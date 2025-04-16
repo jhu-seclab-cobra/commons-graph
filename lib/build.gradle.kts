@@ -17,8 +17,12 @@ repositories {
 }
 
 dependencies {
+    api(libs.cobra.commons.value)
+    implementation(libs.mapdb.core) // Key-value store and off-heap database.
+    implementation(libs.neo4j.core) // Neo4j graph database integration.
+    implementation(libs.jgrapht.core) // Core graph library for algorithms and data structures.
+    implementation(libs.jgrapht.io) // Graph I/O library for importing/exporting graph data.
     testImplementation(kotlin("test"))
-    api(libs.cobra.commons.value) 
 }
 
 kotlin {

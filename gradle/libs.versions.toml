@@ -4,8 +4,16 @@ kover = "0.9.1"
 javaSource = "8"
 javaTarget = "8"
 cobra-commons-value = "0.1.0"
+mapdb = "3.0.9"
+jgrapht = "1.5.0"
+neo4j = "2025.03.0"
+
 
 [libraries]
+neo4j-core = { module = "org.neo4j:neo4j", version.ref = "neo4j" }
+mapdb-core = { module = "org.mapdb:mapdb", version.ref = "mapdb" }
+jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
+jgrapht-io = { module = "org.jgrapht:jgrapht-io", version.ref = "jgrapht" }
 cobra-commons-value = { module = "com.github.jhu-seclab-cobra:commons-value", version.ref = "cobra-commons-value" }
 
 [plugins]
