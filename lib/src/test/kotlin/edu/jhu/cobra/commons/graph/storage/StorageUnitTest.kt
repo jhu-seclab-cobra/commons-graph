@@ -3,15 +3,10 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
-import edu.jhu.cobra.commons.graph.storage.*
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.assertThrows
-import kotlin.test.Test
+import kotlin.test.*
 
 abstract class AbcStorageUnitTest {
 
@@ -19,12 +14,12 @@ abstract class AbcStorageUnitTest {
 
     abstract fun createStorage(): IStorage
 
-    @BeforeEach
+    @BeforeTest
     fun setup() {
         storage = createStorage()
     }
 
-    @AfterEach
+    @AfterTest
     fun teardown() {
         storage.clear()
     }
@@ -120,7 +115,7 @@ abstract class AbcStorageUnitTest {
         val edgeId = EdgeID(srcNode, dstNode, "testEdge")
 
         // Test adding edge with non-existent nodes
-        assertThrows<EntityNotExistException> { storage.addEdge(edgeId) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(edgeId) }
 
         // Add nodes and then the edge
         storage.addNode(srcNode)
