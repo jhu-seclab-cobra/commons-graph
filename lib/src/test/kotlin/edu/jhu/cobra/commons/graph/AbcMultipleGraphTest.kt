@@ -2,21 +2,18 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.BeforeEach
-import kotlin.test.Test
+import kotlin.test.*
 
 class AbcMultipleGraphTest {
 
     private lateinit var graph: TestMultipleGraph
 
-    @BeforeEach
+    @BeforeTest
     fun setUp() {
         graph = TestMultipleGraph()
     }
 
-    @AfterEach
+    @AfterTest
     fun tearDown() {
         graph.clearCache()
     }
@@ -35,10 +32,7 @@ class AbcMultipleGraphTest {
     fun addNodeShouldThrowExceptionIfNodeAlreadyExists() {
         val nodeID = NodeID("A")
         graph.addNode(nodeID)
-
-        assertThrows(EntityAlreadyExistException::class.java) {
-            graph.addNode(nodeID)
-        }
+        assertFailsWith<EntityAlreadyExistException> { graph.addNode(nodeID) }
     }
 
     @Test
@@ -57,7 +51,7 @@ class AbcMultipleGraphTest {
         val nodeB = graph.addNode(NodeID("B"))
         graph.addEdge(nodeA, nodeB, "type")
 
-        assertThrows(EntityAlreadyExistException::class.java) {
+        assertFailsWith<EntityAlreadyExistException> {
             graph.addEdge(nodeA, nodeB, "type")
         }
     }
@@ -77,7 +71,7 @@ class AbcMultipleGraphTest {
     fun wrapNodeShouldThrowEntityNotExistExceptionIfNodeDoesNotExist() {
         val nodeID = NodeID("A")
 
-        assertThrows(EntityNotExistException::class.java) {
+        assertFailsWith<EntityNotExistException> {
             graph.wrapNode(graph.Node(nodeID))
         }
     }
@@ -90,7 +84,7 @@ class AbcMultipleGraphTest {
 
         val node = graph.getNode(nodeID)
         assertNotNull(node)
-        assertEquals(nodeID, node?.id)
+        assertEquals(nodeID, node.id)
     }
 
     @Test
@@ -112,7 +106,7 @@ class AbcMultipleGraphTest {
 
         val edge = graph.getEdge(graph.Node(nodeA), graph.Node(nodeB), "type")
         assertNotNull(edge)
-        assertEquals(edgeID, edge?.id)
+        assertEquals(edgeID, edge.id)
     }
 
     @Test
