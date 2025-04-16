@@ -1,0 +1,13 @@
+[versions]
+kotlin = "2.0.21"
+kover = "0.9.1"
+javaSource = "8"
+javaTarget = "8"
+cobra-commons-value = "0.1.0"
+
+[libraries]
+cobra-commons-value = { module = "com.github.jhu-seclab-cobra:commons-value", version.ref = "cobra-commons-value" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinx-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
