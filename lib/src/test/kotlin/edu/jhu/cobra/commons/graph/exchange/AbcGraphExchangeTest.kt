@@ -9,18 +9,19 @@ import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 abstract class AbcGraphExchangeTest {
 
-    private val tmpDirectory = Path.of(System.getProperty("java.io.tmpdir"), "cobra")
+    private val tmpDirectory = Path(System.getProperty("java.io.tmpdir"), "cobra")
     protected val graphTestDir: Path = tmpDirectory.resolve("graph").also { it.createDirectories() }
 
     protected fun testExchange(exchange: (Pair<IStorage, IStorage>) -> Unit) {
         val (storageA, storageB) = JgphtStorage() to JgphtStorage()
-        val (firstNode, secondNode) = edu.jhu.cobra.commons.graph.entity.toNid to edu.jhu.cobra.commons.graph.entity.toNid
+        val (firstNode, secondNode) = "node1".toNid to "node2".toNid
         val firstEdge = EdgeID(firstNode, secondNode, "edge1")
         val secondEdge = EdgeID(secondNode, firstNode, "edge2")
         storageA.addNode(firstNode, "prop1" to "value1".strVal)
