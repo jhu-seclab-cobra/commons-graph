@@ -3,4 +3,8 @@ plugins {
 }
 
 rootProject.name = "commons-graph"
-include("lib")
+include(
+    "core",
+    "storages",
+    "exchanges",
+)
