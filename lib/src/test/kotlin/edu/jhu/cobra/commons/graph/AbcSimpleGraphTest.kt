@@ -1,7 +1,5 @@
-package cobra.common.graph
+package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
-import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
 import org.junit.jupiter.api.AfterEach
@@ -9,13 +7,13 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import kotlin.test.Test
 
-class AbcMultipleGraphTest {
+class AbcSimpleGraphTest {
 
-    private lateinit var graph: TestMultipleGraph
+    private lateinit var graph: TestSimpleGraph
 
     @BeforeEach
     fun setUp() {
-        graph = TestMultipleGraph()
+        graph = TestSimpleGraph()
     }
 
     @AfterEach

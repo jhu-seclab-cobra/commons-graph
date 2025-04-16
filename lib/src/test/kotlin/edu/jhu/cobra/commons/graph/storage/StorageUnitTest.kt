@@ -1,4 +1,4 @@
-package cobra.common.graph.storage
+package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID

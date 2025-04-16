@@ -1,6 +1,4 @@
-package cobra.common.graph.exchange
-
-import edu.jhu.cobra.commons.graph.exchange.FdbExchangeImpl
+package edu.jhu.cobra.commons.graph.exchange
 
 import kotlin.io.path.deleteIfExists
 import kotlin.test.Test

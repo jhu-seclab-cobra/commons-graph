@@ -1,6 +1,5 @@
-package cobra.common.graph
+package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcSimpleGraph
 import edu.jhu.cobra.commons.graph.entity.*
 import edu.jhu.cobra.commons.graph.storage.JgphtStorage
 
