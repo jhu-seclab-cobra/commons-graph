@@ -4,7 +4,5 @@ plugins {
 
 rootProject.name = "commons-graph"
 include(
-    "core",
-    "storages",
-    "exchanges",
+    "graph",
 )
