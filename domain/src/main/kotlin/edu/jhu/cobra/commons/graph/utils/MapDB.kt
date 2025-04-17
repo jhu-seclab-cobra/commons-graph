@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.extension
+package edu.jhu.cobra.commons.graph.utils
 
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.NullVal
@@ -19,5 +19,4 @@ class MapDbValSerializer(private val core: IValSerializer<ByteArray>) : Serializ
 
     override fun deserialize(input: DataInput2, available: Int): IValue =
         if (available == 0) NullVal else core.deserialize(input.asByteArray(available))
-
 }

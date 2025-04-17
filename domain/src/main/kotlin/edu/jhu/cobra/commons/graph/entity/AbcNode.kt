@@ -3,16 +3,6 @@ package edu.jhu.cobra.commons.graph.entity
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.strVal
-
-
-data class NodeID(val name: String) : IEntity.ID {
-    override val serialize: StrVal get() = name.strVal
-    override fun toString() = name
-
-    constructor(strVal: StrVal) : this(strVal.core)
-}
 
 abstract class AbcNode(private val storage: IStorage) : IEntity {
 

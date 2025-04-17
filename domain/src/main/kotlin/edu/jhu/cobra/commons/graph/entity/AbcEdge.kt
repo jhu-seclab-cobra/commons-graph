@@ -3,24 +3,6 @@ package edu.jhu.cobra.commons.graph.entity
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.ListVal
-import edu.jhu.cobra.commons.value.listVal
-import edu.jhu.cobra.commons.value.strVal
-
-
-data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
-    val name: String by lazy { "$srcNid-$eType-$dstNid" }
-    override val serialize: ListVal by lazy { ListVal(srcNid.serialize, dstNid.serialize, eType.strVal) }
-    override fun toString() = name
-
-    constructor(value: ListVal) : this(
-        value[0].toNid,
-        value[1].toNid,
-        value[2].core.toString()
-    )
-
-    constructor(value: String) : this(value.split("-").let { listOf(it[0], it[2], it[1]) }.listVal)
-}
 
 abstract class AbcEdge(private val storage: IStorage) : IEntity {
 
