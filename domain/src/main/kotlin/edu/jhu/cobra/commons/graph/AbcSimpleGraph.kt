@@ -19,6 +19,17 @@ import edu.jhu.cobra.commons.graph.entity.EdgeID
  */
 abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) : AbcBasicGraph<N, E>(nType) {
 
+    /**
+     * Adds a directed edge between two nodes with the specified type.
+     * Only one edge is allowed between any two nodes in a given direction.
+     * The edge type is automatically prefixed with the graph name.
+     *
+     * @param from The source node from which the edge starts.
+     * @param to The destination node to which the edge points.
+     * @param type The type of the edge, which will be prefixed with the graph name.
+     * @return The newly created edge of type [E].
+     * @throws EntityAlreadyExistException if an edge already exists between the specified nodes.
+     */
     override fun addEdge(from: AbcNode, to: AbcNode, type: String): E {
         val allEdges = storage.getEdgesBetween(from = from.id, to = to.id)
         val prevEdge = allEdges.firstOrNull { edgeID -> edgeID in cacheEIDs }
@@ -30,6 +41,15 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null)
         return newEdgeObj(edgeID.also { cacheEIDs.add(it) })
     }
 
+    /**
+     * Retrieves an edge between two nodes with the specified type.
+     * The edge type must include the graph name prefix.
+     *
+     * @param from The source node from which the edge starts.
+     * @param to The destination node to which the edge points.
+     * @param type The type of the edge, which should include the graph name prefix.
+     * @return The edge if it exists, `null` otherwise.
+     */
     override fun getEdge(from: AbcNode, to: AbcNode, type: String): E? {
         val edgeID = EdgeID(from.id, to.id, eType = "$graphName:$type")
         if (edgeID !in cacheEIDs || !storage.containsEdge(edgeID)) return null
