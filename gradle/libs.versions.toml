@@ -6,7 +6,7 @@ javaTarget = "8"
 cobra-commons-value = "0.1.0"
 mapdb = "3.0.9"
 jgrapht = "1.5.0"
-neo4j = "2025.03.0"
+neo4j = "3.5.35"
 
 
 [libraries]
