@@ -21,13 +21,12 @@ import org.mapdb.*
  * @param config Configuration function for initializing the MapDB database.
  *              Defaults to a temporary file-based off-heap configuration.
  */
-class MapDBStorage(
+class MapDBConcurStorageImpl(
     val serializer: IValSerializer<ByteArray>,
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() }
 ) : IStorage {
 
     private val dbManager: DB = DBMaker.config().make()
-
     private val nodeIDs: HTreeMap<String, IValue>
     private val nodeProperties: HTreeMap<String, IValue>
 

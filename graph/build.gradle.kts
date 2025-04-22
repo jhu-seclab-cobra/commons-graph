@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation(libs.cobra.commons.value)
+    api(libs.cobra.commons.value)
     testImplementation(kotlin("test"))
 }
 

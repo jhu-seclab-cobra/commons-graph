@@ -9,8 +9,8 @@ import edu.jhu.cobra.commons.value.*
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import kotlin.test.*
 
-class MapDBStorageTest {
-    private lateinit var storage: MapDBStorage
+class MapDBStorageImplTest {
+    private lateinit var storage: MapDBStorageImpl
     private val node1 = NodeID("node1")
     private val node2 = NodeID("node2")
     private val node3 = NodeID("node3")
@@ -20,7 +20,7 @@ class MapDBStorageTest {
 
     @BeforeTest
     fun setup() {
-        storage = MapDBStorage(DftByteArraySerializerImpl) { memoryDB() }
+        storage = MapDBStorageImpl(DftByteArraySerializerImpl) { memoryDB() }
     }
 
     @AfterTest
@@ -374,86 +374,6 @@ class MapDBStorageTest {
     }
 
     @Test
-    fun `test concurrent access to storage`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-
-        // Test concurrent edge additions
-        val thread1 = Thread {
-            storage.addEdge(edge1)
-            storage.addEdge(edge3)
-        }
-        val thread2 = Thread {
-            storage.addEdge(edge2)
-        }
-
-        thread1.start()
-        thread2.start()
-        thread1.join()
-        thread2.join()
-
-        // Verify all edges were added correctly
-        assertTrue(storage.containsEdge(edge1))
-        assertTrue(storage.containsEdge(edge2))
-        assertTrue(storage.containsEdge(edge3))
-
-        // Test concurrent property updates with synchronization
-        val latch = java.util.concurrent.CountDownLatch(2)
-        val thread3 = Thread {
-            try {
-                storage.setNodeProperties(node1, "prop1" to "value1".strVal)
-            } finally {
-                latch.countDown()
-            }
-        }
-        val thread4 = Thread {
-            try {
-                storage.setNodeProperties(node1, "prop2" to 42.numVal)
-            } finally {
-                latch.countDown()
-            }
-        }
-
-        thread3.start()
-        thread4.start()
-        latch.await() // Wait for both threads to complete
-
-        // Verify properties were updated correctly
-        val props = storage.getNodeProperties(node1)
-        assertTrue("prop1" in props)
-        assertTrue("prop2" in props)
-        assertEquals("value1", (props["prop1"] as StrVal).core)
-        assertEquals(42, (props["prop2"] as NumVal).core)
-
-        // Test concurrent deletions
-        val deleteLatch = java.util.concurrent.CountDownLatch(2)
-        val thread5 = Thread {
-            try {
-                storage.deleteEdge(edge1)
-            } finally {
-                deleteLatch.countDown()
-            }
-        }
-        val thread6 = Thread {
-            try {
-                storage.deleteEdge(edge2)
-            } finally {
-                deleteLatch.countDown()
-            }
-        }
-
-        thread5.start()
-        thread6.start()
-        deleteLatch.await() // Wait for both threads to complete
-
-        // Verify edges were deleted correctly
-        assertFalse(storage.containsEdge(edge1))
-        assertFalse(storage.containsEdge(edge2))
-        assertTrue(storage.containsEdge(edge3))
-    }
-
-    @Test
     fun `test storage persistence`() {
         storage.addNode(node1, "prop1" to "value1".strVal)
         storage.addNode(node2)
@@ -466,7 +386,7 @@ class MapDBStorageTest {
         assertTrue(storage.containsEdge(edge1))
         assertEquals("value1", (storage.getNodeProperties(node1)["prop1"] as StrVal).core)
 
-        val newStorage = MapDBStorage(DftByteArraySerializerImpl) { memoryDB() }
+        val newStorage = MapDBStorageImpl(DftByteArraySerializerImpl) { memoryDB() }
         assertFalse(newStorage.containsNode(node1))
         assertFalse(newStorage.containsNode(node2))
         assertFalse(newStorage.containsEdge(edge1))
@@ -476,12 +396,12 @@ class MapDBStorageTest {
     fun `test storage asynchronous behavior`() {
         // Test without commit
         storage.addNode(node1, "prop1" to "value1".strVal)
-        val newStorage1 = MapDBStorage(DftByteArraySerializerImpl) { memoryDB() }
+        val newStorage1 = MapDBStorageImpl(DftByteArraySerializerImpl) { memoryDB() }
         assertFalse(newStorage1.containsNode(node1))
 
         // Test with commit
         storage.commit()
-        val newStorage2 = MapDBStorage(DftByteArraySerializerImpl) { memoryDB() }
+        val newStorage2 = MapDBStorageImpl(DftByteArraySerializerImpl) { memoryDB() }
         assertFalse(newStorage2.containsNode(node1)) // Still false because it's a new instance
 
         // Test concurrent updates with commit
@@ -510,7 +430,7 @@ class MapDBStorageTest {
     @Test
     fun `test storage with transaction support`() {
         // Create storage with transaction support
-        val txStorage = MapDBStorage(DftByteArraySerializerImpl) {
+        val txStorage = MapDBStorageImpl(DftByteArraySerializerImpl) {
             memoryDB().transactionEnable()
         }
 
@@ -548,7 +468,7 @@ class MapDBStorageTest {
 
     @Test
     fun `test storage with file-based persistence`() {
-        val fileStorage = MapDBStorage(DftByteArraySerializerImpl) {
+        val fileStorage = MapDBStorageImpl(DftByteArraySerializerImpl) {
             tempFileDB().transactionEnable()
         }
 

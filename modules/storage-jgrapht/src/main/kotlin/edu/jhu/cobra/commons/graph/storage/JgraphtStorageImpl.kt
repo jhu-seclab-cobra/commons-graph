@@ -6,30 +6,30 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
 import edu.jhu.cobra.commons.value.IValue
+import org.jgrapht.Graph
+import org.jgrapht.graph.DirectedPseudograph
+
 
 /**
- * Implementation of the [IStorage] interface using an in-memory storage backed by custom structures.
+ * Implementation of the [IStorage] interface using total in-memory storage backed by the JGraphT library.
  *
- * This class manages nodes and edges along with their associated properties using in-memory data structures.
- * It leverages HashMaps for storing node and edge properties, and maintains the graph structure using an
- * adjacency list implemented as a map of node IDs to sets of edge IDs.
- *
- * This implementation is not thread-safe and is intended for use in single-threaded environments. It provides
- * efficient operations for adding, deleting, and querying nodes and edges, and ensures that all operations
- * respect the closed state of the storage.
+ * This class is designed to manage nodes and edges, along with their associated properties, using in-memory
+ * storage structures [MutableMap] for node and edge properties. It leverages the JGraphT library
+ * to represent the graph structure and provides efficient graph operations like adding, deleting, and retrieving
+ * nodes and edges.
  */
-class NativeStorage : IStorage {
+class JgraphtStorageImpl : IStorage {
 
     private var isClosed: Boolean = false
 
     /** A HashMap to store node properties with NodeId as the key and a PropDict as the value. */
-    private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = mutableMapOf()
+    private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = linkedMapOf()
 
     /** A HashMap to store edge properties with EdgeId as the key and a PropDict as the value. */
-    private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
+    private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = linkedMapOf()
 
     /** A Directed Pseudo-graph from JGraphT library to store nodes and edges. */
-    private val graphStructure: MutableMap<NodeID, Set<EdgeID>> = mutableMapOf()
+    private val jgtGraph: Graph<NodeID, EdgeID> = DirectedPseudograph(EdgeID::class.java)
 
     override val nodeSize: Int
         get() {
@@ -66,18 +66,15 @@ class NativeStorage : IStorage {
     }
 
     override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) {
-        if (isClosed) throw AccessClosedStorageException()
         if (containsNode(id)) throw EntityAlreadyExistException(id = id)
-        nodeProperties[id] = mutableMapOf(*newProperties)
+        jgtGraph.addVertex(id); nodeProperties[id] = mutableMapOf(*newProperties)
     }
 
     override fun addEdge(id: EdgeID, vararg newProperties: Pair<String, IValue>) {
-        if (isClosed) throw AccessClosedStorageException()
         if (containsEdge(id = id)) throw EntityAlreadyExistException(id = id)
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() + id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() + id
+        jgtGraph.addEdge(id.srcNid, id.dstNid, id)
         edgeProperties[id] = mutableMapOf(*newProperties)
     }
 
@@ -108,12 +105,10 @@ class NativeStorage : IStorage {
     }
 
     override fun deleteNode(id: NodeID) {
-        if (isClosed) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
         getIncomingEdges(id = id).forEach { this.deleteEdge(it) }
         getOutgoingEdges(id = id).forEach { this.deleteEdge(it) }
-        graphStructure.remove(id)
-        nodeProperties.remove(id)
+        jgtGraph.removeVertex(id); nodeProperties.remove(id)
     }
 
     override fun deleteNodes(doSatisfyCond: (NodeID) -> Boolean) {
@@ -124,49 +119,50 @@ class NativeStorage : IStorage {
             if (!doSatisfyCond(curNodeID)) continue
             getIncomingEdges(curNodeID).forEach(::deleteEdge)
             getOutgoingEdges(curNodeID).forEach(::deleteEdge)
-            graphStructure.remove(curNodeID)
+            jgtGraph.removeVertex(curNodeID)
             iterator.remove()
         }
     }
 
     override fun deleteEdge(id: EdgeID) {
-        if (isClosed) throw AccessClosedStorageException()
         if (!containsEdge(id)) throw EntityNotExistException(id)
-        edgeProperties.remove(id)
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
+        jgtGraph.removeEdge(id); edgeProperties.remove(id)
     }
 
     override fun deleteEdges(doSatisfyCond: (EdgeID) -> Boolean) {
         if (isClosed) throw AccessClosedStorageException()
         val iterator = edgeProperties.keys.iterator()
         while (iterator.hasNext()) {
-            val id = iterator.next()
-            if (!doSatisfyCond(id)) continue
-            graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
-            graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
+            val curEdgeID = iterator.next()
+            if (!doSatisfyCond(curEdgeID)) continue
+            jgtGraph.removeEdge(curEdgeID)
             iterator.remove()
         }
     }
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
+        return jgtGraph.incomingEdgesOf(id).toSet()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
+        return jgtGraph.outgoingEdgesOf(id).toSet()
     }
 
     override fun getEdgesBetween(from: NodeID, to: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[from]?.filter { it.srcNid == from && it.dstNid == to }?.toSet().orEmpty()
+        return jgtGraph.getAllEdges(from, to).toSet()
     }
 
     override fun clear(): Boolean {
-        graphStructure.clear();edgeProperties.clear(); nodeProperties.clear() // Clear node properties
-        return graphStructure.isEmpty() && edgeProperties.isEmpty() && nodeProperties.isEmpty()
+        if (isClosed) throw AccessClosedStorageException()
+        jgtGraph.removeAllEdges(edgeProperties.keys)
+        edgeProperties.clear() // Clear edge properties
+        jgtGraph.removeAllVertices(nodeProperties.keys)
+        nodeProperties.clear() // Clear node properties
+        return jgtGraph.edgeSet().isEmpty() && edgeProperties.isEmpty()
+                && jgtGraph.vertexSet().isEmpty() && nodeProperties.isEmpty()
     }
 
     override fun close() {

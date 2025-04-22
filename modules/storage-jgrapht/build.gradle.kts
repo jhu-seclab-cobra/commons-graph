@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    api(project(":graph"))
+    implementation(project(":graph"))
     implementation(libs.cobra.commons.value)
     implementation(libs.jgrapht.core) // Core graph library for algorithms and data structures.
     testImplementation(kotlin("test"))

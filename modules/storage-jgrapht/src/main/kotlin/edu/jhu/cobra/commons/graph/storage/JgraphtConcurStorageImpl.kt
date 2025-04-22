@@ -18,7 +18,7 @@ import org.jgrapht.graph.DirectedPseudograph
  * to represent the graph structure and provides efficient graph operations like adding, deleting, and retrieving
  * nodes and edges.
  */
-class JgphtStorage : IStorage {
+class JgraphtConcurStorageImpl : IStorage {
 
     private var isClosed: Boolean = false
 
