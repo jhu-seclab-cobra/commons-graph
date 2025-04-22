@@ -7,6 +7,6 @@ include(
     "graph",
     "modules:storage-jgrapht",
     "modules:storage-mapdb",
-    "modules:storage-neo4j-embedded",
+    "modules:storage-neo4j",
     "modules:exchange-mapdb",
 )
