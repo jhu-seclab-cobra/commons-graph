@@ -5,4 +5,9 @@ plugins {
 rootProject.name = "commons-graph"
 include(
     "graph",
+    "modules:storage-jgrapht",
+    "modules:storage-mapdb",
+    "modules:storage-neo4j"
+
+
 )
