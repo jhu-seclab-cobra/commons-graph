@@ -18,8 +18,9 @@ repositories {
 
 dependencies {
     api(project(":graph"))
+    api(libs.mapdb.core) // Core graph library for algorithms and data structures.
+    implementation(libs.kotlinx.coroutines)
     implementation(libs.cobra.commons.value)
-    implementation(libs.mapdb.core) // Core graph library for algorithms and data structures.
     testImplementation(kotlin("test"))
 }
 
