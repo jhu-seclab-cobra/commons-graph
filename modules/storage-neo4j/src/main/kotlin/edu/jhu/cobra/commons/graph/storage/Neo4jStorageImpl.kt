@@ -12,8 +12,6 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import edu.jhu.cobra.commons.value.serializer.IValSerializer
 import edu.jhu.cobra.commons.value.strVal
-import org.neo4j.dbms.api.DatabaseManagementService
-import org.neo4j.dbms.api.DatabaseManagementServiceBuilder
 import org.neo4j.graphdb.*
 import java.nio.file.Path
 import kotlin.collections.set
@@ -31,7 +29,7 @@ import kotlin.io.path.exists
  * @param serializer The serializer used to serialize and deserialize properties of nodes and edges. Defaults to
  *                      [DftByteArraySerializerImpl] for byte array serialization.
  */
-class Neo4jStorage(
+class Neo4jStorageImpl(
     graphPath: Path,
     private val serializer: IValSerializer<ByteArray>
 ) : IStorage {

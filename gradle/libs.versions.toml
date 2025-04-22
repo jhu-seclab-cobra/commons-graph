@@ -14,9 +14,8 @@ neo4j = "3.5.35"
 neo4j-core = { module = "org.neo4j:neo4j", version.ref = "neo4j" }
 mapdb-core = { module = "org.mapdb:mapdb", version.ref = "mapdb" }
 jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
-jgrapht-io = { module = "org.jgrapht:jgrapht-io", version.ref = "jgrapht" }
-cobra-commons-value = { module = "com.github.jhu-seclab-cobra:commons-value", version.ref = "cobra-commons-value" }
 kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx" }
+cobra-commons-value = { module = "com.github.jhu-seclab-cobra:commons-value", version.ref = "cobra-commons-value" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
