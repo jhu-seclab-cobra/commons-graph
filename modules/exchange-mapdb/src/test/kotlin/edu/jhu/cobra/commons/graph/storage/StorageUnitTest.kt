@@ -182,11 +182,11 @@ abstract class AbcStorageUnitTest {
 
 
 class FileDeltaStorageTest : AbcStorageUnitTest() {
-    override fun createStorage(): IStorage = DeltaStorage(NativeStorage(), MapDBStorage())
+    override fun createStorage(): IStorage = DeltaStorageImpl(NativeStorageImpl(), MapDBStorage())
 }
 
 class MemoryDeltaStorageTest : AbcStorageUnitTest() {
-    override fun createStorage(): IStorage = DeltaStorage(NativeStorage(), NativeStorage())
+    override fun createStorage(): IStorage = DeltaStorageImpl(NativeStorageImpl(), NativeStorageImpl())
 }
 
 class JgphtStorageTest : AbcStorageUnitTest() {
@@ -202,7 +202,7 @@ class MemoryMapDbStorageTest : AbcStorageUnitTest() {
 }
 
 class SimpleStorageTest : AbcStorageUnitTest() {
-    override fun createStorage(): IStorage = NativeStorage()
+    override fun createStorage(): IStorage = NativeStorageImpl()
 }
 
 //class Neo4jStorageTest : AbcStorageUnitTest() {

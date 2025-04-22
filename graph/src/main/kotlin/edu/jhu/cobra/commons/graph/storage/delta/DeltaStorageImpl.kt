@@ -16,12 +16,12 @@ import edu.jhu.cobra.commons.value.strVal
  *
  * Modifications are always applied to the latest delta, and newer deltas take precedence over older ones in terms of data priority.
  *
- * @param foundDelta The base storage that serves as the foundation for all deltas. Defaults to [NativeStorage].
+ * @param foundDelta The base storage that serves as the foundation for all deltas. Defaults to [NativeStorageImpl].
  * @param presentDelta Optional additional named delta slices to initialize the storage with.
  */
-class DeltaStorage(
+class DeltaStorageImpl(
     private val foundDelta: IStorage,
-    private val presentDelta: IStorage = NativeStorage(),
+    private val presentDelta: IStorage = NativeStorageImpl(),
 ) : IStorage {
 
     private val deletedHolder = hashSetOf<IEntity.ID>()

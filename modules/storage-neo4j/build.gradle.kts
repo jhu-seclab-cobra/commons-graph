@@ -17,9 +17,9 @@ repositories {
 }
 
 dependencies {
-    api(project(":graph"))
-    implementation(libs.cobra.commons.value)
+    implementation(project(":graph"))
     implementation(libs.neo4j.core) // Core graph library for algorithms and data structures.
+    implementation(libs.cobra.commons.value)
     testImplementation(kotlin("test"))
 }
 
