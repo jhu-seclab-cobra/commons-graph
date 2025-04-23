@@ -10,15 +10,15 @@ import edu.jhu.cobra.commons.value.strVal
  * Represents a unique identifier for a node in the graph. This data class encapsulates the name
  * information necessary to uniquely identify a node.
  *
- * @property name The string representation of the node identifier.
+ * @property uname The string representation of the node identifier.
  */
-data class NodeID(val name: String) : IEntity.ID {
+data class NodeID(override val uname: String) : IEntity.ID {
     /**
      * The serialized representation of the node identifier as a string value.
      */
-    override val serialize: StrVal get() = name.strVal
+    override val serialize: StrVal get() = uname.strVal
 
-    override fun toString() = name
+    override fun toString() = uname
 
     /**
      * Creates a node identifier from a string value.

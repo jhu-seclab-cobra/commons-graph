@@ -5,11 +5,10 @@ import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
-import edu.jhu.cobra.commons.graph.entity.toEid
-import edu.jhu.cobra.commons.graph.entity.toNid
+import edu.jhu.cobra.commons.graph.storage.utils.EntityPropertyMap
 import edu.jhu.cobra.commons.graph.storage.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.*
-import edu.jhu.cobra.commons.value.serializer.IValSerializer
+import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import org.mapdb.*
 
 /**
@@ -24,36 +23,15 @@ import org.mapdb.*
  *              Defaults to a temporary file-based off-heap configuration.
  */
 class MapDBStorageImpl(
-    val serializer: IValSerializer<ByteArray>,
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() }
 ) : IStorage {
 
     private val dbManager: DB = DBMaker.config().concurrencyDisable().closeOnJvmShutdown().make()
 
-    private val nodeIDs: HTreeMap<String, IValue>
-    private val nodeProperties: HTreeMap<String, IValue>
-
-    private val edgeIDs: HTreeMap<String, IValue>
-    private val edgeProperties: HTreeMap<String, IValue>
-
-    private val graphStructure: HTreeMap<String, IValue>
-
-    private val valueSerializer = MapDbValSerializer(serializer)
-
-    init {
-        nodeIDs = dbManager.hashMap("nodeIDs", Serializer.STRING, valueSerializer).counterEnable().create()
-        edgeIDs = dbManager.hashMap("edgeIDs", Serializer.STRING, valueSerializer).counterEnable().create()
-        nodeProperties = dbManager.hashMap("nodeProps", Serializer.STRING, valueSerializer).create()
-        edgeProperties = dbManager.hashMap("edgeProps", Serializer.STRING, valueSerializer).create()
-        graphStructure = dbManager.hashMap("structure", Serializer.STRING, valueSerializer).create()
-    }
-
-    /**
-     * Persists all pending changes to the database.
-     *
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    fun commit() = dbManager.commit()
+    private val nodeProperties = EntityPropertyMap<NodeID>(dbManager, "nodeProps")
+    private val edgeProperties = EntityPropertyMap<EdgeID>(dbManager, "edgeProps")
+    private val valueSerializer = MapDbValSerializer(DftByteArraySerializerImpl)
+    private val graphStructure = dbManager.hashMap("structure", Serializer.STRING, valueSerializer).create()
 
     /**
      * Closes the storage and releases all associated resources.
@@ -73,7 +51,7 @@ class MapDBStorageImpl(
     override val nodeSize: Int
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return nodeIDs.size
+            return nodeProperties.size
         }
 
     /**
@@ -85,7 +63,7 @@ class MapDBStorageImpl(
     override val nodeIDsSequence: Sequence<NodeID>
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return nodeIDs.keys.asSequence().map { it.toNid }
+            return nodeProperties.keysSequence
         }
 
     /**
@@ -97,7 +75,7 @@ class MapDBStorageImpl(
     override val edgeSize: Int
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return edgeIDs.size
+            return edgeProperties.size
         }
 
     /**
@@ -109,7 +87,7 @@ class MapDBStorageImpl(
     override val edgeIDsSequence: Sequence<EdgeID>
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return edgeIDs.keys.asSequence().map { it.toEid }
+            return edgeProperties.keysSequence
         }
 
     /**
@@ -121,7 +99,7 @@ class MapDBStorageImpl(
      */
     override fun containsNode(id: NodeID): Boolean {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
-        return nodeIDs.contains(key = id.name)
+        return nodeProperties.contains(id)
     }
 
     /**
@@ -133,7 +111,7 @@ class MapDBStorageImpl(
      */
     override fun containsEdge(id: EdgeID): Boolean {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
-        return edgeIDs.contains(key = id.name)
+        return edgeProperties.contains(id)
     }
 
     /**
@@ -146,8 +124,7 @@ class MapDBStorageImpl(
      */
     override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) {
         if (containsNode(id)) throw EntityAlreadyExistException(id)
-        nodeIDs[id.name] = SetVal(newProperties.map { (key) -> key.strVal })
-        newProperties.forEach { (key, value) -> nodeProperties["${id.name}->$key"] = value }
+        nodeProperties.set(id, nodeProperties)
     }
 
     /**

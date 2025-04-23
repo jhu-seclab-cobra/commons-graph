@@ -24,6 +24,13 @@ sealed interface IEntity {
          * @return The serialized value representing the entity's identifier.
          */
         val serialize: IValue
+
+        /**
+         * Represents the unique name or identifier associated with an entity.
+         * This value provides a human-readable identifier that is typically used
+         * as a reference or label for the entity within the system.
+         */
+        val uname: String
     }
 
     /**

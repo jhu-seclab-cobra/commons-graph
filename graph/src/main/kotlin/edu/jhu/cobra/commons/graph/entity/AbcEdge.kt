@@ -19,14 +19,14 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
     /**
      * The string representation of the edge identifier, formatted as "sourceNodeId-edgeType-destinationNodeId".
      */
-    val name: String by lazy { "$srcNid-$eType-$dstNid" }
+    override val uname: String by lazy { "$srcNid-$eType-$dstNid" }
 
     /**
      * The serialized representation of the edge identifier as a list of values.
      */
     override val serialize: ListVal by lazy { ListVal(srcNid.serialize, dstNid.serialize, eType.strVal) }
 
-    override fun toString() = name
+    override fun toString() = uname
 
     /**
      * Creates an edge identifier from a list of values.
