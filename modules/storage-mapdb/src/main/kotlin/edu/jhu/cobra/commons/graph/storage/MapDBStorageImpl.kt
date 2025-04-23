@@ -7,7 +7,7 @@ import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
 import edu.jhu.cobra.commons.graph.entity.toEid
 import edu.jhu.cobra.commons.graph.entity.toNid
-import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
+import edu.jhu.cobra.commons.graph.storage.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.*
 import edu.jhu.cobra.commons.value.serializer.IValSerializer
 import org.mapdb.*
@@ -16,6 +16,8 @@ import org.mapdb.*
  * Implementation of the [IStorage] interface using MapDB for off-heap storage of nodes and edges.
  * This class provides efficient memory management by storing data outside the Java heap,
  * reducing garbage collection overhead and improving performance for large datasets.
+ * Please notice that this implementation is not thread-safe.
+ * If you need to use it in a concurrent environment, consider using [ConcurMapDBStorageImpl].
  *
  * @property serializer The serializer used to convert [IValue] objects to and from byte arrays.
  * @param config Configuration function for initializing the MapDB database.
@@ -26,7 +28,7 @@ class MapDBStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() }
 ) : IStorage {
 
-    private val dbManager: DB = DBMaker.config().make()
+    private val dbManager: DB = DBMaker.config().concurrencyDisable().closeOnJvmShutdown().make()
 
     private val nodeIDs: HTreeMap<String, IValue>
     private val nodeProperties: HTreeMap<String, IValue>
@@ -39,9 +41,8 @@ class MapDBStorageImpl(
     private val valueSerializer = MapDbValSerializer(serializer)
 
     init {
-        Runtime.getRuntime().addShutdownHook(Thread { dbManager.close() })
-        nodeIDs = dbManager.hashMap("nodeIDs", Serializer.STRING, valueSerializer).create()
-        edgeIDs = dbManager.hashMap("edgeIDs", Serializer.STRING, valueSerializer).create()
+        nodeIDs = dbManager.hashMap("nodeIDs", Serializer.STRING, valueSerializer).counterEnable().create()
+        edgeIDs = dbManager.hashMap("edgeIDs", Serializer.STRING, valueSerializer).counterEnable().create()
         nodeProperties = dbManager.hashMap("nodeProps", Serializer.STRING, valueSerializer).create()
         edgeProperties = dbManager.hashMap("edgeProps", Serializer.STRING, valueSerializer).create()
         graphStructure = dbManager.hashMap("structure", Serializer.STRING, valueSerializer).create()

@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.utils
+package edu.jhu.cobra.commons.graph.storage.utils
 
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.NullVal
