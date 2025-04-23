@@ -175,9 +175,10 @@ inline fun <reified ID : IEntity.ID> StrVal.toEntityID(): ID = when (ID::class) 
  * @return The constructed entity identifier of type `ID`.
  * @throws IllegalArgumentException if the specified `ID` type is unsupported.
  */
-fun String.toEntityID(type: KClass<out IEntity.ID>): IEntity.ID = when (type) {
-    NodeID::class -> NodeID(this)
-    EdgeID::class -> EdgeID(this)
+@Suppress("UNCHECKED_CAST")
+fun <K : IEntity.ID> String.toEntityID(type: KClass<out K>): K = when (type) {
+    NodeID::class -> NodeID(this) as K
+    EdgeID::class -> EdgeID(this) as K
     else -> throw IllegalArgumentException("Unsupported ID type")
 }
 
@@ -190,9 +191,10 @@ fun String.toEntityID(type: KClass<out IEntity.ID>): IEntity.ID = when (type) {
  * @return The constructed entity identifier of type `ID`.
  * @throws IllegalArgumentException if the specified `ID` type is unsupported.
  */
-fun StrVal.toEntityID(type: KClass<out IEntity.ID>): IEntity.ID = when (type) {
-    NodeID::class -> NodeID(this.core)
-    EdgeID::class -> EdgeID(this.core)
+@Suppress("UNCHECKED_CAST")
+fun <K : IEntity.ID> StrVal.toEntityID(type: KClass<out K>): K = when (type) {
+    NodeID::class -> NodeID(this.core) as K
+    EdgeID::class -> EdgeID(this.core) as K
     else -> throw IllegalArgumentException("Unsupported ID type")
 }
 

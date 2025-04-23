@@ -8,6 +8,7 @@ import org.mapdb.DataInput2
 import org.mapdb.DataOutput2
 import org.mapdb.Serializer
 import java.io.Serializable
+import kotlin.reflect.KClass
 
 /**
  * Serializer implementation for [IValue] objects using MapDB's serialization framework.
@@ -16,7 +17,10 @@ import java.io.Serializable
  *
  * @property core The underlying serializer used to convert [IValue] objects to and from byte arrays.
  */
-class MapDbValSerializer(private val core: IValSerializer<ByteArray>) : Serializer<IValue>, Serializable {
+class MapDbValSerializer<T : IValue>(
+    private val core: IValSerializer<ByteArray>,
+    private val valueType: KClass<out T>? = null
+) : Serializer<T>, Serializable {
 
     /**
      * Indicates whether the serializer can be trusted for security-sensitive operations.
@@ -31,7 +35,7 @@ class MapDbValSerializer(private val core: IValSerializer<ByteArray>) : Serializ
      * @param out The output stream to write the serialized data to.
      * @param value The [IValue] object to serialize.
      */
-    override fun serialize(out: DataOutput2, value: IValue) =
+    override fun serialize(out: DataOutput2, value: T) =
         out.write(core.serialize(value = value))
 
     /**
@@ -41,6 +45,11 @@ class MapDbValSerializer(private val core: IValSerializer<ByteArray>) : Serializ
      * @param available The number of bytes available for reading.
      * @return The deserialized [IValue] object, or [NullVal] if no data is available.
      */
-    override fun deserialize(input: DataInput2, available: Int): IValue =
-        if (available == 0) NullVal else core.deserialize(input.asByteArray(available))
+    @Suppress("UNCHECKED_CAST")
+    override fun deserialize(input: DataInput2, available: Int): T {
+        require(available > 0) { "Available bytes must be greater than 0" }
+        val deserialized = core.deserialize(input.asByteArray(available))
+        if (valueType == null || valueType.isInstance(deserialized)) return deserialized as T
+        throw throw IllegalArgumentException("Deserialized value type does not match expected type")
+    }
 }
