@@ -5,6 +5,7 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 
 
@@ -134,3 +135,64 @@ val StrVal.toEid get() = EdgeID(this.core)
  * @return An [EdgeID] constructed from the string.
  */
 val String.toEid get() = EdgeID(this)
+
+/**
+ * Converts the string representation to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+inline fun <reified ID : IEntity.ID> String.toEntityID(): ID = when (ID::class) {
+    NodeID::class -> NodeID(this) as ID
+    EdgeID::class -> EdgeID(this) as ID
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
+
+/**
+ * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+inline fun <reified ID : IEntity.ID> StrVal.toEntityID(): ID = when (ID::class) {
+    NodeID::class -> NodeID(this.core) as ID
+    EdgeID::class -> EdgeID(this.core) as ID
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
+
+/**
+ * Converts the string representation of a [String] to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+fun String.toEntityID(type: KClass<out IEntity.ID>): IEntity.ID = when (type) {
+    NodeID::class -> NodeID(this)
+    EdgeID::class -> EdgeID(this)
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
+
+/**
+ * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+fun StrVal.toEntityID(type: KClass<out IEntity.ID>): IEntity.ID = when (type) {
+    NodeID::class -> NodeID(this.core)
+    EdgeID::class -> EdgeID(this.core)
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
+
