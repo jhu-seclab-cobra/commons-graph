@@ -35,7 +35,7 @@ class ConcurMapDBStorageImpl(
     private val edgeIDs: HTreeMap<String, IValue>
     private val edgeProperties: HTreeMap<String, IValue>
     private val graphStructure: HTreeMap<String, IValue>
-    private val valueSerializer = MapDbValSerializer(serializer)
+    private val valueSerializer = MapDbValSerializer<IValue>(serializer)
 
     // Lock for ensuring cross-collections atomic operations
     private val dbLock = ReentrantReadWriteLock()

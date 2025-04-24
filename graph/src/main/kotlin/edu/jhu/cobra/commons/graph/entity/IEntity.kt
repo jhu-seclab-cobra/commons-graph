@@ -30,7 +30,7 @@ sealed interface IEntity {
          * This value provides a human-readable identifier that is typically used
          * as a reference or label for the entity within the system.
          */
-        val uname: String
+        val name: String
     }
 
     /**
