@@ -19,8 +19,8 @@ import kotlin.test.*
 /**
  * Tests for ConcurMapDBStorageImpl to verify concurrency safety and functional correctness
  */
-class ConcurMapDBStorageImplTest {
-    private lateinit var storage: ConcurMapDBStorageImpl
+class MapDBConcurStorageImplTest {
+    private lateinit var storage: MapDBConcurStorageImpl
     private val node1 = NodeID("node1")
     private val node2 = NodeID("node2")
     private val node3 = NodeID("node3")
@@ -30,7 +30,7 @@ class ConcurMapDBStorageImplTest {
 
     @Before
     fun setup() {
-        storage = ConcurMapDBStorageImpl { memoryDB() }
+        storage = MapDBConcurStorageImpl { memoryDB() }
     }
 
     @After

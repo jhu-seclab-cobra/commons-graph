@@ -92,7 +92,7 @@ private fun IGraph<*, *>.increase(group: String): Int {
  * @return The newly created group root node.
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.addGroupRoot(group: String): N =
-    addNode("$graphName@$group#0".toNid)
+    addNode(NodeID("$graphName@$group#0"))
 
 /**
  * Adds a node that is part of a group, optionally with a suffix to distinguish it.
@@ -103,9 +103,9 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.addGroupRoot(group: String): N =
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.addGroupNode(group: String = "UNKNOWN", suffix: String? = null): N {
     val nodePrefix = "$graphName@$group"
-    if (suffix != null) return addNode("$nodePrefix#$suffix".toNid)
+    if (suffix != null) return addNode(NodeID("$nodePrefix#$suffix"))
     do {
-        val nodeID = "$nodePrefix#${increase(group)}".toNid
+        val nodeID = NodeID("$nodePrefix#${increase(group)}")
         if (getNode(nodeID) == null) return addNode(nodeID)
     } while (true)
 }
@@ -127,7 +127,7 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.addGroupNode(sameGroupNode: AbcNode,
  * @return The group root node if it exists, or `null` otherwise.
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupRoot(groupName: String): N? =
-    getNode("$graphName@$groupName#0".toNid)
+    getNode(NodeID("$graphName@$groupName#0"))
 
 /**
  * Retrieves the root node of the group to which a specified member node belongs.
@@ -137,7 +137,7 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupRoot(groupName: String): N? 
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupRoot(ofMember: AbcNode): N? {
     val groupPrefix = ofMember.id.name.substringBefore("#")
-    return getNode(whoseID = "$groupPrefix#0".toNid)
+    return getNode(whoseID = NodeID("$groupPrefix#0"))
 }
 
 /**
@@ -148,7 +148,7 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupRoot(ofMember: AbcNode): N? 
  * @return The grouped node if it exists, or `null` otherwise.
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupNode(groupName: String, suffix: String): N? =
-    getNode("$graphName@$groupName#${suffix}".toNid)
+    getNode(NodeID("$graphName@$groupName#${suffix}"))
 
 /**
  * Retrieves the group name of a node based on its identifier.

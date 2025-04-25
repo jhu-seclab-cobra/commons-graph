@@ -2,12 +2,12 @@ package edu.jhu.cobra.commons.graph.exchange
 
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.entity.toEntityID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.contains
 import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.mapVal
-import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import edu.jhu.cobra.commons.value.strVal
 import org.mapdb.DBMaker
 import java.nio.file.Path
@@ -20,7 +20,7 @@ import kotlin.io.path.*
 object MapDBGraphExchangeImpl : IGraphExchange {
 
     /** Serializer for MapDB value storage. */
-    private val MapSerializer = MapDbValSerializer<MapVal>(DftByteArraySerializerImpl)
+    private val MapSerializer = MapDbValSerializer<MapVal>()
 
     /**
      * @return true if the file is a valid MapDB file containing required collections.
@@ -88,7 +88,7 @@ object MapDBGraphExchangeImpl : IGraphExchange {
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).open()
             edgesList.forEach { props ->
-                val eid = EdgeID(props!!.remove("_eid")!!.core.toString())
+                val eid = props!!.remove("_eid")!!.toEntityID<EdgeID>()
                 if (!predicate(eid)) return@forEach // skip the new edge
                 if (eid.srcNid !in into) into.addNode(id = eid.srcNid)
                 if (eid.dstNid !in into) into.addNode(id = eid.dstNid)

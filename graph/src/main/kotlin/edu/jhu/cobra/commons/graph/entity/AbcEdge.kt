@@ -4,7 +4,6 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
-import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.strVal
 
 /**
@@ -34,17 +33,10 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
      * @param value The list containing source node ID, destination node ID, and edge type.
      */
     constructor(value: ListVal) : this(
-        value[0].toNid,
-        value[1].toNid,
+        value[0].toEntityID<NodeID>(),
+        value[1].toEntityID<NodeID>(),
         value[2].core.toString()
     )
-
-    /**
-     * Creates an edge identifier from a string representation.
-     *
-     * @param value The string representation of the edge identifier in the format "sourceNodeId-edgeType-destinationNodeId".
-     */
-    constructor(value: String) : this(value.split("-").let { listOf(it[0], it[2], it[1]) }.listVal)
 }
 
 /**

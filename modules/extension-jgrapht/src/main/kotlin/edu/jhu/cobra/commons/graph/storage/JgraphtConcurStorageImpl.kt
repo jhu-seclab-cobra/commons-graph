@@ -20,7 +20,7 @@ import kotlin.concurrent.write
  * It leverages the JGraphT library to represent the graph structure and provides efficient graph operations like
  * adding, deleting, and retrieving nodes and edges.
  */
-class ConcurJgraphtStorageImpl : IStorage {
+class JgraphtConcurStorageImpl : IStorage {
 
     private var isClosed: Boolean = false
 

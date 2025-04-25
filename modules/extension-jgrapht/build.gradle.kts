@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":graph"))
     implementation(libs.cobra.commons.value)
     implementation(libs.jgrapht.core) // Core graph library for algorithms and data structures.
+    implementation(libs.jgrapht.io) // Core graph library for algorithms and data structures.
     testImplementation(kotlin("test"))
 }
 

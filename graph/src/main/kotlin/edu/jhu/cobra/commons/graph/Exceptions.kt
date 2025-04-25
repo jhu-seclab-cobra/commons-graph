@@ -26,7 +26,7 @@ class EntityAlreadyExistException(id: IEntity.ID) : Exception("Entity ID $id alr
  * @param propName The name of the invalid property.
  * @param eid The ID of the entity for which the invalid property was attempted.
  */
-class InvalidPropNameException(propName: String, eid: IEntity.ID) : Exception("Invalid name $propName in entity $eid.")
+class InvalidPropNameException(propName: String, eid: IEntity.ID?) : Exception("Invalid name $propName in entity $eid.")
 
 /**
  * Exception thrown when an operation is attempted on a storage that has already been closed.

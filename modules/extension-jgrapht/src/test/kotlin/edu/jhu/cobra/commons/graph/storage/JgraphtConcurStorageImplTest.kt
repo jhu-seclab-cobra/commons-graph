@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
 /**
  * Test suite for ConcurJgraphtStorageImpl to verify its functionality and thread safety
  */
-class ConcurJgraphtStorageImplTest {
-    private lateinit var storage: ConcurJgraphtStorageImpl
+class JgraphtConcurStorageImplTest {
+    private lateinit var storage: JgraphtConcurStorageImpl
     private val node1 = NodeID("node1")
     private val node2 = NodeID("node2")
     private val node3 = NodeID("node3")
@@ -34,7 +34,7 @@ class ConcurJgraphtStorageImplTest {
 
     @Before
     fun setup() {
-        storage = ConcurJgraphtStorageImpl()
+        storage = JgraphtConcurStorageImpl()
     }
 
     @After
