@@ -5,7 +5,7 @@ kover = "0.9.1"
 javaSource = "8"
 javaTarget = "8"
 cobra-commons-value = "0.1.0"
-mapdb = "3.0.9"
+mapdb = "3.0.5"
 jgrapht = "1.4.0"
 neo4j = "3.5.35"
 
