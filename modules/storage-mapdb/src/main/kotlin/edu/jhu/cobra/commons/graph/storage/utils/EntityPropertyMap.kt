@@ -150,7 +150,8 @@ class EntityPropertyMap<K : IEntity.ID>(
                  */
                 override fun remove() {
                     if (currentItem == null) throw IllegalStateException("next() has not been called yet")
-                    else this@PropertyMap.remove(key = currentItem)
+                    // because the keys are constructed so that it will influence each others
+                    this@PropertyMap.remove(key = currentItem)
                 }
             }
 
@@ -241,7 +242,7 @@ class EntityPropertyMap<K : IEntity.ID>(
                  * @return True if this property map was modified
                  */
                 override fun retainAll(elements: Collection<String>): Boolean {
-                    val allPropKeys = identities[eid]!!.core.map { it.core.toString() }.toSet()
+                    val allPropKeys = identities[eid]!!.map { it.core.toString() }.toSet()
                     val removeKeys = (allPropKeys - elements.toSet())
                     return removeKeys.map { this@PropertyMap.remove(it) != null }.any { it }
                 }
@@ -614,7 +615,7 @@ class EntityPropertyMap<K : IEntity.ID>(
              */
             override fun iterator() = object : MutableIterator<MutableMap.MutableEntry<K, Map<String, IValue>>> {
                 private var currentItem: K? = null
-                val entityIdIterator = identities.keys.iterator()
+                val entityIdIterator = identities.iterator()
 
                 /**
                  * Checks if there are more entries to iterate.
@@ -631,7 +632,7 @@ class EntityPropertyMap<K : IEntity.ID>(
                  */
                 override fun next(): MutableMap.MutableEntry<K, Map<String, IValue>> {
                     if (!hasNext()) throw NoSuchElementException("No more elements")
-                    currentItem = entityIdIterator.next().toEntityID(entityType!!)
+                    currentItem = entityIdIterator.next().key.toEntityID(entityType!!)
                     return Entry(key = currentItem!!)
                 }
 
@@ -642,7 +643,10 @@ class EntityPropertyMap<K : IEntity.ID>(
                  */
                 override fun remove() {
                     if (currentItem == null) throw IllegalStateException("next() has not been called yet")
-                    else remove(Entry(key = currentItem!!))
+                    val curEntityItem = currentItem!!.name
+                    val propKeys = identities[curEntityItem]!!.map { it.core.toString() }
+                    propKeys.associateWith { propertiesMap.remove("${curEntityItem}:$it")!! }
+                    entityIdIterator.remove()
                 }
             }
         }
@@ -798,7 +802,7 @@ class EntityPropertyMap<K : IEntity.ID>(
          * @return True if this entity-property map contains all the property maps in the collection
          */
         override fun containsAll(elements: Collection<Map<String, IValue>>): Boolean {
-            val allValues = identities.map { it.key to PropertyMap(it.key) }
+            val allValues = identities.map { PropertyMap(it.key) }.toSet()
             return elements.all { ele -> allValues.any { value -> ele == value } }
         }
 
@@ -807,7 +811,7 @@ class EntityPropertyMap<K : IEntity.ID>(
          * @return True if this entity-property map contains the property map
          */
         override fun contains(element: Map<String, IValue>): Boolean {
-            val allValues = identities.map { it.key to PropertyMap(it.key) }
+            val allValues = identities.asSequence().map { PropertyMap(it.key) }
             return allValues.any { value -> element == value }
         }
 
@@ -890,7 +894,9 @@ class EntityPropertyMap<K : IEntity.ID>(
     override fun putAll(from: Map<out K, Map<String, IValue>>) = from.forEach { (key, value) ->
         if (entityType == null) entityType = key::class
         val properties = identities[key.name]?.core.orEmpty()
-        identities[key.name] = SetVal(properties + value.keys.map { it.strVal })
+        val deletedKeys = properties.filter { it.core.toString() !in value.keys }
+        deletedKeys.forEach { propertiesMap.remove("${key.name}:${it.core.toString()}") }
+        identities[key.name] = value.keys.map { it.strVal }.setVal
         propertiesMap.putAll(value.mapKeys { "${key.name}:${it.key}" })
     }
 
@@ -905,8 +911,10 @@ class EntityPropertyMap<K : IEntity.ID>(
     override fun put(key: K, value: Map<String, IValue>): Map<String, IValue>? {
         if (entityType == null) entityType = key::class
         val prevPropKeys = identities[key.name]?.core?.map { it.core.toString() }
-        identities[key.name] = (prevPropKeys.orEmpty() + value.keys).map { it.strVal }.setVal
         val prevPropValues = prevPropKeys?.associateWith { propertiesMap.remove("${key.name}:$it")!! }
+        val deletedKeys = prevPropKeys?.filter { it !in value.keys }
+        deletedKeys?.forEach { propertiesMap.remove("${key.name}:$it") }
+        identities[key.name] = value.keys.map { it.strVal }.setVal
         propertiesMap.putAll(value.mapKeys { "${key.name}:${it.key}" })
         return prevPropValues
     }
