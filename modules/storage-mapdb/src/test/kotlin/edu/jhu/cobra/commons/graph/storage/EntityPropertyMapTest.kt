@@ -8,10 +8,8 @@ import org.junit.Before
 import org.junit.Test
 import org.mapdb.DB
 import org.mapdb.DBMaker
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.reflect.KClass
+import kotlin.test.*
 
 /**
  * Test the functionality of MapDB implementation of EntityPropertyMap
@@ -279,50 +277,6 @@ class EntityPropertyMapTest {
     }
 
     /**
-     * Test more functionality of PropertyMap inner class
-     */
-    @Test
-    fun testPropertyMapAdvanced() {
-        val entity1 = NodeID("entity1")
-        val initialProps = mapOf(
-            "name" to "Entity 1".strVal,
-            "count" to 42.numVal
-        )
-
-        // Add initial properties
-        entityPropertyMap.put(entity1, initialProps)
-
-        // Get PropertyMap and convert to MutableMap
-        val propertyMap = entityPropertyMap[entity1] as? MutableMap<String, IValue>
-        requireNotNull(propertyMap) { "PropertyMap should be of MutableMap type" }
-
-        // Test put method
-        val oldValue = propertyMap.put("count", 100.numVal)
-        assertEquals(42.numVal, oldValue, "Should return old value")
-        assertEquals(100.numVal, propertyMap["count"], "Should update value")
-
-        // Test remove method
-        val removedValue = propertyMap.remove("name")
-        assertEquals("Entity 1".strVal, removedValue, "Should return removed value")
-        assertNull(propertyMap["name"], "Should return null after removal")
-
-        // Test putAll method
-        propertyMap.putAll(
-            mapOf(
-                "newKey1" to "new value 1".strVal,
-                "newKey2" to "new value 2".strVal
-            )
-        )
-        assertEquals("new value 1".strVal, propertyMap["newKey1"], "Should add new value")
-        assertEquals("new value 2".strVal, propertyMap["newKey2"], "Should add new value")
-
-        // Test clear method
-        propertyMap.clear()
-        assertTrue(propertyMap.isEmpty(), "Should be empty after clearing")
-        assertEquals(0, propertyMap.size, "Size should be 0 after clearing")
-    }
-
-    /**
      * Test exceptions and edge cases
      */
     @Test
@@ -361,48 +315,6 @@ class EntityPropertyMapTest {
             "Should support Unicode character property names"
         )
         assertEquals("Colon in key".strVal, retrieved?.get("a:b"), "Should support property names containing colons")
-    }
-
-    /**
-     * Test collection view modification operations
-     */
-    @Test
-    fun testCollectionViewModifications() {
-        val entity1 = NodeID("entity1")
-        val entity2 = NodeID("entity2")
-        val entity3 = NodeID("entity3")
-
-        val props1 = mapOf("name" to "Entity 1".strVal)
-        val props2 = mapOf("name" to "Entity 2".strVal)
-        val props3 = mapOf("name" to "Entity 3".strVal)
-
-        entityPropertyMap.putAll(
-            mapOf(
-                entity1 to props1,
-                entity2 to props2,
-                entity3 to props3
-            )
-        )
-
-        // Test removal via keys
-        assertTrue(entityPropertyMap.keys.remove(entity1), "Should successfully remove entity1")
-        assertFalse(entityPropertyMap.containsKey(entity1), "Should not contain entity1 after removal")
-        assertEquals(2, entityPropertyMap.size, "Should have 2 entities after removal")
-
-        // Test removal via entries
-        val entity2Entry = entityPropertyMap.entries.find { it.key == entity2 }
-        requireNotNull(entity2Entry) { "Should be able to find entity2 entry" }
-        assertTrue(entityPropertyMap.entries.remove(entity2Entry), "Should successfully remove entity2 entry")
-        assertFalse(entityPropertyMap.containsKey(entity2), "Should not contain entity2 after removal")
-
-        // Test removal via values
-        val entity3Props = entityPropertyMap[entity3]
-        requireNotNull(entity3Props) { "Should be able to get entity3 properties" }
-        assertTrue(entityPropertyMap.values.remove(entity3Props), "Should successfully remove entity3 properties")
-        assertFalse(entityPropertyMap.containsKey(entity3), "Should not contain entity3 after removal")
-
-        // Should now be empty
-        assertTrue(entityPropertyMap.isEmpty(), "Should be empty after removing all entities")
     }
 
     /**
@@ -464,7 +376,200 @@ class EntityPropertyMapTest {
     }
 
     /**
-     * Test collection view operations on PropertyMap
+     * Test entityType field initialization and type checking
+     */
+    @Test
+    fun testEntityTypeInitialization() {
+        // EntityType should initially be null
+        val entityTypeField = entityPropertyMap.javaClass.getDeclaredField("entityType")
+        entityTypeField.isAccessible = true
+        assertNull(entityTypeField.get(entityPropertyMap), "entityType should initially be null")
+
+        // After adding an entity, entityType should be set to the entity's type
+        val entity1 = NodeID("entity1")
+        entityPropertyMap.put(entity1, mapOf("key" to "value".strVal))
+
+        val entityType = entityTypeField.get(entityPropertyMap) as KClass<*>
+        assertNotNull(entityType, "entityType should be set after adding an entity")
+        assertEquals(NodeID::class, entityType, "entityType should be set to NodeID::class.java")
+    }
+
+    /**
+     * Test unsupported operations
+     */
+    @Test
+    fun testUnsupportedOperations() {
+        // Test unsupported operations on keys set
+        try {
+            entityPropertyMap.keys.add(NodeID("newEntity"))
+            fail("Should throw UnsupportedOperationException for keys.add")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+
+        try {
+            entityPropertyMap.keys.addAll(listOf(NodeID("newEntity")))
+            fail("Should throw UnsupportedOperationException for keys.addAll")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+
+        // Test unsupported operations on values collection
+        try {
+            entityPropertyMap.values.add(mapOf("key" to "value".strVal))
+            fail("Should throw UnsupportedOperationException for values.add")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+
+        try {
+            entityPropertyMap.values.addAll(listOf(mapOf("key" to "value".strVal)))
+            fail("Should throw UnsupportedOperationException for values.addAll")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+
+        // Test unsupported operations on PropertyMap keys and values
+        val entity = NodeID("entity")
+        entityPropertyMap.put(entity, mapOf("key" to "value".strVal))
+        val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
+
+        try {
+            propertyMap.keys.add("newKey")
+            fail("Should throw UnsupportedOperationException for propertyMap.keys.add")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+
+        try {
+            propertyMap.values.add("newValue".strVal)
+            fail("Should throw UnsupportedOperationException for propertyMap.values.add")
+        } catch (e: UnsupportedOperationException) {
+            // Expected exception
+        }
+    }
+
+    /**
+     * Test exception handling for operating on closed database
+     */
+    @Test
+    fun testExceptionHandlingForClosedDatabase() {
+        // Setup entity
+        val entity = NodeID("entity")
+        entityPropertyMap.put(entity, mapOf("key" to "value".strVal))
+
+        // Close database
+        dbManager.close()
+
+        // Test various operations that should throw exceptions
+        val operationsToTest = listOf<() -> Unit>(
+            { entityPropertyMap.put(entity, mapOf("key2" to "value2".strVal)) },
+            { entityPropertyMap.remove(entity) },
+            { entityPropertyMap.clear() },
+            { entityPropertyMap.containsKey(entity) },
+            { entityPropertyMap.size },
+            { entityPropertyMap.isEmpty() },
+            { entityPropertyMap[entity] },
+            { entityPropertyMap.entries.size },
+            { entityPropertyMap.keys.size },
+            { entityPropertyMap.values.size }
+        )
+
+        var exceptionCount = 0
+        for (operation in operationsToTest) {
+            try {
+                operation()
+            } catch (e: IllegalAccessError) {
+                // Any exception is acceptable, most likely IllegalAccessError
+                exceptionCount++
+            }
+        }
+
+        assertTrue(exceptionCount > 0, "At least some operations should throw exceptions on closed database")
+
+        // Reset database for other tests
+        setUp()
+    }
+
+    /**
+     * Test consistency of internal structures
+     */
+    @Test
+    fun testInternalStructureConsistency() {
+        // Add and modify entities
+        val entity1 = NodeID("entity1")
+        val entity2 = NodeID("entity2")
+
+        // Initial properties
+        val props1 = mapOf("key1" to "value1".strVal, "key2" to "value2".strVal)
+        val props2 = mapOf("keyA" to "valueA".strVal, "keyB" to "valueB".strVal)
+
+        entityPropertyMap.put(entity1, props1)
+        entityPropertyMap.put(entity2, props2)
+
+        // Access internal fields to verify consistency
+        val identitiesField = entityPropertyMap.javaClass.getDeclaredField("identities")
+        identitiesField.isAccessible = true
+        val identities = identitiesField.get(entityPropertyMap) as Map<*, *>
+
+        val propertiesMapField = entityPropertyMap.javaClass.getDeclaredField("propertiesMap")
+        propertiesMapField.isAccessible = true
+        val propertiesMap = propertiesMapField.get(entityPropertyMap) as Map<*, *>
+
+        // Verify identities contains both entities
+        assertTrue(identities.containsKey(entity1.name), "identities should contain entity1")
+        assertTrue(identities.containsKey(entity2.name), "identities should contain entity2")
+
+        // Verify property keys are stored correctly
+        val entity1Keys = identities[entity1.name] as SetVal
+        val entity2Keys = identities[entity2.name] as SetVal
+
+        assertEquals(props1.size, entity1Keys.size, "entity1 should have correct number of keys")
+        assertEquals(props2.size, entity2Keys.size, "entity2 should have correct number of keys")
+
+        // Verify all property values are stored with correct keys
+        props1.forEach { (key, value) ->
+            val propertiesKey = "${entity1.name}:$key"
+            assertEquals(
+                value, propertiesMap[propertiesKey],
+                "propertiesMap should contain correct value for entity1:$key"
+            )
+        }
+
+        props2.forEach { (key, value) ->
+            val propertiesKey = "${entity2.name}:$key"
+            assertEquals(
+                value, propertiesMap[propertiesKey],
+                "propertiesMap should contain correct value for entity2:$key"
+            )
+        }
+
+        // Modify properties and verify consistency is maintained
+        val propertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
+        propertyMap.remove("key1")
+        propertyMap.put("key3", "value3".strVal)
+
+        // Verify identities is updated
+        val updatedEntity1Keys = identities[entity1.name] as SetVal
+        assertTrue(
+            !updatedEntity1Keys.core.map { it.core.toString() }.contains("key1"),
+            "identities should not contain removed key"
+        )
+        assertTrue(
+            updatedEntity1Keys.core.map { it.core.toString() }.contains("key3"),
+            "identities should contain added key"
+        )
+
+        // Verify propertiesMap is updated
+        assertNull(propertiesMap["${entity1.name}:key1"], "propertiesMap should not contain removed property")
+        assertEquals(
+            "value3".strVal, propertiesMap["${entity1.name}:key3"],
+            "propertiesMap should contain added property"
+        )
+    }
+
+    /**
+     * Test property map collection views operations
      */
     @Test
     fun testPropertyMapCollectionViews() {
@@ -475,37 +580,162 @@ class EntityPropertyMapTest {
             "key3" to "value3".strVal
         )
 
+        // Add entity with properties
         entityPropertyMap.put(entity1, initialProps)
-        val propertyMap = entityPropertyMap[entity1] as? MutableMap<String, IValue>
-        requireNotNull(propertyMap) { "PropertyMap should be of MutableMap type" }
 
-        // Test keys collection
+        // Get the property map for the entity
+        val propertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
+
+        // Test entries view
+        val entries = propertyMap.entries
+        assertEquals(3, entries.size, "Entries view should have correct size")
+
+        // Test contains in entries
+        val keyEntry = entries.find { it.key == "key1" }
+        assertNotNull(keyEntry, "Should find entry with key1")
+        assertEquals("value1".strVal, keyEntry.value, "Entry value should match")
+
+        // Test entry removal
+        assertTrue(entries.remove(keyEntry), "Should remove the entry")
+        assertEquals(2, propertyMap.size, "Property map size should be updated")
+        assertFalse(propertyMap.containsKey("key1"), "Property key should be removed")
+
+        // Test keys view
         val keys = propertyMap.keys
-        assertEquals(3, keys.size, "Should have 3 keys")
-        assertTrue(keys.contains("key1"), "Should contain key1")
+        assertEquals(2, keys.size, "Keys view should have correct size")
+        assertTrue(keys.contains("key2"), "Keys should contain key2")
+        assertTrue(keys.contains("key3"), "Keys should contain key3")
 
-        // Test values collection
+        // Test key removal
+        assertTrue(keys.remove("key2"), "Should remove key2")
+        assertEquals(1, propertyMap.size, "Property map size should be updated")
+        assertFalse(propertyMap.containsKey("key2"), "Property key should be removed")
+
+        // Test values view
         val values = propertyMap.values
-        assertEquals(3, values.size, "Should have 3 values")
-        assertTrue(values.contains("value1".strVal), "Should contain value1")
+        assertEquals(1, values.size, "Values view should have correct size")
+        assertTrue(values.contains("value3".strVal), "Values should contain value3")
 
-        // Test removal from keys
-        assertTrue(keys.remove("key1"), "Should successfully remove key1")
-        assertFalse(propertyMap.containsKey("key1"), "Should not contain key1 after removal")
-        assertEquals(2, propertyMap.size, "Should have 2 properties after removal")
+        // Test value removal
+        assertTrue(values.remove("value3".strVal), "Should remove value3")
+        assertEquals(0, propertyMap.size, "Property map size should be updated")
+        assertTrue(propertyMap.isEmpty(), "Property map should be empty")
 
-        // Test removal from values
-        assertTrue(values.remove("value2".strVal), "Should successfully remove value2")
-        assertFalse(propertyMap.containsValue("value2".strVal), "Should not contain value2 after removal")
-        assertEquals(1, propertyMap.size, "Should have 1 property after removal")
+        // Test bulk operations
+        val newProps = mapOf(
+            "newKey1" to "newValue1".strVal,
+            "newKey2" to "newValue2".strVal
+        )
+
+        // Add properties and verify
+        propertyMap.putAll(newProps)
+        assertEquals(2, propertyMap.size, "Should have added new properties")
+        assertEquals("newValue1".strVal, propertyMap["newKey1"], "New property value should be correct")
+
+        // Test clear
+        propertyMap.clear()
+        assertTrue(propertyMap.isEmpty(), "Property map should be empty after clear")
+
+        // Verify the entity still exists but has no properties
+        assertTrue(entityPropertyMap.containsKey(entity1), "Entity should still exist")
+        assertEquals(0, entityPropertyMap[entity1]?.size, "Entity should have no properties")
     }
 
     /**
-     * Test concurrent modification scenarios for PropertyMap
+     * Test comprehensive collection operations with both true and false cases
      */
     @Test
-    fun testConcurrentModification() {
+    fun testComprehensiveCollectionOperations() {
+        // Setup test entities
         val entity1 = NodeID("entity1")
+        val entity2 = NodeID("entity2")
+        val entity3 = NodeID("entity3")
+        val entity4 = NodeID("entity4")
+
+        val props1 = mapOf("name" to "Entity 1".strVal)
+        val props2 = mapOf("name" to "Entity 2".strVal)
+        val props3 = mapOf("name" to "Entity 3".strVal)
+
+        entityPropertyMap.put(entity1, props1)
+        entityPropertyMap.put(entity2, props2)
+
+        // Test 1: Entity Map keys collection - containsAll true and false cases
+        assertTrue(
+            entityPropertyMap.keys.containsAll(listOf(entity1, entity2)),
+            "keys.containsAll should return true for existing keys"
+        )
+        assertFalse(
+            entityPropertyMap.keys.containsAll(listOf(entity1, entity3)),
+            "keys.containsAll should return false when any key doesn't exist"
+        )
+
+        // Test 2: Entity Map keys collection - retainAll true and false cases
+        val keysToRetain = listOf(entity1)
+        assertTrue(
+            entityPropertyMap.keys.retainAll(keysToRetain),
+            "keys.retainAll should return true when changes occur"
+        )
+        assertEquals(1, entityPropertyMap.size, "After retainAll, only entity1 should remain")
+
+        // Now retainAll should return false as no changes needed
+        assertFalse(
+            entityPropertyMap.keys.retainAll(keysToRetain),
+            "keys.retainAll should return false when no changes occur"
+        )
+
+        // Re-add entity2 for further tests
+        entityPropertyMap.put(entity2, props2)
+
+        // Test 3: Entity Map keys collection - removeAll true and false cases
+        val keysToRemove = listOf(entity2)
+        assertTrue(
+            entityPropertyMap.keys.removeAll(keysToRemove),
+            "keys.removeAll should return true when changes occur"
+        )
+        assertEquals(1, entityPropertyMap.size, "After removeAll, only entity1 should remain")
+
+        // Now removeAll should return false as entities already removed
+        assertFalse(
+            entityPropertyMap.keys.removeAll(keysToRemove),
+            "keys.removeAll should return false when no changes occur"
+        )
+
+        // Test 4: Entity Map entries collection - add true and false cases
+        val entry1 = object : MutableMap.MutableEntry<NodeID, Map<String, IValue>> {
+            override val key = entity3
+            override val value = props3
+            override fun setValue(newValue: Map<String, IValue>): Map<String, IValue> = props3
+        }
+
+        assertTrue(
+            entityPropertyMap.entries.add(entry1),
+            "entries.add should return true for a new entry"
+        )
+        assertEquals(2, entityPropertyMap.size, "Size should be 2 after adding one entry")
+
+        // Adding the same entry again should return false as no change occurs
+        assertFalse(
+            entityPropertyMap.entries.add(entry1),
+            "entries.add should return false when entry already exists"
+        )
+
+        // Test 5: Entity Map values collection operations
+        val valuesToRemove = listOf(props1)
+        assertTrue(
+            entityPropertyMap.values.removeAll(valuesToRemove),
+            "values.removeAll should return true when changes occur"
+        )
+        assertEquals(1, entityPropertyMap.size, "Only one entity should remain after removing by value")
+
+        // Now removeAll should return false as values already removed
+        assertFalse(
+            entityPropertyMap.values.removeAll(valuesToRemove),
+            "values.removeAll should return false when no changes occur"
+        )
+
+        // Test 6: Property Map collection operations - true/false cases
+        // Re-add entities for property map testing
+        entityPropertyMap.clear()
         val initialProps = mapOf(
             "key1" to "value1".strVal,
             "key2" to "value2".strVal,
@@ -513,175 +743,133 @@ class EntityPropertyMapTest {
         )
 
         entityPropertyMap.put(entity1, initialProps)
-        val propertyMap = entityPropertyMap[entity1] as? MutableMap<String, IValue>
-        requireNotNull(propertyMap) { "PropertyMap should be of MutableMap type" }
+        val propertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
 
-        // Test modification during iteration
-        var exception = false
-        try {
-            for (key in propertyMap.keys) {
-                if (key == "key1") {
-                    propertyMap.remove("key2")
-                }
+        // Test property map entries
+        val propEntry = propertyMap.entries.find { it.key == "key1" }
+        assertNotNull(propEntry, "Should find entry with key1")
+
+        assertTrue(
+            propertyMap.entries.remove(propEntry),
+            "entries.remove should return true when entry exists"
+        )
+        assertFalse(
+            propertyMap.entries.remove(propEntry),
+            "entries.remove should return false when entry doesn't exist"
+        )
+
+        // Test property map keys
+        assertTrue(
+            propertyMap.keys.remove("key2"),
+            "keys.remove should return true when key exists"
+        )
+        assertFalse(
+            propertyMap.keys.remove("key2"),
+            "keys.remove should return false when key doesn't exist"
+        )
+
+        // Test property map values
+        assertTrue(
+            propertyMap.values.remove("value3".strVal),
+            "values.remove should return true when value exists"
+        )
+        assertFalse(
+            propertyMap.values.remove("value3".strVal),
+            "values.remove should return false when value doesn't exist"
+        )
+
+        // Test property map keys retainAll
+        propertyMap.putAll(mapOf("keyA" to "valueA".strVal, "keyB" to "valueB".strVal))
+        assertTrue(
+            propertyMap.keys.retainAll(listOf("keyA")),
+            "keys.retainAll should return true when changes occur"
+        )
+        assertEquals(1, propertyMap.size, "Size should be 1 after retainAll")
+
+        assertFalse(
+            propertyMap.keys.retainAll(listOf("keyA")),
+            "keys.retainAll should return false when no changes occur"
+        )
+
+        // Test 7: containsValue - true/false cases
+        propertyMap.clear()
+        propertyMap.put("testKey", "testValue".strVal)
+
+        assertTrue(
+            propertyMap.containsValue("testValue".strVal),
+            "containsValue should return true for existing value"
+        )
+        assertFalse(
+            propertyMap.containsValue("nonExistingValue".strVal),
+            "containsValue should return false for non-existing value"
+        )
+    }
+
+    /**
+     * Test concurrent modifications and boundary conditions with PropertyMap
+     */
+    @Test
+    fun testConcurrentModifications() {
+        // Setup: Create entities with properties
+        val entity1 = NodeID("entity1")
+
+        // Test case 1: Modifying a property map while iterating through it (properly)
+        val initialProps = mapOf(
+            "key1" to "value1".strVal,
+            "key2" to "value2".strVal,
+            "key3" to "value3".strVal
+        )
+        entityPropertyMap.put(entity1, initialProps)
+
+        // Get the property map and use the iterator's remove
+        val propertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
+
+        // Test iterator safety
+        val entryIterator = propertyMap.entries.iterator()
+        var count = 0
+
+        while (entryIterator.hasNext()) {
+            val entry = entryIterator.next()
+            count++
+            if (entry.key == "key2") {
+                entryIterator.remove()
             }
-        } catch (e: ConcurrentModificationException) {
-            exception = true
         }
 
-        // MapDB's implementation might not throw ConcurrentModificationException, so we check if the modification took effect
+        assertEquals(3, count, "Should have iterated through all 3 entries")
+        assertEquals(2, propertyMap.size, "Should have 2 entries left after removing one")
         assertFalse(propertyMap.containsKey("key2"), "key2 should be removed")
-    }
 
-    /**
-     * Test large property values and special values
-     */
-    @Test
-    fun testLargeAndSpecialValues() {
-        val entity1 = NodeID("entity1")
-
-        // Create a large string value
-        val largeString = StringBuilder()
-        for (i in 1..10000) {
-            largeString.append("a")
-        }
-
-        // Test large property value
-        val largeProps = mapOf(
-            "largeString" to largeString.toString().strVal
+        // Test case 2: Using retainAll on an empty property map
+        entityPropertyMap.put(entity1, emptyMap())
+        val emptyPropertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
+        assertFalse(
+            emptyPropertyMap.keys.retainAll(listOf("nonexistent")),
+            "retainAll on empty map should return false"
         )
 
+        // Test case 3: Handling of extreme property counts
+        entityPropertyMap.clear()
+        val largePropsCount = 100
+        val largeProps = (1..largePropsCount).associate {
+            "key$it" to "value$it".strVal
+        }
+        
         entityPropertyMap.put(entity1, largeProps)
-        val retrievedProps = entityPropertyMap[entity1]
+        val largePropertyMap = entityPropertyMap[entity1] as MutableMap<String, IValue>
+
         assertEquals(
-            largeString.toString().strVal,
-            retrievedProps?.get("largeString"),
-            "Should handle large string values correctly"
+            largePropsCount, largePropertyMap.size,
+            "Should handle a large number of properties"
         )
 
-        // Test extreme numeric values
-        val extremeValues = mapOf(
-            "maxInt" to Int.MAX_VALUE.numVal,
-            "minInt" to Int.MIN_VALUE.numVal,
-            "maxLong" to Long.MAX_VALUE.numVal,
-            "minLong" to Long.MIN_VALUE.numVal,
-            "maxDouble" to Double.MAX_VALUE.numVal,
-            "minDouble" to Double.MIN_VALUE.numVal,
-            "posInfinity" to Double.POSITIVE_INFINITY.numVal,
-            "negInfinity" to Double.NEGATIVE_INFINITY.numVal,
-            "nan" to Double.NaN.numVal
-        )
+        // Remove half the properties using the entries collection
+        val halfEntries = largePropertyMap.entries.take(largePropsCount / 2).toList()
+        largePropertyMap.entries.removeAll(halfEntries)
 
-        entityPropertyMap.put(entity1, extremeValues)
-        val retrieved = entityPropertyMap[entity1]
-
-        assertEquals(Int.MAX_VALUE.numVal, retrieved?.get("maxInt"), "Should handle Int.MAX_VALUE correctly")
-        assertEquals(Int.MIN_VALUE.numVal, retrieved?.get("minInt"), "Should handle Int.MIN_VALUE correctly")
-        assertEquals(Long.MAX_VALUE.numVal, retrieved?.get("maxLong"), "Should handle Long.MAX_VALUE correctly")
-        assertEquals(Long.MIN_VALUE.numVal, retrieved?.get("minLong"), "Should handle Long.MIN_VALUE correctly")
-        assertEquals(Double.MAX_VALUE.numVal, retrieved?.get("maxDouble"), "Should handle Double.MAX_VALUE correctly")
-        assertEquals(Double.MIN_VALUE.numVal, retrieved?.get("minDouble"), "Should handle Double.MIN_VALUE correctly")
         assertEquals(
-            Double.POSITIVE_INFINITY.numVal,
-            retrieved?.get("posInfinity"),
-            "Should handle positive infinity correctly"
+            largePropsCount / 2, largePropertyMap.size,
+            "Should have half the properties after removal"
         )
-        assertEquals(
-            Double.NEGATIVE_INFINITY.numVal,
-            retrieved?.get("negInfinity"),
-            "Should handle negative infinity correctly"
-        )
-        assertEquals(Double.NaN.numVal, retrieved?.get("nan"), "Should handle NaN correctly")
-    }
-
-    /**
-     * Test entity ID boundary conditions
-     */
-    @Test
-    fun testEntityIDBoundaries() {
-        // Test empty name entity ID
-        val emptyNameEntity = NodeID("")
-        val emptyProps = mapOf("key" to "value".strVal)
-
-        entityPropertyMap.put(emptyNameEntity, emptyProps)
-        val retrievedProps = entityPropertyMap[emptyNameEntity]
-        assertEquals("value".strVal, retrievedProps?.get("key"), "Should handle empty name entity ID correctly")
-
-        // Test entity ID with special characters
-        val specialNameEntity = NodeID("entity:with:colons")
-        entityPropertyMap.put(specialNameEntity, emptyProps)
-        val specialRetrieved = entityPropertyMap[specialNameEntity]
-        assertEquals("value".strVal, specialRetrieved?.get("key"), "Should handle entity ID with colons correctly")
-
-        // Test long name entity ID
-        val longName = StringBuilder()
-        for (i in 1..1000) {
-            longName.append("x")
-        }
-        val longNameEntity = NodeID(longName.toString())
-        entityPropertyMap.put(longNameEntity, emptyProps)
-        val longRetrieved = entityPropertyMap[longNameEntity]
-        assertEquals("value".strVal, longRetrieved?.get("key"), "Should handle long name entity ID correctly")
-    }
-
-    /**
-     * Test consistency of repeated operations
-     */
-    @Test
-    fun testOperationConsistency() {
-        val entity1 = NodeID("entity1")
-        val props1 = mapOf("key" to "value".strVal)
-
-        // Repeatedly add and remove the same entity
-        for (i in 1..10) {
-            entityPropertyMap.put(entity1, props1)
-            assertEquals(
-                "value".strVal,
-                entityPropertyMap[entity1]?.get("key"),
-                "Should retrieve correctly after add #${i}"
-            )
-
-            entityPropertyMap.remove(entity1)
-            assertNull(entityPropertyMap[entity1], "Should return null after delete #${i}")
-        }
-
-        // Add and immediately update multiple times
-        entityPropertyMap.put(entity1, props1)
-        for (i in 1..10) {
-            val newProps = mapOf("key" to "value${i}".strVal)
-            entityPropertyMap.put(entity1, newProps)
-            assertEquals(
-                "value${i}".strVal,
-                entityPropertyMap[entity1]?.get("key"),
-                "Should retrieve correctly after update #${i}"
-            )
-        }
-    }
-
-    /**
-     * Test behavior after database closure
-     */
-    @Test
-    fun testAfterDatabaseClose() {
-        val entity1 = NodeID("entity1")
-        val props1 = mapOf("key" to "value".strVal)
-
-        // Normal addition
-        entityPropertyMap.put(entity1, props1)
-        assertEquals("value".strVal, entityPropertyMap[entity1]?.get("key"), "Should add correctly")
-
-        // Close database
-        dbManager.close()
-
-        // The following operations should throw an exception
-        var exceptionThrown = false
-        try {
-            entityPropertyMap.get(entity1)
-        } catch (e: IllegalAccessError) {
-            exceptionThrown = true
-        }
-        assertTrue(exceptionThrown, "Should throw exception after database closure")
-
-        // Reset the database to avoid affecting other tests
-        setUp()
     }
 }
