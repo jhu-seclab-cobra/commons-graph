@@ -11,25 +11,25 @@ import org.jgrapht.graph.DirectedPseudograph
 
 
 /**
- * Implementation of the [IStorage] interface using total in-memory storage backed by the JGraphT library.
+ * Non-concurrent implementation of [IStorage] using JGraphT library for in-memory graph storage.
+ * For concurrent access, use [ConcurJgraphtStorageImpl] instead.
  *
- * This class is designed to manage nodes and edges, along with their associated properties, using in-memory
- * storage structures [MutableMap] for node and edge properties. It leverages the JGraphT library
- * to represent the graph structure and provides efficient graph operations like adding, deleting, and retrieving
- * nodes and edges.
+ * It leverages the JGraphT library to represent the graph structure and provides efficient graph operations like
+ * adding, deleting, and retrieving nodes and edges.
  */
 class JgraphtStorageImpl : IStorage {
 
-    private var isClosed: Boolean = false
-
-    /** A HashMap to store node properties with NodeId as the key and a PropDict as the value. */
+    /** Node ID to properties mapping. */
     private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = linkedMapOf()
 
-    /** A HashMap to store edge properties with EdgeId as the key and a PropDict as the value. */
+    /** Edge ID to properties mapping. */
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = linkedMapOf()
 
-    /** A Directed Pseudo-graph from JGraphT library to store nodes and edges. */
+    /** JGraphT graph structure for storing nodes and edges. */
     private val jgtGraph: Graph<NodeID, EdgeID> = DirectedPseudograph(EdgeID::class.java)
+
+    /** Storage closed state flag. */
+    private var isClosed: Boolean = false
 
     override val nodeSize: Int
         get() {
@@ -142,11 +142,13 @@ class JgraphtStorageImpl : IStorage {
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
+        if (id !in nodeProperties) throw EntityNotExistException(id)
         return jgtGraph.incomingEdgesOf(id).toSet()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
+        if (id !in nodeProperties) throw EntityNotExistException(id)
         return jgtGraph.outgoingEdgesOf(id).toSet()
     }
 
@@ -156,7 +158,7 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun clear(): Boolean {
-        if (isClosed) throw AccessClosedStorageException()
+        if (isClosed) return false
         jgtGraph.removeAllEdges(edgeProperties.keys)
         edgeProperties.clear() // Clear edge properties
         jgtGraph.removeAllVertices(nodeProperties.keys)
@@ -166,7 +168,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun close() {
-        isClosed = true
-        clear()
+        isClosed = clear()
     }
 }

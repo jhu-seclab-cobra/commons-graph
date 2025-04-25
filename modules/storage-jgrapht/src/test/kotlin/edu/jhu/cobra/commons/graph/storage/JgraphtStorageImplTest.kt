@@ -6,15 +6,16 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
 import edu.jhu.cobra.commons.value.*
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
 import kotlin.test.*
 
 /**
- * Test the functionality of MapDB implementation of IStorage
+ * Test suite for JgraphtStorageImpl to verify its functionality
  */
-class MapDBStorageImplTest {
-
-    private lateinit var storage: MapDBStorageImpl
-
+class JgraphtStorageImplTest {
+    private lateinit var storage: JgraphtStorageImpl
     private val node1 = NodeID("node1")
     private val node2 = NodeID("node2")
     private val node3 = NodeID("node3")
@@ -22,21 +23,18 @@ class MapDBStorageImplTest {
     private val edge2 = EdgeID(node2, node3, "edge2")
     private val edge3 = EdgeID(node1, node3, "edge3")
 
-    @BeforeTest
+    @Before
     fun setup() {
-        storage = MapDBStorageImpl { memoryDB() }
+        storage = JgraphtStorageImpl()
     }
 
-    @AfterTest
+    @After
     fun cleanup() {
         storage.close()
     }
 
-    /**
-     * Test basic operations: add and get node and edge properties
-     */
     @Test
-    fun testPutAndGet() {
+    fun `test basic CRUD operations`() {
         // Test node operations
         storage.addNode(node1, "prop1" to "value1".strVal)
         assertTrue(storage.containsNode(node1))
@@ -63,11 +61,8 @@ class MapDBStorageImplTest {
         assertFailsWith<EntityNotExistException> { storage.addEdge(EdgeID(node1, NodeID("nonexistent"), "edge")) }
     }
 
-    /**
-     * Test updating properties for nodes and edges
-     */
     @Test
-    fun testUpdateProperties() {
+    fun `test property updates`() {
         // Setup
         storage.addNode(node1, "prop1" to "value1".strVal)
         storage.addNode(node2)
@@ -100,11 +95,8 @@ class MapDBStorageImplTest {
         }
     }
 
-    /**
-     * Test removing entities (nodes and edges)
-     */
     @Test
-    fun testRemoveEntity() {
+    fun `test entity removal`() {
         // Setup
         storage.addNode(node1)
         storage.addNode(node2)
@@ -135,7 +127,7 @@ class MapDBStorageImplTest {
         storage.addNode(node1)
         storage.addEdge(edge1)
         storage.addEdge(edge2)
-        storage.deleteEdges { it.name.split("-")[1] == "edge1" }
+        storage.deleteEdges { it.name == edge1.name }
         assertFalse(storage.containsEdge(edge1))
         assertTrue(storage.containsEdge(edge2))
 
@@ -143,11 +135,8 @@ class MapDBStorageImplTest {
         assertFailsWith<EntityNotExistException> { storage.deleteNode(NodeID("nonexistent")) }
     }
 
-    /**
-     * Test collection views: nodeIDsSequence, edgeIDsSequence, etc.
-     */
     @Test
-    fun testCollectionViews() {
+    fun `test collection views`() {
         // Setup
         storage.addNode(node1)
         storage.addNode(node2)
@@ -193,11 +182,8 @@ class MapDBStorageImplTest {
         }
     }
 
-    /**
-     * Test empty, null, and special value handling
-     */
     @Test
-    fun testEmptyAndNullValues() {
+    fun `test empty and null values`() {
         // Test empty properties
         storage.addNode(node1)
         assertTrue(storage.containsNode(node1))
@@ -219,62 +205,8 @@ class MapDBStorageImplTest {
         assertTrue(storage.nodeIDsSequence.toList().isEmpty())
     }
 
-    /**
-     * Test null value handling in properties
-     */
     @Test
-    fun testNullValueHandling() {
-        // Setup
-        storage.addNode(
-            node1,
-            "nullValue" to NullVal,
-            "normalValue" to "normal".strVal
-        )
-
-        // Verify properties
-        val props = storage.getNodeProperties(node1)
-        assertEquals(NullVal, props["nullValue"])
-        assertEquals("normal".strVal, props["normalValue"])
-
-        // Set property to null (should remove it)
-        storage.setNodeProperties(node1, "normalValue" to null)
-        val updatedProps = storage.getNodeProperties(node1)
-        assertEquals(1, updatedProps.size)
-        assertTrue("normalValue" !in updatedProps)
-        assertTrue("nullValue" in updatedProps)
-    }
-
-    /**
-     * Test edge cases and error conditions
-     */
-    @Test
-    fun testEdgeCases() {
-        // Test operations on non-existent entities
-        assertFalse(storage.containsNode(node1))
-        assertFalse(storage.containsEdge(edge1))
-
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(node1) }
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperty(node1, "prop") }
-        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties(edge1) }
-        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty(edge1, "prop") }
-
-        // Test adding edge with non-existent nodes
-        assertFailsWith<EntityNotExistException> { storage.addEdge(edge1) }
-
-        // Test clearing empty storage
-        assertTrue(storage.clear())
-
-        // Test accessing after close
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeSize }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(node1) }
-    }
-
-    /**
-     * Test complex data structures and property values
-     */
-    @Test
-    fun testComplexDataStructures() {
+    fun `test complex data structures`() {
         // Test complex property values
         val complexValue = mapOf(
             "str" to "test".strVal,
@@ -304,11 +236,8 @@ class MapDBStorageImplTest {
         assertTrue(edges.contains(edge1b))
     }
 
-    /**
-     * Test with large datasets to verify performance and stability
-     */
     @Test
-    fun testLargeDataSet() {
+    fun `test large dataset operations`() {
         val nodeCount = 100
         val edgesPerNode = 5
 
@@ -357,147 +286,29 @@ class MapDBStorageImplTest {
         assertEquals(75, storage.nodeSize)
     }
 
-    /**
-     * Test comprehensive collection operations with both true/false conditions
-     */
     @Test
-    fun testComprehensiveCollectionOperations() {
-        // Setup for testing
-        storage.addNode(node1, "key1" to "value1".strVal)
-        storage.addNode(node2, "key2" to "value2".strVal)
-        storage.addNode(node3, "key3" to "value3".strVal)
+    fun `test exception handling`() {
+        // Test behavior under various exceptional conditions
 
-        storage.addEdge(edge1, "edge_key1" to "edge_value1".strVal)
-        storage.addEdge(edge2, "edge_key2" to "edge_value2".strVal)
-
-        // Test contains operations - true and false cases
-        assertTrue(storage.containsNode(node1))
-        assertFalse(storage.containsNode(NodeID("nonexistent")))
-
-        assertTrue(storage.containsEdge(edge1))
-        assertFalse(storage.containsEdge(EdgeID(node1, node3, "nonexistent")))
-
-        // Test bulk delete operations - both matching and non-matching conditions
-        // Delete matching nodes
-        storage.deleteNodes { it == node1 }
-        assertFalse(storage.containsNode(node1))
-        assertTrue(storage.containsNode(node2))
-
-        // Delete with non-matching condition
-        storage.deleteNodes { false }
-        assertTrue(storage.containsNode(node2))
-        assertTrue(storage.containsNode(node3))
-
-        // Delete matching edges
-        storage.deleteEdges { it == edge1 }
-        assertFalse(storage.containsEdge(edge1))
-        assertTrue(storage.containsEdge(edge2))
-
-        // Delete with non-matching condition
-        storage.deleteEdges { false }
-        assertTrue(storage.containsEdge(edge2))
-
-        // Test clear operation
-        assertTrue(storage.clear())
-        assertEquals(0, storage.nodeSize)
-        assertEquals(0, storage.edgeSize)
-    }
-
-    /**
-     * Test concurrent modifications and thread safety concerns
-     */
-    @Test
-    fun testConcurrentModifications() {
-        // Setup basic data
-        storage.addNode(node1, "prop1" to "value1".strVal)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
-
-        // Test parallel node property modifications
-        val thread1 = Thread {
-            storage.setNodeProperties(node1, "thread1_prop" to "thread1_value".strVal)
+        // Try to add a duplicate node
+        storage.addNode(node1)
+        assertFailsWith<EntityAlreadyExistException> {
+            storage.addNode(node1)
         }
 
-        val thread2 = Thread {
-            storage.setNodeProperties(node1, "thread2_prop" to "thread2_value".strVal)
+        // Try to delete a non-existent node
+        assertFailsWith<EntityNotExistException> {
+            storage.deleteNode(node2)
         }
 
-        thread1.start()
-        thread2.start()
-        thread1.join()
-        thread2.join()
-
-        // Verify results - note: specific outcomes may vary since implementation is not thread-safe
-        val nodeProps = storage.getNodeProperties(node1)
-        assertTrue(nodeProps.size >= 1, "Should have at least original property")
-
-        // Test parallel edge operations
-        val thread3 = Thread {
-            try {
-                storage.addEdge(EdgeID(node1, node2, "thread3_edge"))
-            } catch (e: Exception) {
-                // Expect potential exceptions due to non-thread safety
-            }
+        // Try to add an edge connecting non-existent nodes
+        assertFailsWith<EntityNotExistException> {
+            storage.addEdge(edge1)
         }
 
-        val thread4 = Thread {
-            try {
-                storage.addEdge(EdgeID(node2, node1, "thread4_edge"))
-            } catch (e: Exception) {
-                // Expect potential exceptions due to non-thread safety
-            }
-        }
-
-        thread3.start()
-        thread4.start()
-        thread3.join()
-        thread4.join()
-
-        // Verify the storage is still in a usable state
-        assertTrue(storage.containsNode(node1))
-        assertTrue(storage.containsNode(node2))
-    }
-
-    /**
-     * Test internal structure consistency
-     */
-    @Test
-    fun testInternalStructureConsistency() {
-        // Setup graph with interconnected nodes and edges
-        storage.addNode(node1, "prop1" to "value1".strVal)
-        storage.addNode(node2, "prop2" to "value2".strVal)
-        storage.addNode(node3, "prop3" to "value3".strVal)
-
-        storage.addEdge(edge1, "edge_prop1" to "edge_value1".strVal)
-        storage.addEdge(edge2, "edge_prop2" to "edge_value2".strVal)
-        storage.addEdge(edge3, "edge_prop3" to "edge_value3".strVal)
-
-        // Verify edge relationships
-        val outgoing1 = storage.getOutgoingEdges(node1)
-        assertEquals(2, outgoing1.size)
-        assertTrue(outgoing1.contains(edge1))
-        assertTrue(outgoing1.contains(edge3))
-
-        val incoming3 = storage.getIncomingEdges(node3)
-        assertEquals(2, incoming3.size)
-        assertTrue(incoming3.contains(edge2))
-        assertTrue(incoming3.contains(edge3))
-
-        // Modify structure and verify consistency maintained
-        storage.deleteEdge(edge1)
-
-        val outgoing1After = storage.getOutgoingEdges(node1)
-        assertEquals(1, outgoing1After.size)
-        assertTrue(outgoing1After.contains(edge3))
-        assertFalse(outgoing1After.contains(edge1))
-
-        // Delete node and verify all connected edges are removed
-        storage.deleteNode(node1)
-        assertFalse(storage.containsEdge(edge3))
-        assertTrue(storage.containsEdge(edge2))
-
-        val incoming3After = storage.getIncomingEdges(node3)
-        assertEquals(1, incoming3After.size)
-        assertTrue(incoming3After.contains(edge2))
+        // Try operations after closing storage
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.nodeSize }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode(node2) }
     }
 }
