@@ -12,7 +12,7 @@ import org.jgrapht.graph.DirectedPseudograph
 
 /**
  * Non-concurrent implementation of [IStorage] using JGraphT library for in-memory graph storage.
- * For concurrent access, use [ConcurJgraphtStorageImpl] instead.
+ * For concurrent access, use [JgraphtConcurStorageImpl] instead.
  *
  * It leverages the JGraphT library to represent the graph structure and provides efficient graph operations like
  * adding, deleting, and retrieving nodes and edges.

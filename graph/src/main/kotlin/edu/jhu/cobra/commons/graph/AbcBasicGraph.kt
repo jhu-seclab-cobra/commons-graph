@@ -1,6 +1,9 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.*
+import edu.jhu.cobra.commons.graph.entity.AbcEdge
+import edu.jhu.cobra.commons.graph.entity.AbcNode
+import edu.jhu.cobra.commons.graph.entity.EdgeID
+import edu.jhu.cobra.commons.graph.entity.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.util.*
 
@@ -45,7 +48,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * The class object representing the node type, used for runtime type checking.
      * If not provided in the constructor, determined from a sample node.
      */
-    private val nodeClass by lazy { nType ?: newNodeObj("__sample__".toNid)::class.java }
+    private val nodeClass by lazy { nType ?: newNodeObj(NodeID("__sample__"))::class.java }
 
     /**
      * Creates a new node object of type [N] using the provided node ID.

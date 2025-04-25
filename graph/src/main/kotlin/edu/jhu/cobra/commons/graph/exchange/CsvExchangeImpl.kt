@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph.exchange
 
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.entity.toEntityID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.contains
 import edu.jhu.cobra.commons.value.IValue
@@ -77,7 +78,8 @@ object CsvExchangeImpl : IGraphExchange {
         val edgeHeader = edgeReader.readLine().split(CSV_DELIMITER).toMutableList().also { it.removeAt(0) }
         edgeReader.forEachLine { line ->
             val propStrings = line.split(CSV_DELIMITER).toMutableList()
-            val edgeID = runCatching { EdgeID(propStrings.removeFirst()) }.getOrNull() ?: return@forEachLine
+            val eidStr = propStrings.removeFirst().let(CsvSerializer::deserialize)
+            val edgeID = kotlin.runCatching { eidStr?.toEntityID<EdgeID>() }.getOrNull() ?: return@forEachLine
             val nullableProps = edgeHeader.zip(propStrings.map(CsvSerializer::deserialize))
             val props = nullableProps.mapNotNull { (f, s) -> s?.let { f to it } }
             if (edgeID !in into) into.addEdge(edgeID, newProperties = props.toTypedArray())
