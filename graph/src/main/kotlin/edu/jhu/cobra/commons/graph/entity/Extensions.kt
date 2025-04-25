@@ -1,11 +1,7 @@
 package edu.jhu.cobra.commons.graph.entity
 
-import edu.jhu.cobra.commons.value.IPrimitiveVal
-import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.strVal
+import edu.jhu.cobra.commons.value.*
 import kotlin.properties.ReadWriteProperty
-import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 
 
@@ -109,80 +105,6 @@ inline fun <reified T : IEntity.Type> entityType(
 }
 
 /**
- * Converts an [IValue] to a [NodeID] using its core value.
- *
- * @return A [NodeID] constructed from the string representation of the [IValue]'s core value.
- */
-val IValue.toNid get() = NodeID(this.core.toString())
-
-/**
- * Converts a [String] to a [NodeID].
- *
- * @return A [NodeID] constructed from the string.
- */
-val String.toNid get() = NodeID(this)
-
-/**
- * Converts a [StrVal] to an [EdgeID] using its core value.
- *
- * @return An [EdgeID] constructed from the core string value of the [StrVal].
- */
-val StrVal.toEid get() = EdgeID(this.core)
-
-/**
- * Converts a [String] to an [EdgeID].
- *
- * @return An [EdgeID] constructed from the string.
- */
-val String.toEid get() = EdgeID(this)
-
-/**
- * Converts the string representation to an entity identifier of the specified type.
- *
- * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
- * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
- *
- * @return The constructed entity identifier of type `ID`.
- * @throws IllegalArgumentException if the specified `ID` type is unsupported.
- */
-inline fun <reified ID : IEntity.ID> String.toEntityID(): ID = when (ID::class) {
-    NodeID::class -> NodeID(this) as ID
-    EdgeID::class -> EdgeID(this) as ID
-    else -> throw IllegalArgumentException("Unsupported ID type")
-}
-
-/**
- * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
- *
- * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
- * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
- *
- * @return The constructed entity identifier of type `ID`.
- * @throws IllegalArgumentException if the specified `ID` type is unsupported.
- */
-inline fun <reified ID : IEntity.ID> StrVal.toEntityID(): ID = when (ID::class) {
-    NodeID::class -> NodeID(this.core) as ID
-    EdgeID::class -> EdgeID(this.core) as ID
-    else -> throw IllegalArgumentException("Unsupported ID type")
-}
-
-/**
- * Converts the string representation of a [String] to an entity identifier of the specified type.
- *
- * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
- * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
- *
- * @return The constructed entity identifier of type `ID`.
- * @throws IllegalArgumentException if the specified `ID` type is unsupported.
- */
-@Suppress("UNCHECKED_CAST")
-fun <K : IEntity.ID> String.toEntityID(type: KClass<out K>): K = when (type) {
-    NodeID::class -> NodeID(this) as K
-    EdgeID::class -> EdgeID(this) as K
-    else -> throw IllegalArgumentException("Unsupported ID type")
-}
-
-/**
  * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
  *
  * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
@@ -192,9 +114,11 @@ fun <K : IEntity.ID> String.toEntityID(type: KClass<out K>): K = when (type) {
  * @throws IllegalArgumentException if the specified `ID` type is unsupported.
  */
 @Suppress("UNCHECKED_CAST")
-fun <K : IEntity.ID> StrVal.toEntityID(type: KClass<out K>): K = when (type) {
-    NodeID::class -> NodeID(this.core) as K
-    EdgeID::class -> EdgeID(this.core) as K
+fun <K : IEntity.ID> IValue.toEntityID(): K = when (this) {
+    is StrVal -> NodeID(this) as K
+    is ListVal -> EdgeID(this) as K
     else -> throw IllegalArgumentException("Unsupported ID type")
 }
+
+
 

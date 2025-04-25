@@ -11,7 +11,6 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.orEmpty
-import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import org.mapdb.DB
 import org.mapdb.DBException
 import org.mapdb.DBMaker
@@ -22,7 +21,7 @@ import org.mapdb.Serializer
  * This class provides efficient memory management by storing data outside the Java heap,
  * reducing garbage collection overhead and improving performance for large datasets.
  * Please notice that this implementation is not thread-safe.
- * If you need to use it in a concurrent environment, consider using [ConcurMapDBStorageImpl].
+ * If you need to use it in a concurrent environment, consider using [MapDBConcurStorageImpl].
  *
  * @param config Configuration function for initializing the MapDB database.
  *              Defaults to a temporary file-based off-heap configuration.
@@ -35,8 +34,9 @@ class MapDBStorageImpl(
 
     private val nodeProperties = EntityPropertyMap<NodeID>(dbManager, "nodeProps")
     private val edgeProperties = EntityPropertyMap<EdgeID>(dbManager, "edgeProps")
-    private val structSerializer = MapDbValSerializer<SetVal>(DftByteArraySerializerImpl)
-    private val graphStructure = dbManager.hashMap("structure", Serializer.STRING, structSerializer).create()
+    private val graphStructure = dbManager.hashMap(
+        "structure", Serializer.STRING, MapDbValSerializer<SetVal>()
+    ).create()
 
     /**
      * Closes the storage and releases all associated resources.
