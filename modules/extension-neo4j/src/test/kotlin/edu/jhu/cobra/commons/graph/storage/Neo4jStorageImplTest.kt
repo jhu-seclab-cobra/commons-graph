@@ -207,7 +207,7 @@ class Neo4jStorageImplTest {
         storage.addNode(nodeId)
 
         assertFailsWith<InvalidPropNameException> {
-            storage.addNode(nodeId, "_meta_prop" to "value".strVal)
+            storage.setNodeProperties(nodeId, "__meta_id__" to "value".strVal)
         }
     }
 
