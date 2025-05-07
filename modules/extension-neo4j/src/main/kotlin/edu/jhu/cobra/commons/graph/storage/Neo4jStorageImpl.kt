@@ -3,102 +3,90 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
-import edu.jhu.cobra.commons.graph.entity.toEid
-import edu.jhu.cobra.commons.graph.entity.toNid
+import edu.jhu.cobra.commons.graph.utils.*
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
-import edu.jhu.cobra.commons.value.serializer.IValSerializer
-import edu.jhu.cobra.commons.value.strVal
-import org.neo4j.graphdb.*
+import org.neo4j.graphdb.Direction
+import org.neo4j.graphdb.GraphDatabaseService
+import org.neo4j.graphdb.RelationshipType
 import org.neo4j.graphdb.factory.GraphDatabaseFactory
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
+import kotlin.collections.Map
+import kotlin.collections.Set
+import kotlin.collections.asSequence
+import kotlin.collections.associateWith
+import kotlin.collections.filter
+import kotlin.collections.forEach
+import kotlin.collections.map
+import kotlin.collections.set
+import kotlin.collections.toSet
 import kotlin.io.path.createDirectories
+import kotlin.io.path.notExists
 
 /**
  * Transaction-based implementation of [IStorage] using Neo4j embedded mode.
  * Provides thread-safe graph operations with ACID guarantees.
  *
  * @param graphPath The file path where the Neo4J database will be stored.
- * @param serializer The serializer used for property serialization.
  */
 class Neo4jStorageImpl(
-    private val graphPath: Path,
-    private val serializer: IValSerializer<ByteArray> = DftByteArraySerializerImpl
+    private val graphPath: Path
 ) : IStorage, AutoCloseable {
 
     private var isClosed: Boolean = false
 
     private val database: GraphDatabaseService by lazy {
-        graphPath.createDirectories()
-        GraphDatabaseFactory()
-            .newEmbeddedDatabaseBuilder(graphPath.toFile())
-            .newGraphDatabase()
-            .also { db ->
-                Runtime.getRuntime().addShutdownHook(Thread { db.shutdown() })
-            }
+        if (graphPath.notExists()) graphPath.createDirectories()
+        val graphDB = GraphDatabaseFactory().newEmbeddedDatabaseBuilder(graphPath.toFile()).newGraphDatabase()
+        graphDB.also { Runtime.getRuntime().addShutdownHook(Thread { it.shutdown() }) }
     }
 
-    private val node2ElementIdMap: MutableMap<NodeID, String> = mutableMapOf()
-    private val edge2ElementIdMap: MutableMap<EdgeID, String> = mutableMapOf()
+    private fun <R> readTx(action: GraphDatabaseService.() -> R): R =
+        if (isClosed) throw AccessClosedStorageException()
+        else database.beginTx().use { database.action() }
+
+    private fun <R> writeTx(action: GraphDatabaseService.() -> R): R =
+        if (isClosed) throw AccessClosedStorageException()
+        else database.beginTx().use { tx ->
+            val results = runCatching { database.action() }
+            if (results.isSuccess) tx.success() else tx.failure()
+            results.getOrThrow()
+        }
+
+    private val node2ElementIdMap: ConcurrentMap<NodeID, String> = ConcurrentHashMap()
+    private val edge2ElementIdMap: ConcurrentMap<EdgeID, String> = ConcurrentHashMap()
 
     init {
-        loadExistingData()
-    }
-
-    private fun loadExistingData() = readTx {
-        allNodes.forEach { node ->
-            node2ElementIdMap[node.metaID] = node.id.toString()
-        }
-        allRelationships.forEach { rel ->
-            edge2ElementIdMap[rel.metaID] = rel.id.toString()
+        readTx {
+            allNodes.forEach { node2ElementIdMap[it.metaID] = it.id.toString() }
+            allRelationships.forEach { edge2ElementIdMap[it.metaID] = it.id.toString() }
         }
     }
 
-    private fun <R> readTx(action: GraphDatabaseService.() -> R): R {
-        if (isClosed) throw AccessClosedStorageException()
-        return database.beginTx().use { database.action() }
-    }
+    override val nodeSize: Int
+        get() =
+            if (isClosed) throw AccessClosedStorageException() else node2ElementIdMap.size
 
-    private fun <R> writeTx(action: GraphDatabaseService.() -> R): R {
-        if (isClosed) throw AccessClosedStorageException()
-        return database.beginTx().use { tx ->
-            try {
-                val result = database.action()
-                tx.success()
-                result
-            } catch (e: Exception) {
-                tx.failure()
-                throw e
-            }
-        }
-    }
+    override val nodeIDsSequence: Sequence<NodeID>
+        get() =
+            if (isClosed) throw AccessClosedStorageException() else node2ElementIdMap.keys.asSequence()
 
-    private operator fun PropertyContainer.set(byName: String, newVal: IValue) {
-        if (byName.startsWith("_meta_")) throw InvalidPropNameException(byName, null)
-        setProperty(byName, serializer.serialize(newVal))
-    }
+    override val edgeSize: Int
+        get() =
+            if (isClosed) throw AccessClosedStorageException() else edge2ElementIdMap.size
 
-    private operator fun PropertyContainer.get(byName: String): IValue? =
-        (getProperty(byName, null) as? ByteArray)?.let(serializer::deserialize)
+    override val edgeIDsSequence: Sequence<EdgeID>
+        get() =
+            if (isClosed) throw AccessClosedStorageException() else edge2ElementIdMap.keys.asSequence()
 
-    private var Node.metaID: NodeID
-        get() = (getProperty("_meta_id", null) as? ByteArray)?.let(serializer::deserialize)!!.core.toString().toNid
-        set(value) = setProperty("_meta_id", serializer.serialize(value.name.strVal))
+    override fun containsNode(id: NodeID): Boolean =
+        if (isClosed) throw AccessClosedStorageException() else node2ElementIdMap.containsKey(id)
 
-    private var Relationship.metaID: EdgeID
-        get() = (getProperty("_meta_id", null) as? ByteArray)?.let(serializer::deserialize)!!.core.toString().toEid
-        set(value) = setProperty("_meta_id", serializer.serialize(value.name.strVal))
-
-    override val nodeSize: Int get() = node2ElementIdMap.size
-    override val nodeIDsSequence: Sequence<NodeID> get() = node2ElementIdMap.keys.asSequence()
-    override val edgeSize: Int get() = edge2ElementIdMap.size
-    override val edgeIDsSequence: Sequence<EdgeID> get() = edge2ElementIdMap.keys.asSequence()
-
-    override fun containsNode(id: NodeID): Boolean = node2ElementIdMap.containsKey(id)
-    override fun containsEdge(id: EdgeID): Boolean = edge2ElementIdMap.containsKey(id)
+    override fun containsEdge(id: EdgeID): Boolean =
+        if (isClosed) throw AccessClosedStorageException() else edge2ElementIdMap.containsKey(id)
 
     override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) = writeTx {
         if (containsNode(id)) throw EntityAlreadyExistException(id)
@@ -126,8 +114,7 @@ class Neo4jStorageImpl(
     override fun getNodeProperties(id: NodeID): Map<String, IValue> = readTx {
         if (!containsNode(id)) throw EntityNotExistException(id)
         val node = getNodeById(node2ElementIdMap[id]!!.toLong())
-        node.propertyKeys.filter { !it.startsWith("_meta_") }
-            .associateWith { node[it]!! }
+        node.keys.associateWith { node[it]!! }
     }
 
     override fun getNodeProperty(id: NodeID, byName: String): IValue? = readTx {
@@ -138,8 +125,7 @@ class Neo4jStorageImpl(
     override fun getEdgeProperties(id: EdgeID): Map<String, IValue> = readTx {
         if (!containsEdge(id)) throw EntityNotExistException(id)
         val edge = getRelationshipById(edge2ElementIdMap[id]!!.toLong())
-        edge.propertyKeys.filter { !it.startsWith("_meta_") }
-            .associateWith { edge[it]!! }
+        edge.keys.associateWith { edge[it]!! }
     }
 
     override fun getEdgeProperty(id: EdgeID, byName: String): IValue? = readTx {
@@ -217,9 +203,7 @@ class Neo4jStorageImpl(
     }
 
     override fun close() {
-        if (!isClosed) {
-            isClosed = true
-            database.shutdown()
-        }
+        if (!isClosed) database.shutdown()
+        isClosed = true
     }
 }
