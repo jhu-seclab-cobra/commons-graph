@@ -18,6 +18,7 @@ repositories {
 dependencies {
     api(libs.cobra.commons.value)
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines)
 }
 
 kotlin {
