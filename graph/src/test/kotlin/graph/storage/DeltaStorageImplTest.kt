@@ -206,4 +206,44 @@ class DeltaStorageImplTest {
             deltaStorage.deleteEdge(EdgeID(testNode1, testNode2, "nonexistent"))
         }
     }
+
+    @Test
+    fun `test direct modification of underlying storage`() {
+        // Add node directly to foundStorage
+        foundStorage.addNode(testNode1, testProperty)
+
+        // Verify that deltaStorage can see the node
+        assertTrue(deltaStorage.containsNode(testNode1))
+        assertEquals(testProperty.second, deltaStorage.getNodeProperty(testNode1, testProperty.first))
+
+        // Add node directly to presentStorage
+        val testNode3 = NodeID("test3")
+        val presentProperty = "presentProp" to StrVal("presentValue")
+        presentStorage.addNode(testNode3, presentProperty)
+
+        // Verify that deltaStorage can see the node
+        assertTrue(deltaStorage.containsNode(testNode3))
+        assertEquals(presentProperty.second, deltaStorage.getNodeProperty(testNode3, presentProperty.first))
+
+        // Note: Direct modifications to underlying storage may cause inconsistencies in deltaStorage's internal state
+        // For example, the nodeCounter might not be updated correctly
+
+        // Add edge directly to foundStorage
+        foundStorage.addNode(testNode2)
+        foundStorage.addEdge(testEdge, testProperty)
+
+        // Verify that deltaStorage can see the edge
+        assertTrue(deltaStorage.containsEdge(testEdge))
+        assertEquals(testProperty.second, deltaStorage.getEdgeProperty(testEdge, testProperty.first))
+
+        // Delete node directly from foundStorage
+        foundStorage.deleteNode(testNode1)
+
+        // This might lead to inconsistent state in deltaStorage
+        // The node might still be reported as existing in deltaStorage even though it's deleted in foundStorage
+        // or the nodeCounter might be incorrect
+
+        // This test demonstrates that while direct modification of underlying storage is possible,
+        // it can lead to inconsistent state in deltaStorage and should be used with caution
+    }
 }
