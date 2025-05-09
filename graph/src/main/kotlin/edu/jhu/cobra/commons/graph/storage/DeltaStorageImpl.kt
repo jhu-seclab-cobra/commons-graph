@@ -15,29 +15,47 @@ import edu.jhu.cobra.commons.value.strVal
  * Please note that this implementation is used for sharing the base delta between multiple storage instances in
  * multi-thread environments, but the storage itself is not thread-safe.
  *
+ * Please pay attention to that the individual modifications for the delta storage will BREAK the correctness of the
+ * storage, so that all modifications should be done through the method existing in the [DeltaStorageImpl].
+ *
  * Modifications are always applied to the latest delta, and newer deltas take precedence over older ones in terms of data priority.
  *
  * @param baseDelta The base storage that serves as the foundation for all deltas. Defaults to [NativeStorageImpl].
- * @param presentDelta Optional additional named delta slices to initialize the storage with.
+ * @param presentDelta Optional additional named delta slices to initialize the storage with
  */
 class DeltaStorageImpl(
     private val baseDelta: IStorage,
     private val presentDelta: IStorage = NativeStorageImpl(),
 ) : IStorage {
+
+    private var nodeCounter: Int = 0
+    private var edgeCounter: Int = 0
     private val deletedNodesHolder = hashSetOf<NodeID>()
     private val deletedEdgesHolder = hashSetOf<EdgeID>()
 
     private var isClosed: Boolean = false
 
-    override val nodeSize: Int get() = baseDelta.nodeSize + presentDelta.nodeSize - deletedNodesHolder.size
+    init {
+        nodeCounter = baseDelta.nodeSize + presentDelta.nodeIDsSequence.count { it !in baseDelta }
+        edgeCounter = baseDelta.edgeSize + presentDelta.edgeIDsSequence.count { it !in baseDelta }
+    }
+
+    override val nodeSize: Int get() = if (isClosed) throw AccessClosedStorageException() else nodeCounter
+    override val edgeSize: Int get() = if (isClosed) throw AccessClosedStorageException() else edgeCounter
 
     override val nodeIDsSequence: Sequence<NodeID>
-        get() = (baseDelta.nodeIDsSequence + presentDelta.nodeIDsSequence).filter { it !in deletedNodesHolder }
-
-    override val edgeSize: Int get() = baseDelta.edgeSize + presentDelta.edgeSize - deletedEdgesHolder.size
+        get() {
+            if (isClosed) throw AccessClosedStorageException()
+            return (baseDelta.nodeIDsSequence + presentDelta.nodeIDsSequence).filter { it !in deletedNodesHolder }
+                .distinct()
+        }
 
     override val edgeIDsSequence: Sequence<EdgeID>
-        get() = (baseDelta.edgeIDsSequence + presentDelta.edgeIDsSequence).filter { it !in deletedEdgesHolder }
+        get() {
+            if (isClosed) throw AccessClosedStorageException()
+            return (baseDelta.edgeIDsSequence + presentDelta.edgeIDsSequence).filter { it !in deletedEdgesHolder }
+                .distinct()
+        }
 
     override fun containsNode(id: NodeID): Boolean {
         if (isClosed) throw AccessClosedStorageException()
@@ -52,16 +70,17 @@ class DeltaStorageImpl(
     }
 
     override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) {
-        if (containsNode(id)) throw EntityAlreadyExistException(id)
+        if (isClosed) throw AccessClosedStorageException()
+        if (containsNode(id)) throw EntityAlreadyExistException(id) else nodeCounter += 1
         deletedNodesHolder.remove(element = id)
         if (baseDelta.containsNode(id) || presentDelta.containsNode(id)) return
         presentDelta.addNode(id, *newProperties)
     }
 
     override fun addEdge(id: EdgeID, vararg newProperties: Pair<String, IValue>) {
-        if (containsEdge(id)) throw EntityAlreadyExistException(id)
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
+        if (containsEdge(id)) throw EntityAlreadyExistException(id) else edgeCounter += 1
         deletedEdgesHolder.remove(element = id)
         if (baseDelta.containsEdge(id) || presentDelta.containsEdge(id)) return
         if (!presentDelta.containsNode(id.srcNid)) presentDelta.addNode(id.srcNid)
@@ -114,11 +133,19 @@ class DeltaStorageImpl(
     }
 
     override fun deleteNode(id: NodeID) {
-        if (!containsNode(id)) throw EntityNotExistException(id)
-        if (presentDelta.containsNode(id)) presentDelta.deleteNode(id = id)
+        if (!containsNode(id)) throw EntityNotExistException(id) else nodeCounter -= 1
+        if (presentDelta.containsNode(id)) {
+            edgeCounter -= presentDelta.getOutgoingEdges(id).size
+            edgeCounter -= presentDelta.getIncomingEdges(id).size
+            presentDelta.deleteNode(id = id)
+        }
         if (!baseDelta.containsNode(id)) return
-        deletedEdgesHolder.addAll(baseDelta.getOutgoingEdges(id))
-        deletedEdgesHolder.addAll(baseDelta.getIncomingEdges(id))
+        val outgoingEdges = baseDelta.getOutgoingEdges(id)
+        deletedEdgesHolder.addAll(outgoingEdges)
+        edgeCounter -= outgoingEdges.size
+        val incomingEdges = baseDelta.getIncomingEdges(id)
+        deletedEdgesHolder.addAll(incomingEdges)
+        edgeCounter -= incomingEdges.size
         deletedNodesHolder.add(id)
     }
 
@@ -128,7 +155,7 @@ class DeltaStorageImpl(
 
 
     override fun deleteEdge(id: EdgeID) {
-        if (!containsEdge(id)) throw EntityNotExistException(id)
+        if (!containsEdge(id)) throw EntityNotExistException(id) else edgeCounter -= 1
         if (presentDelta.containsEdge(id)) presentDelta.deleteEdge(id = id)
         if (baseDelta.containsEdge(id)) deletedEdgesHolder.add(id)
     }

@@ -24,11 +24,11 @@ val PropertyContainer.keys: Collection<String>
     get() =
         this.propertyKeys.filter { it != META_ID }.distinct()
 
-var Neo4jNode.metaID: NodeID
+var Neo4jNode.storageID: NodeID
     get() = NodeID(getProp<StrVal>(META_ID)!!)
     set(value) = setProp(META_ID, value.serialize)
 
-var Neo4jEdge.metaID: EdgeID
+var Neo4jEdge.storageID: EdgeID
     get() = EdgeID(getProp<ListVal>(META_ID)!!)
     set(value) = setProp(META_ID, value.serialize)
 

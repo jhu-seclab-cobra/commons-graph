@@ -28,7 +28,7 @@ class NativeStorageImpl : IStorage {
     /** A HashMap to store edge properties with EdgeId as the key and a PropDict as the value. */
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
 
-    /** A Directed Pseudo-graph from JGraphT library to store nodes and edges. */
+    /** A mutable map used to store the graph structure. */
     private val graphStructure: MutableMap<NodeID, Set<EdgeID>> = mutableMapOf()
 
     override val nodeSize: Int

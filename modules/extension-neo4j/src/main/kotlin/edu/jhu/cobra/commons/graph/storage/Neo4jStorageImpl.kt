@@ -5,7 +5,10 @@ import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.entity.EdgeID
 import edu.jhu.cobra.commons.graph.entity.NodeID
-import edu.jhu.cobra.commons.graph.utils.*
+import edu.jhu.cobra.commons.graph.utils.get
+import edu.jhu.cobra.commons.graph.utils.keys
+import edu.jhu.cobra.commons.graph.utils.set
+import edu.jhu.cobra.commons.graph.utils.storageID
 import edu.jhu.cobra.commons.value.IValue
 import org.neo4j.graphdb.Direction
 import org.neo4j.graphdb.GraphDatabaseService
@@ -14,15 +17,6 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
-import kotlin.collections.Map
-import kotlin.collections.Set
-import kotlin.collections.asSequence
-import kotlin.collections.associateWith
-import kotlin.collections.filter
-import kotlin.collections.forEach
-import kotlin.collections.map
-import kotlin.collections.set
-import kotlin.collections.toSet
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
 
@@ -61,8 +55,8 @@ class Neo4jStorageImpl(
 
     init {
         readTx {
-            allNodes.forEach { node2ElementIdMap[it.metaID] = it.id.toString() }
-            allRelationships.forEach { edge2ElementIdMap[it.metaID] = it.id.toString() }
+            allNodes.forEach { node2ElementIdMap[it.storageID] = it.id.toString() }
+            allRelationships.forEach { edge2ElementIdMap[it.storageID] = it.id.toString() }
         }
     }
 
@@ -91,7 +85,7 @@ class Neo4jStorageImpl(
     override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) = writeTx {
         if (containsNode(id)) throw EntityAlreadyExistException(id)
         val newNode = createNode()
-        newNode.metaID = id
+        newNode.storageID = id
         node2ElementIdMap[id] = newNode.id.toString()
         newProperties.forEach { (name, value) -> newNode[name] = value }
     }
@@ -100,14 +94,11 @@ class Neo4jStorageImpl(
         if (containsEdge(id)) throw EntityAlreadyExistException(id)
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
-
         val srcNode = getNodeById(node2ElementIdMap[id.srcNid]!!.toLong())
         val dstNode = getNodeById(node2ElementIdMap[id.dstNid]!!.toLong())
-
         val newEdge = srcNode.createRelationshipTo(dstNode, RelationshipType.withName(id.eType))
-        newEdge.metaID = id
+        newEdge.storageID = id
         edge2ElementIdMap[id] = newEdge.id.toString()
-
         newProperties.forEach { (name, value) -> newEdge[name] = value }
     }
 
@@ -153,7 +144,7 @@ class Neo4jStorageImpl(
         if (!containsNode(id)) throw EntityNotExistException(id)
         val node = getNodeById(node2ElementIdMap.remove(id)!!.toLong())
         node.relationships.forEach { edge ->
-            edge2ElementIdMap.remove(edge.metaID)
+            edge2ElementIdMap.remove(edge.storageID)
             edge.delete()
         }
         node.delete()
@@ -175,23 +166,21 @@ class Neo4jStorageImpl(
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> = readTx {
         if (!containsNode(id)) throw EntityNotExistException(id)
         val node = getNodeById(node2ElementIdMap[id]!!.toLong())
-        node.getRelationships(Direction.INCOMING).map { it.metaID }.toSet()
+        node.getRelationships(Direction.INCOMING).map { it.storageID }.toSet()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> = readTx {
         if (!containsNode(id)) throw EntityNotExistException(id)
         val node = getNodeById(node2ElementIdMap[id]!!.toLong())
-        node.getRelationships(Direction.OUTGOING).map { it.metaID }.toSet()
+        node.getRelationships(Direction.OUTGOING).map { it.storageID }.toSet()
     }
 
     override fun getEdgesBetween(from: NodeID, to: NodeID): Set<EdgeID> = readTx {
         if (!containsNode(from)) throw EntityNotExistException(from)
         if (!containsNode(to)) throw EntityNotExistException(to)
         val fromNode = getNodeById(node2ElementIdMap[from]!!.toLong())
-        fromNode.getRelationships(Direction.OUTGOING)
-            .filter { it.endNode.metaID == to }
-            .map { it.metaID }
-            .toSet()
+        val allRelationships = fromNode.getRelationships(Direction.OUTGOING).asSequence()
+        allRelationships.filter { it.endNode.storageID == to }.map { it.storageID }.toSet()
     }
 
     override fun clear(): Boolean = writeTx {
