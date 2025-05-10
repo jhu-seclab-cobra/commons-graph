@@ -5,9 +5,6 @@ import edu.jhu.cobra.commons.graph.entity.NodeID
 import edu.jhu.cobra.commons.graph.entity.toEntityID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.contains
-import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
-import edu.jhu.cobra.commons.value.serializer.asCharBuffer
 import java.nio.file.Path
 import kotlin.io.path.*
 
@@ -15,7 +12,7 @@ import kotlin.io.path.*
  * Exports the nodes and edges from the storage to a CSV directory.
  * This exchanger will create CSV files for nodes and edges and allows filtering of entities that are exported.
  */
-object CsvExchangeImpl : IGraphExchange {
+object NativeCsvExchangeImpl : IGraphExchange {
 
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isDirectory()) return false
@@ -89,22 +86,4 @@ object CsvExchangeImpl : IGraphExchange {
         return into
     }
 
-}
-
-private const val CSV_DELIMITER = "\t"
-
-private object CsvSerializer {
-    private val ESCAPE_MAP = setOf("\n" to "\\n", "\r" to "\\r", "\t" to "\\t", "\r\n" to "\\r\\n")
-    private val UNESCAPE_MAP = setOf("\\n" to "\n", "\\r" to "\r", "\\t" to "\t", "\\r\\n" to "\r\n")
-
-    fun serialize(value: IValue): String {
-        val rawString = DftCharBufferSerializerImpl.serialize(value).toString()
-        return ESCAPE_MAP.fold(rawString) { o, (c, r) -> o.replace(c, r) }
-    }
-
-    fun deserialize(value: String): IValue? {
-        if (value.isEmpty()) return null // The mini length of a serialized value UNSURE is 3
-        val unescaped = UNESCAPE_MAP.fold(value) { o, (c, r) -> o.replace(c, r) }
-        return DftCharBufferSerializerImpl.deserialize(unescaped.asCharBuffer())
-    }
 }
