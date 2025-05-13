@@ -1,16 +1,5 @@
-# Compiled class file
+# === Java/Kotlin/Gradle Build Artifacts ===
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
 *.nar
@@ -18,22 +7,49 @@
 *.zip
 *.tar.gz
 *.rar
+build/
+out/
+.gradle/
+.kotlin/
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# === IDE/Editor Files ===
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# === OS/System Files ===
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# === Logs & Temp ===
+*.log
+.mtj.tmp/
 hs_err_pid*
 replay_pid*
 
-# Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
-.kotlin/
-# Ignore Gradle project-specific cache directory
-.gradle
+# === Misc ===
+# Ignore generated reports, test results, and coverage
+reports/
+test-results/
+kover/
 
-.idea
+# === Exclude all build/libs from version control ===
+**/libs/
 
-.vscode
+# === Ignore user-specific files ===
+*.swp
+*.swo
+*~
 
-# Ignore Gradle build output directory
-build
-out
-
-**/.DS_Store
+# === Ignore any other unwanted files ===
+# (add more patterns as needed)
