@@ -8,7 +8,6 @@ import edu.jhu.cobra.commons.graph.storage.contains
 import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.mapVal
-import edu.jhu.cobra.commons.value.strVal
 import org.mapdb.DBMaker
 import java.nio.file.Path
 import kotlin.io.path.*
@@ -17,7 +16,10 @@ import kotlin.io.path.*
  * Implementation of [IGraphExchange] using MapDB for graph data persistence.
  * Provides functionality to export and import graph data between [IStorage] and MapDB files.
  */
-object MapDBGraphExchangeImpl : IGraphExchange {
+object MapDbGraphExchangeImpl : IGraphExchange {
+
+    private const val NODE_ID_KEY = "_nid"
+    private const val EDGE_ID_KEY = "_eid"
 
     /** Serializer for MapDB value storage. */
     private val MapSerializer = MapDbValSerializer<MapVal>()
@@ -52,16 +54,16 @@ object MapDBGraphExchangeImpl : IGraphExchange {
         if (dstFile.parent.notExists()) dstFile.createParentDirectories()
         val dbManager = DBMaker.fileDB(dstFile.toFile()).fileMmapEnableIfSupported().make()
         dbManager.use {
-            // we use list to ensure order of nodes and edges by which the ast loading will ensure same
+            // we use a list to ensure the order of nodes and edges by which the ast loading will ensure same
             val nodesList = dbManager.indexTreeList("nodes", MapSerializer).create()
             from.nodeIDsSequence.filter(predicate).forEach { nodeID ->
                 val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
-                nodesList.add(nodeProperties.also { it.add("_nid", nodeID.name.strVal) })
+                nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, nodeID.serialize) })
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).create()
             from.edgeIDsSequence.filter(predicate).forEach { edgeID ->
                 val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
-                edgesList.add(edgeProperties.also { it.add("_eid", edgeID.name.strVal) })
+                edgesList.add(edgeProperties.also { it.add(EDGE_ID_KEY, edgeID.serialize) })
             }
         }
         return dstFile
@@ -76,19 +78,19 @@ object MapDBGraphExchangeImpl : IGraphExchange {
      * @throws IllegalArgumentException if srcFile does not exist or is empty
      */
     override fun import(srcFile: Path, into: IStorage, predicate: EntityFilter): IStorage {
-        require(srcFile.exists() || srcFile.fileSize() > 0) { "File $srcFile does not exist" }
+        require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exist" }
         val dbManager = DBMaker.fileDB(srcFile.toFile()).fileMmapEnableIfSupported().make()
         dbManager.use {
             val nodesList = dbManager.indexTreeList("nodes", MapSerializer).open()
             nodesList.forEach { props ->
-                val nid = NodeID(props!!.remove("_nid")!!.core.toString())
+                val nid = NodeID(props!!.remove(NODE_ID_KEY)!!.core.toString())
                 if (!predicate(nid)) return@forEach // skip the new node
                 if (nid in into) into.setNodeProperties(nid, *props.toTypeArray())
                 else into.addNode(id = nid, newProperties = props.toTypeArray())
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).open()
             edgesList.forEach { props ->
-                val eid = props!!.remove("_eid")!!.toEntityID<EdgeID>()
+                val eid = props!!.remove(EDGE_ID_KEY)!!.toEntityID<EdgeID>()
                 if (!predicate(eid)) return@forEach // skip the new edge
                 if (eid.srcNid !in into) into.addNode(id = eid.srcNid)
                 if (eid.dstNid !in into) into.addNode(id = eid.dstNid)
