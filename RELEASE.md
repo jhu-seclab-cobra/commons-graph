@@ -1,5 +1,5 @@
 ## Version 0.1.0 (Initial Release)
-
+[![codecov](https://codecov.io/gh/jhu-seclab-cobra/commons-graph/branch/main/graph/badge.svg)](https://codecov.io/gh/jhu-seclab-cobra/commons-graph)
 [![Kotlin JVM](https://img.shields.io/badge/Kotlin%20JVM-1.8%2B-blue?logo=kotlin)](https://kotlinlang.org/)
 [![Release](https://img.shields.io/github/v/release/jhu-seclab-cobra/commons-graph?include_prereleases)](https://github.com/jhu-seclab-cobra/commons-graph/releases)
 [![last commit](https://img.shields.io/github/last-commit/jhu-seclab-cobra/commons-graph)](https://github.com/jhu-seclab-cobra/commons-graph/commits/main)
