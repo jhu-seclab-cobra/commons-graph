@@ -32,8 +32,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: jhu-seclab-cobra/commons-graph
-          files: |
-            ./graph/build/reports/kover/report.xml
-            ./modules/extension-mapdb/build/reports/kover/report.xml
-            ./modules/extension-jgrapht/build/reports/kover/report.xml
-            ./modules/extension-neo4j/build/reports/kover/report.xml
+          files: ./graph/build/reports/kover/report.xml,./modules/extension-mapdb/build/reports/kover/report.xml,./modules/extension-jgrapht/build/reports/kover/report.xml,./modules/extension-neo4j/build/reports/kover/report.xml
