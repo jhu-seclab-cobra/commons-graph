@@ -21,8 +21,11 @@ jobs:
       - name: Grant permission
         run: chmod +x ./gradlew
 
-      - name: Generate coverage report for all modules
+      - name: Run tests and generate coverage reports
         run: ./gradlew :graph:test :modules:extension-mapdb:test :modules:extension-jgrapht:test :modules:extension-neo4j:test :graph:koverXmlReport :modules:extension-mapdb:koverXmlReport :modules:extension-jgrapht:koverXmlReport :modules:extension-neo4j:koverXmlReport
+
+      - name: List all coverage reports (debug)
+        run: find . -name report.xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
