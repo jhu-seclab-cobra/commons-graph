@@ -26,7 +26,7 @@ internal class EntityPropertyMap<K : IEntity.ID>(
 
     private val identities = dbManager.hashMap(
         "$name-id",
-        MapDbEntityIDSerializer<K>(),
+        MapDbIDSerializer<K>(),
         SERIALIZER_SETVAL
     ).counterEnable().createOrOpen()
 
@@ -34,7 +34,7 @@ internal class EntityPropertyMap<K : IEntity.ID>(
 
     /**
      * Inner class that represents a property map for a specific entity.
-     * Implements [MutableMap] interface for property name to value mapping.
+     * Implements [MutableMap] interface for property name-to-value mapping.
      *
      * @param eid The entity ID string
      */
