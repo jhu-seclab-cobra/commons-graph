@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlinx.kover)
     `java-library`
     `maven-publish`
 }
