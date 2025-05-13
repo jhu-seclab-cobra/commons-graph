@@ -6,24 +6,24 @@ import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.numVal
 
 /**
- * The identifier for the meta node of the graph.
- * The meta node is used to store metadata about the graph.
+ * The identifier for the meta-node of the graph.
+ * The meta-node is used to store metadata about the graph.
  */
 val <N : AbcNode, E : AbcEdge> IGraph<N, E>.META_NID get() = NodeID(this.graphName + "__meta__")
 
 /**
- * Retrieves the value of a property from the meta node of the graph.
- * If the meta node does not exist, it is created before fetching the property value.
+ * Retrieves the value of a property from the meta-node of the graph.
+ * If the meta-node does not exist, it is created before fetching the property value.
  *
- * @param propName The name of the property to retrieve from the meta node.
+ * @param propName The name of the property to retrieve from the meta-node.
  * @return The value of the specified property if it exists, or `null` otherwise.
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getMeta(propName: String): IValue? =
     (getNode(META_NID) ?: addNode(META_NID)).getProp(name = propName)
 
 /**
- * Sets a metadata property on the graph's meta node.
- * If the meta node does not exist, it will be created.
+ * Sets a metadata property on the graph's meta-node.
+ * If the meta-node does not exist, it will be created.
  *
  * @param propName The name of the property to set.
  * @param value The value to associate with the specified property.
