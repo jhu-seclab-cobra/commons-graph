@@ -8,7 +8,7 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.util.*
 
 /**
- * Abstract base class implementing [IGraph] interface with caching mechanism.
+ * Abstract base class implementing [IGraph] interface with a caching mechanism.
  * Maintains synchronized caches for node and edge identifiers.
  *
  * @param N The type of nodes in the graph, must extend [AbcNode].
@@ -158,7 +158,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
 
     /**
      * Retrieves all outgoing edges from the specified node.
-     * Returns empty sequence if the node does not exist.
+     * Returns an empty sequence if the node does not exist.
      *
      * @param of The node whose outgoing edges are to be retrieved.
      * @return A sequence of outgoing edges if the node exists, empty sequence otherwise.
@@ -171,7 +171,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
 
     /**
      * Retrieves all incoming edges to the specified node.
-     * Returns empty sequence if the node does not exist.
+     * Returns an empty sequence if the node does not exist.
      *
      * @param of The node whose incoming edges are to be retrieved.
      * @return A sequence of incoming edges if the node exists, empty sequence otherwise.

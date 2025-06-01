@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlinx.kover)
@@ -36,4 +38,11 @@ java {
 
 publishing {
     publications { create<MavenPublication>("maven") { from(components["java"]) } }
+}
+
+// Enables experimental Kotlin feature: context receivers.
+// This feature is experimental and may affect framework adaptability.
+// We will move to the context-parameters in the future.
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions { freeCompilerArgs.add("-Xcontext-receivers") }
 }
