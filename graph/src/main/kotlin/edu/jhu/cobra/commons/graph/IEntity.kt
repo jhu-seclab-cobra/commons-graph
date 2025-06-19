@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.entity
+package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.value.IPrimitiveVal
 import edu.jhu.cobra.commons.value.IValue

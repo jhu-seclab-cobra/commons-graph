@@ -1,9 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.AbcEdge
-import edu.jhu.cobra.commons.graph.entity.AbcNode
-import edu.jhu.cobra.commons.graph.entity.EdgeID
-
 /**
  * An abstract implementation of a simple directed graph where nodes are of type [N] and edges are of type [E].
  * This class extends [AbcBasicGraph] and provides functionality to work with directed simple graphs that have

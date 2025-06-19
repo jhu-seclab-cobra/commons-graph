@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.IEntity
-
 
 /**
  * Thrown when an entity with the given ID does not exist in the system.

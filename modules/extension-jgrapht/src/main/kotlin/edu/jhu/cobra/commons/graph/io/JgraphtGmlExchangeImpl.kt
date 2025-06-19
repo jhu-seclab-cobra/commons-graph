@@ -1,7 +1,7 @@
-package edu.jhu.cobra.commons.graph.exchange
+package edu.jhu.cobra.commons.graph.io
 
-import edu.jhu.cobra.commons.graph.entity.EdgeID
-import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.EdgeID
+import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.entity.toEntityID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.contains
