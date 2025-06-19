@@ -1,6 +1,6 @@
-package edu.jhu.cobra.commons.graph.exchange
+package edu.jhu.cobra.commons.graph.io
 
-import edu.jhu.cobra.commons.graph.entity.IEntity
+import edu.jhu.cobra.commons.graph.IEntity
 
 /**
  * Represents a filter function for selecting entities in a graph based on their ID.

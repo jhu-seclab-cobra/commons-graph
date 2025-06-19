@@ -1,8 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.entity.EdgeID
-import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.EdgeID
+import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.numVal

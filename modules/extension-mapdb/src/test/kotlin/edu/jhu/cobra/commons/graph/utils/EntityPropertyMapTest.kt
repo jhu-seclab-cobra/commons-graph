@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
 import org.junit.Before

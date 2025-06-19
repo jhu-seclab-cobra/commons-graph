@@ -1,9 +1,26 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.*
 import edu.jhu.cobra.commons.value.IValue
+import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
+
+/**
+ * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+@Suppress("UNCHECKED_CAST")
+fun <K : IEntity.ID> IValue.toEntityID(): K = when (this) {
+    is StrVal -> NodeID(this) as K
+    is ListVal -> EdgeID(this) as K
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
 
 /**
  * The identifier for the meta-node of the graph.

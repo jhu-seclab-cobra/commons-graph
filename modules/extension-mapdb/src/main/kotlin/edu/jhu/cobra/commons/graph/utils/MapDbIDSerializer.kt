@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.graph.entity.IEntity
+import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.entity.toEntityID
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl

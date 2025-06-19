@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.exchange
+package edu.jhu.cobra.commons.graph.io
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.nio.file.Path
