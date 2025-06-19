@@ -12,6 +12,8 @@ import java.nio.file.Path
  * @see IStorage
  */
 interface IGraphExchange {
+    // storage
+    // transfer
 
     /**
      * Checks if a given file is valid.
