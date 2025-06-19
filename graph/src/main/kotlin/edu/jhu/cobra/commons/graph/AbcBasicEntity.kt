@@ -6,24 +6,35 @@ import edu.jhu.cobra.commons.value.strVal
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
+/**
+ * Base entity for graph nodes and edges with property management.
+ *
+ * Serves as a superclass for [AbcNode] and [AbcEdge]. Provides property delegate utilities for typed property access.
+ *
+ * @see IEntity
+ * @see AbcNode
+ * @see AbcEdge
+ */
 sealed class AbcBasicEntity : IEntity {
 
     /**
-     * Retrieves a property value of a specific type from the entity.
+     * Returns the property value with the specified name, cast to type [T].
      *
-     * @param name The name of the property to retrieve.
-     * @return The property value cast to the specified type, or `null` if the property doesn't exist or is of a different type.
+     * @param name The property name.
+     * @return The property value as [T], or null if absent or type does not match.
+     * @see IEntity.getProp
      */
     inline fun <reified T : IValue> getTypeProp(name: String): T? = getProp(name) as? T
 
     /**
-     * Creates a property delegate that manages property access through the entity's cache.
+     * Creates a delegate for a non-nullable typed property.
      *
-     * @param optName The optional name of the property. If not provided, the property's actual name is used.
-     * @param default The default value to return if the property doesn't exist in the cache.
-     * @return A delegate that handles property access and modification.
+     * @param optName Optional custom property name; uses the property name if null.
+     * @param default The default value if the property is absent.
+     * @return A [ReadWriteProperty] delegate for property access and modification.
+     * @see IEntity.setProp
      */
-    inline fun <reified T : IValue> entityProperty(
+    protected inline fun <reified T : IValue> entityProperty(
         optName: String? = null, default: T
     ) = object : ReadWriteProperty<IEntity, T> {
         override fun getValue(thisRef: IEntity, property: KProperty<*>): T =
@@ -34,12 +45,13 @@ sealed class AbcBasicEntity : IEntity {
     }
 
     /**
-     * Creates a nullable property delegate that manages property access through the entity's cache.
+     * Creates a delegate for a nullable typed property.
      *
-     * @param optName The optional name of the property. If not provided, the property's actual name is used.
-     * @return A delegate that handles property access and modification.
+     * @param optName Optional custom property name; uses the property name if null.
+     * @return A [ReadWriteProperty] delegate for property access and modification.
+     * @see IEntity.setProp
      */
-    inline fun <reified T : IValue?> entityProperty(
+    protected inline fun <reified T : IValue?> entityProperty(
         optName: String? = null
     ) = object : ReadWriteProperty<IEntity, T?> {
         override fun getValue(thisRef: IEntity, property: KProperty<*>): T? =
@@ -51,17 +63,18 @@ sealed class AbcBasicEntity : IEntity {
     }
 
     /**
-     * Creates a property delegate for managing entity type properties.
-     * The property name is automatically prefixed with the lowercase class name.
+     * Creates a delegate for an entity type property using an enum type.
      *
-     * @param optName The optional name of the property. If not provided, a name is generated.
-     * @param default The default value to return if the property doesn't exist.
-     * @return A delegate that handles type property access and modification.
+     * Property names are automatically prefixed with the lowercase class name if [optName] is not provided.
+     *
+     * @param optName Optional custom property name; auto-generated if null.
+     * @param default The default enum value if the property is absent.
+     * @return A [ReadWriteProperty] delegate for type property access and modification.
+     * @see IEntity.Type
      */
-    inline fun <reified T : IEntity.Type> entityType(
+    protected inline fun <reified T : IEntity.Type> entityType(
         optName: String? = null, default: T
     ) = object : ReadWriteProperty<IEntity, T> {
-
         private val propPrefix by lazy { this::class.java.simpleName.lowercase() }
         private val enumTypeMap by lazy { T::class.java.enumConstants.associateBy { it.name } }
 

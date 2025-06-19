@@ -1,27 +1,32 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.contains
 import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 
 /**
- * Represents a unique identifier for a node in the graph. This data class encapsulates the name
- * information necessary to uniquely identify a node.
+ * Unique identifier for a node in the graph.
  *
- * @property name The string representation of the node identifier.
+ * Represents an immutable identifier as a string value.
+ *
+ * @property name The node identifier string.
+ * @constructor Creates a [NodeID] from a string.
+ * @param name The node identifier string.
+ * @see IEntity.ID
  */
 data class NodeID(override val name: String) : IEntity.ID {
     /**
-     * The serialized representation of the node identifier as a string value.
+     * Returns the serialized node identifier as a [StrVal].
+     *
+     * @return The string value representation.
      */
     override val serialize: StrVal get() = name.strVal
-
     override fun toString() = name
-
     /**
-     * Creates a node identifier from a string value.
+     * Creates a [NodeID] from a [StrVal].
      *
      * @param strVal The string value representing the node identifier.
      */
@@ -29,88 +34,93 @@ data class NodeID(override val name: String) : IEntity.ID {
 }
 
 /**
- * Abstract base class for nodes in the graph. This class implements the [IEntity] interface and provides
- * common functionality for node operations, including property management and identity comparison.
+ * Abstract base class for graph nodes with storage-backed property management.
  *
- * @property storage The storage system used to persist node properties and relationships.
+ * Provides property access, identity management, and storage integration for nodes.
+ *
+ * @property storage The storage system for node properties.
+ * @constructor Creates a node with the given [IStorage].
+ * @param storage The storage system for node properties.
+ * @see AbcBasicEntity
+ * @see IEntity
+ * @see NodeID
  */
-abstract class AbcNode(private val storage: IStorage) : AbcBasicEntity() {
-
+abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
     /**
-     * Interface representing the type information for a node.
+     * Represents the type information for a node.
      */
     interface Type : IEntity.Type
-
     /**
-     * The unique identifier of the node.
+     * Returns the unique node identifier.
+     *
+     * @return The node's identifier.
      */
     abstract override val id: NodeID
-
     /**
-     * The type information of the node.
+     * Returns the node type information.
+     *
+     * @return The node's type.
      */
     abstract override val type: Type
-
     /**
-     * Checks if the provided target storage is the same as the storage associated with this node.
+     * Returns true if the target storage matches this node's storage.
      *
-     * @param target The target storage to compare.
-     * @return `true` if the target storage matches the node's storage, `false` otherwise.
+     * @param target The storage to compare.
+     * @return True if storage matches, false otherwise.
      */
-    fun doUseStorage(target: IStorage) = target == storage
-
+    fun doUseStorage(target: IStorage): Boolean = target == storage
     /**
      * Sets a property value for the node.
      *
-     * @param name The name of the property to set.
-     * @param value The value to associate with the property.
+     * @param name The property name.
+     * @param value The property value.
      */
     override fun setProp(name: String, value: IValue?) =
         storage.setNodeProperties(id, name to value)
-
     /**
-     * Sets multiple properties for the node at once.
+     * Sets multiple properties for the node.
      *
-     * @param props A map of property names to their corresponding values.
+     * @param props Map of property names to values.
      */
     override fun setProps(props: Map<String, IValue?>) =
         storage.setNodeProperties(id, *props.toTypeArray())
-
     /**
-     * Retrieves the value of a property from the node.
+     * Returns a property value from the node.
      *
-     * @param name The name of the property to retrieve.
-     * @return The value of the property if it exists, `null` otherwise.
+     * @param name The property name.
+     * @return The property value, or null if absent.
      */
     override fun getProp(name: String): IValue? = storage.getNodeProperty(id, name)
-
     /**
-     * Retrieves all properties of the node.
+     * Returns all properties of the node.
      *
-     * @return A map containing all properties of the node, where the key is the property name
-     *         and the value is the property value.
+     * @return Map of property names to values.
      */
-    override fun getAllProps() = storage.getNodeProperties(id)
-
+    override fun getAllProps(): Map<String, IValue> = storage.getNodeProperties(id)
+    /**
+     * Returns true if the node contains the specified property.
+     *
+     * @param name The property name.
+     * @return True if the property exists, false otherwise.
+     */
+    override fun containProp(name: String): Boolean = storage.getNodeProperty(id, name) != null
     /**
      * Returns a string representation of the node.
      *
-     * @return A string containing the node identifier and type information.
+     * @return String containing node ID and type.
      */
     override fun toString(): String = "{id=${id}, type=${this.type}}"
-
     /**
-     * Returns a hash code value for the node.
+     * Returns the hash code based on string representation.
      *
-     * @return The hash code value based on the string representation of the node.
+     * @return The hash code value.
      */
     override fun hashCode(): Int = toString().hashCode()
-
     /**
      * Compares this node with another object for equality.
      *
      * @param other The object to compare with.
-     * @return `true` if the other object is a node with the same identifier, `false` otherwise.
+     * @return True if other is a node with the same ID, false otherwise.
      */
     override fun equals(other: Any?): Boolean = if (other is AbcNode) this.id == other.id else super.equals(other)
 }
