@@ -1,8 +1,8 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.graph.entity.EdgeID
-import edu.jhu.cobra.commons.graph.entity.IEntity
-import edu.jhu.cobra.commons.graph.entity.NodeID
+import edu.jhu.cobra.commons.graph.EdgeID
+import edu.jhu.cobra.commons.graph.IEntity
+import edu.jhu.cobra.commons.graph.NodeID
 import org.mapdb.DBMaker
 import org.mapdb.Serializer
 import kotlin.io.path.createTempDirectory

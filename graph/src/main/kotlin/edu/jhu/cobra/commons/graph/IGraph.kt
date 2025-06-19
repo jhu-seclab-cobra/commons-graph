@@ -1,10 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.AbcEdge
-import edu.jhu.cobra.commons.graph.entity.AbcNode
-import edu.jhu.cobra.commons.graph.entity.EdgeID
-import edu.jhu.cobra.commons.graph.entity.NodeID
-
 /**
  * Interface representing a generic graph structure where nodes and edges are modeled by the types [N] and [E],
  * respectively. This interface provides operations to manipulate and query the graph, including adding/removing

@@ -15,6 +15,7 @@ out/
 # === IDE/Editor Files ===
 .idea/
 .vscode/
+.cursor/
 *.iml
 *.ipr
 *.iws

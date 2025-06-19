@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.graph.entity.IEntity
+import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.value.*
 import org.mapdb.DB
 import org.mapdb.Serializer
