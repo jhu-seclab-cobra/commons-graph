@@ -7,30 +7,41 @@ import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.strVal
 
 /**
- * Represents a unique identifier for an edge in the graph. This data class encapsulates the source node,
- * destination node, and edge type information necessary to uniquely identify an edge.
+ * Unique identifier for an edge in the graph.
  *
- * @property srcNid The identifier of the source node.
- * @property dstNid The identifier of the destination node.
- * @property eType The type of the edge.
+ * Represents an immutable identifier composed of source node, destination node, and edge type.
+ *
+ * @property srcNid The source node identifier.
+ * @property dstNid The destination node identifier.
+ * @property eType The edge type name.
+ * @constructor Creates an [EdgeID] from source, destination, and type.
+ * @param srcNid The source node identifier.
+ * @param dstNid The destination node identifier.
+ * @param eType The edge type name.
+ * @see NodeID
+ * @see IEntity.ID
  */
 data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
     /**
-     * The string representation of the edge identifier, formatted as "sourceNodeId-edgeType-destinationNodeId".
+     * Returns the edge identifier as "sourceNodeId-edgeType-destinationNodeId".
+     *
+     * @return The formatted edge identifier string.
      */
     override val name: String by lazy { "$srcNid-$eType-$dstNid" }
 
     /**
-     * The serialized representation of the edge identifier as a list of values.
+     * Returns the serialized edge identifier as a [ListVal].
+     *
+     * @return List containing source ID, destination ID, and edge type.
      */
     override val serialize: ListVal by lazy { ListVal(srcNid.serialize, dstNid.serialize, eType.strVal) }
 
     override fun toString() = name
 
     /**
-     * Creates an edge identifier from a list of values.
+     * Creates an [EdgeID] from a [ListVal].
      *
-     * @param value The list containing source node ID, destination node ID, and edge type.
+     * @param value List containing source ID, destination ID, and edge type.
      */
     constructor(value: ListVal) : this(
         value[0].toEntityID<NodeID>(),
@@ -40,82 +51,102 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
 }
 
 /**
- * Abstract base class for edges in the graph. This class implements the [IEntity] interface and provides
- * common functionality for edge operations, including property management and identity comparison.
+ * Abstract base class for graph edges with storage-backed property management.
  *
- * @property storage The storage system used to persist edge properties and relationships.
+ * Provides property access, identity management, and storage integration for edges.
+ *
+ * @property storage The storage system for edge properties.
+ * @constructor Creates an edge with the given [IStorage].
+ * @param storage The storage system for edge properties.
+ * @see AbcBasicEntity
+ * @see IEntity
+ * @see EdgeID
  */
-abstract class AbcEdge(private val storage: IStorage) : AbcBasicEntity() {
+abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
 
     /**
-     * Interface representing the type information for an edge.
+     * Represents the type information for an edge.
      */
     interface Type : IEntity.Type
 
     /**
-     * The unique identifier of the edge.
+     * Returns the unique edge identifier.
+     *
+     * @return The edge's identifier.
      */
     abstract override val id: EdgeID
 
     /**
-     * The identifier of the source node.
+     * Returns the source node identifier.
+     *
+     * @return The source node ID.
      */
     val srcNid: NodeID get() = id.srcNid
 
     /**
-     * The identifier of the destination node.
+     * Returns the destination node identifier.
+     *
+     * @return The destination node ID.
      */
     val dstNid: NodeID get() = id.dstNid
 
     /**
-     * The type of the edge.
+     * Returns the edge type name.
+     *
+     * @return The edge type.
      */
     val eType: String get() = id.eType
 
     /**
      * Sets a property value for the edge.
      *
-     * @param name The name of the property to set.
-     * @param value The value to associate with the property.
+     * @param name The property name.
+     * @param value The property value.
      */
     override fun setProp(name: String, value: IValue?) =
         storage.setEdgeProperties(id, name to value!!)
 
     /**
-     * Sets multiple properties for the edge at once.
+     * Sets multiple properties for the edge.
      *
-     * @param props A map of property names to their corresponding values.
+     * @param props Map of property names to values.
      */
     override fun setProps(props: Map<String, IValue?>) =
         storage.setEdgeProperties(id, *props.toTypeArray())
 
     /**
-     * Retrieves the value of a property from the edge.
+     * Returns a property value from the edge.
      *
-     * @param name The name of the property to retrieve.
-     * @return The value of the property if it exists, `null` otherwise.
+     * @param name The property name.
+     * @return The property value, or null if absent.
      */
     override fun getProp(name: String): IValue? = storage.getEdgeProperty(id, name)
 
     /**
-     * Retrieves all properties of the edge.
+     * Returns all properties of the edge.
      *
-     * @return A map containing all properties of the edge, where the key is the property name
-     *         and the value is the property value.
+     * @return Map of property names to values.
      */
     override fun getAllProps(): Map<String, IValue> = storage.getEdgeProperties(id)
+    /**
+     * Returns true if the edge contains the specified property.
+     *
+     * @param name The property name.
+     * @return True if the property exists, false otherwise.
+     */
+    override fun containProp(name: String): Boolean = storage.getEdgeProperty(id, name) != null
 
     /**
      * Returns a string representation of the edge.
      *
-     * @return A string containing the edge identifier and type information.
+     * @return String containing edge ID and type.
      */
     override fun toString(): String = "{${id}, ${this.type}}"
 
     /**
-     * Returns a hash code value for the edge.
+     * Returns the hash code based on string representation.
      *
-     * @return The hash code value based on the string representation of the edge.
+     * @return The hash code value.
      */
     override fun hashCode(): Int = toString().hashCode()
 
@@ -123,7 +154,7 @@ abstract class AbcEdge(private val storage: IStorage) : AbcBasicEntity() {
      * Compares this edge with another object for equality.
      *
      * @param other The object to compare with.
-     * @return `true` if the other object is an edge with the same identifier, `false` otherwise.
+     * @return True if other is an edge with the same ID, false otherwise.
      */
     override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.id == other.id else super.equals(other)
 }
