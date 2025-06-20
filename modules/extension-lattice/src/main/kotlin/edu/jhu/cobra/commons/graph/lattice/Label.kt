@@ -1,8 +1,8 @@
 package edu.jhu.cobra.commons.graph.lattice
 
-import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.value.StrVal
 import java.util.*
 

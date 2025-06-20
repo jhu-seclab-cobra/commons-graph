@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.io
+package edu.jhu.cobra.commons.graph.serialization
 
 import edu.jhu.cobra.commons.graph.IEntity
 

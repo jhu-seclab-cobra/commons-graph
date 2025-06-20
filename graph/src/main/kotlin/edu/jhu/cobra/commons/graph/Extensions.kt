@@ -1,10 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.ListVal
-import edu.jhu.cobra.commons.value.NumVal
-import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.*
 
 /**
  * Converts the string representation of a [StrVal] to an entity identifier of the specified type.

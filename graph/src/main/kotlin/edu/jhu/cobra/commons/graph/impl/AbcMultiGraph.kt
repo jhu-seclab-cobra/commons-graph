@@ -1,4 +1,5 @@
 package edu.jhu.cobra.commons.graph
+
 import java.util.*
 
 /**
@@ -52,7 +53,7 @@ abstract class AbcMultiGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) 
     /**
      * Adds a directed edge between two nodes with a randomly generated UUID as the edge type.
      * The UUID is automatically prefixed with the graph name.
-     * 
+     *
      * @param from The source node from which the edge starts.
      * @param to The destination node to which the edge points.
      * @return The newly created edge of type [E].
@@ -61,7 +62,7 @@ abstract class AbcMultiGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) 
 
     /**
      * Retrieves all edges between two nodes, regardless of their types.
-     * 
+     *
      * @param from The source node from which the edge starts.
      * @param to The destination node to which the edge points.
      * @return A sequence of edges of type [E] between the specified nodes.

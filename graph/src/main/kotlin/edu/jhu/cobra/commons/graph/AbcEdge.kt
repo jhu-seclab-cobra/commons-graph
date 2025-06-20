@@ -128,6 +128,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
      * @return Map of property names to values.
      */
     override fun getAllProps(): Map<String, IValue> = storage.getEdgeProperties(id)
+
     /**
      * Returns true if the edge contains the specified property.
      *
