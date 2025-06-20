@@ -4,16 +4,19 @@ import edu.jhu.cobra.commons.value.IPrimitiveVal
 import edu.jhu.cobra.commons.value.IValue
 
 /**
- * Serves as the base interface for all graph entities, including nodes and edges.
+ * Base interface for all graph entities, including nodes and edges.
  *
- * Entities are uniquely identified and can store typed properties for flexible graph modeling.
+ * Provides unique identification and typed property storage for flexible graph modeling.
+ *
+ * @see AbcNode
+ * @see AbcEdge
  */
 sealed interface IEntity {
 
     /**
      * Uniquely identifies an entity within the graph.
      *
-     * Supports various identifier types (e.g., string, number).
+     * Supports various identifier types such as string or number.
      */
     sealed interface ID {
         /**

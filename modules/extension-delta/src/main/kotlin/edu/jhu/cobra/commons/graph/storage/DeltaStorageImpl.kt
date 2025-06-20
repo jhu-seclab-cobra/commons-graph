@@ -1,10 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
-import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.strVal
 
@@ -149,19 +145,10 @@ class DeltaStorageImpl(
         deletedNodesHolder.add(id)
     }
 
-    override fun deleteNodes(doSatisfyCond: (NodeID) -> Boolean) {
-        nodeIDsSequence.filter(doSatisfyCond).toSet().forEach(::deleteNode)
-    }
-
-
     override fun deleteEdge(id: EdgeID) {
         if (!containsEdge(id)) throw EntityNotExistException(id) else edgeCounter -= 1
         if (presentDelta.containsEdge(id)) presentDelta.deleteEdge(id = id)
         if (baseDelta.containsEdge(id)) deletedEdgesHolder.add(id)
-    }
-
-    override fun deleteEdges(doSatisfyCond: (EdgeID) -> Boolean) {
-        edgeIDsSequence.filter(doSatisfyCond).toSet().forEach(::deleteEdge)
     }
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {

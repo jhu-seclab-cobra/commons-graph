@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.graph.storage.contains
 import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
@@ -25,6 +24,7 @@ data class NodeID(override val name: String) : IEntity.ID {
      */
     override val serialize: StrVal get() = name.strVal
     override fun toString() = name
+
     /**
      * Creates a [NodeID] from a [StrVal].
      *
@@ -50,18 +50,21 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      * Represents the type information for a node.
      */
     interface Type : IEntity.Type
+
     /**
      * Returns the unique node identifier.
      *
      * @return The node's identifier.
      */
     abstract override val id: NodeID
+
     /**
      * Returns the node type information.
      *
      * @return The node's type.
      */
     abstract override val type: Type
+
     /**
      * Returns true if the target storage matches this node's storage.
      *
@@ -69,6 +72,7 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      * @return True if storage matches, false otherwise.
      */
     fun doUseStorage(target: IStorage): Boolean = target == storage
+
     /**
      * Sets a property value for the node.
      *
@@ -77,6 +81,7 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      */
     override fun setProp(name: String, value: IValue?) =
         storage.setNodeProperties(id, name to value)
+
     /**
      * Sets multiple properties for the node.
      *
@@ -84,6 +89,7 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      */
     override fun setProps(props: Map<String, IValue?>) =
         storage.setNodeProperties(id, *props.toTypeArray())
+
     /**
      * Returns a property value from the node.
      *
@@ -91,12 +97,14 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      * @return The property value, or null if absent.
      */
     override fun getProp(name: String): IValue? = storage.getNodeProperty(id, name)
+
     /**
      * Returns all properties of the node.
      *
      * @return Map of property names to values.
      */
     override fun getAllProps(): Map<String, IValue> = storage.getNodeProperties(id)
+
     /**
      * Returns true if the node contains the specified property.
      *
@@ -104,18 +112,21 @@ abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
      * @return True if the property exists, false otherwise.
      */
     override fun containProp(name: String): Boolean = storage.getNodeProperty(id, name) != null
+
     /**
      * Returns a string representation of the node.
      *
      * @return String containing node ID and type.
      */
     override fun toString(): String = "{id=${id}, type=${this.type}}"
+
     /**
      * Returns the hash code based on string representation.
      *
      * @return The hash code value.
      */
     override fun hashCode(): Int = toString().hashCode()
+
     /**
      * Compares this node with another object for equality.
      *
