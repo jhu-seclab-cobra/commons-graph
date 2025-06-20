@@ -1,175 +1,214 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
-import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.IValue
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.ReadWriteLock
+import kotlin.concurrent.withLock
 
 /**
- * Implementation of the [IStorage] interface using an in-memory storage backed by custom structures.
+ * Thread-safe in-memory graph storage implementation using read-write locks.
  *
- * This class manages nodes and edges along with their associated properties using in-memory data structures.
- * It leverages HashMaps for storing node and edge properties, and maintains the graph structure using an
- * adjacency list implemented as a map of node IDs to sets of edge IDs.
+ * Provides concurrent access with multiple readers and single writer. Suitable for read-heavy workloads.
  *
- * This implementation is not thread-safe and is intended for use in single-threaded environments. It provides
- * efficient operations for adding, deleting, and querying nodes and edges, and ensures that all operations
- * respect the closed state of the storage.
+ * @constructor Creates a new empty thread-safe storage instance.
+ * @see NativeStorageImpl
  */
 class NativeConcurStorageImpl : IStorage {
 
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
+
+    /**
+     * Indicates whether the storage has been closed.
+     */
+    @Volatile
     private var isClosed: Boolean = false
 
-    /** A HashMap to store node properties with NodeId as the key and a PropDict as the value. */
+    /**
+     * Read-write lock for concurrent access control.
+     */
+    private val lock: ReadWriteLock = ReentrantReadWriteLock()
+
+    // ============================================================================
+    // STORAGE STRUCTURES
+    // ============================================================================
+
+    /**
+     * Maps node IDs to their property dictionaries.
+     */
     private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = mutableMapOf()
 
-    /** A HashMap to store edge properties with EdgeId as the key and a PropDict as the value. */
+    /**
+     * Maps edge IDs to their property dictionaries.
+     */
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
 
-    /** A Directed Pseudo-graph from JGraphT library to store nodes and edges. */
+    /**
+     * Maps metadata keys to their values.
+     */
+    private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
+
+    // ============================================================================
+    // GRAPH STRUCTURE
+    // ============================================================================
+
+    /**
+     * Adjacency list representation for graph structure.
+     */
     private val graphStructure: MutableMap<NodeID, Set<EdgeID>> = mutableMapOf()
 
-    override val nodeSize: Int
-        get() {
+    // ============================================================================
+    // PROPERTIES AND STATISTICS
+    // ============================================================================
+
+    override val nodeIDs: Set<NodeID> 
+        get() = lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            return nodeProperties.size
+            nodeProperties.keys
         }
 
-    override val nodeIDsSequence: Sequence<NodeID>
-        get() {
+    override val edgeIDs: Set<EdgeID> 
+        get() = lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            return nodeProperties.keys.asSequence()
+            edgeProperties.keys
         }
 
-    override val edgeSize: Int
-        get() {
-            if (isClosed) throw AccessClosedStorageException()
-            return edgeProperties.size
-        }
+    // ============================================================================
+    // NODE OPERATIONS
+    // ============================================================================
 
-    override val edgeIDsSequence: Sequence<EdgeID>
-        get() {
-            if (isClosed) throw AccessClosedStorageException()
-            return edgeProperties.keys.asSequence()
-        }
-
-    override fun containsNode(id: NodeID): Boolean {
+    override fun containsNode(id: NodeID): Boolean = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        return id in nodeProperties // check whether it is in the graph
+        id in nodeProperties
     }
 
-    override fun containsEdge(id: EdgeID): Boolean {
-        if (isClosed) throw AccessClosedStorageException()
-        return id in edgeProperties // check whether it is in the graph
-    }
-
-    override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) {
+    override fun addNode(id: NodeID, properties: Map<String, IValue>) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
         if (containsNode(id)) throw EntityAlreadyExistException(id = id)
-        nodeProperties[id] = mutableMapOf(*newProperties)
+        nodeProperties[id] = properties.toMutableMap()
     }
 
-    override fun addEdge(id: EdgeID, vararg newProperties: Pair<String, IValue>) {
+    override fun getNodeProperties(id: NodeID): Map<String, IValue> = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        if (containsEdge(id = id)) throw EntityAlreadyExistException(id = id)
-        if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
-        if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() + id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() + id
-        edgeProperties[id] = mutableMapOf(*newProperties)
+        nodeProperties[id] ?: throw EntityNotExistException(id = id)
     }
 
-    override fun getNodeProperties(id: NodeID): MutableMap<String, IValue> {
-        if (isClosed) throw AccessClosedStorageException()
-        return nodeProperties[id] ?: throw EntityNotExistException(id = id)
-    }
-
-    override fun getNodeProperty(id: NodeID, byName: String) = getNodeProperties(id)[byName]
-
-    override fun getEdgeProperties(id: EdgeID): MutableMap<String, IValue> {
-        if (isClosed) throw AccessClosedStorageException()
-        return edgeProperties[id] ?: throw EntityNotExistException(id = id)
-    }
-
-    override fun getEdgeProperty(id: EdgeID, byName: String) = getEdgeProperties(id)[byName]
-
-    override fun setNodeProperties(id: NodeID, vararg newProperties: Pair<String, IValue?>) {
+    override fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
         val container = nodeProperties[id] ?: throw EntityNotExistException(id = id)
-        newProperties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
+        properties.forEach { (key, value) -> 
+            if (value != null) container[key] = value else container.remove(key) 
+        }
     }
 
-    override fun setEdgeProperties(id: EdgeID, vararg newProperties: Pair<String, IValue?>) {
-        if (isClosed) throw AccessClosedStorageException()
-        val container = edgeProperties[id] ?: throw EntityNotExistException(id = id)
-        newProperties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
-    }
-
-    override fun deleteNode(id: NodeID) {
+    override fun deleteNode(id: NodeID): Unit = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        getIncomingEdges(id = id).forEach { this.deleteEdge(it) }
-        getOutgoingEdges(id = id).forEach { this.deleteEdge(it) }
+        
+        // Delete all connected edges first
+        getIncomingEdges(id).forEach { deleteEdge(it) }
+        getOutgoingEdges(id).forEach { deleteEdge(it) }
+        
+        // Remove node from structures
         graphStructure.remove(id)
         nodeProperties.remove(id)
     }
 
-    override fun deleteNodes(doSatisfyCond: (NodeID) -> Boolean) {
+    // ============================================================================
+    // EDGE OPERATIONS
+    // ============================================================================
+
+    override fun containsEdge(id: EdgeID): Boolean = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        val iterator = nodeProperties.keys.iterator()
-        while (iterator.hasNext()) {
-            val curNodeID = iterator.next()
-            if (!doSatisfyCond(curNodeID)) continue
-            getIncomingEdges(curNodeID).forEach(::deleteEdge)
-            getOutgoingEdges(curNodeID).forEach(::deleteEdge)
-            graphStructure.remove(curNodeID)
-            iterator.remove()
+        id in edgeProperties
+    }
+
+    override fun addEdge(id: EdgeID, properties: Map<String, IValue>) = lock.writeLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        if (containsEdge(id)) throw EntityAlreadyExistException(id = id)
+        if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
+        if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
+        
+        // Add edge to graph structure
+        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() + id
+        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() + id
+        
+        // Store edge properties
+        edgeProperties[id] = properties.toMutableMap()
+    }
+
+    override fun getEdgeProperties(id: EdgeID): Map<String, IValue> = lock.readLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        edgeProperties[id] ?: throw EntityNotExistException(id = id)
+    }
+
+    override fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>) = lock.writeLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        val container = edgeProperties[id] ?: throw EntityNotExistException(id = id)
+        properties.forEach { (key, value) -> 
+            if (value != null) container[key] = value else container.remove(key) 
         }
     }
 
-    override fun deleteEdge(id: EdgeID) {
+    override fun deleteEdge(id: EdgeID): Unit = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsEdge(id)) throw EntityNotExistException(id)
-        edgeProperties.remove(id)
+        
+        // Remove edge from graph structure
         graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
         graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
+        
+        // Remove edge properties
+        edgeProperties.remove(id)
     }
 
-    override fun deleteEdges(doSatisfyCond: (EdgeID) -> Boolean) {
+    // ============================================================================
+    // GRAPH STRUCTURE QUERIES
+    // ============================================================================
+
+    override fun getIncomingEdges(id: NodeID): Set<EdgeID> = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        val iterator = edgeProperties.keys.iterator()
-        while (iterator.hasNext()) {
-            val id = iterator.next()
-            if (!doSatisfyCond(id)) continue
-            graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
-            graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
-            iterator.remove()
+        graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
+    }
+
+    override fun getOutgoingEdges(id: NodeID): Set<EdgeID> = lock.readLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
+    }
+
+    // ============================================================================
+    // METADATA OPERATIONS
+    // ============================================================================
+
+    override fun getMeta(name: String): IValue? = lock.readLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        metaProperties[name]
+    }
+
+    override fun setMeta(name: String, value: IValue?): Unit = lock.writeLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
+        if (value == null) {
+            metaProperties.remove(name)
+        } else {
+            metaProperties[name] = value
         }
     }
 
-    override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
-        if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
+    // ============================================================================
+    // UTILITY OPERATIONS
+    // ============================================================================
+
+    override fun clear(): Boolean = lock.writeLock().withLock {
+        graphStructure.clear()
+        edgeProperties.clear()
+        nodeProperties.clear()
+        metaProperties.clear()
+        true
     }
 
-    override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
-        if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
-    }
-
-    override fun getEdgesBetween(from: NodeID, to: NodeID): Set<EdgeID> {
-        if (isClosed) throw AccessClosedStorageException()
-        return graphStructure[from]?.filter { it.srcNid == from && it.dstNid == to }?.toSet().orEmpty()
-    }
-
-    override fun clear(): Boolean {
-        graphStructure.clear();edgeProperties.clear(); nodeProperties.clear() // Clear node properties
-        return graphStructure.isEmpty() && edgeProperties.isEmpty() && nodeProperties.isEmpty()
-    }
-
-    override fun close() {
+    override fun close(): Unit = lock.writeLock().withLock {
         isClosed = true
         clear()
     }

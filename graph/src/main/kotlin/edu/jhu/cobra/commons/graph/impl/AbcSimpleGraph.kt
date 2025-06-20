@@ -1,4 +1,10 @@
-package edu.jhu.cobra.commons.graph
+package edu.jhu.cobra.commons.graph.impl
+
+import edu.jhu.cobra.commons.graph.impl.AbcBasicGraph
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.EdgeID
+import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 
 /**
  * An abstract implementation of a simple directed graph where nodes are of type [N] and edges are of type [E].
@@ -9,8 +15,8 @@ package edu.jhu.cobra.commons.graph
  * For more details on the concept of a directed graph, you can refer to the
  * [Directed Graph](https://en.wikipedia.org/wiki/Directed_graph) page.
  *
- * @param N The type of nodes in the graph, which extends [AbcNode].
- * @param E The type of edges in the graph, which extends [AbcEdge].
+ * @param N The type of nodes in the graph, which extends [edu.jhu.cobra.commons.graph.AbcNode].
+ * @param E The type of edges in the graph, which extends [edu.jhu.cobra.commons.graph.AbcEdge].
  * @param nType The class type of the nodes, can be `null` by default.
  */
 abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) : AbcBasicGraph<N, E>(nType) {
@@ -24,7 +30,7 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null)
      * @param to The destination node to which the edge points.
      * @param type The type of the edge, which will be prefixed with the graph name.
      * @return The newly created edge of type [E].
-     * @throws EntityAlreadyExistException if an edge already exists between the specified nodes.
+     * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if an edge already exists between the specified nodes.
      */
     override fun addEdge(from: AbcNode, to: AbcNode, type: String): E {
         val allEdges = storage.getEdgesBetween(from = from.id, to = to.id)

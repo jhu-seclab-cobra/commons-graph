@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.impl.AbcMultiGraph
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.*
