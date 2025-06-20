@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.io
+package edu.jhu.cobra.commons.graph.serialization
 
 import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.IEntity
@@ -20,7 +20,7 @@ import kotlin.io.path.*
  * Exports the nodes and edges from the storage to a CSV directory.
  * This exchanger will create CSV files for nodes and edges and allows filtering of entities that are exported.
  */
-object NativeCsvExchangeImpl : IGraphExchange {
+object NativeCsvExchangeImpl : IStorageExchange {
 
     private const val CSV_DELIMITER = ","
     private val CSV_DELIMITER_REGEX = Regex("(?<!\\\\)$CSV_DELIMITER")

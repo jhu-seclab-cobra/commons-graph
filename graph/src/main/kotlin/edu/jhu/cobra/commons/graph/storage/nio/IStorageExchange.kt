@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.io
+package edu.jhu.cobra.commons.graph.serialization
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.nio.file.Path
@@ -11,9 +11,7 @@ import java.nio.file.Path
  *
  * @see IStorage
  */
-interface IGraphExchange {
-    // storage
-    // transfer
+interface IStorageExchange {
 
     /**
      * Checks if a given file is valid.

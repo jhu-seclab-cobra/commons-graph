@@ -1,10 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
-import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.CopyOnWriteArraySet
@@ -216,26 +212,12 @@ class DeltaConcurStorageImpl(
         deletedNodesHolder.add(id)
     }
 
-
-    override fun deleteNodes(doSatisfyCond: (NodeID) -> Boolean) {
-        // Create a snapshot of nodes to delete to avoid concurrent modification
-        val nodesToDelete = lock.read { nodeIDsSequence.filter(doSatisfyCond).toSet() }
-        nodesToDelete.forEach(::deleteNode)
-    }
-
-
     override fun deleteEdge(id: EdgeID) {
         lock.write {
             if (!containsEdge(id)) throw EntityNotExistException(id) else edgeCounter.decrementAndGet()
             if (presentDelta.containsEdge(id)) presentDelta.deleteEdge(id = id)
             if (baseDelta.containsEdge(id)) deletedEdgesHolder.add(id)
         }
-    }
-
-    override fun deleteEdges(doSatisfyCond: (EdgeID) -> Boolean) {
-        // Create a snapshot of edges to delete to avoid concurrent modification
-        val edgesToDelete = lock.read { edgeIDsSequence.filter(doSatisfyCond).toSet() }
-        edgesToDelete.forEach(::deleteEdge)
     }
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
