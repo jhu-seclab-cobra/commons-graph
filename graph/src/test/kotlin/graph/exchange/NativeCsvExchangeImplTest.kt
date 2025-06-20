@@ -2,7 +2,7 @@ package graph.exchange
 
 import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
-import edu.jhu.cobra.commons.graph.io.NativeCsvExchangeImpl
+import edu.jhu.cobra.commons.graph.storage.nio.NativeCsvExchangeImpl
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.boolVal

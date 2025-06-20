@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.serialization
+package edu.jhu.cobra.commons.graph.storage.nio
 
 interface IStorageExporter {
 }
