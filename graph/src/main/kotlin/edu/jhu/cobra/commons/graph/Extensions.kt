@@ -171,3 +171,14 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupNode(groupName: String, suff
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupName(node: AbcNode) =
     node.id.name.substringAfter("@").substringBeforeLast("#")
+
+/**
+ * Converts a map to an array of key-value pairs.
+ *
+ * Useful for converting property maps to vararg parameters.
+ *
+ * @return Array containing pairs of keys and values from the map.
+ */
+fun <K, V> Map<K, V>.toTypeArray(): Array<Pair<K, V>> {
+    return Array(this.size) { this.entries.elementAt(it).toPair() }
+}

@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.strVal
@@ -104,7 +103,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
      * @param value The property value.
      */
     override fun setProp(name: String, value: IValue?) =
-        storage.setEdgeProperties(id, name to value!!)
+        storage.setEdgeProperties(id, mapOf(name to value))
 
     /**
      * Sets multiple properties for the edge.
@@ -112,7 +111,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
      * @param props Map of property names to values.
      */
     override fun setProps(props: Map<String, IValue?>) =
-        storage.setEdgeProperties(id, *props.toTypeArray())
+        storage.setEdgeProperties(id, props)
 
     /**
      * Returns a property value from the edge.
@@ -120,7 +119,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
      * @param name The property name.
      * @return The property value, or null if absent.
      */
-    override fun getProp(name: String): IValue? = storage.getEdgeProperty(id, name)
+    override fun getProp(name: String): IValue? = storage.getEdgeProperties(id)[name]
 
     /**
      * Returns all properties of the edge.
@@ -135,7 +134,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
      * @param name The property name.
      * @return True if the property exists, false otherwise.
      */
-    override fun containProp(name: String): Boolean = storage.getEdgeProperty(id, name) != null
+    override fun containProp(name: String): Boolean = storage.getEdgeProperties(id)[name] != null
 
     /**
      * Returns a string representation of the edge.

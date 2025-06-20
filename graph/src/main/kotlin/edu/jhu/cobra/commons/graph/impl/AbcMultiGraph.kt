@@ -1,5 +1,10 @@
-package edu.jhu.cobra.commons.graph
+package edu.jhu.cobra.commons.graph.impl
 
+import edu.jhu.cobra.commons.graph.impl.AbcBasicGraph
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.EdgeID
+import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import java.util.*
 
 /**
@@ -10,8 +15,8 @@ import java.util.*
  * For more details on the mathematical concept of a directed multi-graph, refer to the
  * [Directed multi-graph](https://en.wikipedia.org/wiki/Multigraph#Directed_multigraph_(edges_with_own_identity)) page.
  *
- * @param N The type of nodes in the graph, which extends [AbcNode].
- * @param E The type of edges in the graph, which extends [AbcEdge].
+ * @param N The type of nodes in the graph, which extends [edu.jhu.cobra.commons.graph.AbcNode].
+ * @param E The type of edges in the graph, which extends [edu.jhu.cobra.commons.graph.AbcEdge].
  * @param nType The class type of the nodes, can be `null` by default.
  */
 abstract class AbcMultiGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) : AbcBasicGraph<N, E>(nType) {
@@ -25,7 +30,7 @@ abstract class AbcMultiGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) 
      * @param to The destination node to which the edge points.
      * @param type The type of the edge, which will be prefixed with the graph name.
      * @return The newly created edge of type [E].
-     * @throws EntityAlreadyExistException if an edge with the same ID already exists.
+     * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if an edge with the same ID already exists.
      */
     override fun addEdge(from: AbcNode, to: AbcNode, type: String): E {
         val edgeID = EdgeID(from.id, to.id, eType = "$graphName:$type")
