@@ -24,16 +24,19 @@ alwaysApply: false
 - Use meaningful variable and function names.
 
 ## Performance
-- Use context managers for resource management/cleanup.
+- Use `use` function or `Closeable`/`AutoCloseable` for resource management/cleanup.
 - Avoid unnecessary object creation in loops.
 - Check caches before expensive operations.
 - Optimize critical paths.
+- Prefer immutable collections when possible.
+- Use lazy initialization for expensive computations.
 
 ## Documentation
 - Use English for comments and docs.
 - Explain why (rationale) rather than what.
-- Add type hints/annotations to all function parameters and return values.
+- Add explicit type declarations for function parameters and return values when type inference is unclear.
 - Prefer specific types over generic ones.
+- Use KDoc format for public APIs.
 
 ## Testing
 - Prefer one assertion per test when practical.
@@ -58,18 +61,19 @@ alwaysApply: false
 
 ### During Development
 - Follow control flow optimization guidelines
-- Follow naming conventions and code structure rules
-- Add appropriate type hints and documentation
-- Use context managers for resource management
-- Use appropriate design patterns
+- Follow Kotlin naming conventions and code structure rules
+- Add explicit type declarations when type inference is unclear
+- Add KDoc documentation for public APIs
+- Use `use` function or `Closeable` for resource management
+- Use appropriate Kotlin design patterns (sealed classes, data classes, extension functions)
 
 ### Post-Modification Quality Check
-- Run code quality tools again
+- Run code quality tools again (ktlint, detekt)
 - Target score: 9.0+ for all modules
 - Fix all warnings before proceeding
-- Apply code formatting tools
-- Run import/organization tools
-- Verify structure follows standards
+- Apply Kotlin code formatting (ktlint format)
+- Organize imports (remove unused, sort)
+- Verify structure follows Kotlin standards
 
 ### Phase Completion Quality Gate
 - Run comprehensive code quality checks
@@ -98,14 +102,16 @@ alwaysApply: false
 - Avoid redundant documentation that duplicates TODO content
 
 ## Language-Specific Guidelines
-### General Principles
-- Follow language-specific best practices
-- Use appropriate design patterns for the language
+### Kotlin Best Practices
+- Follow Kotlin coding conventions (https://kotlinlang.org/docs/coding-conventions.html)
+- Use appropriate Kotlin design patterns (sealed classes, data classes, extension functions, coroutines)
 - Maintain consistency with existing codebase style
-- Use language-specific tools for quality assurance
+- Use Kotlin-specific tools for quality assurance (ktlint, detekt, kover)
 
 ### Code Organization
-- Follow language-specific module/package organization
-- Use appropriate import/export patterns
+- Follow Kotlin package organization (package declaration at top, imports below)
+- Use appropriate import patterns (avoid wildcard imports except for common packages)
 - Maintain clear separation of concerns
 - Avoid circular dependencies
+- Prefer top-level functions and extension functions over utility classes
+- Use companion objects for static members
