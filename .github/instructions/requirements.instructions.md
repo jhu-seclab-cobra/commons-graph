@@ -18,17 +18,18 @@ Include a class diagram showing all classes and their relationships at the begin
 **Classes**: `ClassA`, `ClassB`, `ClassC`, `ClassD`
 **Relationships**: `ClassA` extends `ClassB`, `ClassA` contains `ClassC`, `ClassA` uses `ClassD`
 **Abstract**: `ClassE` (implemented by `ClassF`, `ClassG`)
-**Exceptions**: `ExceptionH` extends `ExceptionI`, raised by `ClassA`
+**Interfaces**: `InterfaceH` (implemented by `ClassI`, `ClassJ`)
+**Exceptions**: `ExceptionK` extends `ExceptionL`, thrown by `ClassA`
 
 ### Class Specifications
 **[ClassName] Class** 
 - **Responsibility**: [Single sentence purpose]
-- **Properties**: `property: type` - Brief description
-- **[method_name(param: type) -> return_type]**
+- **Properties**: `property: Type` - Brief description
+- **[methodName(param: Type): ReturnType]**
   - **Behavior**: [What it does]
   - **Input**: [Parameter description]
   - **Output**: [Return description]
-  - **Raises**: [Exception conditions]
+  - **Throws**: [Exception conditions]
 - **Example Usage**: Include minimal working example
 ...
 
@@ -76,5 +77,6 @@ These contents should not appear in the final product documents, as they are evi
 
 #### Open/Closed Principle
 - Open for extension, closed for modification
-- Use interfaces and abstract classes for extensibility
+- Use interfaces, abstract classes, and sealed classes for extensibility
 - Avoid modifying existing code when adding new features
+- Prefer extension functions for adding functionality without modifying classes

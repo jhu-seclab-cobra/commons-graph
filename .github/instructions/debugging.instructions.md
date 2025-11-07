@@ -13,10 +13,10 @@ alwaysApply: false
 - Use appropriate log levels (debug, info, warn, error)
 
 ### Debug Context Management
-- Use context managers for debugging scopes
+- Use `use` function or `Closeable` for debugging scopes
 - Track execution flow and performance
 - Monitor module calls and responses
-- Measure operation timing
+- Measure operation timing using `measureTimeMillis` or `measureTime`
 
 ## Exception Handling
 ### Exception Strategy
@@ -26,11 +26,11 @@ alwaysApply: false
 - Provide meaningful error messages with context
 
 ### Exception Patterns
-- **ModuleError**: Module-specific application logic errors
-- **ValidationError**: Input validation errors
-- **ConfigurationError**: Configuration-related errors
-- **ResourceError**: Resource access/availability errors
-- **NetworkError**: Network communication errors
+- **ModuleException**: Module-specific application logic errors (extend `Exception` or `RuntimeException`)
+- **ValidationException**: Input validation errors (extend `IllegalArgumentException`)
+- **ConfigurationException**: Configuration-related errors (extend `IllegalStateException`)
+- **ResourceException**: Resource access/availability errors (extend `IOException` or custom exception)
+- **NetworkException**: Network communication errors (extend `IOException` or custom exception)
 
 ## Error Handling Patterns
 ### Module Error Handling
@@ -53,10 +53,11 @@ alwaysApply: false
 - Test error conditions explicitly
 
 ### Debugging Tools
-- Use appropriate debugging tools for the language/platform
+- Use IntelliJ IDEA or Android Studio debugger for Kotlin debugging
 - Set breakpoints at critical points
 - Use step-through debugging when needed
-- Monitor memory usage and performance
+- Monitor memory usage and performance using JVM profiling tools
+- Use Kotlin coroutines debugger for concurrent code
 
 ## Error Recovery
 ### Graceful Degradation
@@ -91,14 +92,17 @@ alwaysApply: false
 - Monitor debugging overhead
 
 ## Language-Specific Considerations
-### Debugging Tools
-- Use language-specific debugging tools
-- Follow language-specific error handling patterns
-- Use appropriate exception types
-- Follow language-specific logging conventions
+### Kotlin Debugging Tools
+- Use IntelliJ IDEA debugger for Kotlin debugging
+- Use Kotlin coroutines debugger for concurrent code
+- Follow Kotlin error handling patterns (exceptions, Result type, sealed classes)
+- Use appropriate Kotlin exception types (Exception, RuntimeException, IllegalArgumentException, IllegalStateException, IOException)
+- Follow Kotlin logging conventions (use logging frameworks like SLF4J, Logback, or Kotlin Logging)
 
-### Error Handling Patterns
-- Use language-specific exception handling
-- Follow language-specific error recovery patterns
-- Use appropriate error propagation mechanisms
-- Follow language-specific debugging practices
+### Kotlin Error Handling Patterns
+- Use Kotlin exception handling (try-catch-finally)
+- Use `Result` type for functional error handling when appropriate
+- Use sealed classes for representing error states
+- Follow Kotlin error propagation mechanisms (exceptions, Result, nullable types)
+- Use `runCatching` for safe execution and error handling
+- Follow Kotlin debugging practices (use `println`, logging, debugger)
