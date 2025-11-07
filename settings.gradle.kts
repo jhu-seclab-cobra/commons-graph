@@ -5,7 +5,9 @@ plugins {
 rootProject.name = "commons-graph"
 include(
     "graph",
-    "modules:extension-jgrapht",
-    "modules:extension-mapdb",
-    "modules:extension-neo4j",
+    "modules:storage-jgrapht",
+    "modules:storage-mapdb",
+    "modules:storage-neo4j",
+    "modules:extension-lattice",
+    "modules:extension-delta",
 )

@@ -1,9 +1,22 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.entity.*
-import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.NumVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.*
+
+/**
+ * Converts the string representation of a [StrVal] to an entity identifier of the specified type.
+ *
+ * The method uses the type parameter `ID` to determine which specific implementation of `IEntity.ID` to construct,
+ * such as `NodeID` or `EdgeID`. The string should conform to the expected format of the corresponding `ID` type.
+ *
+ * @return The constructed entity identifier of type `ID`.
+ * @throws IllegalArgumentException if the specified `ID` type is unsupported.
+ */
+@Suppress("UNCHECKED_CAST")
+fun <K : IEntity.ID> IValue.toEntityID(): K = when (this) {
+    is StrVal -> NodeID(this) as K
+    is ListVal -> EdgeID(this) as K
+    else -> throw IllegalArgumentException("Unsupported ID type")
+}
 
 /**
  * The identifier for the meta-node of the graph.
@@ -158,3 +171,14 @@ fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupNode(groupName: String, suff
  */
 fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.getGroupName(node: AbcNode) =
     node.id.name.substringAfter("@").substringBeforeLast("#")
+
+/**
+ * Converts a map to an array of key-value pairs.
+ *
+ * Useful for converting property maps to vararg parameters.
+ *
+ * @return Array containing pairs of keys and values from the map.
+ */
+fun <K, V> Map<K, V>.toTypeArray(): Array<Pair<K, V>> {
+    return Array(this.size) { this.entries.elementAt(it).toPair() }
+}
