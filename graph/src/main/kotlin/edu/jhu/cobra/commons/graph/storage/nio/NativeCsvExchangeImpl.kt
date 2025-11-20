@@ -4,7 +4,6 @@ import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.graph.storage.toTypeArray
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -190,20 +189,18 @@ object NativeCsvExchangeImpl : IStorageExchange {
 
     override fun export(dstFile: Path, from: IStorage, predicate: EntityFilter): Path {
         CsvWriter(path = dstFile).use { writer ->
-            val filterNodeIDs = from.nodeIDsSequence.filter(predicate = predicate)
-            filterNodeIDs.forEach { writer.write(it, from.getNodeProperties(it)) }
-            val filterEdgeIDs = from.edgeIDsSequence.filter(predicate = predicate)
-            filterEdgeIDs.forEach { writer.write(it, from.getEdgeProperties(it)) }
+            from.nodeIDs.filter(predicate).forEach { writer.write(it, from.getNodeProperties(it)) }
+            from.edgeIDs.filter(predicate).forEach { writer.write(it, from.getEdgeProperties(it)) }
         }
         return dstFile
     }
 
     override fun import(srcFile: Path, into: IStorage, predicate: EntityFilter): IStorage {
         CsvReader(path = srcFile).use { reader ->
-            val validNodes = reader.readNodes().asSequence().filter { (id) -> predicate(id) }
-            validNodes.forEach { (id, props) -> into.addNode(id, newProperties = props.toTypeArray()) }
-            val validEdges = reader.readEdges().asSequence().filter { (id) -> predicate(id) }
-            validEdges.forEach { (id, props) -> into.addEdge(id, newProperties = props.toTypeArray()) }
+            val validNodes = reader.readNodes().asSequence().filter { (nid) -> predicate(nid) }
+            validNodes.forEach { (nid, properties) -> into.addNode(nid, properties) }
+            val validEdges = reader.readEdges().asSequence().filter { (eid) -> predicate(eid) }
+            validEdges.forEach { (eid, properties) -> into.addEdge(eid, properties) }
         }
         return into
     }

@@ -72,6 +72,8 @@ abstract class AbcMultiGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null) 
      * @param to The destination node to which the edge points.
      * @return A sequence of edges of type [E] between the specified nodes.
      */
-    fun getEdges(from: AbcNode, to: AbcNode): Sequence<E> =
-        storage.getEdgesBetween(from.id, to.id).asSequence().filter { it in cacheEIDs }.map(::newEdgeObj)
+    fun getEdges(from: AbcNode, to: AbcNode): Sequence<E> {
+        val betweenEdges = storage.getIncomingEdges(from.id).filter{ it.dstNid == to.id }
+        return betweenEdges.filter { it in cacheEIDs }.asSequence().map(::newEdgeObj)
+    }
 }
