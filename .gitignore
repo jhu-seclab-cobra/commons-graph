@@ -54,3 +54,4 @@ kover/
 
 # === Ignore any other unwanted files ===
 # (add more patterns as needed)
+.*
