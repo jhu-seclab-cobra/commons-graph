@@ -72,7 +72,7 @@ class MapDBConcurStorageImpl(
      * @return A sequence of [NodeID] objects.
      * @throws AccessClosedStorageException if the storage is closed.
      */
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() = dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeProperties.keys.toList().asSequence()
@@ -99,7 +99,7 @@ class MapDBConcurStorageImpl(
      * @return A sequence of [EdgeID] objects.
      * @throws AccessClosedStorageException if the storage is closed.
      */
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() = dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeProperties.keys.toList().asSequence()

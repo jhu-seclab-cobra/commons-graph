@@ -265,7 +265,7 @@ class MapDBConcurStorageImplTest {
         assertEquals(50, storage.nodeSize, "Should have 50 nodes remaining (with even indices)")
 
         // Verify remaining nodes all have even indices
-        storage.nodeIDsSequence.forEach { nodeId ->
+        storage.nodeIDs.forEach { nodeId ->
             val idx = nodeId.name.substringAfterLast("_").toInt()
             assertEquals(0, idx % 2, "Remaining nodes should all have even indices")
         }

@@ -4,8 +4,8 @@ import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
-import edu.jhu.cobra.commons.graph.storage.nio.IStorageExchange
-import edu.jhu.cobra.commons.graph.storage.toTypeArray
+import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
+import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
@@ -34,7 +34,7 @@ import kotlin.io.path.fileSize
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
-object JgraphtGmlExchangeImpl : IStorageExchange {
+object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
 
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isRegularFile()) return false
@@ -44,14 +44,14 @@ object JgraphtGmlExchangeImpl : IStorageExchange {
     override fun export(dstFile: Path, from: IStorage, predicate: EntityFilter): Path {
         require(dstFile.notExists() || dstFile.fileSize() != 0L) { "File $dstFile already exists" }
         val exporter = GmlExporter<Int, Int>()
-        val nodeList = from.nodeIDsSequence.filter(predicate).toList()
+        val nodeList = from.nodeIDs.filter(predicate).toList()
         exporter.setVertexAttributeProvider { index: Int ->
             val nodeID = nodeList[index] // NodeId
             val metaProp = mapOf("nid" to nodeID.serialize)
             val props = metaProp + from.getNodeProperties(nodeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
-        val edgeList = from.edgeIDsSequence.filter(predicate).toList()
+        val edgeList = from.edgeIDs.filter(predicate).toList()
         exporter.setEdgeAttributeProvider { index: Int ->
             val edgeID = edgeList[index] // EdgeId
             val metaProp = mapOf("eid" to edgeID.serialize)

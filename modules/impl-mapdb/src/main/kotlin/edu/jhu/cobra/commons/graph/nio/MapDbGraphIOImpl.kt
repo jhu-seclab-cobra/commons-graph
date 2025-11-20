@@ -4,7 +4,8 @@ import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
-import edu.jhu.cobra.commons.graph.storage.nio.IStorageExchange
+import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
+import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
 import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.mapVal
@@ -13,10 +14,10 @@ import java.nio.file.Path
 import kotlin.io.path.*
 
 /**
- * Implementation of [edu.jhu.cobra.commons.graph.storage.nio.IStorageExchange] using MapDB for graph data persistence.
+ * Implementation of [IStorageExporter] and [IStorageImporter] using MapDB for graph data persistence.
  * Provides functionality to export and import graph data between [IStorage] and MapDB files.
  */
-object MapDbGraphExchangeImpl : IStorageExchange {
+object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
 
     private const val NODE_ID_KEY = "_nid"
     private const val EDGE_ID_KEY = "_eid"
@@ -56,12 +57,12 @@ object MapDbGraphExchangeImpl : IStorageExchange {
         dbManager.use {
             // we use a list to ensure the order of nodes and edges by which the ast loading will ensure same
             val nodesList = dbManager.indexTreeList("nodes", MapSerializer).create()
-            from.nodeIDsSequence.filter(predicate).forEach { nodeID ->
+            from.nodeIDs.filter(predicate).forEach { nodeID ->
                 val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
                 nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, nodeID.serialize) })
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).create()
-            from.edgeIDsSequence.filter(predicate).forEach { edgeID ->
+            from.edgeIDs.filter(predicate).forEach { edgeID ->
                 val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
                 edgesList.add(edgeProperties.also { it.add(EDGE_ID_KEY, edgeID.serialize) })
             }

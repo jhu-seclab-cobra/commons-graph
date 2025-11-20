@@ -32,24 +32,24 @@ class DeltaStorageImpl(
     private var isClosed: Boolean = false
 
     init {
-        nodeCounter = baseDelta.nodeSize + presentDelta.nodeIDsSequence.count { it !in baseDelta }
-        edgeCounter = baseDelta.edgeSize + presentDelta.edgeIDsSequence.count { it !in baseDelta }
+        nodeCounter = baseDelta.nodeSize + presentDelta.nodeIDs.count { it !in baseDelta }
+        edgeCounter = baseDelta.edgeSize + presentDelta.edgeIDs.count { it !in baseDelta }
     }
 
     override val nodeSize: Int get() = if (isClosed) throw AccessClosedStorageException() else nodeCounter
     override val edgeSize: Int get() = if (isClosed) throw AccessClosedStorageException() else edgeCounter
 
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
-            return (baseDelta.nodeIDsSequence + presentDelta.nodeIDsSequence).filter { it !in deletedNodesHolder }
+            return (baseDelta.nodeIDs + presentDelta.nodeIDs).filter { it !in deletedNodesHolder }
                 .distinct()
         }
 
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
-            return (baseDelta.edgeIDsSequence + presentDelta.edgeIDsSequence).filter { it !in deletedEdgesHolder }
+            return (baseDelta.edgeIDs + presentDelta.edgeIDs).filter { it !in deletedEdgesHolder }
                 .distinct()
         }
 

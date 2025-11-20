@@ -57,7 +57,7 @@ class JgraphtConcurStorageImpl : IStorage {
      * @return A sequence of [NodeID] objects.
      * @throws AccessClosedStorageException if the storage is closed.
      */
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() = storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             nodeProperties.keys.toList().asSequence()
@@ -84,7 +84,7 @@ class JgraphtConcurStorageImpl : IStorage {
      * @return A sequence of [EdgeID] objects.
      * @throws AccessClosedStorageException if the storage is closed.
      */
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() = storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             edgeProperties.keys.toList().asSequence()

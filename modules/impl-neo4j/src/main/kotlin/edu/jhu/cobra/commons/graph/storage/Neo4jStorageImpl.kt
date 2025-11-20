@@ -64,7 +64,7 @@ class Neo4jStorageImpl(
         get() =
             if (isClosed) throw AccessClosedStorageException() else node2ElementIdMap.size
 
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() =
             if (isClosed) throw AccessClosedStorageException() else node2ElementIdMap.keys.asSequence()
 
@@ -72,7 +72,7 @@ class Neo4jStorageImpl(
         get() =
             if (isClosed) throw AccessClosedStorageException() else edge2ElementIdMap.size
 
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() =
             if (isClosed) throw AccessClosedStorageException() else edge2ElementIdMap.keys.asSequence()
 

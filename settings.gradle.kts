@@ -8,7 +8,7 @@ include(
     "modules:impl-jgrapht",
     "modules:impl-mapdb",
     "modules:impl-neo4j",
-    "modules:trait-lattice",
-    "modules:trait-group",
     "modules:trait-delta",
+    "modules:trait-group",
+    "modules:trait-label",
 )

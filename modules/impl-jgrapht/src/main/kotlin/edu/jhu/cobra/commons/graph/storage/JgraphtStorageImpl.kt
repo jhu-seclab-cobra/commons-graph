@@ -37,7 +37,7 @@ class JgraphtStorageImpl : IStorage {
             return nodeProperties.size
         }
 
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
             return nodeProperties.keys.asSequence()
@@ -49,7 +49,7 @@ class JgraphtStorageImpl : IStorage {
             return edgeProperties.size
         }
 
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
             return edgeProperties.keys.asSequence()

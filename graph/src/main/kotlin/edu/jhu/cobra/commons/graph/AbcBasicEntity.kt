@@ -34,7 +34,8 @@ sealed class AbcBasicEntity : IEntity {
      * @return A [ReadWriteProperty] delegate for property access and modification.
      * @see IEntity.setProp
      */
-    protected inline fun <reified T : IValue> entityProperty(
+    @Suppress("FunctionName")
+    protected inline fun <reified T : IValue> EntityProperty(
         optName: String? = null, default: T
     ) = object : ReadWriteProperty<IEntity, T> {
         override fun getValue(thisRef: IEntity, property: KProperty<*>): T =
@@ -51,7 +52,8 @@ sealed class AbcBasicEntity : IEntity {
      * @return A [ReadWriteProperty] delegate for property access and modification.
      * @see IEntity.setProp
      */
-    protected inline fun <reified T : IValue?> entityProperty(
+    @Suppress("FunctionName")
+    protected inline fun <reified T : IValue?> EntityProperty(
         optName: String? = null
     ) = object : ReadWriteProperty<IEntity, T?> {
         override fun getValue(thisRef: IEntity, property: KProperty<*>): T? =
@@ -72,7 +74,8 @@ sealed class AbcBasicEntity : IEntity {
      * @return A [ReadWriteProperty] delegate for type property access and modification.
      * @see IEntity.Type
      */
-    protected inline fun <reified T : IEntity.Type> entityType(
+    @Suppress("FunctionName")
+    protected inline fun <reified T : IEntity.Type> EntityType(
         optName: String? = null, default: T
     ) = object : ReadWriteProperty<IEntity, T> {
         private val propPrefix by lazy { this::class.java.simpleName.lowercase() }
