@@ -170,11 +170,13 @@ class NativeConcurStorageImpl : IStorage {
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
+        if (!containsNode(id)) throw EntityNotExistException(id)
         graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> = lock.readLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
+        if (!containsNode(id)) throw EntityNotExistException(id)
         graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
     }
 
@@ -201,6 +203,7 @@ class NativeConcurStorageImpl : IStorage {
     // ============================================================================
 
     override fun clear(): Boolean = lock.writeLock().withLock {
+        if (isClosed) throw AccessClosedStorageException()
         graphStructure.clear()
         edgeProperties.clear()
         nodeProperties.clear()
@@ -209,7 +212,7 @@ class NativeConcurStorageImpl : IStorage {
     }
 
     override fun close(): Unit = lock.writeLock().withLock {
+        if (!isClosed) clear()
         isClosed = true
-        clear()
     }
 }

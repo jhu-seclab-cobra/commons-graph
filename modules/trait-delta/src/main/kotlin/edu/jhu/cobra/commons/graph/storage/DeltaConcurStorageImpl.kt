@@ -44,8 +44,8 @@ class DeltaConcurStorageImpl(
         // Initialize counters with the current size of the base and present deltas
         val baseNodeSize = baseDelta.nodeSize
         val baseEdgeSize = baseDelta.edgeSize
-        val presentNodeSize = presentDelta.nodeIDsSequence.count { it !in baseDelta }
-        val presentEdgeSize = presentDelta.edgeIDsSequence.count { it !in baseDelta }
+        val presentNodeSize = presentDelta.nodeIDs.count { it !in baseDelta }
+        val presentEdgeSize = presentDelta.edgeIDs.count { it !in baseDelta }
 
         nodeCounter.set(baseNodeSize + presentNodeSize)
         edgeCounter.set(baseEdgeSize + presentEdgeSize)
@@ -65,22 +65,22 @@ class DeltaConcurStorageImpl(
             return edgeCounter.get()
         }
 
-    override val nodeIDsSequence: Sequence<NodeID>
+    override val nodeIDs: Sequence<NodeID>
         get() {
             // Check if storage is closed before any operation
             if (isClosed.get()) throw AccessClosedStorageException()
             return lock.read {
-                (baseDelta.nodeIDsSequence + presentDelta.nodeIDsSequence).filter { it !in deletedNodesHolder }
+                (baseDelta.nodeIDs + presentDelta.nodeIDs).filter { it !in deletedNodesHolder }
                     .distinct()
             }
         }
 
-    override val edgeIDsSequence: Sequence<EdgeID>
+    override val edgeIDs: Sequence<EdgeID>
         get() {
             // Check if storage is closed before any operation
             if (isClosed.get()) throw AccessClosedStorageException()
             return lock.read {
-                (baseDelta.edgeIDsSequence + presentDelta.edgeIDsSequence).filter { it !in deletedEdgesHolder }
+                (baseDelta.edgeIDs + presentDelta.edgeIDs).filter { it !in deletedEdgesHolder }
                     .distinct()
             }
         }

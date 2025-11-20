@@ -91,13 +91,6 @@ operator fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.contains(entity: IEntity) =
 infix fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.wrap(node: AbcNode): N = wrapNode(node)
 
 /**
- * Retrieves the group name of a node based on its identifier.
- *
- * @return The name of the group to which the node belongs.
- */
-fun AbcNode.getGroupName() = id.name.substringAfter("@").substringBeforeLast("#")
-
-/**
  * Converts a map to an array of key-value pairs.
  *
  * Useful for converting property maps to vararg parameters.

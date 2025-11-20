@@ -149,11 +149,13 @@ class NativeStorageImpl : IStorage {
 
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
+        if (!containsNode(id)) throw EntityNotExistException(id)
         return graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
+        if (!containsNode(id)) throw EntityNotExistException(id)
         return graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
     }
 
@@ -180,6 +182,7 @@ class NativeStorageImpl : IStorage {
     // ============================================================================
 
     override fun clear(): Boolean {
+        if (isClosed) throw AccessClosedStorageException()
         graphStructure.clear()
         edgeProperties.clear()
         nodeProperties.clear()
@@ -188,7 +191,7 @@ class NativeStorageImpl : IStorage {
     }
 
     override fun close() {
+        if (!isClosed) clear()
         isClosed = true
-        clear()
     }
 }

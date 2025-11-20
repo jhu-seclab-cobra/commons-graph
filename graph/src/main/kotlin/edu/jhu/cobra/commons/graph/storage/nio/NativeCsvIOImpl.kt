@@ -19,7 +19,7 @@ import kotlin.io.path.*
  * Exports the nodes and edges from the storage to a CSV directory.
  * This exchanger will create CSV files for nodes and edges and allows filtering of entities that are exported.
  */
-object NativeCsvExchangeImpl : IStorageExchange {
+object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
 
     private const val CSV_DELIMITER = ","
     private val CSV_DELIMITER_REGEX = Regex("(?<!\\\\)$CSV_DELIMITER")
@@ -66,10 +66,8 @@ object NativeCsvExchangeImpl : IStorageExchange {
 
         fun write(id: IEntity.ID, props: Map<String, IValue>) {
             val writer = getWriter(id)
-            props.keys.forEach {
-                if (id is NodeID) isNodeHeaderChanged = nodeHeaders.add(it)
-                else isEdgeHeaderChanged = edgeHeaders.add(it)
-            }
+            if (id is NodeID) isNodeHeaderChanged = isNodeHeaderChanged || nodeHeaders.addAll(props.keys)
+            else isEdgeHeaderChanged = isEdgeHeaderChanged || edgeHeaders.addAll(props.keys)
             val headerSequence = if (id is NodeID) nodeHeaders.asSequence() else edgeHeaders.asSequence()
             val orderProps = sequenceOf(id.serialize) + headerSequence.map(props::get)
             val serPropSeq = orderProps.map { it?.let(DftCharBufferSerializerImpl::serialize) ?: "" }
@@ -136,7 +134,8 @@ object NativeCsvExchangeImpl : IStorageExchange {
         fun readNodes(): Iterator<Pair<NodeID, Map<String, IValue>>> = iterator {
             val nodeReader = nodeFile.bufferedReader()
             try {
-                val rawHeader = nodeReader.readLine()!!.split(CSV_DELIMITER_REGEX).drop(1)
+                val rawHeaderString = nodeReader.readLine() ?: ""
+                val rawHeader = rawHeaderString.split(CSV_DELIMITER_REGEX).drop(1)
                 val nodeHeader = rawHeader.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
                 val nodeSequence = nodeReader.lineSequence()
                 for (line in nodeSequence) {

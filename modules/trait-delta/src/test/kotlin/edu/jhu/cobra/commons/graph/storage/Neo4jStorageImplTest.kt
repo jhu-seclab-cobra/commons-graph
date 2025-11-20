@@ -32,8 +32,8 @@ class Neo4jStorageImplTest {
     fun `test empty storage properties`() {
         assertEquals(0, storage.nodeSize)
         assertEquals(0, storage.edgeSize)
-        assertTrue(storage.nodeIDsSequence.toList().isEmpty())
-        assertTrue(storage.edgeIDsSequence.toList().isEmpty())
+        assertTrue(storage.nodeIDs.toList().isEmpty())
+        assertTrue(storage.edgeIDs.toList().isEmpty())
     }
 
     @Test

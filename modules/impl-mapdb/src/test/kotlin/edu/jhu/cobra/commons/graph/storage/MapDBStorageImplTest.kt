@@ -144,7 +144,7 @@ class MapDBStorageImplTest {
     }
 
     /**
-     * Test collection views: nodeIDsSequence, edgeIDsSequence, etc.
+     * Test collection views: nodeIDs, edgeIDs, etc.
      */
     @Test
     fun testCollectionViews() {
@@ -154,13 +154,13 @@ class MapDBStorageImplTest {
         storage.addEdge(edge1)
 
         // Test node collection
-        val nodeIds = storage.nodeIDsSequence.toList()
+        val nodeIds = storage.nodeIDs.toList()
         assertEquals(2, nodeIds.size)
         assertTrue(nodeIds.contains(node1))
         assertTrue(nodeIds.contains(node2))
 
         // Test edge collection
-        val edgeIds = storage.edgeIDsSequence.toList()
+        val edgeIds = storage.edgeIDs.toList()
         assertEquals(1, edgeIds.size)
         assertTrue(edgeIds.contains(edge1))
 
@@ -210,13 +210,13 @@ class MapDBStorageImplTest {
         assertTrue(props["nullProp"] is NullVal)
 
         // Test empty storage operations
-        val emptyNodeIds = storage.nodeIDsSequence.toList()
+        val emptyNodeIds = storage.nodeIDs.toList()
         assertEquals(2, emptyNodeIds.size)  // We added node1 and node2
 
         storage.clear()
         assertEquals(0, storage.nodeSize)
         assertEquals(0, storage.edgeSize)
-        assertTrue(storage.nodeIDsSequence.toList().isEmpty())
+        assertTrue(storage.nodeIDs.toList().isEmpty())
     }
 
     /**
