@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.0.21"
+kotlin = "2.2.21"
 kotlinx = "1.10.2"
 kover = "0.9.1"
 javaSource = "8"

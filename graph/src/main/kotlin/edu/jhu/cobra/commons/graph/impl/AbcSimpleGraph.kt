@@ -33,12 +33,10 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null)
      * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if an edge already exists between the specified nodes.
      */
     override fun addEdge(from: AbcNode, to: AbcNode, type: String): E {
-        val allEdges = storage.getEdgesBetween(from = from.id, to = to.id)
-        val prevEdge = allEdges.firstOrNull { edgeID -> edgeID in cacheEIDs }
-        if (prevEdge != null) throw EntityAlreadyExistException(id = prevEdge)
+        getEdge(from, to)?.let { throw EntityAlreadyExistException(id = it.id) }
         val edgeID = EdgeID(from.id, to.id, eType = "$graphName:$type")
-        if (edgeID in cacheEIDs) throw EntityAlreadyExistException(edgeID)
-        sequenceOf(from, to).forEach { if (it.id !in cacheNIDs) wrapNode(it) }
+        if (from.id !in cacheNIDs) wrapNode(from)
+        if (to.id !in cacheNIDs) wrapNode(to)
         if (!storage.containsEdge(edgeID)) storage.addEdge(id = edgeID)
         return newEdgeObj(edgeID.also { cacheEIDs.add(it) })
     }
@@ -79,8 +77,9 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null)
      * @return The edge of type [E] if it exists, or `null` if no such edge exists.
      */
     fun getEdge(from: AbcNode, to: AbcNode): E? {
-        val allEdges = storage.getEdgesBetween(from.id, to.id)
-        val prevEdge = allEdges.singleOrNull { it in cacheEIDs }
-        return prevEdge?.let { newEdgeObj(eid = it) }
+        val defaultID = EdgeID(from.id, to.id, eType = "$graphName:")
+        if (defaultID in cacheEIDs) return getEdge(whoseID = defaultID)
+        val canEdgeIDs = storage.getIncomingEdges(from.id).filter{ it.dstNid == to.id }
+        return canEdgeIDs.singleOrNull { it in cacheEIDs }?.let { newEdgeObj(it) }
     }
 }
