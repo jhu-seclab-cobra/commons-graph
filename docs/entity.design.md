@@ -98,7 +98,7 @@ if ("age" in entity) { /* ... */ }
 
 **Properties**:
 - `serialize: IValue` - serialized value representing this identifier
-- `name: String` - human-readable name or label for this identifier
+- `asString: String` - string representation of this identifier
 
 ### IEntity.Type Interface
 
@@ -153,9 +153,9 @@ class MyEntity : AbcBasicEntity() {
 }
 
 // Use entity type delegate with enum
-enum class NodeType { PERSON, COMPANY }
+enum class Nodname { PERSON, COMPANY }
 class MyNode : AbcBasicEntity() {
-    var type: NodeType by EntityType(default = NodeType.PERSON)
+    var type: Nodname by EntityType(default = Nodname.PERSON)
 }
 ```
 
@@ -202,10 +202,7 @@ if (node.doUseStorage(storage)) {
 **Properties**:
 - `storage: IStorage` - storage system for edge properties
 - `id: EdgeID` - unique edge identifier
-- `type: Type` - edge type information
-- `srcNid: NodeID` - source node identifier
-- `dstNid: NodeID` - destination node identifier
-- `eType: String` - edge type name
+- `type: Type` - type information
 
 **Example Usage**:
 ```kotlin
@@ -219,9 +216,9 @@ val storage = NativeStorageImpl()
 val edge = MyEdge(storage, EdgeID(NodeID("src"), NodeID("dst"), "relation"))
 
 // Access edge properties
-val srcId = edge.srcNid
-val dstId = edge.dstNid
-val edgeType = edge.eType
+val srcId = edge.id.srcNid
+val dstId = edge.id.dstNid
+val name = edge.id.name
 
 // Set and get edge properties
 edge.setProp("weight", 1.5.doubleVal)
@@ -233,8 +230,15 @@ val weight = edge.getProp("weight")
 **Responsibility**: Unique identifier for a node in the graph.
 
 **Properties**:
-- `name: String` - node identifier string
+- `name: String` - node identifier string (constructor parameter)
+- `asString: String` - string representation of this identifier "name"
 - `serialize: StrVal` - serialized node identifier as StrVal
+
+**[NodeID(name: String)]**
+- **Behavior**: Creates a NodeID from a string.
+- **Input**: `name: String` - node identifier string
+- **Output**: `NodeID` - new node identifier instance
+- **Throws**: None
 
 **[NodeID(strVal: StrVal)]**
 - **Behavior**: Creates a NodeID from a StrVal.
@@ -251,8 +255,10 @@ val nodeId1 = NodeID("node1")
 val nodeId2 = NodeID("node2".strVal)
 
 // Access properties
+val idString = nodeId1.asString  // "node1"
 val name = nodeId1.name  // "node1"
 val serialized = nodeId1.serialize  // StrVal("node1")
+val toString = nodeId1.toString()  // "node1"
 ```
 
 ### EdgeID Data Class
@@ -260,15 +266,21 @@ val serialized = nodeId1.serialize  // StrVal("node1")
 **Responsibility**: Unique identifier for an edge in the graph.
 
 **Properties**:
-- `srcNid: NodeID` - source node identifier
-- `dstNid: NodeID` - destination node identifier
-- `eType: String` - edge type name
-- `name: String` - formatted edge identifier string
-- `serialize: ListVal` - serialized edge identifier as ListVal
+- `srcNid: NodeID` - source node identifier (constructor parameter)
+- `dstNid: NodeID` - destination node identifier (constructor parameter)
+- `name: String` - name of the edge (constructor parameter)
+- `asString: String` - string representation in format "srcID>dstID:name"
+- `serialize: ListVal` - serialized edge identifier as ListVal containing source ID, destination ID, and name
+
+**[EdgeID(srcNid: NodeID, dstNid: NodeID, name: String)]**
+- **Behavior**: Creates an EdgeID from source node, destination node, and name.
+- **Input**: `srcNid: NodeID` - source node identifier, `dstNid: NodeID` - destination node identifier, `name: String` - name name
+- **Output**: `EdgeID` - new edge identifier instance
+- **Throws**: None
 
 **[EdgeID(value: ListVal)]**
 - **Behavior**: Creates an EdgeID from a ListVal.
-- **Input**: `value: ListVal` - list containing source ID, destination ID, and edge type
+- **Input**: `value: ListVal` - list containing source ID, destination ID, and name
 - **Output**: `EdgeID` - new edge identifier instance
 - **Throws**: None
 
@@ -283,8 +295,12 @@ val edgeId1 = EdgeID(srcId, dstId, "relation")
 val edgeId2 = EdgeID(ListVal(srcId.serialize, dstId.serialize, "relation".strVal))
 
 // Access properties
-val name = edgeId1.name  // "node1-relation-node2"
+val idString = edgeId1.asString  // "node1-relation-node2"
+val source = edgeId1.srcNid  // NodeID("node1")
+val destination = edgeId1.dstNid  // NodeID("node2")
+val name = edgeId1.name  // "relation"
 val serialized = edgeId1.serialize  // ListVal([src, dst, type])
+val toString = edgeId1.toString()  // "node1-relation-node2"
 ```
 
 ---
@@ -305,7 +321,7 @@ val serialized = edgeId1.serialize  // ListVal([src, dst, type])
 - Node properties are stored in the storage system, not in the node object itself.
 
 **Edge Validation**:
-- Edge IDs are composed of source node ID, destination node ID, and edge type.
+- Edge IDs are composed of source node ID, destination node ID, and name.
 
 **Property Validation**:
 - Property names starting with "meta_" are invalid and throw `InvalidPropNameException`.

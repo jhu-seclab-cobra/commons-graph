@@ -25,7 +25,7 @@ class EdgeIDWhiteBoxTest {
 
         // Assert
         assertEquals("", edgeId.eType)
-        assertEquals("src--dst", edgeId.name)
+        assertEquals("src--dst", edgeId.asString)
     }
 
     @Test
@@ -35,7 +35,7 @@ class EdgeIDWhiteBoxTest {
 
         // Assert
         assertEquals("edge-123_test", edgeId.eType)
-        assertEquals("src-edge-123_test-dst", edgeId.name)
+        assertEquals("src-edge-123_test-dst", edgeId.asString)
     }
 
     @Test
@@ -45,7 +45,7 @@ class EdgeIDWhiteBoxTest {
 
         // Assert
         assertEquals("关系_类型", edgeId.eType)
-        assertTrue(edgeId.name.contains("关系_类型"))
+        assertTrue(edgeId.asString.contains("关系_类型"))
     }
 
     @Test
@@ -58,7 +58,7 @@ class EdgeIDWhiteBoxTest {
 
         // Assert
         assertEquals(100, edgeId.eType.length)
-        assertTrue(edgeId.name.contains(longType))
+        assertTrue(edgeId.asString.contains(longType))
     }
 
     @Test
@@ -70,7 +70,7 @@ class EdgeIDWhiteBoxTest {
         assertEquals(srcNode, edgeId.srcNid)
         assertEquals(srcNode, edgeId.dstNid)
         assertEquals("self-loop", edgeId.eType)
-        assertEquals("src-self-loop-src", edgeId.name)
+        assertEquals("src-self-loop-src", edgeId.asString)
     }
 
     // ============================================================================
@@ -83,8 +83,8 @@ class EdgeIDWhiteBoxTest {
         val edgeId = EdgeID(srcNode, dstNode, "relation")
 
         // Assert
-        val expectedName = "${srcNode.name}-${edgeId.eType}-${dstNode.name}"
-        assertEquals(expectedName, edgeId.name)
+        val expectedName = "${srcNode.asString}-${edgeId.eType}-${dstNode.asString}"
+        assertEquals(expectedName, edgeId.asString)
     }
 
     @Test
@@ -108,8 +108,8 @@ class EdgeIDWhiteBoxTest {
         val edgeId = EdgeID(srcNode, dstNode, "relation")
 
         // Act - Access multiple times
-        val name1 = edgeId.name
-        val name2 = edgeId.name
+        val name1 = edgeId.asString
+        val name2 = edgeId.asString
         val serialize1 = edgeId.serialize
         val serialize2 = edgeId.serialize
 

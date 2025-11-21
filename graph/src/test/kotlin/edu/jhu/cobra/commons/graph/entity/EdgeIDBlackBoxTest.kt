@@ -37,7 +37,7 @@ class EdgeIDBlackBoxTest {
         val edgeId = EdgeID(srcNode, dstNode, "relation")
 
         // Assert
-        assertEquals("src-relation-dst", edgeId.name)
+        assertEquals("src-relation-dst", edgeId.asString)
     }
 
     @Test
@@ -176,7 +176,7 @@ class EdgeIDBlackBoxTest {
         val edgeId: IEntity.ID = EdgeID(srcNode, dstNode, "relation")
 
         // Assert
-        assertEquals("src-relation-dst", edgeId.name)
+        assertEquals("src-relation-dst", edgeId.asString)
     }
 
     @Test

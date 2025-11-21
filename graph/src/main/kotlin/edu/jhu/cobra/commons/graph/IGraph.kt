@@ -16,46 +16,24 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     val graphName: String
 
     /**
-     * The total number of entities (nodes and edges) in the graph.
+     * Returns all node IDs currently in the graph.
      */
-    val entitySize: Int
+    val nodeIDs: Set<NodeID>
 
     /**
-     * Checks if the specified node is contained in the graph.
-     *
-     * @param node The node to check for containment in the graph.
-     * @return `true` if the node is contained in the graph, `false` otherwise.
+     * Returns all edge IDs currently in the graph.
      */
-    fun containNode(node: AbcNode): Boolean
+    val edgeIDs: Set<EdgeID>
 
     /**
-     * Checks if the graph contains the specified edge.
+     * Adds a new node to the graph with the specified human-readable name.
+     * The graph is responsible for constructing the underlying [NodeID] (including any required prefixes).
      *
-     * @param edge The edge to check for existence in the graph.
-     * @return `true` if the edge is present in the graph, `false` otherwise.
+     * @param whoseName The display name for the node to be added (without graph prefix).
+     * @return The newly added node of type [N] whose `id` is managed by the graph.
+     * @throws EntityAlreadyExistException If a node with the specified name already exists.
      */
-    fun containEdge(edge: AbcEdge): Boolean
-
-    /**
-     * Adds a new node to the graph with the specified identifier.
-     *
-     * @param whoseID The identifier of the node to be added.
-     * @return The newly added node of type [N].
-     * @throws EntityAlreadyExistException If a node with the specified identifier already exists.
-     */
-    fun addNode(whoseID: NodeID): N
-
-    /**
-     * Adds a directed edge between two nodes in the graph.
-     *
-     * @param from The source node from which the edge starts.
-     * @param to The destination node to which the edge points.
-     * @param type The type of the edge.
-     * @return The newly added edge of type [E].
-     * @throws EntityNotExistException If the source or destination node does not exist in the graph.
-     * @throws EntityAlreadyExistException If an edge of the specified type between the nodes already exists.
-     */
-    fun addEdge(from: AbcNode, to: AbcNode, type: String): E
+    fun addNode(whoseName: String): N
 
     /**
      * Wraps a generic [AbcNode] into its specific graph-context type [N].
@@ -75,22 +53,19 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun getNode(whoseID: NodeID): N?
 
     /**
-     * Retrieves an edge from the graph based on its identifier.
+     * Checks if the specified node instance is contained in the graph.
      *
-     * @param whoseID The identifier of the edge to retrieve.
-     * @return The edge if it exists, `null` otherwise.
+     * @param node The node to check for containment.
+     * @return `true` if the node is contained in the graph, `false` otherwise.
      */
-    fun getEdge(whoseID: EdgeID): E?
+    fun containNode(node: AbcNode): Boolean
 
     /**
-     * Retrieves an edge between two nodes with the specified type.
+     * Deletes the provided node (and all associated edges) from the graph.
      *
-     * @param from The source node from which the edge starts.
-     * @param to The destination node to which the edge points.
-     * @param type The type of the edge.
-     * @return The edge if it exists, `null` otherwise.
+     * @param node The node produced by this graph to be deleted.
      */
-    fun getEdge(from: AbcNode, to: AbcNode, type: String): E?
+    fun delNode(node: N)
 
     /**
      * Retrieves all nodes in the graph that satisfy the given predicate.
@@ -101,6 +76,42 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>
 
     /**
+     * Adds a directed edge between two nodes in the graph.
+     * The graph is responsible for creating the underlying [EdgeID] using the node IDs and the provided name.
+     *
+     * @param from The source node from which the edge starts.
+     * @param to The destination node to which the edge points.
+     * @param name The human-readable edge name (without graph prefix).
+     * @return The newly added edge of type [E].
+     * @throws EntityNotExistException If the source or destination node does not belong to the graph.
+     * @throws EntityAlreadyExistException If an equivalent edge already exists between the nodes.
+     */
+    fun addEdge(from: AbcNode, to: AbcNode, name: String): E
+
+    /**
+     * Retrieves an edge from the graph based on its identifier.
+     *
+     * @param whoseID The identifier of the edge to retrieve.
+     * @return The edge if it exists, `null` otherwise.
+     */
+    fun getEdge(whoseID: EdgeID): E?
+
+    /**
+     * Checks if the graph contains the specified edge instance.
+     *
+     * @param edge The edge to check for existence in the graph.
+     * @return `true` if the edge is present in the graph, `false` otherwise.
+     */
+    fun containEdge(edge: AbcEdge): Boolean
+
+    /**
+     * Deletes an edge from the graph.
+     *
+     * @param edge The edge instance (produced by this graph) to be deleted.
+     */
+    fun delEdge(edge: E)
+
+    /**
      * Retrieves all edges in the graph that satisfy the given predicate.
      *
      * @param doSatisfy The predicate to filter edges.
@@ -109,21 +120,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>
 
     /**
-     * Deletes a node and all its associated edges from the graph.
-     *
-     * @param node The node to be deleted.
-     */
-    fun delNode(node: N)
-
-    /**
-     * Deletes an edge from the graph.
-     *
-     * @param edge The edge to be deleted.
-     */
-    fun delEdge(edge: E)
-
-    /**
-     * Retrieves all incoming edges to the specified node.
+     * Retrieves all incoming edges to the specified node instance.
      *
      * @param of The node whose incoming edges are to be retrieved.
      * @return A sequence of incoming edges.
@@ -131,7 +128,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun getIncomingEdges(of: AbcNode): Sequence<E>
 
     /**
-     * Retrieves all outgoing edges from the specified node.
+     * Retrieves all outgoing edges from the specified node instance.
      *
      * @param of The node whose outgoing edges are to be retrieved.
      * @return A sequence of outgoing edges.

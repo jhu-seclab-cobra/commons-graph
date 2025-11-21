@@ -10,18 +10,26 @@ import edu.jhu.cobra.commons.value.strVal
  *
  * Represents an immutable identifier as a string value.
  *
- * @property name The node identifier string.
+ * @property value The node identifier string.
  * @constructor Creates a [NodeID] from a string.
- * @param name The node identifier string.
+ * @param value The node identifier string.
  * @see IEntity.ID
  */
-data class NodeID(override val name: String) : IEntity.ID {
+data class NodeID(val name: String) : IEntity.ID {
+    /**
+     * Returns the string representation of this identifier.
+     *
+     * @return The identifier as string.
+     */
+    override val asString: String get() = name
+
     /**
      * Returns the serialized node identifier as a [StrVal].
      *
      * @return The string value representation.
      */
     override val serialize: StrVal get() = name.strVal
+
     override fun toString() = name
 
     /**

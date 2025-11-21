@@ -20,7 +20,7 @@ class NodeIDWhiteBoxTest {
         val nodeId = NodeID("")
 
         // Assert
-        assertEquals("", nodeId.name)
+        assertEquals("", nodeId.asString)
         assertEquals("", nodeId.toString())
         assertEquals("", nodeId.serialize.core)
     }
@@ -31,7 +31,7 @@ class NodeIDWhiteBoxTest {
         val nodeId = NodeID("node-123_test")
 
         // Assert
-        assertEquals("node-123_test", nodeId.name)
+        assertEquals("node-123_test", nodeId.asString)
         assertEquals("node-123_test", nodeId.toString())
     }
 
@@ -41,7 +41,7 @@ class NodeIDWhiteBoxTest {
         val nodeId = NodeID("节点_123")
 
         // Assert
-        assertEquals("节点_123", nodeId.name)
+        assertEquals("节点_123", nodeId.asString)
         assertEquals("节点_123", nodeId.serialize.core)
     }
 
@@ -54,7 +54,7 @@ class NodeIDWhiteBoxTest {
         val nodeId = NodeID(longString)
 
         // Assert
-        assertEquals(1000, nodeId.name.length)
+        assertEquals(1000, nodeId.asString.length)
         assertEquals(longString, nodeId.serialize.core)
     }
 
@@ -71,9 +71,9 @@ class NodeIDWhiteBoxTest {
         val nodeId = NodeID(testName)
 
         // Assert
-        assertEquals(testName, nodeId.name)
+        assertEquals(testName, nodeId.asString)
         assertEquals(testName, (nodeId.serialize as StrVal).core)
-        assertTrue(nodeId.name == nodeId.serialize.core)
+        assertTrue(nodeId.asString == nodeId.serialize.core)
     }
 
     @Test
@@ -86,7 +86,7 @@ class NodeIDWhiteBoxTest {
 
         // Assert
         assertEquals(testName, nodeId.toString())
-        assertEquals(nodeId.name, nodeId.toString())
+        assertEquals(nodeId.asString, nodeId.toString())
     }
 }
 
