@@ -79,7 +79,7 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>? = null)
     fun getEdge(from: AbcNode, to: AbcNode): E? {
         val defaultID = EdgeID(from.id, to.id, eType = "$graphName:")
         if (defaultID in cacheEIDs) return getEdge(whoseID = defaultID)
-        val canEdgeIDs = storage.getIncomingEdges(from.id).filter{ it.dstNid == to.id }
+        val canEdgeIDs = storage.getOutgoingEdges(from.id).filter{ it.dstNid == to.id }
         return canEdgeIDs.singleOrNull { it in cacheEIDs }?.let { newEdgeObj(it) }
     }
 }

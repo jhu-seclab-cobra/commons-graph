@@ -27,11 +27,11 @@ sealed interface IEntity {
         val serialize: IValue
 
         /**
-         * Returns the human-readable name or label for this identifier.
+         * Returns the string representation of this identifier.
          *
-         * @return The identifier name.
+         * @return The identifier as string.
          */
-        val name: String
+        val asString: String
     }
 
     /**

@@ -22,7 +22,7 @@ class NodeIDBlackBoxTest {
         val nodeId = NodeID("node1")
 
         // Assert
-        assertEquals("node1", nodeId.name)
+        assertEquals("node1", nodeId.asString)
         assertEquals("node1", nodeId.toString())
     }
 
@@ -35,7 +35,7 @@ class NodeIDBlackBoxTest {
         val nodeId = NodeID(strVal)
 
         // Assert
-        assertEquals("node2", nodeId.name)
+        assertEquals("node2", nodeId.asString)
         assertEquals("node2", nodeId.toString())
     }
 
@@ -65,7 +65,7 @@ class NodeIDBlackBoxTest {
         val serialized = nodeId.serialize
 
         // Assert
-        assertEquals(nodeId.name, serialized.core)
+        assertEquals(nodeId.asString, serialized.core)
     }
 
     // ============================================================================
@@ -122,7 +122,7 @@ class NodeIDBlackBoxTest {
         val nodeId: IEntity.ID = NodeID("test")
 
         // Assert
-        assertEquals("test", nodeId.name)
+        assertEquals("test", nodeId.asString)
     }
 
     @Test

@@ -103,6 +103,19 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
     }
 
     /**
+     * Adds a new node to the graph with the specified name.
+     * The graph name prefix is automatically added to create the internal NodeID transparently.
+     *
+     * @param name The name for the new node (without graph name prefix).
+     * @return The newly created node with transparently prefixed NodeID.
+     * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if a node with the given name already exists.
+     */
+    fun addNode(name: String): N {
+        val nodeID = NodeID("$graphName:$name")
+        return addNode(nodeID)
+    }
+
+    /**
      * Wraps a generic [AbcNode] into its specific graph-context type [N].
      *
      * @param node The generic node to be wrapped.
@@ -127,6 +140,18 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
     override fun getNode(whoseID: NodeID): N? {
         if (whoseID !in cacheNIDs || !storage.containsNode(whoseID)) return null
         return newNodeObj(nid = whoseID)
+    }
+
+    /**
+     * Retrieves a node from the graph based on its name.
+     * The graph name prefix is automatically added to create the internal NodeID transparently.
+     *
+     * @param name The name of the node to retrieve (without graph name prefix).
+     * @return The node if it exists, `null` otherwise.
+     */
+    fun getNode(name: String): N? {
+        val nodeID = NodeID("$graphName:$name")
+        return getNode(nodeID)
     }
 
     /**

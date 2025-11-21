@@ -96,18 +96,6 @@
 - **Output**: `Set<EdgeID>` - set of edge IDs representing the outgoing edges
 - **Throws**: `AccessClosedStorageException` if storage is closed, `EntityNotExistException` if node does not exist
 
-**[getMeta(name: String): IValue?]**
-- **Behavior**: Returns a metadata value by name.
-- **Input**: `name: String` - name of the metadata property
-- **Output**: `IValue?` - metadata value, or null if not found
-- **Throws**: `AccessClosedStorageException` if storage is closed
-
-**[setMeta(name: String, value: IValue?)]**
-- **Behavior**: Sets a metadata value by name. Passing null as the value will delete the metadata property.
-- **Input**: `name: String` - name of the metadata property, `value: IValue?` - metadata value, or null to delete
-- **Output**: Unit
-- **Throws**: `AccessClosedStorageException` if storage is closed
-
 **[clear(): Boolean]**
 - **Behavior**: Clears all nodes and edges from storage.
 - **Input**: None

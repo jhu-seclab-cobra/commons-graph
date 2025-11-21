@@ -22,11 +22,11 @@ import edu.jhu.cobra.commons.value.strVal
  */
 data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
     /**
-     * Returns the edge identifier as "sourceNodeId-edgeType-destinationNodeId".
+     * Returns the string representation of this identifier.
      *
-     * @return The formatted edge identifier string.
+     * @return The identifier as string in format "sourceNodeId-edgeType-destinationNodeId".
      */
-    override val name: String by lazy { "$srcNid-$eType-$dstNid" }
+    override val asString: String by lazy { "$srcNid-$eType-$dstNid" }
 
     /**
      * Returns the serialized edge identifier as a [ListVal].
@@ -35,7 +35,7 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
      */
     override val serialize: ListVal by lazy { ListVal(srcNid.serialize, dstNid.serialize, eType.strVal) }
 
-    override fun toString() = name
+    override fun toString() = asString
 
     /**
      * Creates an [EdgeID] from a [ListVal].

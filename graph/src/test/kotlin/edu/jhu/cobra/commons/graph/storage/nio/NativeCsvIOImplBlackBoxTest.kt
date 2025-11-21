@@ -147,7 +147,7 @@ class NativeCsvIOImplBlackBoxTest {
 
         // Act
         NativeCsvIOImpl.export(exportPath, storage) { id ->
-            id is NodeID && id.name.startsWith("node")
+            id is NodeID && id.asString.startsWith("node")
         }
 
         // Assert
@@ -174,7 +174,7 @@ class NativeCsvIOImplBlackBoxTest {
 
         // Act
         NativeCsvIOImpl.export(exportPath, storage) { id ->
-            id is NodeID || "edge1" in id.name
+            id is NodeID || "edge1" in id.asString
         }
 
         // Assert
@@ -201,8 +201,8 @@ class NativeCsvIOImplBlackBoxTest {
         // Act
         NativeCsvIOImpl.export(exportPath, storage) { id ->
             when (id) {
-                is NodeID -> id.name in listOf("node1", "node2", "node3")
-                is EdgeID -> listOf("edge1", "edge3").any { it in id.name }
+                is NodeID -> id.asString in listOf("node1", "node2", "node3")
+                is EdgeID -> listOf("edge1", "edge3").any { it in id.asString }
             }
         }
 
@@ -268,7 +268,7 @@ class NativeCsvIOImplBlackBoxTest {
         // Act
         val importedStorage = NativeStorageImpl()
         NativeCsvIOImpl.import(exportPath, importedStorage) { id ->
-            id is NodeID && id.name in listOf("node1", "node3")
+            id is NodeID && id.asString in listOf("node1", "node3")
         }
 
         // Assert
@@ -294,7 +294,7 @@ class NativeCsvIOImplBlackBoxTest {
         // Act
         val importedStorage = NativeStorageImpl()
         NativeCsvIOImpl.import(exportPath, importedStorage) { id ->
-            id is NodeID || "edge1" in id.name
+            id is NodeID || "edge1" in id.asString
         }
 
         // Assert
