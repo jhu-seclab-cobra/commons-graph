@@ -22,7 +22,7 @@ fun <K : IEntity.ID> IValue.toEntityID(): K = when (this) {
  * The identifier for the meta-node of the graph.
  * The meta-node is used to store metadata about the graph.
  */
-val <N : AbcNode, E : AbcEdge> IGraph<N, E>.META_NID get() = NodeID(this.graphName + "__meta__")
+val <N : AbcNode, E : AbcEdge> IGraph<N, E>.META_NID get() = this.graphName + "__meta__"
 
 /**
  * Retrieves the value of a property from the meta-node of the graph.
@@ -78,8 +78,8 @@ operator fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.contains(id: IEntity.ID) = 
  * @return `true` if the graph contains the specified entity, `false` otherwise.
  */
 operator fun <N : AbcNode, E : AbcEdge> IGraph<N, E>.contains(entity: IEntity) = when (entity) {
-    is AbcNode -> containNode(entity)
-    is AbcEdge -> containEdge(entity)
+    is AbcNode -> containNode(entity.id)
+    is AbcEdge -> containEdge(entity.id)
 }
 
 /**

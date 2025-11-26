@@ -8,6 +8,7 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import java.io.Closeable
 import java.util.LinkedList
 
 /**
@@ -16,9 +17,8 @@ import java.util.LinkedList
  *
  * @param N The type of nodes in the graph, must extend [edu.jhu.cobra.commons.graph.AbcNode].
  * @param E The type of edges in the graph, must extend [edu.jhu.cobra.commons.graph.AbcEdge].
- * @param nType The class object representing the node type, used for runtime type checking.
  */
-abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGraph<N, E> {
+abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>() : IGraph<N, E>, Closeable {
 
     /**
      * The storage kernel for managing graph nodes and edges.
@@ -29,29 +29,12 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
     /**
      * Cache for node IDs in the graph storage.
      */
-    protected val cacheNIDs: MutableSet<NodeID> = mutableSetOf()
+    override val nodeIDs: MutableSet<NodeID> = mutableSetOf()
 
     /**
      * Cache for edge IDs in the graph storage.
      */
-    protected val cacheEIDs: MutableSet<EdgeID> = mutableSetOf()
-
-    /**
-     * The total number of entities (nodes and edges) in the graph.
-     */
-    override val entitySize: Int get() = cacheNIDs.size + cacheEIDs.size
-
-    /**
-     * The name of the graph, derived from the class name by removing the "Graph" suffix.
-     * Defaults to "anonymous" if class name cannot be determined.
-     */
-    override val graphName: String by lazy { this::class.simpleName?.removeSuffix("Graph") ?: "anonymous" }
-
-    /**
-     * The class object representing the node type, used for runtime type checking.
-     * If not provided in the constructor, determined from a sample node.
-     */
-    private val nodeClass by lazy { nType ?: newNodeObj(NodeID("__sample__"))::class.java }
+    override val edgeIDs: MutableSet<EdgeID> = mutableSetOf()
 
     /**
      * Creates a new node object of type [N] using the provided node ID.
@@ -70,26 +53,6 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
     protected abstract fun newEdgeObj(eid: EdgeID): E
 
     /**
-     * Checks if the graph contains the specified node.
-     * Returns true only if the node exists in both cache and storage.
-     *
-     * @param node The node to check for existence.
-     * @return `true` if the node exists in both cache and storage, `false` otherwise.
-     */
-    override fun containNode(node: AbcNode): Boolean =
-        cacheNIDs.contains(node.id) && storage.containsNode(node.id)
-
-    /**
-     * Checks if the graph contains the specified edge.
-     * Returns true only if the edge exists in both cache and storage.
-     *
-     * @param edge The edge to check for existence.
-     * @return `true` if the edge exists in both cache and storage, `false` otherwise.
-     */
-    override fun containEdge(edge: AbcEdge): Boolean =
-        cacheEIDs.contains(edge.id) && storage.containsEdge(edge.id)
-
-    /**
      * Adds a new node to the graph with the specified identifier.
      *
      * @param whoseID The identifier for the new node.
@@ -97,37 +60,22 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if a node with the given ID already exists.
      */
     override fun addNode(whoseID: NodeID): N {
-        if (whoseID in cacheNIDs) throw EntityAlreadyExistException(whoseID)
+        if (whoseID in nodeIDs) throw EntityAlreadyExistException(whoseID)
         if (!storage.containsNode(whoseID)) storage.addNode(id = whoseID)
-        return newNodeObj(whoseID.also { cacheNIDs.add(it) })
+        return newNodeObj(whoseID.also { nodeIDs.add(it) })
     }
 
     /**
-     * Adds a new node to the graph with the specified name.
-     * The graph name prefix is automatically added to create the internal NodeID transparently.
+     * Deletes a node and all its associated edges from the graph.
+     * Also removes the node and its edges from both cache and storage.
      *
-     * @param name The name for the new node (without graph name prefix).
-     * @return The newly created node with transparently prefixed NodeID.
-     * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException if a node with the given name already exists.
+     * @param node The node to be deleted.
      */
-    fun addNode(name: String): N {
-        val nodeID = NodeID("$graphName:$name")
-        return addNode(nodeID)
-    }
-
-    /**
-     * Wraps a generic [AbcNode] into its specific graph-context type [N].
-     *
-     * @param node The generic node to be wrapped.
-     * @return The node converted to the specific type [N].
-     * @throws edu.jhu.cobra.commons.graph.EntityNotExistException if the node does not exist in the storage.
-     */
-    @Suppress("UNCHECKED_CAST")
-    override fun wrapNode(node: AbcNode): N {
-        if (!storage.containsNode(node.id)) throw EntityNotExistException(node.id)
-        if (cacheNIDs.add(node.id)) return newNodeObj(node.id)
-        val canBeCasted = nodeClass.isInstance(node) && node.doUseStorage(storage)
-        return if (canBeCasted) node as N else newNodeObj(node.id)
+    override fun delNode(node: N) {
+        if (!nodeIDs.remove(node.id) || !storage.containsNode(node.id)) return
+        val allEdges = getOutgoingEdges(node) + getIncomingEdges(node)
+        allEdges.forEach { if (edgeIDs.remove(it.id)) storage.deleteEdge(it.id) }
+        storage.deleteNode(id = node.id)
     }
 
     /**
@@ -138,20 +86,38 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return The node if it exists in both cache and storage, `null` otherwise.
      */
     override fun getNode(whoseID: NodeID): N? {
-        if (whoseID !in cacheNIDs || !storage.containsNode(whoseID)) return null
+        if (whoseID !in nodeIDs || !storage.containsNode(whoseID)) return null
         return newNodeObj(nid = whoseID)
     }
 
     /**
-     * Retrieves a node from the graph based on its name.
-     * The graph name prefix is automatically added to create the internal NodeID transparently.
+     * Retrieves all nodes in the graph that satisfy the given predicate.
      *
-     * @param name The name of the node to retrieve (without graph name prefix).
-     * @return The node if it exists, `null` otherwise.
+     * @param doSatisfy The predicate to filter nodes.
+     * @return A sequence of nodes that satisfy the predicate.
      */
-    fun getNode(name: String): N? {
-        val nodeID = NodeID("$graphName:$name")
-        return getNode(nodeID)
+    override fun getAllNodes(doSatisfy: (N) -> Boolean): Sequence<N> =
+        nodeIDs.asSequence().map { newNodeObj(it) }.filter { storage.containsNode(it.id) && doSatisfy(it) }
+
+    /**
+     * Checks if the graph contains the specified node.
+     * Returns true only if the node exists in both cache and storage.
+     *
+     * @param node The node to check for existence.
+     * @return `true` if the node exists in both cache and storage, `false` otherwise.
+     */
+    override fun containNode(node: AbcNode): Boolean =
+        nodeIDs.contains(node.id) && storage.containsNode(node.id)
+
+    /**
+     * Deletes an edge from the graph.
+     * Also removes the edge from both cache and storage.
+     *
+     * @param edge The edge to be deleted.
+     */
+    override fun delEdge(edge: E) {
+        if (!edgeIDs.remove(edge.id) || !storage.containsEdge(edge.id)) return
+        storage.deleteEdge(id = edge.id)
     }
 
     /**
@@ -162,18 +128,9 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return The edge if it exists in both cache and storage, `null` otherwise.
      */
     override fun getEdge(whoseID: EdgeID): E? {
-        if (whoseID !in cacheEIDs || !storage.containsEdge(whoseID)) return null
+        if (whoseID !in edgeIDs || !storage.containsEdge(whoseID)) return null
         return newEdgeObj(eid = whoseID)
     }
-
-    /**
-     * Retrieves all nodes in the graph that satisfy the given predicate.
-     *
-     * @param doSatisfy The predicate to filter nodes.
-     * @return A sequence of nodes that satisfy the predicate.
-     */
-    override fun getAllNodes(doSatisfy: (N) -> Boolean): Sequence<N> =
-        cacheNIDs.asSequence().map { newNodeObj(it) }.filter { storage.containsNode(it.id) && doSatisfy(it) }
 
     /**
      * Retrieves all edges in the graph that satisfy the given predicate.
@@ -182,7 +139,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return A sequence of edges that satisfy the predicate.
      */
     override fun getAllEdges(doSatisfy: (E) -> Boolean): Sequence<E> =
-        cacheEIDs.asSequence().map { newEdgeObj(it) }.filter { storage.containsEdge(it.id) && doSatisfy(it) }
+        edgeIDs.asSequence().map { newEdgeObj(it) }.filter { storage.containsEdge(it.id) && doSatisfy(it) }
 
     /**
      * Retrieves all outgoing edges from the specified node.
@@ -192,8 +149,8 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return A sequence of outgoing edges if the node exists, empty sequence otherwise.
      */
     override fun getOutgoingEdges(of: AbcNode): Sequence<E> {
-        if (of.id !in cacheNIDs || !storage.containsNode(of.id)) return emptySequence()
-        val existingIDs = storage.getOutgoingEdges(of.id).filter { it in cacheEIDs }
+        if (of.id !in nodeIDs || !storage.containsNode(of.id)) return emptySequence()
+        val existingIDs = storage.getOutgoingEdges(of.id).filter { it in edgeIDs }
         return existingIDs.asSequence().map { newEdgeObj(it) }
     }
 
@@ -205,8 +162,8 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return A sequence of incoming edges if the node exists, empty sequence otherwise.
      */
     override fun getIncomingEdges(of: AbcNode): Sequence<E> {
-        if (of.id !in cacheNIDs || !storage.containsNode(of.id)) return emptySequence()
-        val existingIDs = storage.getIncomingEdges(of.id).filter { it in cacheEIDs }
+        if (of.id !in nodeIDs || !storage.containsNode(of.id)) return emptySequence()
+        val existingIDs = storage.getIncomingEdges(of.id).filter { it in edgeIDs }
         return existingIDs.asSequence().map { newEdgeObj(it) }
     }
 
@@ -242,14 +199,14 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return A sequence of ancestor nodes.
      */
     override fun getAncestors(of: AbcNode, edgeCond: (E) -> Boolean) = sequence {
-        if (of.id !in cacheNIDs || !storage.containsNode(of.id)) return@sequence
+        if (of.id !in nodeIDs || !storage.containsNode(of.id)) return@sequence
         val loop = hashSetOf<NodeID>()
         val stack = mutableListOf(of.id)
         while (stack.isNotEmpty()) {
             val currentId = stack.removeAt(index = 0)
             if (!loop.add(currentId)) continue
             storage.getIncomingEdges(currentId).forEach { edgeID ->
-                if (edgeID !in cacheEIDs) return@forEach
+                if (edgeID !in edgeIDs) return@forEach
                 if (!edgeCond(newEdgeObj(edgeID))) return@forEach
                 yield(newNodeObj(nid = edgeID.srcNid))
                 stack.add(element = edgeID.srcNid)
@@ -267,7 +224,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
      * @return A sequence of descendant nodes.
      */
     override fun getDescendants(of: AbcNode, edgeCond: (E) -> Boolean) = sequence {
-        if (of.id !in cacheNIDs || !storage.containsNode(of.id)) return@sequence
+        if (of.id !in nodeIDs || !storage.containsNode(of.id)) return@sequence
         val loop = hashSetOf<NodeID>()
         val stack = LinkedList<NodeID>().apply { add(of.id) }
         while (stack.isNotEmpty()) {
@@ -275,7 +232,7 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
             if (!loop.add(currentId)) continue
             val outgoings = storage.getOutgoingEdges(currentId)
             outgoings.forEach { edgeID ->
-                if (edgeID !in cacheEIDs) return@forEach
+                if (edgeID !in edgeIDs) return@forEach
                 if (!edgeCond(newEdgeObj(edgeID))) return@forEach
                 yield(newNodeObj(nid = edgeID.dstNid))
                 stack.add(element = edgeID.dstNid)
@@ -284,48 +241,31 @@ abstract class AbcBasicGraph<N : AbcNode, E : AbcEdge>(nType: Class<N>?) : IGrap
     }
 
     /**
-     * Deletes a node and all its associated edges from the graph.
-     * Also removes the node and its edges from both cache and storage.
+     * Checks if the graph contains the specified edge.
+     * Returns true only if the edge exists in both cache and storage.
      *
-     * @param node The node to be deleted.
+     * @param edge The edge to check for existence.
+     * @return `true` if the edge exists in both cache and storage, `false` otherwise.
      */
-    override fun delNode(node: N) {
-        if (!cacheNIDs.remove(node.id) || !storage.containsNode(node.id)) return
-        val allEdges = getOutgoingEdges(node) + getIncomingEdges(node)
-        allEdges.forEach { if (cacheEIDs.remove(it.id)) storage.deleteEdge(it.id) }
-        storage.deleteNode(id = node.id)
-    }
+    override fun containEdge(edge: AbcEdge): Boolean =
+        edgeIDs.contains(edge.id) && storage.containsEdge(edge.id)
 
-    /**
-     * Deletes an edge from the graph.
-     * Also removes the edge from both cache and storage.
-     *
-     * @param edge The edge to be deleted.
-     */
-    override fun delEdge(edge: E) {
-        if (!cacheEIDs.remove(edge.id) || !storage.containsEdge(edge.id)) return
-        storage.deleteEdge(id = edge.id)
-    }
+
 
     /**
      * Clears and refreshes the cache for edge and node IDs in the graph storage.
      * Only loads edges whose type starts with the graph name.
      */
-    open fun refreshCache() {
-        clearCache()
-        storage.edgeIDs.forEach { canID ->
-            if (!canID.eType.startsWith(graphName)) return@forEach
-            cacheNIDs.add(canID.srcNid); cacheNIDs.add(canID.dstNid)
-            cacheEIDs.add(element = canID)
-        }
+    fun refresh() {
+
     }
 
     /**
      * Clears the cache for edge and node IDs in the graph storage.
      * Does not affect the actual storage.
      */
-    open fun clearCache() {
-        cacheEIDs.clear()
-        cacheNIDs.clear()
+    override fun close() {
+        edgeIDs.clear()
+        nodeIDs.clear()
     }
 }

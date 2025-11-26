@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.entity
 
-import edu.jhu.cobra.commons.graph.AbcBasicEntity
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.NodeID
