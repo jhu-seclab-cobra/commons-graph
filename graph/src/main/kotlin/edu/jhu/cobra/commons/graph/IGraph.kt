@@ -1,177 +1,43 @@
 package edu.jhu.cobra.commons.graph
 
-/**
- * Interface representing a generic graph structure where nodes and edges are modeled by the types [N] and [E],
- * respectively. This interface provides operations to manipulate and query the graph, including adding/removing
- * nodes and edges, retrieving related nodes, and traversing the graph.
- *
- * @param N The type of nodes in the graph, which must extend [AbcNode].
- * @param E The type of edges in the graph, which must extend [AbcEdge].
- */
 interface IGraph<N : AbcNode, E : AbcEdge> {
 
-    /**
-     * The name of the graph.
-     */
-    val graphName: String
-
-    /**
-     * Returns all node IDs currently in the graph.
-     */
     val nodeIDs: Set<NodeID>
 
-    /**
-     * Returns all edge IDs currently in the graph.
-     */
     val edgeIDs: Set<EdgeID>
 
-    /**
-     * Adds a new node to the graph with the specified human-readable name.
-     * The graph is responsible for constructing the underlying [NodeID] (including any required prefixes).
-     *
-     * @param whoseName The display name for the node to be added (without graph prefix).
-     * @return The newly added node of type [N] whose `id` is managed by the graph.
-     * @throws EntityAlreadyExistException If a node with the specified name already exists.
-     */
-    fun addNode(whoseName: String): N
+    // Node CURD Operations
+    fun addNode(withID: NodeID): N
 
-    /**
-     * Wraps a generic [AbcNode] into its specific graph-context type [N].
-     *
-     * @param node The generic node to be wrapped.
-     * @return The node converted to the specific type [N].
-     * @throws EntityNotExistException If the node does not exist in the graph.
-     */
-    fun wrapNode(node: AbcNode): N
-
-    /**
-     * Retrieves a node from the graph based on its identifier.
-     *
-     * @param whoseID The identifier of the node to retrieve.
-     * @return The node if it exists, `null` otherwise.
-     */
     fun getNode(whoseID: NodeID): N?
 
-    /**
-     * Checks if the specified node instance is contained in the graph.
-     *
-     * @param node The node to check for containment.
-     * @return `true` if the node is contained in the graph, `false` otherwise.
-     */
-    fun containNode(node: AbcNode): Boolean
+    fun containNode(whoseID: NodeID): Boolean
 
-    /**
-     * Deletes the provided node (and all associated edges) from the graph.
-     *
-     * @param node The node produced by this graph to be deleted.
-     */
-    fun delNode(node: N)
+    fun delNode(whoseID: NodeID)
 
-    /**
-     * Retrieves all nodes in the graph that satisfy the given predicate.
-     *
-     * @param doSatisfy The predicate to filter nodes.
-     * @return A sequence of nodes that satisfy the predicate.
-     */
-    fun getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>
+    fun getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>
 
-    /**
-     * Adds a directed edge between two nodes in the graph.
-     * The graph is responsible for creating the underlying [EdgeID] using the node IDs and the provided name.
-     *
-     * @param from The source node from which the edge starts.
-     * @param to The destination node to which the edge points.
-     * @param name The human-readable edge name (without graph prefix).
-     * @return The newly added edge of type [E].
-     * @throws EntityNotExistException If the source or destination node does not belong to the graph.
-     * @throws EntityAlreadyExistException If an equivalent edge already exists between the nodes.
-     */
-    fun addEdge(from: AbcNode, to: AbcNode, name: String): E
+    // Edge CURD Operations
+    fun addEdge(withID: EdgeID): E
 
-    /**
-     * Retrieves an edge from the graph based on its identifier.
-     *
-     * @param whoseID The identifier of the edge to retrieve.
-     * @return The edge if it exists, `null` otherwise.
-     */
     fun getEdge(whoseID: EdgeID): E?
 
-    /**
-     * Checks if the graph contains the specified edge instance.
-     *
-     * @param edge The edge to check for existence in the graph.
-     * @return `true` if the edge is present in the graph, `false` otherwise.
-     */
-    fun containEdge(edge: AbcEdge): Boolean
+    fun containEdge(whoseID: EdgeID): Boolean
 
-    /**
-     * Deletes an edge from the graph.
-     *
-     * @param edge The edge instance (produced by this graph) to be deleted.
-     */
-    fun delEdge(edge: E)
+    fun delEdge(whoseID: EdgeID)
 
-    /**
-     * Retrieves all edges in the graph that satisfy the given predicate.
-     *
-     * @param doSatisfy The predicate to filter edges.
-     * @return A sequence of edges that satisfy the predicate.
-     */
-    fun getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>
+    // Graph Structure queries
+    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
 
-    /**
-     * Retrieves all incoming edges to the specified node instance.
-     *
-     * @param of The node whose incoming edges are to be retrieved.
-     * @return A sequence of incoming edges.
-     */
-    fun getIncomingEdges(of: AbcNode): Sequence<E>
+    fun getIncomingEdges(of: NodeID): Sequence<E>
 
-    /**
-     * Retrieves all outgoing edges from the specified node instance.
-     *
-     * @param of The node whose outgoing edges are to be retrieved.
-     * @return A sequence of outgoing edges.
-     */
-    fun getOutgoingEdges(of: AbcNode): Sequence<E>
+    fun getOutgoingEdges(of: NodeID): Sequence<E>
 
-    /**
-     * Retrieves all child nodes of the specified node that are connected by edges
-     * satisfying the given predicate.
-     *
-     * @param of The node whose children are to be retrieved.
-     * @param edgeCond The predicate to filter connecting edges.
-     * @return A sequence of child nodes.
-     */
-    fun getChildren(of: AbcNode, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
 
-    /**
-     * Retrieves all parent nodes of the specified node that are connected by edges
-     * satisfying the given predicate.
-     *
-     * @param of The node whose parents are to be retrieved.
-     * @param edgeCond The predicate to filter connecting edges.
-     * @return A sequence of parent nodes.
-     */
-    fun getParents(of: AbcNode, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
 
-    /**
-     * Retrieves all descendant nodes of the specified node that are connected by edges
-     * satisfying the given predicate.
-     *
-     * @param of The node whose descendants are to be retrieved.
-     * @param edgeCond The predicate to filter connecting edges.
-     * @return A sequence of descendant nodes.
-     */
-    fun getDescendants(of: AbcNode, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
 
-    /**
-     * Retrieves all ancestor nodes of the specified node that are connected by edges
-     * satisfying the given predicate.
-     *
-     * @param of The node whose ancestors are to be retrieved.
-     * @param edgeCond The predicate to filter connecting edges.
-     * @return A sequence of ancestor nodes.
-     */
-    fun getAncestors(of: AbcNode, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
 }

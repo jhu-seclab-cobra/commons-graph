@@ -57,11 +57,11 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
  * @property storage The storage system for edge properties.
  * @constructor Creates an edge with the given [IStorage].
  * @param storage The storage system for edge properties.
- * @see AbcBasicEntity
+ * @see AbcEntity
  * @see IEntity
  * @see EdgeID
  */
-abstract class AbcEdge(protected val storage: IStorage) : AbcBasicEntity() {
+abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
 
     /**
      * Represents the type information for an edge.

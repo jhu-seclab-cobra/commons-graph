@@ -8,11 +8,11 @@ import edu.jhu.cobra.commons.value.strVal
 /**
  * Unique identifier for a node in the graph.
  *
- * Represents an immutable identifier as a string value.
+ * Represents an immutable identifier as a string name.
  *
- * @property value The node identifier string.
+ * @property name The node identifier string.
  * @constructor Creates a [NodeID] from a string.
- * @param value The node identifier string.
+ * @param name The node identifier string.
  * @see IEntity.ID
  */
 data class NodeID(val name: String) : IEntity.ID {
@@ -48,11 +48,11 @@ data class NodeID(val name: String) : IEntity.ID {
  * @property storage The storage system for node properties.
  * @constructor Creates a node with the given [IStorage].
  * @param storage The storage system for node properties.
- * @see AbcBasicEntity
+ * @see AbcEntity
  * @see IEntity
  * @see NodeID
  */
-abstract class AbcNode(protected val storage: IStorage) : AbcBasicEntity() {
+abstract class AbcNode(protected val storage: IStorage) : AbcEntity() {
     /**
      * Represents the type information for a node.
      */

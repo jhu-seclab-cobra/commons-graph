@@ -15,7 +15,7 @@ import kotlin.reflect.KProperty
  * @see AbcNode
  * @see AbcEdge
  */
-sealed class AbcBasicEntity : IEntity {
+sealed class AbcEntity : IEntity {
 
     /**
      * Returns the property value with the specified name, cast to type [T].
