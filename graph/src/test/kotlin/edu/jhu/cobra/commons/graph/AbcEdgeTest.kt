@@ -1,9 +1,5 @@
-package edu.jhu.cobra.commons.graph.entity
+package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcEdge
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.IEntity
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.*
