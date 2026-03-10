@@ -7,47 +7,22 @@ import edu.jhu.cobra.commons.value.IValue
  * In-memory graph storage implementation using HashMap-based data structures.
  *
  * Provides efficient storage with O(1) average time complexity. Not thread-safe.
+ * Uses separate incoming/outgoing adjacency indices for O(1) directional edge queries.
  *
  * @constructor Creates a new empty storage instance.
  * @see NativeConcurStorageImpl
  */
 class NativeStorageImpl : IStorage {
-    // ============================================================================
-    // STATE MANAGEMENT
-    // ============================================================================
-
-    /**
-     * Indicates whether the storage has been closed.
-     */
     private var isClosed: Boolean = false
 
-    // ============================================================================
-    // STORAGE STRUCTURES
-    // ============================================================================
-
-    /**
-     * Maps node IDs to their property dictionaries.
-     */
+    // Entity property stores — LinkedHashMap preserves insertion order for nodeIDs/edgeIDs
     private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = mutableMapOf()
-
-    /**
-     * Maps edge IDs to their property dictionaries.
-     */
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
-
-    /**
-     * Maps metadata keys to their values.
-     */
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
 
-    // ============================================================================
-    // GRAPH STRUCTURE
-    // ============================================================================
-
-    /**
-     * Adjacency list representation for graph structure.
-     */
-    private val graphStructure: MutableMap<NodeID, Set<EdgeID>> = mutableMapOf()
+    // Split adjacency indices: O(1) directional lookups without filtering
+    private val outEdges = HashMap<NodeID, MutableSet<EdgeID>>()
+    private val inEdges = HashMap<NodeID, MutableSet<EdgeID>>()
 
     // ============================================================================
     // PROPERTIES AND STATISTICS
@@ -75,6 +50,8 @@ class NativeStorageImpl : IStorage {
         if (isClosed) throw AccessClosedStorageException()
         if (containsNode(id)) throw EntityAlreadyExistException(id = id)
         nodeProperties[id] = properties.toMutableMap()
+        outEdges[id] = HashSet()
+        inEdges[id] = HashSet()
     }
 
     override fun getNodeProperties(id: NodeID): Map<String, IValue> {
@@ -96,11 +73,13 @@ class NativeStorageImpl : IStorage {
     override fun deleteNode(id: NodeID) {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        // Delete all connected edges first
-        getIncomingEdges(id).forEach { deleteEdge(it) }
-        getOutgoingEdges(id).forEach { deleteEdge(it) }
-        // Remove node from structures
-        graphStructure.remove(id)
+        // Snapshot connected edges before mutating adjacency sets
+        val connected = HashSet<EdgeID>(outEdges[id]!!.size + inEdges[id]!!.size)
+        connected.addAll(outEdges[id]!!)
+        connected.addAll(inEdges[id]!!)
+        connected.forEach { deleteEdge(it) }
+        outEdges.remove(id)
+        inEdges.remove(id)
         nodeProperties.remove(id)
     }
 
@@ -121,10 +100,8 @@ class NativeStorageImpl : IStorage {
         if (containsEdge(id)) throw EntityAlreadyExistException(id = id)
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
-        // Add edge to graph structure
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() + id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() + id
-        // Store edge properties
+        outEdges[id.srcNid]!!.add(id)
+        inEdges[id.dstNid]!!.add(id)
         edgeProperties[id] = properties.toMutableMap()
     }
 
@@ -147,10 +124,8 @@ class NativeStorageImpl : IStorage {
     override fun deleteEdge(id: EdgeID) {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsEdge(id)) throw EntityNotExistException(id)
-        // Remove edge from graph structure
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
-        // Remove edge properties
+        outEdges[id.srcNid]?.remove(id)
+        inEdges[id.dstNid]?.remove(id)
         edgeProperties.remove(id)
     }
 
@@ -161,13 +136,13 @@ class NativeStorageImpl : IStorage {
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        return graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
+        return inEdges[id] ?: emptySet()
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         if (isClosed) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        return graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
+        return outEdges[id] ?: emptySet()
     }
 
     // ============================================================================
@@ -203,7 +178,8 @@ class NativeStorageImpl : IStorage {
 
     override fun clear(): Boolean {
         if (isClosed) throw AccessClosedStorageException()
-        graphStructure.clear()
+        outEdges.clear()
+        inEdges.clear()
         edgeProperties.clear()
         nodeProperties.clear()
         metaProperties.clear()
