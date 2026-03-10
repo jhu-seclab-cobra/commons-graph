@@ -11,7 +11,6 @@ import kotlin.io.path.*
 import kotlin.test.*
 
 class NativeCsvIOImplTest {
-
     private lateinit var tempDir: Path
     private lateinit var storage: NativeStorageImpl
 
@@ -353,11 +352,14 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with special characters in property values`() {
-        storage.addNode(node1, mapOf(
-            "name" to "Node,with,commas".strVal,
-            "newline" to "Line1\nLine2".strVal,
-            "tab" to "Value\tSeparated".strVal
-        ))
+        storage.addNode(
+            node1,
+            mapOf(
+                "name" to "Node,with,commas".strVal,
+                "newline" to "Line1\nLine2".strVal,
+                "tab" to "Value\tSeparated".strVal,
+            ),
+        )
         val exportPath = tempDir.resolve("special_chars")
         NativeCsvIOImpl.export(exportPath, storage)
 
@@ -374,10 +376,13 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with empty property values`() {
-        storage.addNode(node1, mapOf(
-            "prop1" to "value1".strVal,
-            "prop2" to "".strVal
-        ))
+        storage.addNode(
+            node1,
+            mapOf(
+                "prop1" to "value1".strVal,
+                "prop2" to "".strVal,
+            ),
+        )
         val exportPath = tempDir.resolve("empty_props")
         NativeCsvIOImpl.export(exportPath, storage)
 
@@ -429,12 +434,15 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test round-trip export and import preserves all data`() {
-        storage.addNode(node1, mapOf(
-            "name" to "Node1".strVal,
-            "age" to 25.numVal,
-            "weight" to 1.5.numVal,
-            "active" to true.boolVal
-        ))
+        storage.addNode(
+            node1,
+            mapOf(
+                "name" to "Node1".strVal,
+                "age" to 25.numVal,
+                "weight" to 1.5.numVal,
+                "active" to true.boolVal,
+            ),
+        )
         storage.addNode(node2, mapOf("name" to "Node2".strVal))
         storage.addNode(node3, mapOf("name" to "Node3".strVal))
         storage.addEdge(edge1, mapOf("weight" to 1.0.numVal, "label" to "relation".strVal))
