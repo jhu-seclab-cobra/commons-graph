@@ -4,7 +4,6 @@ import edu.jhu.cobra.commons.graph.*
 import kotlin.test.*
 
 class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
-
     @BeforeTest
     fun setUp() {
         graph = TestGraph()
