@@ -9,34 +9,45 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
  * Base class for TraitNodeGroup tests providing shared test infrastructure.
  */
 abstract class AbcTraitNodeGroupTest {
-    protected class TestNode(storage: IStorage, override val id: NodeID) : AbcNode(storage) {
+    protected class TestNode(
+        storage: IStorage,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
         enum class Type {
-            TEST
+            TEST,
         }
 
         override val type: AbcNode.Type
-            get() = object : AbcNode.Type {
-                override val name: String get() = Type.TEST.name
-            }
+            get() =
+                object : AbcNode.Type {
+                    override val name: String get() = Type.TEST.name
+                }
     }
 
-    protected class TestEdge(storage: IStorage, override val id: EdgeID) : AbcEdge(storage) {
+    protected class TestEdge(
+        storage: IStorage,
+        override val id: EdgeID,
+    ) : AbcEdge(storage) {
         enum class Type {
-            TEST
+            TEST,
         }
 
         override val type: AbcEdge.Type
-            get() = object : AbcEdge.Type {
-                override val name: String get() = Type.TEST.name
-            }
+            get() =
+                object : AbcEdge.Type {
+                    override val name: String get() = Type.TEST.name
+                }
     }
 
-    protected class TestGraph : AbcSimpleGraph<TestNode, TestEdge>(), TraitNodeGroup<TestNode, TestEdge> {
+    protected class TestGraph :
+        AbcSimpleGraph<TestNode, TestEdge>(),
+        TraitNodeGroup<TestNode, TestEdge> {
         override val storage = NativeStorageImpl()
         override val groupPrefix: String = "Test"
         override val groupedNodesCounter: MutableMap<String, Int> = mutableMapOf()
 
         override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
+
         override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
     }
 
@@ -46,4 +57,3 @@ abstract class AbcTraitNodeGroupTest {
         graph.groupedNodesCounter[group] = 0
     }
 }
-
