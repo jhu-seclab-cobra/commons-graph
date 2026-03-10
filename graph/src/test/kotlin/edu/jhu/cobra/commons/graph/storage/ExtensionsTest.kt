@@ -3,10 +3,7 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
-/**
- * Tests for IStorage.transferTo() extension function.
- */
-class TransferToExtensionTest {
+class ExtensionsTest {
 
     private val node1 = StorageTestUtils.node1
     private val node2 = StorageTestUtils.node2
@@ -49,7 +46,6 @@ class TransferToExtensionTest {
         assertEquals(1.5, (target.getEdgeProperties(edge1)["weight"] as NumVal).core)
         assertEquals("x", (target.getEdgeProperties(edge2)["label"] as StrVal).core)
 
-        // Adjacency should be correct
         val outgoing = target.getOutgoingEdges(node1)
         assertTrue(outgoing.contains(edge1))
         val incoming = target.getIncomingEdges(node2)
@@ -82,7 +78,6 @@ class TransferToExtensionTest {
         val target = NativeStorageImpl()
         source.transferTo(target)
 
-        // Source is unchanged
         assertTrue(source.containsNode(node1))
         assertTrue(source.containsNode(node2))
         assertTrue(source.containsEdge(edge1))
