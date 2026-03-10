@@ -19,11 +19,14 @@ import kotlin.reflect.KClass
  */
 class MapDbValSerializer<T : IValue>(
     private val core: IValSerializer<ByteArray> = DftByteArraySerializerImpl,
-    private var valueType: KClass<out T>? = null
-) : Serializer<T>, Serializable {
+    private var valueType: KClass<out T>? = null,
+) : Serializer<T>,
+    Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
 
     private val delegator = Serializer.BYTE_ARRAY
-
 
     /**
      * Indicates whether the serializer can be trusted for security-sensitive operations.
@@ -38,9 +41,10 @@ class MapDbValSerializer<T : IValue>(
      * @param out The output stream to write the serialized data to.
      * @param value The [T] object to serialize.
      */
-    override fun serialize(out: DataOutput2, value: T) =
-        delegator.serialize(out, core.serialize(value = value))
-
+    override fun serialize(
+        out: DataOutput2,
+        value: T,
+    ) = delegator.serialize(out, core.serialize(value = value))
 
     /**
      * Deserializes a byte array back into an [T] object.
@@ -50,9 +54,14 @@ class MapDbValSerializer<T : IValue>(
      * @return The deserialized [T] object, or [NullVal] if no data is available.
      */
     @Suppress("UNCHECKED_CAST")
-    override fun deserialize(input: DataInput2, available: Int): T {
+    override fun deserialize(
+        input: DataInput2,
+        available: Int,
+    ): T {
         val deserialized = core.deserialize(delegator.deserialize(input, available))
-        if (valueType?.isInstance(deserialized) != false) return deserialized as T
-        else throw IllegalArgumentException("Deserialized value type does not match expected type")
+        require(valueType?.isInstance(deserialized) != false) {
+            "Deserialized value type does not match expected type"
+        }
+        return deserialized as T
     }
 }
