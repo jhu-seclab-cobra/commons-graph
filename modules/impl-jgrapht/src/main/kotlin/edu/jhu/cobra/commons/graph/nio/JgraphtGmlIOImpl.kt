@@ -7,6 +7,8 @@ import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
 import edu.jhu.cobra.commons.value.IValue
+import edu.jhu.cobra.commons.value.ListVal
+import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
 import org.jgrapht.graph.DirectedPseudograph
@@ -18,49 +20,44 @@ import org.jgrapht.nio.gml.GmlImporter
 import org.jgrapht.util.SupplierUtil
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.collections.MutableMap
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.contains
-import kotlin.collections.forEach
-import kotlin.collections.forEachIndexed
-import kotlin.collections.mapOf
-import kotlin.collections.mapValues
-import kotlin.collections.mutableMapOf
-import kotlin.collections.plus
-import kotlin.collections.set
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
 object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
-
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isRegularFile()) return false
         return file.fileSize() > 0 && "text" in Files.probeContentType(file)
     }
 
-    override fun export(dstFile: Path, from: IStorage, predicate: EntityFilter): Path {
+    override fun export(
+        dstFile: Path,
+        from: IStorage,
+        predicate: EntityFilter,
+    ): Path {
         require(dstFile.notExists() || dstFile.fileSize() != 0L) { "File $dstFile already exists" }
         val exporter = GmlExporter<Int, Int>()
         val nodeList = from.nodeIDs.filter(predicate).toList()
         exporter.setVertexAttributeProvider { index: Int ->
-            val nodeID = nodeList[index] // NodeId
+            val nodeID = nodeList[index]
             val metaProp = mapOf("nid" to nodeID.serialize)
             val props = metaProp + from.getNodeProperties(nodeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
         val edgeList = from.edgeIDs.filter(predicate).toList()
         exporter.setEdgeAttributeProvider { index: Int ->
-            val edgeID = edgeList[index] // EdgeId
+            val edgeID = edgeList[index]
             val metaProp = mapOf("eid" to edgeID.serialize)
             val props = metaProp + from.getEdgeProperties(edgeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
         val idOfVx = mutableMapOf<NodeID, Int>()
         val graph = DirectedPseudograph<Int, Int>(Int::class.java)
-        nodeList.forEachIndexed { index, node -> graph.addVertex(index); idOfVx[node] = index; }
+        nodeList.forEachIndexed { index, node ->
+            graph.addVertex(index)
+            idOfVx[node] = index
+        }
         edgeList.forEachIndexed { index, edge -> graph.addEdge(idOfVx[edge.srcNid], idOfVx[edge.dstNid], index) }
         exporter.setParameter(GmlExporter.Parameter.EXPORT_VERTEX_LABELS, true)
         exporter.setParameter(GmlExporter.Parameter.EXPORT_EDGE_LABELS, true)
@@ -68,7 +65,12 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         return dstFile
     }
 
-    override fun import(srcFile: Path, into: IStorage, predicate: EntityFilter): IStorage {
+    @Suppress("LongMethod")
+    override fun import(
+        srcFile: Path,
+        into: IStorage,
+        predicate: EntityFilter,
+    ): IStorage {
         require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exists or it is empty" }
         val importer = GmlImporter<Int, Int>()
         val nodesCache = mutableMapOf<Int, MutableMap<String, IValue>>()
@@ -89,14 +91,20 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         vGraph.edgeSupplier = SupplierUtil.createIntegerSupplier()
         importer.importGraph(vGraph, srcFile.toFile())
         nodesCache.values.forEach { props ->
-            val nid = props.remove("nid")!!.toEntityID<NodeID>()
-            if (nid !in into) into.addNode(nid, *props.toTypeArray())
-            else into.setNodeProperties(nid, *props.toTypeArray())
+            val nid = NodeID(props.remove("nid")!! as StrVal)
+            if (!into.containsNode(nid)) {
+                into.addNode(nid, props)
+            } else {
+                into.setNodeProperties(nid, props)
+            }
         }
         edgeCache.values.forEach { props ->
-            val eid = props.remove("eid")!!.toEntityID<EdgeID>()
-            if (eid !in into) into.addEdge(eid, *props.toTypeArray())
-            else into.setEdgeProperties(eid, *props.toTypeArray())
+            val eid = EdgeID(props.remove("eid")!! as ListVal)
+            if (!into.containsEdge(eid)) {
+                into.addEdge(eid, props)
+            } else {
+                into.setEdgeProperties(eid, props)
+            }
         }
         return into
     }
@@ -113,5 +121,4 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val value = DftCharBufferSerializerImpl.serialize(this).toString()
             return DefaultAttribute.createAttribute(value.replace("\"", "\\\""))
         }
-
 }
