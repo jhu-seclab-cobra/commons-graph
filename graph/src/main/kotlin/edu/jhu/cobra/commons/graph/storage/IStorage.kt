@@ -1,14 +1,13 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
+import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.IValue
 import java.io.Closeable
-
 
 /**
  * Core interface for managing storage of nodes and edges.
@@ -62,7 +61,10 @@ interface IStorage : Closeable {
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityAlreadyExistException If node already exists.
      */
-    fun addNode(id: NodeID, properties: Map<String, IValue> = emptyMap())
+    fun addNode(
+        id: NodeID,
+        properties: Map<String, IValue> = emptyMap(),
+    )
 
     /**
      * Returns all properties associated with a specific node.
@@ -84,7 +86,10 @@ interface IStorage : Closeable {
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>)
+    fun setNodeProperties(
+        id: NodeID,
+        properties: Map<String, IValue?>,
+    )
 
     /**
      * Deletes a node from storage.
@@ -116,7 +121,10 @@ interface IStorage : Closeable {
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityAlreadyExistException If edge already exists.
      */
-    fun addEdge(id: EdgeID, properties: Map<String, IValue> = emptyMap())
+    fun addEdge(
+        id: EdgeID,
+        properties: Map<String, IValue> = emptyMap(),
+    )
 
     /**
      * Returns all properties associated with a specific edge.
@@ -138,7 +146,10 @@ interface IStorage : Closeable {
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>)
+    fun setEdgeProperties(
+        id: EdgeID,
+        properties: Map<String, IValue?>,
+    )
 
     /**
      * Deletes an edge from storage.
@@ -178,6 +189,14 @@ interface IStorage : Closeable {
     // ============================================================================
 
     /**
+     * Returns all metadata property names currently in storage.
+     *
+     * @return Set of metadata property names.
+     * @throws AccessClosedStorageException If storage is closed.
+     */
+    val metaNames: Set<String>
+
+    /**
      * Returns a metadata value by name.
      *
      * @param name The name of the metadata property.
@@ -195,7 +214,10 @@ interface IStorage : Closeable {
      * @param value The metadata value, or null to delete the property.
      * @throws AccessClosedStorageException If storage is closed.
      */
-    fun setMeta(name: String, value: IValue?)
+    fun setMeta(
+        name: String,
+        value: IValue?,
+    )
 
     // ============================================================================
     // UTILITY OPERATIONS
@@ -208,4 +230,29 @@ interface IStorage : Closeable {
      * @throws AccessClosedStorageException If storage is closed.
      */
     fun clear(): Boolean
+
+    /**
+     * Transfers all data from this storage into [target].
+     *
+     * Copies all nodes (with properties), all edges (with properties), and all
+     * metadata into [target]. Nodes are transferred before edges to satisfy
+     * edge source/destination existence constraints.
+     *
+     * This storage is not modified. [target] must be empty or accept the transferred
+     * entities without ID conflicts.
+     *
+     * @param target The destination storage to receive all data.
+     * @throws EntityAlreadyExistException if [target] already contains a transferred entity.
+     */
+    fun transferTo(target: IStorage) {
+        for (nodeId in nodeIDs) {
+            target.addNode(nodeId, getNodeProperties(nodeId))
+        }
+        for (edgeId in edgeIDs) {
+            target.addEdge(edgeId, getEdgeProperties(edgeId))
+        }
+        for (name in metaNames) {
+            target.setMeta(name, getMeta(name))
+        }
+    }
 }
