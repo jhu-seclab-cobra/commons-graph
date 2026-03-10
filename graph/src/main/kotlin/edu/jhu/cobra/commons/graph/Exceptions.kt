@@ -43,3 +43,25 @@ class InvalidPropNameException(propName: String, eid: IEntity.ID?) : Exception("
  * @constructor Creates an exception for accessing closed storage.
  */
 class AccessClosedStorageException : IllegalStateException("Try to access closed graph storage")
+
+/**
+ * Thrown when attempting to modify (delete) an entity that belongs to a frozen layer.
+ *
+ * Frozen layers are immutable; only entities in the active layer can be deleted.
+ *
+ * @constructor Creates an exception for a frozen-layer modification attempt.
+ * @param id The ID of the entity in the frozen layer.
+ * @see IEntity.ID
+ */
+class FrozenLayerModificationException(id: IEntity.ID) :
+    IllegalStateException("Cannot modify frozen-layer entity: $id")
+
+/**
+ * Thrown when a write operation is attempted on a frozen storage.
+ *
+ * After [edu.jhu.cobra.commons.graph.storage.PhasedStorageImpl.freeze] is called,
+ * all write operations throw this exception.
+ *
+ * @constructor Creates an exception for writing to frozen storage.
+ */
+class StorageFrozenException : IllegalStateException("Cannot write to frozen storage")
