@@ -6,16 +6,19 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class AbcEdgeTest {
-
     private lateinit var storage: NativeStorageImpl
     private lateinit var srcNode: NodeID
     private lateinit var dstNode: NodeID
     private lateinit var testEdge: TestEdge
 
-    private class TestEdge(storage: IStorage, override val id: EdgeID) : AbcEdge(storage) {
-        override val type: AbcEdge.Type = object : AbcEdge.Type {
-            override val name = "TestEdge"
-        }
+    private class TestEdge(
+        storage: IStorage,
+        override val id: EdgeID,
+    ) : AbcEdge(storage) {
+        override val type: AbcEdge.Type =
+            object : AbcEdge.Type {
+                override val name = "TestEdge"
+            }
     }
 
     @BeforeTest
@@ -164,7 +167,7 @@ class AbcEdgeTest {
     fun `test edgeID_differentSource_notEqual`() {
         assertNotEquals(
             EdgeID(srcNode, dstNode, "relation"),
-            EdgeID(NodeID("other"), dstNode, "relation")
+            EdgeID(NodeID("other"), dstNode, "relation"),
         )
     }
 
@@ -172,7 +175,7 @@ class AbcEdgeTest {
     fun `test edgeID_differentDestination_notEqual`() {
         assertNotEquals(
             EdgeID(srcNode, dstNode, "relation"),
-            EdgeID(srcNode, NodeID("other"), "relation")
+            EdgeID(srcNode, NodeID("other"), "relation"),
         )
     }
 
@@ -180,7 +183,7 @@ class AbcEdgeTest {
     fun `test edgeID_differentEdgeType_notEqual`() {
         assertNotEquals(
             EdgeID(srcNode, dstNode, "relation"),
-            EdgeID(srcNode, dstNode, "other")
+            EdgeID(srcNode, dstNode, "other"),
         )
     }
 
@@ -243,11 +246,13 @@ class AbcEdgeTest {
 
     @Test
     fun `test setProps_multipleProperties_setsAll`() {
-        testEdge.setProps(mapOf(
-            "weight" to 1.5.numVal,
-            "label" to "test".strVal,
-            "active" to true.boolVal
-        ))
+        testEdge.setProps(
+            mapOf(
+                "weight" to 1.5.numVal,
+                "label" to "test".strVal,
+                "active" to true.boolVal,
+            ),
+        )
 
         assertEquals(1.5, (testEdge.getProp("weight") as NumVal).core)
         assertEquals("test", (testEdge.getProp("label") as StrVal).core)
@@ -284,11 +289,13 @@ class AbcEdgeTest {
 
     @Test
     fun `test setProps_mixedValueTypes_setsAll`() {
-        testEdge.setProps(mapOf(
-            "str" to "test".strVal,
-            "num" to 25.numVal,
-            "bool" to true.boolVal
-        ))
+        testEdge.setProps(
+            mapOf(
+                "str" to "test".strVal,
+                "num" to 25.numVal,
+                "bool" to true.boolVal,
+            ),
+        )
 
         assertEquals(3, testEdge.getAllProps().size)
     }
@@ -427,7 +434,7 @@ class AbcEdgeTest {
     fun `test equals_differentID_returnsFalse`() {
         assertNotEquals(
             TestEdge(storage, EdgeID(srcNode, dstNode, "relation")),
-            TestEdge(storage, EdgeID(srcNode, dstNode, "other"))
+            TestEdge(storage, EdgeID(srcNode, dstNode, "other")),
         )
     }
 

@@ -5,7 +5,6 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class PhasedStorageImplTest {
-
     private lateinit var storage: PhasedStorageImpl
 
     private val node1 = StorageTestUtils.node1

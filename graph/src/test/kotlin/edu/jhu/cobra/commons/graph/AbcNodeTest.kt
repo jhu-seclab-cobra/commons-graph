@@ -6,15 +6,18 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class AbcNodeTest {
-
     private lateinit var storage: NativeStorageImpl
     private lateinit var otherStorage: NativeStorageImpl
     private lateinit var testNode: TestNode
 
-    private class TestNode(storage: IStorage, override val id: NodeID) : AbcNode(storage) {
-        override val type: AbcNode.Type = object : AbcNode.Type {
-            override val name = "TestNode"
-        }
+    private class TestNode(
+        storage: IStorage,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "TestNode"
+            }
     }
 
     @BeforeTest
@@ -186,11 +189,13 @@ class AbcNodeTest {
 
     @Test
     fun `test setProps_multipleProperties_setsAll`() {
-        testNode.setProps(mapOf(
-            "name" to "test".strVal,
-            "age" to 25.numVal,
-            "active" to true.boolVal
-        ))
+        testNode.setProps(
+            mapOf(
+                "name" to "test".strVal,
+                "age" to 25.numVal,
+                "active" to true.boolVal,
+            ),
+        )
 
         assertEquals("test", (testNode.getProp("name") as StrVal).core)
         assertEquals(25, (testNode.getProp("age") as NumVal).core)
@@ -227,11 +232,13 @@ class AbcNodeTest {
 
     @Test
     fun `test setProps_mixedValueTypes_setsAll`() {
-        testNode.setProps(mapOf(
-            "str" to "test".strVal,
-            "num" to 25.numVal,
-            "bool" to true.boolVal
-        ))
+        testNode.setProps(
+            mapOf(
+                "str" to "test".strVal,
+                "num" to 25.numVal,
+                "bool" to true.boolVal,
+            ),
+        )
 
         assertEquals(3, testNode.getAllProps().size)
         assertTrue(testNode.containProp("str"))

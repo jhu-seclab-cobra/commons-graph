@@ -5,14 +5,17 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class AbcEntityTest {
-
     private lateinit var storage: NativeStorageImpl
     private lateinit var testNode: TestNode
 
-    private class TestNode(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-        override val type: AbcNode.Type = object : AbcNode.Type {
-            override val name = "TestNode"
-        }
+    private class TestNode(
+        storage: NativeStorageImpl,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "TestNode"
+            }
     }
 
     @BeforeTest
@@ -87,10 +90,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_defaultValue_returnsDefault`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
         storage.addNode(NodeID("entity1"))
@@ -101,10 +108,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_setAndGet_returnsNewValue`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
         storage.addNode(NodeID("entity2"))
@@ -117,10 +128,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_customName_usesCustomStorageKey`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var customProp: StrVal by EntityProperty("customName", default = "default".strVal)
         }
         storage.addNode(NodeID("entity3"))
@@ -133,10 +148,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullable_returnsNullInitially`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var description: StrVal? by EntityProperty()
         }
         storage.addNode(NodeID("entity4"))
@@ -147,10 +166,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullableSetAndGet_returnsValue`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var description: StrVal? by EntityProperty()
         }
         storage.addNode(NodeID("entity5"))
@@ -163,10 +186,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullableSetToNull_doesNotRemoveProperty`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var description: StrVal? by EntityProperty()
         }
         storage.addNode(NodeID("entity6"))
@@ -181,10 +208,14 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_emptyName_returnsDefault`() {
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
-            }
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var emptyProp: StrVal by EntityProperty("", default = "default".strVal)
         }
         storage.addNode(NodeID("entity10"))
@@ -199,13 +230,19 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_defaultValue_returnsDefault`() {
-        val personType = object : IEntity.Type {
-            override val name = "PERSON"
-        }
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
+        val personType =
+            object : IEntity.Type {
+                override val name = "PERSON"
             }
+
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
         storage.addNode(NodeID("entity7"))
@@ -216,13 +253,19 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_customName_usesCustomStorageKey`() {
-        val personType = object : IEntity.Type {
-            override val name = "PERSON"
-        }
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
+        val personType =
+            object : IEntity.Type {
+                override val name = "PERSON"
             }
+
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var customType: IEntity.Type by EntityType("customTypeName", default = personType)
         }
         storage.addNode(NodeID("entity9"))
@@ -236,13 +279,19 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_objectTypeFallback_returnsDefault`() {
-        val personType = object : IEntity.Type {
-            override val name = "PERSON"
-        }
-        class TestEntity(storage: NativeStorageImpl, override val id: NodeID) : AbcNode(storage) {
-            override val type: AbcNode.Type = object : AbcNode.Type {
-                override val name = "TestEntity"
+        val personType =
+            object : IEntity.Type {
+                override val name = "PERSON"
             }
+
+        class TestEntity(
+            storage: NativeStorageImpl,
+            override val id: NodeID,
+        ) : AbcNode(storage) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
         storage.addNode(NodeID("entity8"))

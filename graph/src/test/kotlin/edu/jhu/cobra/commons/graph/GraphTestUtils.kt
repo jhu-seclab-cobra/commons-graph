@@ -23,50 +23,69 @@ object GraphTestUtils {
     val edgeId4 = EdgeID(nodeId3, nodeId4, "edge4")
     val edgeId5 = EdgeID(nodeId4, nodeId5, "edge5")
 
-    class TestNode(storage: IStorage, override val id: NodeID) : AbcNode(storage) {
-        override val type: AbcNode.Type = object : AbcNode.Type {
-            override val name = "TestNode"
-        }
+    class TestNode(
+        storage: IStorage,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "TestNode"
+            }
     }
 
-    class TestEdge(storage: IStorage, override val id: EdgeID) : AbcEdge(storage) {
-        override val type: AbcEdge.Type = object : AbcEdge.Type {
-            override val name = "TestEdge"
-        }
+    class TestEdge(
+        storage: IStorage,
+        override val id: EdgeID,
+    ) : AbcEdge(storage) {
+        override val type: AbcEdge.Type =
+            object : AbcEdge.Type {
+                override val name = "TestEdge"
+            }
     }
 
-    fun createTestMultipleGraph(storage: IStorage = NativeStorageImpl()): AbcMultipleGraph<TestNode, TestEdge> {
-        return object : AbcMultipleGraph<TestNode, TestEdge>() {
+    fun createTestMultipleGraph(storage: IStorage = NativeStorageImpl()): AbcMultipleGraph<TestNode, TestEdge> =
+        object : AbcMultipleGraph<TestNode, TestEdge>() {
             override val storage: IStorage = storage
+
             override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
+
             override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
         }
-    }
 
-    class TestMultipleGraph(storage: IStorage) : AbcMultipleGraph<TestNode, TestEdge>() {
+    class TestMultipleGraph(
+        storage: IStorage,
+    ) : AbcMultipleGraph<TestNode, TestEdge>() {
         override val storage: IStorage = storage
+
         override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
+
         override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
 
         fun exposeNodeIDs(): MutableSet<NodeID> = nodeIDs
+
         fun exposeEdgeIDs(): MutableSet<EdgeID> = edgeIDs
     }
 
-    fun createTestSimpleGraph(storage: IStorage = NativeStorageImpl()): AbcSimpleGraph<TestNode, TestEdge> {
-        return object : AbcSimpleGraph<TestNode, TestEdge>() {
+    fun createTestSimpleGraph(storage: IStorage = NativeStorageImpl()): AbcSimpleGraph<TestNode, TestEdge> =
+        object : AbcSimpleGraph<TestNode, TestEdge>() {
             override val storage: IStorage = storage
+
             override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
+
             override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
         }
-    }
 
-    class TestSimpleGraph(storage: IStorage) : AbcSimpleGraph<TestNode, TestEdge>() {
+    class TestSimpleGraph(
+        storage: IStorage,
+    ) : AbcSimpleGraph<TestNode, TestEdge>() {
         override val storage: IStorage = storage
+
         override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
+
         override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
 
         fun exposeNodeIDs(): MutableSet<NodeID> = nodeIDs
+
         fun exposeEdgeIDs(): MutableSet<EdgeID> = edgeIDs
     }
-
 }
