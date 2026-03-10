@@ -4,12 +4,7 @@ import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
-/**
- * Black-box tests for PhasedStorageImpl focusing on public API contracts.
- * Tests cover IStorage contract, layering semantics,
- * and active-layer-only deletion constraint.
- */
-class PhasedStorageImplBlackBoxTest {
+class PhasedStorageImplTest {
 
     private lateinit var storage: PhasedStorageImpl
 
@@ -30,9 +25,7 @@ class PhasedStorageImplBlackBoxTest {
         storage.close()
     }
 
-    // ============================================================================
-    // BASIC IStorage CONTRACT (single layer, no freezing)
-    // ============================================================================
+    // region Basic IStorage contract (single layer, no freezing)
 
     @Test
     fun `test empty storage properties`() {
@@ -160,9 +153,9 @@ class PhasedStorageImplBlackBoxTest {
         assertFailsWith<AccessClosedStorageException> { storage.addNode(node1) }
     }
 
-    // ============================================================================
-    // FREEZE AND LAYER TESTS
-    // ============================================================================
+    // endregion
+
+    // region Freeze and layer
 
     @Test
     fun `test layerCount starts at 1`() {
@@ -187,7 +180,6 @@ class PhasedStorageImplBlackBoxTest {
         storage.addEdge(edge1, mapOf("weight" to 1.0.numVal))
         storage.freezeAndPushLayer()
 
-        // Data from frozen layer should still be accessible
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.containsNode(node2))
         assertTrue(storage.containsEdge(edge1))
@@ -237,7 +229,6 @@ class PhasedStorageImplBlackBoxTest {
         storage.freezeAndPushLayer()
 
         storage.addNode(node2)
-        // edge1: node1 -> node2, node1 is frozen, node2 is active
         storage.addEdge(edge1)
 
         assertTrue(storage.containsEdge(edge1))
@@ -259,13 +250,11 @@ class PhasedStorageImplBlackBoxTest {
 
     @Test
     fun `test adjacency merges across layers`() {
-        // Freeze layer with edge1: node1 -> node2
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1)
         storage.freezeAndPushLayer()
 
-        // Active layer with edge3: node1 -> node3
         storage.addNode(node3)
         storage.addEdge(edge3)
 
@@ -280,7 +269,6 @@ class PhasedStorageImplBlackBoxTest {
         storage.addNode(node1, mapOf("a" to "frozen_a".strVal, "b" to "frozen_b".strVal))
         storage.freezeAndPushLayer()
 
-        // Override property "a" in active layer, leave "b" from frozen
         storage.setNodeProperties(node1, mapOf("a" to "active_a".strVal))
 
         val props = storage.getNodeProperties(node1)
@@ -307,7 +295,6 @@ class PhasedStorageImplBlackBoxTest {
         storage.setMeta("key", "frozen".strVal)
         storage.freezeAndPushLayer()
 
-        // Active layer meta overrides frozen
         storage.setMeta("key", "active".strVal)
         assertEquals("active", (storage.getMeta("key") as StrVal).core)
     }
@@ -320,9 +307,9 @@ class PhasedStorageImplBlackBoxTest {
         assertEquals("frozen", (storage.getMeta("key") as StrVal).core)
     }
 
-    // ============================================================================
-    // ACTIVE-LAYER-ONLY DELETION
-    // ============================================================================
+    // endregion
+
+    // region Active-layer-only deletion
 
     @Test
     fun `test deleteNode on frozen layer throws FrozenLayerModificationException`() {
@@ -365,9 +352,9 @@ class PhasedStorageImplBlackBoxTest {
         assertFalse(storage.containsEdge(edge1))
     }
 
-    // ============================================================================
-    // FREEZE (FULL READ-ONLY)
-    // ============================================================================
+    // endregion
+
+    // region Freeze (full read-only)
 
     @Test
     fun `test freeze makes storage read-only`() {
@@ -377,10 +364,8 @@ class PhasedStorageImplBlackBoxTest {
         storage.freeze()
         assertTrue(storage.isFrozen)
 
-        // Reads still work
         assertTrue(storage.containsNode(node1))
 
-        // Writes throw
         assertFailsWith<StorageFrozenException> { storage.addNode(node2) }
         assertFailsWith<StorageFrozenException> { storage.deleteNode(node1) }
         assertFailsWith<StorageFrozenException> { storage.setNodeProperties(node1, mapOf()) }
@@ -396,9 +381,9 @@ class PhasedStorageImplBlackBoxTest {
         assertTrue(storage.isFrozen)
     }
 
-    // ============================================================================
-    // COMPACT LAYERS
-    // ============================================================================
+    // endregion
+
+    // region Compact layers
 
     @Test
     fun `test compactLayers merges frozen layers`() {
@@ -408,12 +393,11 @@ class PhasedStorageImplBlackBoxTest {
         storage.addNode(node2, mapOf("phase" to "2".strVal))
         storage.freezeAndPushLayer()
 
-        assertEquals(3, storage.layerCount) // 2 frozen + 1 active
+        assertEquals(3, storage.layerCount)
 
         storage.compactLayers(2)
-        assertEquals(2, storage.layerCount) // 1 compacted frozen + 1 active
+        assertEquals(2, storage.layerCount)
 
-        // Data from both frozen layers still accessible
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.containsNode(node2))
         assertEquals("1", (storage.getNodeProperties(node1)["phase"] as StrVal).core)
@@ -429,24 +413,21 @@ class PhasedStorageImplBlackBoxTest {
         assertFailsWith<IllegalArgumentException> { storage.compactLayers(2) }
     }
 
-    // ============================================================================
-    // MULTI-PHASE WORKFLOW
-    // ============================================================================
+    // endregion
+
+    // region Multi-phase workflow
 
     @Test
     fun `test multi-phase analysis workflow`() {
-        // Phase 1: build AST
         storage.addNode(node1, mapOf("type" to "ASTNode".strVal))
         storage.addNode(node2, mapOf("type" to "ASTNode".strVal))
         storage.addEdge(edge1, mapOf("type" to "ASTEdge".strVal))
         storage.freezeAndPushLayer()
 
-        // Phase 2: build CFG
         storage.addNode(node3, mapOf("type" to "CFGNode".strVal))
         storage.addEdge(edge2, mapOf("type" to "CFGEdge".strVal))
         storage.freezeAndPushLayer()
 
-        // Phase 3: analysis — all data readable
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.containsNode(node2))
         assertTrue(storage.containsNode(node3))
@@ -456,7 +437,6 @@ class PhasedStorageImplBlackBoxTest {
         assertEquals(3, storage.nodeIDs.size)
         assertEquals(2, storage.edgeIDs.size)
 
-        // Can still add analysis results to active layer
         storage.setNodeProperties(node1, mapOf("analysisResult" to "safe".strVal))
         val props = storage.getNodeProperties(node1)
         assertEquals("safe", (props["analysisResult"] as StrVal).core)
@@ -469,7 +449,6 @@ class PhasedStorageImplBlackBoxTest {
         storage.addNode(node2)
         storage.freezeAndPushLayer()
 
-        // Create temporary dummy node for CFG construction
         val dummyEntry = NodeID("dummy_entry")
         val dummyEdge = EdgeID(dummyEntry, node1, "cfg_entry")
         storage.addNode(dummyEntry)
@@ -477,16 +456,15 @@ class PhasedStorageImplBlackBoxTest {
 
         assertTrue(storage.containsNode(dummyEntry))
 
-        // Clean up dummy before freeze
         storage.deleteEdge(dummyEdge)
         storage.deleteNode(dummyEntry)
         assertFalse(storage.containsNode(dummyEntry))
         assertFalse(storage.containsEdge(dummyEdge))
     }
 
-    // ============================================================================
-    // CLEAR WITH FROZEN LAYERS
-    // ============================================================================
+    // endregion
+
+    // region Clear with frozen layers
 
     @Test
     fun `test clear removes frozen layers and active layer`() {
@@ -499,4 +477,6 @@ class PhasedStorageImplBlackBoxTest {
         assertTrue(storage.edgeIDs.isEmpty())
         assertEquals(1, storage.layerCount)
     }
+
+    // endregion
 }
