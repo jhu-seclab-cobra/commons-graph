@@ -3,6 +3,7 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
+import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 
 /**
@@ -20,7 +21,11 @@ import edu.jhu.cobra.commons.value.strVal
  * @see NodeID
  * @see IEntity.ID
  */
-data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
+data class EdgeID(
+    val srcNid: NodeID,
+    val dstNid: NodeID,
+    val eType: String,
+) : IEntity.ID {
     /**
      * Returns the string representation of this identifier.
      *
@@ -43,9 +48,9 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
      * @param value List containing source ID, destination ID, and edge type.
      */
     constructor(value: ListVal) : this(
-        value[0].toEntityID<NodeID>(),
-        value[1].toEntityID<NodeID>(),
-        value[2].core.toString()
+        NodeID(value[0] as StrVal),
+        NodeID(value[1] as StrVal),
+        value[2].core.toString(),
     )
 }
 
@@ -61,8 +66,9 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
  * @see IEntity
  * @see EdgeID
  */
-abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
-
+abstract class AbcEdge(
+    protected val storage: IStorage,
+) : AbcEntity() {
     /**
      * Represents the type information for an edge.
      */
@@ -102,16 +108,17 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
      * @param name The property name.
      * @param value The property value.
      */
-    override fun setProp(name: String, value: IValue?) =
-        storage.setEdgeProperties(id, mapOf(name to value))
+    override fun setProp(
+        name: String,
+        value: IValue?,
+    ) = storage.setEdgeProperties(id, mapOf(name to value))
 
     /**
      * Sets multiple properties for the edge.
      *
      * @param props Map of property names to values.
      */
-    override fun setProps(props: Map<String, IValue?>) =
-        storage.setEdgeProperties(id, props)
+    override fun setProps(props: Map<String, IValue?>) = storage.setEdgeProperties(id, props)
 
     /**
      * Returns a property value from the edge.
@@ -141,7 +148,7 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
      *
      * @return String containing edge ID and type.
      */
-    override fun toString(): String = "{${id}, ${this.type}}"
+    override fun toString(): String = "{$id, ${this.type}}"
 
     /**
      * Returns the hash code based on string representation.
@@ -158,4 +165,3 @@ abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
      */
     override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.id == other.id else super.equals(other)
 }
-

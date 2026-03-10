@@ -12,7 +12,6 @@ import edu.jhu.cobra.commons.value.IValue
  * @see AbcEdge
  */
 sealed interface IEntity {
-
     /**
      * Uniquely identifies an entity within the graph.
      *
@@ -66,7 +65,10 @@ sealed interface IEntity {
      * @param byName The property name.
      * @param newVal The new primitive value, or null to remove.
      */
-    operator fun set(byName: String, newVal: IPrimitiveVal?) = setProp(byName, newVal)
+    operator fun set(
+        byName: String,
+        newVal: IPrimitiveVal?,
+    ) = setProp(byName, newVal)
 
     /**
      * Sets a property value by name.
@@ -74,7 +76,10 @@ sealed interface IEntity {
      * @param name The property name.
      * @param value The value to set, or null to remove.
      */
-    fun setProp(name: String, value: IValue?)
+    fun setProp(
+        name: String,
+        value: IValue?,
+    )
 
     /**
      * Sets multiple properties at once.
@@ -121,5 +126,4 @@ sealed interface IEntity {
      * @return True if present in cache, false otherwise.
      */
     operator fun contains(byName: String): Boolean = containProp(byName)
-
 }

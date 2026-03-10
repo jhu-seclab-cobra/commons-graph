@@ -10,12 +10,12 @@ import edu.jhu.cobra.commons.value.StrVal
  *
  * @property core The core string representation of the label.
  */
-data class Label(val core: String) {
-
+data class Label(
+    val core: String,
+) {
     constructor(strVal: StrVal) : this(strVal.core)
 
     companion object {
-
         /** Greatest Lower Bound — below all labels in the poset. */
         val INFIMUM: Label = Label("infimum")
 

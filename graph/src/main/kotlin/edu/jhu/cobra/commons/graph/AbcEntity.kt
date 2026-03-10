@@ -16,7 +16,6 @@ import kotlin.reflect.KProperty
  * @see AbcEdge
  */
 sealed class AbcEntity : IEntity {
-
     /**
      * Returns the property value with the specified name, cast to type [T].
      *
@@ -36,13 +35,19 @@ sealed class AbcEntity : IEntity {
      */
     @Suppress("FunctionName")
     protected inline fun <reified T : IValue> EntityProperty(
-        optName: String? = null, default: T
+        optName: String? = null,
+        default: T,
     ) = object : ReadWriteProperty<IEntity, T> {
-        override fun getValue(thisRef: IEntity, property: KProperty<*>): T =
-            thisRef.getProp(optName ?: property.name) as? T ?: default
+        override fun getValue(
+            thisRef: IEntity,
+            property: KProperty<*>,
+        ): T = thisRef.getProp(optName ?: property.name) as? T ?: default
 
-        override fun setValue(thisRef: IEntity, property: KProperty<*>, value: T) =
-            thisRef.setProp(optName ?: property.name, value)
+        override fun setValue(
+            thisRef: IEntity,
+            property: KProperty<*>,
+            value: T,
+        ) = thisRef.setProp(optName ?: property.name, value)
     }
 
     /**
@@ -53,16 +58,21 @@ sealed class AbcEntity : IEntity {
      * @see IEntity.setProp
      */
     @Suppress("FunctionName")
-    protected inline fun <reified T : IValue?> EntityProperty(
-        optName: String? = null
-    ) = object : ReadWriteProperty<IEntity, T?> {
-        override fun getValue(thisRef: IEntity, property: KProperty<*>): T? =
-            thisRef.getProp(optName ?: property.name) as? T
+    protected inline fun <reified T : IValue?> EntityProperty(optName: String? = null) =
+        object : ReadWriteProperty<IEntity, T?> {
+            override fun getValue(
+                thisRef: IEntity,
+                property: KProperty<*>,
+            ): T? = thisRef.getProp(optName ?: property.name) as? T
 
-        override fun setValue(thisRef: IEntity, property: KProperty<*>, value: T?) {
-            value?.let { thisRef.setProp(optName ?: property.name, it) }
+            override fun setValue(
+                thisRef: IEntity,
+                property: KProperty<*>,
+                value: T?,
+            ) {
+                value?.let { thisRef.setProp(optName ?: property.name, it) }
+            }
         }
-    }
 
     /**
      * Creates a delegate for an entity type property using an enum type.
@@ -76,18 +86,26 @@ sealed class AbcEntity : IEntity {
      */
     @Suppress("FunctionName")
     protected inline fun <reified T : IEntity.Type> EntityType(
-        optName: String? = null, default: T
+        optName: String? = null,
+        default: T,
     ) = object : ReadWriteProperty<IEntity, T> {
         private val propPrefix by lazy { this::class.java.simpleName.lowercase() }
         private val enumTypeMap by lazy { T::class.java.enumConstants.associateBy { it.name } }
 
-        override fun getValue(thisRef: IEntity, property: KProperty<*>): T {
+        override fun getValue(
+            thisRef: IEntity,
+            property: KProperty<*>,
+        ): T {
             val propName = optName ?: "${propPrefix}_${property.name}"
             val typeStrVal = thisRef.getProp(propName) as? StrVal
             return typeStrVal?.core?.let { enumTypeMap[it] } ?: default
         }
 
-        override fun setValue(thisRef: IEntity, property: KProperty<*>, value: T) {
+        override fun setValue(
+            thisRef: IEntity,
+            property: KProperty<*>,
+            value: T,
+        ) {
             val propName = optName ?: "${propPrefix}_${property.name}"
             val prevValue = thisRef.getProp(propName) as? StrVal
             if (prevValue?.core == value.name) return
