@@ -8,7 +8,6 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class NativeStorageImplTest {
-
     private lateinit var storage: NativeStorageImpl
 
     private val node1 = StorageTestUtils.node1
@@ -120,12 +119,13 @@ class NativeStorageImplTest {
 
     @Test
     fun `test addNode with properties`() {
-        val properties = mapOf(
-            "name" to "Node1".strVal,
-            "age" to 25.numVal,
-            "weight" to 1.5.numVal,
-            "active" to true.boolVal
-        )
+        val properties =
+            mapOf(
+                "name" to "Node1".strVal,
+                "age" to 25.numVal,
+                "weight" to 1.5.numVal,
+                "active" to true.boolVal,
+            )
 
         storage.addNode(node1, properties)
 
@@ -158,10 +158,11 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getNodeProperties returns all properties`() {
-        val properties = mapOf(
-            "prop1" to "value1".strVal,
-            "prop2" to 42.numVal
-        )
+        val properties =
+            mapOf(
+                "prop1" to "value1".strVal,
+                "prop2" to 42.numVal,
+            )
         storage.addNode(node1, properties)
 
         val props = storage.getNodeProperties(node1)
@@ -228,11 +229,14 @@ class NativeStorageImplTest {
     fun `test setNodeProperties with mixed null and non-null values`() {
         storage.addNode(node1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
-        storage.setNodeProperties(node1, mapOf(
-            "prop1" to null,
-            "prop2" to "updated".strVal,
-            "prop3" to 100.numVal
-        ))
+        storage.setNodeProperties(
+            node1,
+            mapOf(
+                "prop1" to null,
+                "prop2" to "updated".strVal,
+                "prop3" to 100.numVal,
+            ),
+        )
 
         val props = storage.getNodeProperties(node1)
         assertEquals(2, props.size)
@@ -343,10 +347,11 @@ class NativeStorageImplTest {
     fun `test addEdge with properties`() {
         storage.addNode(node1)
         storage.addNode(node2)
-        val properties = mapOf(
-            "weight" to 1.5.numVal,
-            "label" to "relation".strVal
-        )
+        val properties =
+            mapOf(
+                "weight" to 1.5.numVal,
+                "label" to "relation".strVal,
+            )
 
         storage.addEdge(edge1, properties)
 

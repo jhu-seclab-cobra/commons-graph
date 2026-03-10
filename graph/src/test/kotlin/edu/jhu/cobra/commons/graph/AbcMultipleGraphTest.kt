@@ -6,17 +6,14 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId4
-import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId5
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId4
-import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId5
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.*
 
 class AbcMultipleGraphTest {
-
     private lateinit var graph: AbcMultipleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>
     private lateinit var storage: NativeStorageImpl
 
@@ -887,9 +884,10 @@ class AbcMultipleGraphTest {
 
     @Test
     fun `test bulkNodeInsertion_completesInTime`() {
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
+            }
 
         assertEquals(PERF_NODE_COUNT, graph.nodeIDs.size)
         println("MultipleGraph: $PERF_NODE_COUNT nodes inserted in $elapsed")
@@ -899,13 +897,14 @@ class AbcMultipleGraphTest {
     fun `test bulkEdgeInsertion_completesInTime`() {
         repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_EDGE_COUNT) { i ->
-                val src = NodeID("n${i % PERF_NODE_COUNT}")
-                val dst = NodeID("n${(i + 1) % PERF_NODE_COUNT}")
-                graph.addEdge(EdgeID(src, dst, "e$i"))
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_EDGE_COUNT) { i ->
+                    val src = NodeID("n${i % PERF_NODE_COUNT}")
+                    val dst = NodeID("n${(i + 1) % PERF_NODE_COUNT}")
+                    graph.addEdge(EdgeID(src, dst, "e$i"))
+                }
             }
-        }
 
         assertEquals(PERF_EDGE_COUNT, graph.edgeIDs.size)
         println("MultipleGraph: $PERF_EDGE_COUNT edges inserted in $elapsed")
@@ -915,9 +914,10 @@ class AbcMultipleGraphTest {
     fun `test nodeLookup_completesInTime`() {
         repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT) { i -> graph.getNode(NodeID("n$i")) }
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT) { i -> graph.getNode(NodeID("n$i")) }
+            }
 
         println("MultipleGraph: $PERF_NODE_COUNT node lookups in $elapsed")
     }
@@ -932,9 +932,10 @@ class AbcMultipleGraphTest {
             edgeIds.add(eid)
         }
 
-        val elapsed = kotlin.time.measureTime {
-            edgeIds.forEach { graph.getEdge(it) }
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                edgeIds.forEach { graph.getEdge(it) }
+            }
 
         println("MultipleGraph: $PERF_EDGE_COUNT edge lookups in $elapsed")
     }
@@ -946,11 +947,12 @@ class AbcMultipleGraphTest {
             graph.addEdge(EdgeID(NodeID("n${i % PERF_NODE_COUNT}"), NodeID("n${(i + 1) % PERF_NODE_COUNT}"), "e$i"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT) { i ->
-                graph.getOutgoingEdges(NodeID("n$i")).toList()
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT) { i ->
+                    graph.getOutgoingEdges(NodeID("n$i")).toList()
+                }
             }
-        }
 
         println("MultipleGraph: outgoing edge queries for $PERF_NODE_COUNT nodes in $elapsed")
     }
@@ -962,10 +964,11 @@ class AbcMultipleGraphTest {
             graph.addEdge(EdgeID(NodeID("c$i"), NodeID("c${i + 1}"), "next"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            val descendants = graph.getDescendants(NodeID("c0")).toList()
-            assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                val descendants = graph.getDescendants(NodeID("c0")).toList()
+                assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
+            }
 
         println("MultipleGraph: descendant traversal of chain($PERF_CHAIN_LENGTH) in $elapsed")
     }
@@ -977,10 +980,11 @@ class AbcMultipleGraphTest {
             graph.addEdge(EdgeID(NodeID("c$i"), NodeID("c${i + 1}"), "next"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            val ancestors = graph.getAncestors(NodeID("c${PERF_CHAIN_LENGTH - 1}")).toList()
-            assertEquals(PERF_CHAIN_LENGTH - 1, ancestors.size)
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                val ancestors = graph.getAncestors(NodeID("c${PERF_CHAIN_LENGTH - 1}")).toList()
+                assertEquals(PERF_CHAIN_LENGTH - 1, ancestors.size)
+            }
 
         println("MultipleGraph: ancestor traversal of chain($PERF_CHAIN_LENGTH) in $elapsed")
     }
@@ -992,9 +996,10 @@ class AbcMultipleGraphTest {
             graph.addEdge(EdgeID(NodeID("n${i % PERF_NODE_COUNT}"), NodeID("n${(i + 1) % PERF_NODE_COUNT}"), "e$i"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT) { i -> graph.delNode(NodeID("n$i")) }
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT) { i -> graph.delNode(NodeID("n$i")) }
+            }
 
         assertEquals(0, graph.nodeIDs.size)
         assertEquals(0, graph.edgeIDs.size)
@@ -1011,9 +1016,10 @@ class AbcMultipleGraphTest {
             graph.addEdge(EdgeID(NodeID("c$i"), NodeID("c${i + 1}"), "next"), label)
         }
 
-        val elapsed = kotlin.time.measureTime {
-            graph.getDescendants(NodeID("c0"), labelA).toList()
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                graph.getDescendants(NodeID("c0"), labelA).toList()
+            }
 
         println("MultipleGraph: label-filtered descendant traversal of chain($PERF_CHAIN_LENGTH) in $elapsed")
     }

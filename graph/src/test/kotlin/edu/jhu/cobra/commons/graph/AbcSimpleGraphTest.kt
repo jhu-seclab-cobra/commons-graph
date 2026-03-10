@@ -9,7 +9,6 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.*
 
 class AbcSimpleGraphTest {
-
     private lateinit var graph: AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>
     private lateinit var storage: NativeStorageImpl
 
@@ -203,9 +202,10 @@ class AbcSimpleGraphTest {
 
     @Test
     fun `test bulkNodeInsertion_completesInTime`() {
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
+            }
 
         assertEquals(PERF_NODE_COUNT, graph.nodeIDs.size)
         println("SimpleGraph: $PERF_NODE_COUNT nodes inserted in $elapsed")
@@ -215,11 +215,12 @@ class AbcSimpleGraphTest {
     fun `test bulkEdgeInsertion_completesInTime`() {
         repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(PERF_NODE_COUNT - 1) { i ->
-                graph.addEdge(EdgeID(NodeID("n$i"), NodeID("n${i + 1}"), "e$i"))
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(PERF_NODE_COUNT - 1) { i ->
+                    graph.addEdge(EdgeID(NodeID("n$i"), NodeID("n${i + 1}"), "e$i"))
+                }
             }
-        }
 
         assertEquals(PERF_NODE_COUNT - 1, graph.edgeIDs.size)
         println("SimpleGraph: ${PERF_NODE_COUNT - 1} edges inserted in $elapsed")
@@ -233,13 +234,14 @@ class AbcSimpleGraphTest {
             graph.addEdge(EdgeID(hubNode, NodeID("n${i + 1}"), "e$i"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            repeat(100) {
-                assertFailsWith<EntityAlreadyExistException> {
-                    graph.addEdge(EdgeID(hubNode, NodeID("n1"), "dup$it"))
+        val elapsed =
+            kotlin.time.measureTime {
+                repeat(100) {
+                    assertFailsWith<EntityAlreadyExistException> {
+                        graph.addEdge(EdgeID(hubNode, NodeID("n1"), "dup$it"))
+                    }
                 }
             }
-        }
 
         println("SimpleGraph: 100 uniqueness-check rejections (hub with ${PERF_NODE_COUNT - 1} outgoing) in $elapsed")
     }
@@ -251,10 +253,11 @@ class AbcSimpleGraphTest {
             graph.addEdge(EdgeID(NodeID("c$i"), NodeID("c${i + 1}"), "next"))
         }
 
-        val elapsed = kotlin.time.measureTime {
-            val descendants = graph.getDescendants(NodeID("c0")).toList()
-            assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
-        }
+        val elapsed =
+            kotlin.time.measureTime {
+                val descendants = graph.getDescendants(NodeID("c0")).toList()
+                assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
+            }
 
         println("SimpleGraph: descendant traversal of chain($PERF_CHAIN_LENGTH) in $elapsed")
     }

@@ -3,8 +3,7 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
-class ExtensionsTest {
-
+class TransferToTest {
     private val node1 = StorageTestUtils.node1
     private val node2 = StorageTestUtils.node2
     private val node3 = StorageTestUtils.node3
