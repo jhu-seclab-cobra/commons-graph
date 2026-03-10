@@ -11,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -22,7 +24,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run tests and generate coverage reports
-        run: ./gradlew :graph:test :modules:extension-mapdb:test :modules:extension-jgrapht:test :modules:extension-neo4j:test :graph:koverXmlReport :modules:extension-mapdb:koverXmlReport :modules:extension-jgrapht:koverXmlReport :modules:extension-neo4j:koverXmlReport
+        run: ./gradlew :graph:test :modules:impl-mapdb:test :modules:impl-jgrapht:test :modules:impl-neo4j:test :graph:koverXmlReport :modules:impl-mapdb:koverXmlReport :modules:impl-jgrapht:koverXmlReport :modules:impl-neo4j:koverXmlReport
 
       - name: List all coverage reports (debug)
         run: find . -name report.xml
@@ -32,4 +34,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: jhu-seclab-cobra/commons-graph
-          files: ./graph/build/reports/kover/report.xml,./modules/extension-mapdb/build/reports/kover/report.xml,./modules/extension-jgrapht/build/reports/kover/report.xml,./modules/extension-neo4j/build/reports/kover/report.xml
+          files: ./graph/build/reports/kover/report.xml,./modules/impl-mapdb/build/reports/kover/report.xml,./modules/impl-jgrapht/build/reports/kover/report.xml,./modules/impl-neo4j/build/reports/kover/report.xml
