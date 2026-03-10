@@ -1,9 +1,9 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
+import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.utils.EntityPropertyMap
 import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
@@ -27,121 +27,64 @@ import org.mapdb.Serializer
  *              Defaults to a temporary file-based off-heap configuration.
  */
 class MapDBStorageImpl(
-    config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() }
+    config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
 ) : IStorage {
+    private val dbManager: DB =
+        DBMaker
+            .config()
+            .concurrencyDisable()
+            .closeOnJvmShutdown()
+            .make()
 
-    private val dbManager: DB = DBMaker.config().concurrencyDisable().closeOnJvmShutdown().make()
-
+    private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
     private val nodeProperties = EntityPropertyMap<NodeID>(dbManager, "nodeProps")
     private val edgeProperties = EntityPropertyMap<EdgeID>(dbManager, "edgeProps")
-    private val graphStructure = dbManager.hashMap(
-        "structure", Serializer.STRING, MapDbValSerializer<SetVal>()
-    ).create()
+    private val graphStructure =
+        dbManager
+            .hashMap(
+                "structure",
+                Serializer.STRING,
+                MapDbValSerializer<SetVal>(),
+            ).create()
 
-    /**
-     * Closes the storage and releases all associated resources.
-     *
-     * @throws AccessClosedStorageException if the storage is already closed.
-     */
     override fun close() {
         if (!dbManager.isClosed()) dbManager.close()
     }
 
-    /**
-     * Retrieves the total number of nodes in the storage.
-     *
-     * @return The number of nodes.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override val nodeSize: Int
+    override val nodeIDs: Set<NodeID>
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return nodeProperties.size
+            return nodeProperties.keys.toSet()
         }
 
-    /**
-     * Retrieves a sequence of all node identifiers in the storage.
-     *
-     * @return A sequence of [NodeID] objects.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override val nodeIDs: Sequence<NodeID>
+    override val edgeIDs: Set<EdgeID>
         get() {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return nodeProperties.keys.asSequence()
+            return edgeProperties.keys.toSet()
         }
 
-    /**
-     * Retrieves the total number of edges in the storage.
-     *
-     * @return The number of edges.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override val edgeSize: Int
-        get() {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return edgeProperties.size
-        }
-
-    /**
-     * Retrieves a sequence of all edge identifiers in the storage.
-     *
-     * @return A sequence of [EdgeID] objects.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override val edgeIDs: Sequence<EdgeID>
-        get() {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
-            return edgeProperties.keys.asSequence()
-        }
-
-    /**
-     * Checks if a node exists in the storage.
-     *
-     * @param id The node identifier to check.
-     * @return `true` if the node exists, `false` otherwise.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun containsNode(id: NodeID): Boolean {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         return nodeProperties.contains(id)
     }
 
-    /**
-     * Checks if an edge exists in the storage.
-     *
-     * @param id The edge identifier to check.
-     * @return `true` if the edge exists, `false` otherwise.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun containsEdge(id: EdgeID): Boolean {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         return edgeProperties.contains(id)
     }
 
-    /**
-     * Adds a new node to the storage with optional properties.
-     *
-     * @param id The identifier of the node to add.
-     * @param newProperties Optional properties to associate with the node.
-     * @throws EntityAlreadyExistException if a node with the same identifier already exists.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun addNode(id: NodeID, vararg newProperties: Pair<String, IValue>) {
+    override fun addNode(
+        id: NodeID,
+        properties: Map<String, IValue>,
+    ) {
         if (containsNode(id)) throw EntityAlreadyExistException(id)
-        nodeProperties[id] = mapOf(*newProperties)
+        nodeProperties[id] = properties
     }
 
-    /**
-     * Adds a new edge to the storage with optional properties.
-     *
-     * @param id The identifier of the edge to add.
-     * @param newProperties Optional properties to associate with the edge.
-     * @throws EntityAlreadyExistException if an edge with the same identifier already exists.
-     * @throws EntityNotExistException if the source or destination node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun addEdge(id: EdgeID, vararg newProperties: Pair<String, IValue>) {
+    override fun addEdge(
+        id: EdgeID,
+        properties: Map<String, IValue>,
+    ) {
         if (containsEdge(id)) throw EntityAlreadyExistException(id)
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
@@ -150,102 +93,39 @@ class MapDBStorageImpl(
         graphStructure[srcName] = prevSrcEdges + id.serialize
         val prevDstEdges = graphStructure[dstName].orEmpty()
         graphStructure[dstName] = prevDstEdges + id.serialize
-        edgeProperties[id] = mapOf(*newProperties)
+        edgeProperties[id] = properties
     }
 
-    /**
-     * Retrieves all properties of a node.
-     *
-     * @param id The identifier of the node.
-     * @return A map of property names to their values.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun getNodeProperties(id: NodeID): Map<String, IValue> {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         return nodeProperties[id] ?: throw EntityNotExistException(id)
     }
 
-    /**
-     * Retrieves a specific property of a node.
-     *
-     * @param id The identifier of the node.
-     * @param byName The name of the property to retrieve.
-     * @return The property value, or `null` if the property does not exist.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun getNodeProperty(id: NodeID, byName: String): IValue? {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
-        val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
-        return nodePropMap[byName]
-    }
-
-    /**
-     * Retrieves all properties of an edge.
-     *
-     * @param id The identifier of the edge.
-     * @return A map of property names to their values.
-     * @throws EntityNotExistException if the edge does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun getEdgeProperties(id: EdgeID): Map<String, IValue> {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         return edgeProperties[id] ?: throw EntityNotExistException(id)
     }
 
-    /**
-     * Retrieves a specific property of an edge.
-     *
-     * @param id The identifier of the edge.
-     * @param byName The name of the property to retrieve.
-     * @return The property value, or `null` if the property does not exist.
-     * @throws EntityNotExistException if the edge does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun getEdgeProperty(id: EdgeID, byName: String): IValue? {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
-        val edgePropMap = edgeProperties[id] ?: throw EntityNotExistException(id)
-        return edgePropMap[byName]
-    }
-
-    /**
-     * Updates the properties of a node.
-     *
-     * @param id The identifier of the node.
-     * @param newProperties The properties to update or remove.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun setNodeProperties(id: NodeID, vararg newProperties: Pair<String, IValue?>) {
+    override fun setNodeProperties(
+        id: NodeID,
+        properties: Map<String, IValue?>,
+    ) {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
-        val newPropMap = (nodePropMap + newProperties).asSequence().filter { it.value != null }
-        nodeProperties[id] = newPropMap.associate { it.key to it.value!! }
+        val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
+        nodeProperties[id] = merged
     }
 
-    /**
-     * Updates the properties of an edge.
-     *
-     * @param id The identifier of the edge.
-     * @param newProperties The properties to update or remove.
-     * @throws EntityNotExistException if the edge does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun setEdgeProperties(id: EdgeID, vararg newProperties: Pair<String, IValue?>) {
+    override fun setEdgeProperties(
+        id: EdgeID,
+        properties: Map<String, IValue?>,
+    ) {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
-        val newPropMap = (curEdgeProps + newProperties).asSequence().filter { it.value != null }
-        edgeProperties[id] = newPropMap.associate { it.key to it.value!! }
+        val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
+        edgeProperties[id] = merged
     }
 
-    /**
-     * Removes a node and all its associated edges and properties from the storage.
-     *
-     * @param id The identifier of the node to remove.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun deleteNode(id: NodeID) {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         if (!containsNode(id)) throw EntityNotExistException(id)
@@ -255,32 +135,6 @@ class MapDBStorageImpl(
         graphStructure.remove(id.name)
     }
 
-    /**
-     * Removes all nodes that satisfy the given condition.
-     *
-     * @param doSatisfyCond The condition to check for each node.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun deleteNodes(doSatisfyCond: (NodeID) -> Boolean) {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
-        val keyIterator = nodeProperties.keys.iterator()
-        while (keyIterator.hasNext()) {
-            val nodeID = keyIterator.next()
-            if (!doSatisfyCond(nodeID)) continue
-            getIncomingEdges(nodeID).forEach(::deleteEdge)
-            getOutgoingEdges(nodeID).forEach(::deleteEdge)
-            keyIterator.remove()
-            graphStructure.remove(nodeID.name)
-        }
-    }
-
-    /**
-     * Removes an edge and all its associated properties from the storage.
-     *
-     * @param id The identifier of the edge to remove.
-     * @throws EntityNotExistException if the edge does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun deleteEdge(id: EdgeID) {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
         edgeProperties.remove(key = id)
@@ -290,34 +144,6 @@ class MapDBStorageImpl(
         graphStructure[id.dstNid.name] = prevDstEdges.also { it.core -= id.serialize }
     }
 
-    /**
-     * Removes all edges that satisfy the given condition.
-     *
-     * @param doSatisfyCond The condition to check for each edge.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun deleteEdges(doSatisfyCond: (EdgeID) -> Boolean) {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
-        val keyIterator = edgeProperties.keys.iterator()
-        while (keyIterator.hasNext()) {
-            val edgeID = keyIterator.next().takeIf(doSatisfyCond) ?: continue
-            keyIterator.remove()
-            val (srcName, dstName) = edgeID.srcNid.name to edgeID.dstNid.name
-            val prevSrcEdges = graphStructure[srcName].orEmpty()
-            graphStructure[srcName] = prevSrcEdges - edgeID.serialize
-            val prevDstEdges = graphStructure[dstName].orEmpty()
-            graphStructure[dstName] = prevDstEdges - edgeID.serialize
-        }
-    }
-
-    /**
-     * Retrieves all incoming edges for a node.
-     *
-     * @param id The identifier of the node.
-     * @return A set of edge identifiers.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         if (!containsNode(id)) throw EntityNotExistException(id)
         val allSerialized = graphStructure[id.name] ?: return emptySet()
@@ -325,14 +151,6 @@ class MapDBStorageImpl(
         return allEdgeIDs.filter { it.dstNid == id }.toSet()
     }
 
-    /**
-     * Retrieves all outgoing edges for a node.
-     *
-     * @param id The identifier of the node.
-     * @return A set of edge identifiers.
-     * @throws EntityNotExistException if the node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         if (!containsNode(id = id)) throw EntityNotExistException(id = id)
         val allSerialized = graphStructure[id.name] ?: return emptySet()
@@ -340,35 +158,34 @@ class MapDBStorageImpl(
         return allEdgeIDs.filter { it.srcNid == id }.toSet()
     }
 
-    /**
-     * Retrieves all edges between two nodes.
-     *
-     * @param from The source node identifier.
-     * @param to The destination node identifier.
-     * @return A set of edge identifiers.
-     * @throws EntityNotExistException if either node does not exist.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun getEdgesBetween(from: NodeID, to: NodeID): Set<EdgeID> {
-        if (!containsNode(from)) throw EntityNotExistException(id = from)
-        if (!containsNode(id = to)) throw EntityNotExistException(id = to)
-        val allSerialized = graphStructure[from.name] ?: return emptySet()
-        val allEdgeIDs = allSerialized.asSequence().map { EdgeID(it as ListVal) }
-        return allEdgeIDs.filter { it.srcNid == from && it.dstNid == to }.toSet()
+    override val metaNames: Set<String>
+        get() {
+            if (dbManager.isClosed()) throw AccessClosedStorageException()
+            return metaProperties.keys.toSet()
+        }
+
+    override fun getMeta(name: String): IValue? {
+        if (dbManager.isClosed()) throw AccessClosedStorageException()
+        return metaProperties[name]
     }
 
-    /**
-     * Removes all nodes, edges, and their properties from the storage.
-     *
-     * @return `true` if the storage was successfully cleared, `false` otherwise.
-     * @throws AccessClosedStorageException if the storage is closed.
-     */
-    override fun clear(): Boolean = try {
-        graphStructure.clear()
-        edgeProperties.clear()
-        nodeProperties.clear()
-        graphStructure.isEmpty() && edgeProperties.isEmpty() && nodeProperties.isEmpty()
-    } catch (e: DBException.VolumeIOError) {
-        false
+    override fun setMeta(
+        name: String,
+        value: IValue?,
+    ) {
+        if (dbManager.isClosed()) throw AccessClosedStorageException()
+        if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
+
+    @Suppress("SwallowedException")
+    override fun clear(): Boolean =
+        try {
+            graphStructure.clear()
+            edgeProperties.clear()
+            nodeProperties.clear()
+            metaProperties.clear()
+            graphStructure.isEmpty() && edgeProperties.isEmpty() && nodeProperties.isEmpty()
+        } catch (e: DBException.VolumeIOError) {
+            false
+        }
 }

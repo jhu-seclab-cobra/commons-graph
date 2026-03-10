@@ -1,8 +1,11 @@
 package edu.jhu.cobra.commons.graph.utils
 
+import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.IEntity
-import edu.jhu.cobra.commons.graph.entity.toEntityID
+import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.NullVal
+import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import edu.jhu.cobra.commons.value.serializer.IValSerializer
 import org.mapdb.DataInput2
@@ -10,7 +13,12 @@ import org.mapdb.DataOutput2
 import org.mapdb.Serializer
 import java.io.Serializable
 
-class MapDbIDSerializer<T : IEntity.ID> : Serializer<T>, Serializable {
+class MapDbIDSerializer<T : IEntity.ID> :
+    Serializer<T>,
+    Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
 
     private val delegator = Serializer.BYTE_ARRAY
     private val core: IValSerializer<ByteArray> = DftByteArraySerializerImpl
@@ -28,7 +36,10 @@ class MapDbIDSerializer<T : IEntity.ID> : Serializer<T>, Serializable {
      * @param out The output stream to write the serialized data to.
      * @param value The [T] object to serialize.
      */
-    override fun serialize(out: DataOutput2, value: T) {
+    override fun serialize(
+        out: DataOutput2,
+        value: T,
+    ) {
         delegator.serialize(out, core.serialize(value = value.serialize))
     }
 
@@ -39,7 +50,16 @@ class MapDbIDSerializer<T : IEntity.ID> : Serializer<T>, Serializable {
      * @param available The number of bytes available for reading.
      * @return The deserialized [T] object, or [NullVal] if no data is available.
      */
-    override fun deserialize(input: DataInput2, available: Int): T {
-        return core.deserialize(delegator.deserialize(input, available)).toEntityID()
+    @Suppress("UNCHECKED_CAST")
+    override fun deserialize(
+        input: DataInput2,
+        available: Int,
+    ): T {
+        val deserialized = core.deserialize(delegator.deserialize(input, available))
+        return when (deserialized) {
+            is StrVal -> NodeID(deserialized) as T
+            is ListVal -> EdgeID(deserialized) as T
+            else -> throw IllegalArgumentException("Cannot deserialize ${deserialized::class} to IEntity.ID")
+        }
     }
 }

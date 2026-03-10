@@ -1,10 +1,10 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
+import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
@@ -23,15 +23,16 @@ class Neo4jStorageImplTest {
     @AfterTest
     fun cleanup() {
         storage.close()
-        Files.walk(Files.createTempDirectory("neo4j-test"))
+        Files
+            .walk(Files.createTempDirectory("neo4j-test"))
             .sorted(Comparator.reverseOrder())
             .forEach(Files::delete)
     }
 
     @Test
     fun `test empty storage properties`() {
-        assertEquals(0, storage.nodeSize)
-        assertEquals(0, storage.edgeSize)
+        assertEquals(0, storage.nodeIDs.size)
+        assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.nodeIDs.toList().isEmpty())
         assertTrue(storage.edgeIDs.toList().isEmpty())
     }
@@ -39,11 +40,11 @@ class Neo4jStorageImplTest {
     @Test
     fun `test add and query node`() {
         val nodeId = NodeID("test-node")
-        storage.addNode(nodeId, "prop1" to "value1".strVal)
+        storage.addNode(nodeId, mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsNode(nodeId))
-        assertEquals(1, storage.nodeSize)
-        assertEquals("value1", storage.getNodeProperty(nodeId, "prop1")?.core)
+        assertEquals(1, storage.nodeIDs.size)
+        assertEquals("value1", storage.getNodeProperties(nodeId)["prop1"]?.core)
     }
 
     @Test
@@ -62,11 +63,11 @@ class Neo4jStorageImplTest {
         storage.addNode(dstId)
 
         val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(edgeId, "prop1" to "value1".strVal)
+        storage.addEdge(edgeId, mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsEdge(edgeId))
-        assertEquals(1, storage.edgeSize)
-        assertEquals("value1", storage.getEdgeProperty(edgeId, "prop1")?.core)
+        assertEquals(1, storage.edgeIDs.size)
+        assertEquals("value1", storage.getEdgeProperties(edgeId)["prop1"]?.core)
     }
 
     @Test
@@ -85,8 +86,7 @@ class Neo4jStorageImplTest {
         val nodeId = NodeID("test-node")
         storage.addNode(
             nodeId,
-            "prop1" to "value1".strVal,
-            "prop2" to "value2".strVal
+            mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
         )
 
         val props = storage.getNodeProperties(nodeId)
@@ -94,8 +94,8 @@ class Neo4jStorageImplTest {
         assertEquals("value1", props["prop1"]?.core)
         assertEquals("value2", props["prop2"]?.core)
 
-        storage.setNodeProperties(nodeId, "prop1" to "updated".strVal)
-        assertEquals("updated", storage.getNodeProperty(nodeId, "prop1")?.core)
+        storage.setNodeProperties(nodeId, mapOf("prop1" to "updated".strVal))
+        assertEquals("updated", storage.getNodeProperties(nodeId)["prop1"]?.core)
     }
 
     @Test
@@ -108,8 +108,7 @@ class Neo4jStorageImplTest {
         val edgeId = EdgeID(srcId, dstId, "test-edge")
         storage.addEdge(
             edgeId,
-            "prop1" to "value1".strVal,
-            "prop2" to "value2".strVal
+            mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
         )
 
         val props = storage.getEdgeProperties(edgeId)
@@ -117,8 +116,8 @@ class Neo4jStorageImplTest {
         assertEquals("value1", props["prop1"]?.core)
         assertEquals("value2", props["prop2"]?.core)
 
-        storage.setEdgeProperties(edgeId, "prop1" to "updated".strVal)
-        assertEquals("updated", storage.getEdgeProperty(edgeId, "prop1")?.core)
+        storage.setEdgeProperties(edgeId, mapOf("prop1" to "updated".strVal))
+        assertEquals("updated", storage.getEdgeProperties(edgeId)["prop1"]?.core)
     }
 
     @Test
@@ -129,7 +128,7 @@ class Neo4jStorageImplTest {
 
         storage.deleteNode(nodeId)
         assertFalse(storage.containsNode(nodeId))
-        assertEquals(0, storage.nodeSize)
+        assertEquals(0, storage.nodeIDs.size)
     }
 
     @Test
@@ -145,22 +144,7 @@ class Neo4jStorageImplTest {
 
         storage.deleteEdge(edgeId)
         assertFalse(storage.containsEdge(edgeId))
-        assertEquals(0, storage.edgeSize)
-    }
-
-    @Test
-    fun `test get edges between nodes`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        storage.addNode(srcId)
-        storage.addNode(dstId)
-
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(edgeId)
-
-        val edges = storage.getEdgesBetween(srcId, dstId)
-        assertEquals(1, edges.size)
-        assertTrue(edgeId in edges)
+        assertEquals(0, storage.edgeIDs.size)
     }
 
     @Test
@@ -185,8 +169,8 @@ class Neo4jStorageImplTest {
         storage.addNode(nodeId)
 
         assertTrue(storage.clear())
-        assertEquals(0, storage.nodeSize)
-        assertEquals(0, storage.edgeSize)
+        assertEquals(0, storage.nodeIDs.size)
+        assertEquals(0, storage.edgeIDs.size)
     }
 
     @Test
@@ -197,7 +181,7 @@ class Neo4jStorageImplTest {
             storage.addNode(NodeID("test"))
         }
         assertFailsWith<AccessClosedStorageException> {
-            storage.nodeSize
+            storage.nodeIDs
         }
     }
 
@@ -207,23 +191,24 @@ class Neo4jStorageImplTest {
         storage.addNode(nodeId)
 
         assertFailsWith<InvalidPropNameException> {
-            storage.setNodeProperties(nodeId, "__meta_id__" to "value".strVal)
+            storage.setNodeProperties(nodeId, mapOf("__meta_id__" to "value".strVal))
         }
     }
 
     @Test
     fun `test concurrent operations`() {
-        val threads = List(10) { threadId ->
-            Thread {
-                val nodeId = NodeID("node-$threadId")
-                storage.addNode(nodeId)
-                storage.setNodeProperties(nodeId, "prop" to "value-$threadId".strVal)
+        val threads =
+            List(10) { threadId ->
+                Thread {
+                    val nodeId = NodeID("node-$threadId")
+                    storage.addNode(nodeId)
+                    storage.setNodeProperties(nodeId, mapOf("prop" to "value-$threadId".strVal))
+                }
             }
-        }
 
         threads.forEach { it.start() }
         threads.forEach { it.join() }
 
-        assertEquals(10, storage.nodeSize)
+        assertEquals(10, storage.nodeIDs.size)
     }
 }

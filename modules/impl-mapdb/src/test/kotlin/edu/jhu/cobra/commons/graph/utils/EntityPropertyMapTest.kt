@@ -34,11 +34,12 @@ class EntityPropertyMapTest {
     @Test
     fun `test basic put and get operations`() {
         val entity = NodeID("entity1")
-        val props = mapOf(
-            "name" to "Entity 1".strVal,
-            "count" to 42.numVal,
-            "active" to true.boolVal
-        )
+        val props =
+            mapOf(
+                "name" to "Entity 1".strVal,
+                "count" to 42.numVal,
+                "active" to true.boolVal,
+            )
 
         assertNull(entityPropertyMap.put(entity, props), "Should return null for new entity")
         assertEquals(props, entityPropertyMap[entity], "Should retrieve correct properties")
@@ -48,10 +49,11 @@ class EntityPropertyMapTest {
     fun `test property update and override`() {
         val entity = NodeID("entity1")
         val initialProps = mapOf("name" to "Initial".strVal)
-        val updatedProps = mapOf(
-            "name" to "Updated".strVal,
-            "newProp" to "new value".strVal
-        )
+        val updatedProps =
+            mapOf(
+                "name" to "Updated".strVal,
+                "newProp" to "new value".strVal,
+            )
 
         entityPropertyMap.put(entity, initialProps)
         assertEquals(initialProps, entityPropertyMap.put(entity, updatedProps), "Should return previous properties")
@@ -74,10 +76,11 @@ class EntityPropertyMapTest {
     @Test
     fun `test property map operations`() {
         val entity = NodeID("entity1")
-        val initialProps = mapOf(
-            "key1" to "value1".strVal,
-            "key2" to "value2".strVal
-        )
+        val initialProps =
+            mapOf(
+                "key1" to "value1".strVal,
+                "key2" to "value2".strVal,
+            )
         entityPropertyMap.put(entity, initialProps)
         val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
 
@@ -97,11 +100,12 @@ class EntityPropertyMapTest {
     @Test
     fun `test property map collection views`() {
         val entity = NodeID("entity1")
-        val props = mapOf(
-            "key1" to "value1".strVal,
-            "key2" to "value2".strVal,
-            "key3" to "value3".strVal
-        )
+        val props =
+            mapOf(
+                "key1" to "value1".strVal,
+                "key2" to "value2".strVal,
+                "key3" to "value3".strVal,
+            )
         entityPropertyMap.put(entity, props)
         val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
 
@@ -126,14 +130,15 @@ class EntityPropertyMapTest {
     @Test
     fun `test edge cases for property names and values`() {
         val entity = NodeID("entity1")
-        val edgeCases = mapOf(
-            "" to "Empty key".strVal,
-            "!@#$%^&*()" to "Special chars".strVal,
-            "你好世界" to "Unicode chars".strVal,
-            "a:b" to "Colon in key".strVal,
-            "key with spaces" to "Spaces in key".strVal,
-            "key\nwith\nnewlines" to "Newlines in key".strVal
-        )
+        val edgeCases =
+            mapOf(
+                "" to "Empty key".strVal,
+                "!@#$%^&*()" to "Special chars".strVal,
+                "你好世界" to "Unicode chars".strVal,
+                "a:b" to "Colon in key".strVal,
+                "key with spaces" to "Spaces in key".strVal,
+                "key\nwith\nnewlines" to "Newlines in key".strVal,
+            )
 
         entityPropertyMap.put(entity, edgeCases)
         val retrieved = entityPropertyMap[entity]
@@ -145,11 +150,12 @@ class EntityPropertyMapTest {
     @Test
     fun `test null and empty value handling`() {
         val entity = NodeID("entity1")
-        val props = mapOf(
-            "nullValue" to NullVal,
-            "emptyString" to "".strVal,
-            "normalValue" to "normal".strVal
-        )
+        val props =
+            mapOf(
+                "nullValue" to NullVal,
+                "emptyString" to "".strVal,
+                "normalValue" to "normal".strVal,
+            )
 
         entityPropertyMap.put(entity, props)
         val retrieved = entityPropertyMap[entity]
@@ -165,9 +171,10 @@ class EntityPropertyMapTest {
         // Create and add large number of entities
         for (i in 1..entityCount) {
             val entity = NodeID("entity$i")
-            val props = (1..propsPerEntity).associate {
-                "prop$it" to "value$it for entity$i".strVal
-            }
+            val props =
+                (1..propsPerEntity).associate {
+                    "prop$it" to "value$it for entity$i".strVal
+                }
             entityPropertyMap.put(entity, props)
         }
 
@@ -186,11 +193,12 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test bulk operations`() {
-        val entities = mapOf(
-            NodeID("entity1") to mapOf("name" to "Entity 1".strVal),
-            NodeID("entity2") to mapOf("name" to "Entity 2".strVal),
-            NodeID("entity3") to mapOf("name" to "Entity 3".strVal)
-        )
+        val entities =
+            mapOf(
+                NodeID("entity1") to mapOf("name" to "Entity 1".strVal),
+                NodeID("entity2") to mapOf("name" to "Entity 2".strVal),
+                NodeID("entity3") to mapOf("name" to "Entity 3".strVal),
+            )
 
         entityPropertyMap.putAll(entities)
         assertEquals(3, entityPropertyMap.size, "Should add all entities")
@@ -201,10 +209,11 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test collection view operations`() {
-        val entities = mapOf(
-            NodeID("entity1") to mapOf("name" to "Entity 1".strVal),
-            NodeID("entity2") to mapOf("name" to "Entity 2".strVal)
-        )
+        val entities =
+            mapOf(
+                NodeID("entity1") to mapOf("name" to "Entity 1".strVal),
+                NodeID("entity2") to mapOf("name" to "Entity 2".strVal),
+            )
         entityPropertyMap.putAll(entities)
 
         // Test keys view
@@ -263,11 +272,12 @@ class EntityPropertyMapTest {
     @Test
     fun `test concurrent modification handling`() {
         val entity = NodeID("entity1")
-        val initialProps = mapOf(
-            "key1" to "value1".strVal,
-            "key2" to "value2".strVal,
-            "key3" to "value3".strVal
-        )
+        val initialProps =
+            mapOf(
+                "key1" to "value1".strVal,
+                "key2" to "value2".strVal,
+                "key3" to "value3".strVal,
+            )
         entityPropertyMap.put(entity, initialProps)
         val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
 
@@ -297,12 +307,13 @@ class EntityPropertyMapTest {
             val db = DBMaker.fileDB(dbFile).make()
             val map = EntityPropertyMap<NodeID>(db, "persist-test")
             val entity = NodeID("persist-entity")
-            val props = mapOf(
-                "name" to "Persistent".strVal,
-                "count" to 123.numVal,
-                "unicode" to "测试".strVal,
-                "null" to NullVal
-            )
+            val props =
+                mapOf(
+                    "name" to "Persistent".strVal,
+                    "count" to 123.numVal,
+                    "unicode" to "测试".strVal,
+                    "null" to NullVal,
+                )
             map.put(entity, props)
             db.close()
         }

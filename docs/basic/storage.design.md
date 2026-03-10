@@ -50,10 +50,17 @@ interface IStorage : Closeable {
     fun getIncomingEdges(id: NodeID): Set<EdgeID>
     fun getOutgoingEdges(id: NodeID): Set<EdgeID>
 
+    val metaNames: Set<String>
     fun getMeta(name: String): IValue?
     fun setMeta(name: String, value: IValue?)
 
     fun clear(): Boolean
+
+    fun transferTo(target: IStorage) {
+        for (nodeId in nodeIDs) target.addNode(nodeId, getNodeProperties(nodeId))
+        for (edgeId in edgeIDs) target.addEdge(edgeId, getEdgeProperties(edgeId))
+        for (name in metaNames) target.setMeta(name, getMeta(name))
+    }
 }
 ```
 
@@ -65,8 +72,10 @@ interface IStorage : Closeable {
 | `setEdgeProperties` | Same as `setNodeProperties` for edges | `id`: EdgeID; `properties`: map | — | `EntityNotExistException` if missing |
 | `deleteNode` | Removes a node; does **not** cascade edge deletion by contract | `id`: NodeID | — | `EntityNotExistException` if missing |
 | `deleteEdge` | Removes an edge | `id`: EdgeID | — | `EntityNotExistException` if missing |
+| `metaNames` | Returns all metadata property names | — | `Set<String>` | `AccessClosedStorageException` if closed |
 | `getMeta` / `setMeta` | Reads/writes metadata as named properties on a special reserved node | `name`: key; `value`: IValue or null | `IValue?` | — |
 | `clear` | Removes all nodes, edges, and metadata | — | `Boolean` | `AccessClosedStorageException` if closed |
+| `transferTo` | Default method. Copies all nodes, edges, and metadata into `target` | `target`: destination `IStorage` | — | `EntityAlreadyExistException` if target has conflicts |
 
 **Key design decisions:**
 
@@ -194,15 +203,6 @@ freezeAndPushLayer():
   activeLayer.close()                           → release heap memory
   frozenLayers.add(frozenTarget)
   activeLayer = NativeStorageImpl()             → fresh empty heap layer
-```
-
-**Extension function for transfer:**
-
-```kotlin
-fun IStorage.transferTo(target: IStorage) {
-    for (nodeId in nodeIDs) target.addNode(nodeId, getNodeProperties(nodeId))
-    for (edgeId in edgeIDs) target.addEdge(edgeId, getEdgeProperties(edgeId))
-}
 ```
 
 **Design rationale:** `PhasedStorageImpl` is the only freeze-and-stack implementation. Introducing `IFreezableStorage` / `ILayeredStorage` interfaces would add inheritance complexity without benefit — there are no other implementations to abstract over. Upstream code that needs only `IStorage` works transparently; code that needs phased-specific methods holds a `PhasedStorageImpl` reference directly.

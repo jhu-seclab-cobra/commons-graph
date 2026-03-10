@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlinx.kover)
@@ -26,7 +24,11 @@ dependencies {
 
 kotlin {
     jvmToolchain { languageVersion.set(JavaLanguageVersion.of(sourceJavaVersion.majorVersion)) }
-    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(targetJavaVersion.toString()) }
+    compilerOptions {
+        jvmTarget =
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget
+                .fromTarget(targetJavaVersion.toString())
+    }
 }
 
 java {
@@ -39,4 +41,3 @@ java {
 publishing {
     publications { create<MavenPublication>("maven") { from(components["java"]) } }
 }
-

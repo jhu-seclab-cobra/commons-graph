@@ -59,13 +59,14 @@ class MapDbValSerializerTest {
     fun `test serialize and deserialize nested complex values`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<IValue>()).createOrOpen()
-        val nested = ListVal(
-            listOf(
-                MapVal("a" to ListVal(listOf(NumVal(1), NullVal))),
-                BoolVal(true),
-                StrVal("deep")
+        val nested =
+            ListVal(
+                listOf(
+                    MapVal("a" to ListVal(listOf(NumVal(1), NullVal))),
+                    BoolVal(true),
+                    StrVal("deep"),
+                ),
             )
-        )
         map["nested"] = nested
         assertEquals(nested, map["nested"])
         db.close()
@@ -123,4 +124,3 @@ class MapDbValSerializerTest {
         db2.close()
     }
 }
-

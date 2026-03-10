@@ -46,7 +46,6 @@ class MapDbIDSerializerTest {
         val nodeId = NodeID("persistent_node")
         val edgeId = EdgeID(NodeID("persistent_node"), NodeID("persistent_node"), "persistent_edge")
 
-
         map["node"] = nodeId
         map["edge"] = edgeId
         db.close()
@@ -114,4 +113,3 @@ class MapDbIDSerializerTest {
         db.close()
     }
 }
-

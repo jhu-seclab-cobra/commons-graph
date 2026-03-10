@@ -2,6 +2,8 @@
 kotlin = "2.2.21"
 kotlinx = "1.10.2"
 kover = "0.9.1"
+ktlint = "14.0.1"
+detekt = "1.23.8"
 javaSource = "8"
 javaTarget = "8"
 cobra-commons-value = "0.1.0"
@@ -21,3 +23,5 @@ cobra-commons-value = { module = "com.github.jhu-seclab-cobra:commons-value", ve
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinx-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
