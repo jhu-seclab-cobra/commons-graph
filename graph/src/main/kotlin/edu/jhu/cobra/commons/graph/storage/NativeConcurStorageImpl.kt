@@ -2,7 +2,6 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.IValue
-import java.util.concurrent.locks.ReadWriteLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 
@@ -10,53 +9,39 @@ import kotlin.concurrent.withLock
  * Thread-safe in-memory graph storage implementation using read-write locks.
  *
  * Provides concurrent access with multiple readers and single writer. Suitable for read-heavy workloads.
+ * Uses internal non-locking helpers to avoid lock re-entrance overhead in compound operations.
  *
  * @constructor Creates a new empty thread-safe storage instance.
  * @see NativeStorageImpl
  */
 class NativeConcurStorageImpl : IStorage {
-    // ============================================================================
-    // STATE MANAGEMENT
-    // ============================================================================
-
-    /**
-     * Indicates whether the storage has been closed.
-     */
     @Volatile
     private var isClosed: Boolean = false
 
-    /**
-     * Read-write lock for concurrent access control.
-     */
-    private val lock: ReadWriteLock = ReentrantReadWriteLock()
+    private val lock = ReentrantReadWriteLock()
 
-    // ============================================================================
-    // STORAGE STRUCTURES
-    // ============================================================================
-
-    /**
-     * Maps node IDs to their property dictionaries.
-     */
+    // Entity property stores — LinkedHashMap preserves insertion order for nodeIDs/edgeIDs
     private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = mutableMapOf()
-
-    /**
-     * Maps edge IDs to their property dictionaries.
-     */
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
-
-    /**
-     * Maps metadata keys to their values.
-     */
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
 
+    // Split adjacency indices: O(1) directional lookups without filtering
+    private val outEdges = HashMap<NodeID, MutableSet<EdgeID>>()
+    private val inEdges = HashMap<NodeID, MutableSet<EdgeID>>()
+
     // ============================================================================
-    // GRAPH STRUCTURE
+    // INTERNAL HELPERS (no locking — callers must hold appropriate lock)
     // ============================================================================
 
-    /**
-     * Adjacency list representation for graph structure.
-     */
-    private val graphStructure: MutableMap<NodeID, Set<EdgeID>> = mutableMapOf()
+    private fun hasNode(id: NodeID): Boolean = id in nodeProperties
+
+    private fun hasEdge(id: EdgeID): Boolean = id in edgeProperties
+
+    private fun removeEdgeInternal(id: EdgeID) {
+        outEdges[id.srcNid]?.remove(id)
+        inEdges[id.dstNid]?.remove(id)
+        edgeProperties.remove(id)
+    }
 
     // ============================================================================
     // PROPERTIES AND STATISTICS
@@ -83,7 +68,7 @@ class NativeConcurStorageImpl : IStorage {
     override fun containsNode(id: NodeID): Boolean =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            id in nodeProperties
+            hasNode(id)
         }
 
     override fun addNode(
@@ -91,8 +76,10 @@ class NativeConcurStorageImpl : IStorage {
         properties: Map<String, IValue>,
     ) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        if (containsNode(id)) throw EntityAlreadyExistException(id = id)
+        if (hasNode(id)) throw EntityAlreadyExistException(id = id)
         nodeProperties[id] = properties.toMutableMap()
+        outEdges[id] = HashSet()
+        inEdges[id] = HashSet()
     }
 
     override fun getNodeProperties(id: NodeID): Map<String, IValue> =
@@ -115,14 +102,13 @@ class NativeConcurStorageImpl : IStorage {
     override fun deleteNode(id: NodeID): Unit =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (!containsNode(id)) throw EntityNotExistException(id)
-
-            // Delete all connected edges first
-            getIncomingEdges(id).forEach { deleteEdge(it) }
-            getOutgoingEdges(id).forEach { deleteEdge(it) }
-
-            // Remove node from structures
-            graphStructure.remove(id)
+            if (!hasNode(id)) throw EntityNotExistException(id)
+            val connected = HashSet<EdgeID>(outEdges[id]!!.size + inEdges[id]!!.size)
+            connected.addAll(outEdges[id]!!)
+            connected.addAll(inEdges[id]!!)
+            connected.forEach { removeEdgeInternal(it) }
+            outEdges.remove(id)
+            inEdges.remove(id)
             nodeProperties.remove(id)
         }
 
@@ -133,7 +119,7 @@ class NativeConcurStorageImpl : IStorage {
     override fun containsEdge(id: EdgeID): Boolean =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            id in edgeProperties
+            hasEdge(id)
         }
 
     override fun addEdge(
@@ -141,15 +127,11 @@ class NativeConcurStorageImpl : IStorage {
         properties: Map<String, IValue>,
     ) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        if (containsEdge(id)) throw EntityAlreadyExistException(id = id)
-        if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
-        if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
-
-        // Add edge to graph structure
-        graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() + id
-        graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() + id
-
-        // Store edge properties
+        if (hasEdge(id)) throw EntityAlreadyExistException(id = id)
+        if (!hasNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
+        if (!hasNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
+        outEdges[id.srcNid]!!.add(id)
+        inEdges[id.dstNid]!!.add(id)
         edgeProperties[id] = properties.toMutableMap()
     }
 
@@ -173,14 +155,8 @@ class NativeConcurStorageImpl : IStorage {
     override fun deleteEdge(id: EdgeID): Unit =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (!containsEdge(id)) throw EntityNotExistException(id)
-
-            // Remove edge from graph structure
-            graphStructure[id.srcNid] = graphStructure[id.srcNid].orEmpty() - id
-            graphStructure[id.dstNid] = graphStructure[id.dstNid].orEmpty() - id
-
-            // Remove edge properties
-            edgeProperties.remove(id)
+            if (!hasEdge(id)) throw EntityNotExistException(id)
+            removeEdgeInternal(id)
         }
 
     // ============================================================================
@@ -190,15 +166,15 @@ class NativeConcurStorageImpl : IStorage {
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (!containsNode(id)) throw EntityNotExistException(id)
-            graphStructure[id]?.filter { it.dstNid == id }?.toSet().orEmpty()
+            if (!hasNode(id)) throw EntityNotExistException(id)
+            inEdges[id] ?: emptySet()
         }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (!containsNode(id)) throw EntityNotExistException(id)
-            graphStructure[id]?.filter { it.srcNid == id }?.toSet().orEmpty()
+            if (!hasNode(id)) throw EntityNotExistException(id)
+            outEdges[id] ?: emptySet()
         }
 
     // ============================================================================
@@ -238,7 +214,8 @@ class NativeConcurStorageImpl : IStorage {
     override fun clear(): Boolean =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            graphStructure.clear()
+            outEdges.clear()
+            inEdges.clear()
             edgeProperties.clear()
             nodeProperties.clear()
             metaProperties.clear()
