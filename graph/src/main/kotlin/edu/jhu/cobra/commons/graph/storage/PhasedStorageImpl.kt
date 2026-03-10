@@ -23,9 +23,8 @@ import edu.jhu.cobra.commons.value.IValue
  * @see FrozenLayerModificationException
  */
 class PhasedStorageImpl(
-    private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }
+    private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
-
     private val frozenLayers = mutableListOf<IStorage>()
     private var activeLayer: IStorage = NativeStorageImpl()
     private var closed = false
@@ -129,7 +128,10 @@ class PhasedStorageImpl(
         return frozenLayers.asReversed().any { it.containsNode(id) }
     }
 
-    override fun addNode(id: NodeID, properties: Map<String, IValue>) {
+    override fun addNode(
+        id: NodeID,
+        properties: Map<String, IValue>,
+    ) {
         ensureOpen()
         ensureNotFrozen()
         if (containsNode(id)) throw EntityAlreadyExistException(id)
@@ -147,7 +149,10 @@ class PhasedStorageImpl(
         return merged
     }
 
-    override fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>) {
+    override fun setNodeProperties(
+        id: NodeID,
+        properties: Map<String, IValue?>,
+    ) {
         ensureOpen()
         ensureNotFrozen()
         if (!containsNode(id)) throw EntityNotExistException(id)
@@ -175,7 +180,10 @@ class PhasedStorageImpl(
         return frozenLayers.asReversed().any { it.containsEdge(id) }
     }
 
-    override fun addEdge(id: EdgeID, properties: Map<String, IValue>) {
+    override fun addEdge(
+        id: EdgeID,
+        properties: Map<String, IValue>,
+    ) {
         ensureOpen()
         ensureNotFrozen()
         if (containsEdge(id)) throw EntityAlreadyExistException(id)
@@ -198,7 +206,10 @@ class PhasedStorageImpl(
         return merged
     }
 
-    override fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>) {
+    override fun setEdgeProperties(
+        id: EdgeID,
+        properties: Map<String, IValue?>,
+    ) {
         ensureOpen()
         ensureNotFrozen()
         if (!containsEdge(id)) throw EntityNotExistException(id)
@@ -248,6 +259,17 @@ class PhasedStorageImpl(
     // METADATA OPERATIONS
     // ============================================================================
 
+    override val metaNames: Set<String>
+        get() {
+            ensureOpen()
+            val names = mutableSetOf<String>()
+            for (layer in frozenLayers) {
+                names.addAll(layer.metaNames)
+            }
+            names.addAll(activeLayer.metaNames)
+            return names
+        }
+
     override fun getMeta(name: String): IValue? {
         ensureOpen()
         activeLayer.getMeta(name)?.let { return it }
@@ -257,7 +279,10 @@ class PhasedStorageImpl(
         return null
     }
 
-    override fun setMeta(name: String, value: IValue?) {
+    override fun setMeta(
+        name: String,
+        value: IValue?,
+    ) {
         ensureOpen()
         ensureNotFrozen()
         activeLayer.setMeta(name, value)

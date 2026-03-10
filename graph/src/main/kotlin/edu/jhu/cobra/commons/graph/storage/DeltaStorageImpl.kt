@@ -21,7 +21,6 @@ class DeltaStorageImpl(
     private val baseDelta: IStorage,
     private val presentDelta: IStorage = NativeStorageImpl(),
 ) : IStorage {
-
     private var isClosed: Boolean = false
     private val deletedNodesHolder = hashSetOf<NodeID>()
     private val deletedEdgesHolder = hashSetOf<EdgeID>()
@@ -56,7 +55,10 @@ class DeltaStorageImpl(
         return presentDelta.containsNode(id) || baseDelta.containsNode(id)
     }
 
-    override fun addNode(id: NodeID, properties: Map<String, IValue>) {
+    override fun addNode(
+        id: NodeID,
+        properties: Map<String, IValue>,
+    ) {
         if (isClosed) throw AccessClosedStorageException()
         if (containsNode(id)) throw EntityAlreadyExistException(id)
         deletedNodesHolder.remove(id)
@@ -71,11 +73,17 @@ class DeltaStorageImpl(
         return (baseProps + presentProps).filterValues { it.core != "_deleted_" }
     }
 
-    override fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>) {
+    override fun setNodeProperties(
+        id: NodeID,
+        properties: Map<String, IValue?>,
+    ) {
         if (!containsNode(id)) throw EntityNotExistException(id)
         val sentinelProps = properties.mapValues { (_, v) -> v ?: "_deleted_".strVal }
-        if (!presentDelta.containsNode(id)) presentDelta.addNode(id, sentinelProps)
-        else presentDelta.setNodeProperties(id, sentinelProps)
+        if (!presentDelta.containsNode(id)) {
+            presentDelta.addNode(id, sentinelProps)
+        } else {
+            presentDelta.setNodeProperties(id, sentinelProps)
+        }
     }
 
     override fun deleteNode(id: NodeID) {
@@ -97,7 +105,10 @@ class DeltaStorageImpl(
         return presentDelta.containsEdge(id) || baseDelta.containsEdge(id)
     }
 
-    override fun addEdge(id: EdgeID, properties: Map<String, IValue>) {
+    override fun addEdge(
+        id: EdgeID,
+        properties: Map<String, IValue>,
+    ) {
         if (!containsNode(id.srcNid)) throw EntityNotExistException(id.srcNid)
         if (!containsNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
         if (containsEdge(id)) throw EntityAlreadyExistException(id)
@@ -115,13 +126,19 @@ class DeltaStorageImpl(
         return (baseProps + presentProps).filterValues { it.core != "_deleted_" }
     }
 
-    override fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>) {
+    override fun setEdgeProperties(
+        id: EdgeID,
+        properties: Map<String, IValue?>,
+    ) {
         if (!containsEdge(id)) throw EntityNotExistException(id)
         val sentinelProps = properties.mapValues { (_, v) -> v ?: "_deleted_".strVal }
         if (!presentDelta.containsNode(id.srcNid)) presentDelta.addNode(id.srcNid)
         if (!presentDelta.containsNode(id.dstNid)) presentDelta.addNode(id.dstNid)
-        if (!presentDelta.containsEdge(id)) presentDelta.addEdge(id, sentinelProps)
-        else presentDelta.setEdgeProperties(id, sentinelProps)
+        if (!presentDelta.containsEdge(id)) {
+            presentDelta.addEdge(id, sentinelProps)
+        } else {
+            presentDelta.setEdgeProperties(id, sentinelProps)
+        }
     }
 
     override fun deleteEdge(id: EdgeID) {
@@ -150,12 +167,21 @@ class DeltaStorageImpl(
     // METADATA OPERATIONS
     // ============================================================================
 
+    override val metaNames: Set<String>
+        get() {
+            if (isClosed) throw AccessClosedStorageException()
+            return baseDelta.metaNames + presentDelta.metaNames
+        }
+
     override fun getMeta(name: String): IValue? {
         if (isClosed) throw AccessClosedStorageException()
         return presentDelta.getMeta(name) ?: baseDelta.getMeta(name)
     }
 
-    override fun setMeta(name: String, value: IValue?) {
+    override fun setMeta(
+        name: String,
+        value: IValue?,
+    ) {
         if (isClosed) throw AccessClosedStorageException()
         presentDelta.setMeta(name, value)
     }
