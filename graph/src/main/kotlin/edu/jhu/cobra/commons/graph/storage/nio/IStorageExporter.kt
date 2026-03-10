@@ -1,10 +1,15 @@
 package edu.jhu.cobra.commons.graph.storage.nio
 
+import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.nio.file.Path
 
-interface IStorageExporter {
+/**
+ * Filter function for selecting entities in a graph based on their ID.
+ */
+typealias EntityFilter = (IEntity.ID) -> Boolean
 
+interface IStorageExporter {
     /**
      * Exports data from an [IStorage] object to a destination file specified by [dstFile].
      *
@@ -14,5 +19,9 @@ interface IStorageExporter {
      *                  By default, all entities will be exported.
      * @return The path to the exported file.
      */
-    fun export(dstFile: Path, from: IStorage, predicate: EntityFilter = { true }): Path
+    fun export(
+        dstFile: Path,
+        from: IStorage,
+        predicate: EntityFilter = { true },
+    ): Path
 }

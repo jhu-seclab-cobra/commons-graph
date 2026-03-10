@@ -20,19 +20,24 @@ import kotlin.io.path.*
  * This exchanger will create CSV files for nodes and edges and allows filtering of entities that are exported.
  */
 object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
-
     private const val CSV_DELIMITER = ","
     private val CSV_DELIMITER_REGEX = Regex("(?<!\\\\)$CSV_DELIMITER")
-    private val escapeMap = mapOf(
-        "\\" to "\\\\", "," to "\\,",
-        "\r\n" to "\\r\\n", "\n" to "\\n", "\r" to "\\r", "\t" to "\\t",
-    )
+    private val escapeMap =
+        mapOf(
+            "\\" to "\\\\",
+            "," to "\\,",
+            "\r\n" to "\\r\\n",
+            "\n" to "\\n",
+            "\r" to "\\r",
+            "\t" to "\\t",
+        )
     private val unescapeMap = escapeMap.entries.associate { (key, value) -> value to key }
     private val escapeRegex = escapeMap.keys.joinToString("|") { Regex.escape(it) }.toRegex()
     private val unescapeRegex = unescapeMap.keys.joinToString("|") { Regex.escape(it) }.toRegex()
 
-    private class CsvWriter(path: Path) : Closeable {
-
+    private class CsvWriter(
+        path: Path,
+    ) : Closeable {
         private var isClosed: Boolean = false
 
         private val nodeFile = path.resolve("nodes.csv")
@@ -64,10 +69,16 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             }
         }
 
-        fun write(id: IEntity.ID, props: Map<String, IValue>) {
+        fun write(
+            id: IEntity.ID,
+            props: Map<String, IValue>,
+        ) {
             val writer = getWriter(id)
-            if (id is NodeID) isNodeHeaderChanged = isNodeHeaderChanged || nodeHeaders.addAll(props.keys)
-            else isEdgeHeaderChanged = isEdgeHeaderChanged || edgeHeaders.addAll(props.keys)
+            if (id is NodeID) {
+                isNodeHeaderChanged = isNodeHeaderChanged || nodeHeaders.addAll(props.keys)
+            } else {
+                isEdgeHeaderChanged = isEdgeHeaderChanged || edgeHeaders.addAll(props.keys)
+            }
             val headerSequence = if (id is NodeID) nodeHeaders.asSequence() else edgeHeaders.asSequence()
             val orderProps = sequenceOf(id.serialize) + headerSequence.map(props::get)
             val serPropSeq = orderProps.map { it?.let(DftCharBufferSerializerImpl::serialize) ?: "" }
@@ -83,7 +94,10 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             writer.appendLine()
         }
 
-        private fun updateHeader(file: File, header: LinkedHashSet<String>) {
+        private fun updateHeader(
+            file: File,
+            header: LinkedHashSet<String>,
+        ) {
             require(!isClosed) { "The file is closed" }
             val tempFile = File.createTempFile("tmp", ".txt")
             val reader = file.bufferedReader()
@@ -113,8 +127,9 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         }
     }
 
-    private class CsvReader(path: Path) : Closeable {
-
+    private class CsvReader(
+        path: Path,
+    ) : Closeable {
         private var isClosed: Boolean = false
 
         private val nodeFile = path.resolve("nodes.csv")
@@ -131,53 +146,54 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             return runCatching { DftCharBufferSerializerImpl.deserialize(charBuffer) }.getOrNull()
         }
 
-        fun readNodes(): Iterator<Pair<NodeID, Map<String, IValue>>> = iterator {
-            val nodeReader = nodeFile.bufferedReader()
-            try {
-                val rawHeaderString = nodeReader.readLine() ?: ""
-                val rawHeader = rawHeaderString.split(CSV_DELIMITER_REGEX).drop(1)
-                val nodeHeader = rawHeader.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
-                val nodeSequence = nodeReader.lineSequence()
-                for (line in nodeSequence) {
-                    val props = line.split(CSV_DELIMITER_REGEX).asSequence()
-                    val unescaped = props.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
-                    val validValues = unescaped.map { strValue -> if (strValue == "") null else strValue }
-                    val values = validValues.map { if (it == null) null else deserialize(it) }.toList()
-                    val nodeID = (values.firstOrNull() as? StrVal)?.let(block = ::NodeID) ?: continue
-                    val validIndexes = (1..nodeHeader.size).filter { values.getOrNull(it) != null }
-                    val nodeProps = validIndexes.associate { nodeHeader[it - 1] to values[it]!! }
-                    yield(value = nodeID to nodeProps)
+        fun readNodes(): Iterator<Pair<NodeID, Map<String, IValue>>> =
+            iterator {
+                val nodeReader = nodeFile.bufferedReader()
+                try {
+                    val rawHeaderString = nodeReader.readLine() ?: ""
+                    val rawHeader = rawHeaderString.split(CSV_DELIMITER_REGEX).drop(1)
+                    val nodeHeader = rawHeader.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
+                    val nodeSequence = nodeReader.lineSequence()
+                    for (line in nodeSequence) {
+                        val props = line.split(CSV_DELIMITER_REGEX).asSequence()
+                        val unescaped = props.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
+                        val validValues = unescaped.map { strValue -> if (strValue == "") null else strValue }
+                        val values = validValues.map { if (it == null) null else deserialize(it) }.toList()
+                        val nodeID = (values.firstOrNull() as? StrVal)?.let(block = ::NodeID) ?: continue
+                        val validIndexes = (1..nodeHeader.size).filter { values.getOrNull(it) != null }
+                        val nodeProps = validIndexes.associate { nodeHeader[it - 1] to values[it]!! }
+                        yield(value = nodeID to nodeProps)
+                    }
+                } finally {
+                    nodeReader.close()
                 }
-            } finally {
-                nodeReader.close()
             }
-        }
 
-        fun readEdges(): Iterator<Pair<EdgeID, Map<String, IValue>>> = iterator {
-            val edgeReader = edgeFile.bufferedReader()
-            try {
-                val rawHeader = edgeReader.readLine().split(CSV_DELIMITER_REGEX).drop(1)
-                val edgeHeader = rawHeader.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
-                for (line in edgeReader.lineSequence()) {
-                    val props = line.split(CSV_DELIMITER_REGEX)
-                    require(!isClosed) { "The edge file is closed" }
-                    val unescaped = props.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
-                    val validValues = unescaped.map { string -> if (string == "") null else string }
-                    val values = validValues.map { if (it == null) null else deserialize(strValue = it) }.toList()
-                    val edgeID = (values.firstOrNull() as? ListVal)?.let(block = ::EdgeID) ?: continue
-                    val validIndexes = (1..edgeHeader.size).filter { values.getOrNull(it) != null }
-                    val edgeProps = validIndexes.associate { edgeHeader[it - 1] to values[it]!! }
-                    yield(value = edgeID to edgeProps)
+        fun readEdges(): Iterator<Pair<EdgeID, Map<String, IValue>>> =
+            iterator {
+                val edgeReader = edgeFile.bufferedReader()
+                try {
+                    val rawHeader = edgeReader.readLine().split(CSV_DELIMITER_REGEX).drop(1)
+                    val edgeHeader = rawHeader.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
+                    for (line in edgeReader.lineSequence()) {
+                        val props = line.split(CSV_DELIMITER_REGEX)
+                        require(!isClosed) { "The edge file is closed" }
+                        val unescaped = props.map { it.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value } }
+                        val validValues = unescaped.map { string -> if (string == "") null else string }
+                        val values = validValues.map { if (it == null) null else deserialize(strValue = it) }.toList()
+                        val edgeID = (values.firstOrNull() as? ListVal)?.let(block = ::EdgeID) ?: continue
+                        val validIndexes = (1..edgeHeader.size).filter { values.getOrNull(it) != null }
+                        val edgeProps = validIndexes.associate { edgeHeader[it - 1] to values[it]!! }
+                        yield(value = edgeID to edgeProps)
+                    }
+                } finally {
+                    edgeReader.close()
                 }
-            } finally {
-                edgeReader.close()
             }
-        }
 
         override fun close() {
             isClosed = true
         }
-
     }
 
     override fun isValidFile(file: Path): Boolean {
@@ -186,7 +202,11 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         return nodeFile.exists() && nodeFile.fileSize() > 0 && edgeFile.exists() && edgeFile.fileSize() > 0
     }
 
-    override fun export(dstFile: Path, from: IStorage, predicate: EntityFilter): Path {
+    override fun export(
+        dstFile: Path,
+        from: IStorage,
+        predicate: EntityFilter,
+    ): Path {
         CsvWriter(path = dstFile).use { writer ->
             from.nodeIDs.filter(predicate).forEach { writer.write(it, from.getNodeProperties(it)) }
             from.edgeIDs.filter(predicate).forEach { writer.write(it, from.getEdgeProperties(it)) }
@@ -194,7 +214,11 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         return dstFile
     }
 
-    override fun import(srcFile: Path, into: IStorage, predicate: EntityFilter): IStorage {
+    override fun import(
+        srcFile: Path,
+        into: IStorage,
+        predicate: EntityFilter,
+    ): IStorage {
         CsvReader(path = srcFile).use { reader ->
             val validNodes = reader.readNodes().asSequence().filter { (nid) -> predicate(nid) }
             validNodes.forEach { (nid, properties) -> into.addNode(nid, properties) }
@@ -203,5 +227,4 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         }
         return into
     }
-
 }
