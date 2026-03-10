@@ -5,8 +5,7 @@ import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.graph.NodeID
 
-interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
-
+interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     companion object {
         private const val PREFIX_SPLITTER = '@'
         private const val SUFFIX_SPLITTER = '#'
@@ -23,7 +22,10 @@ interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
 
     val groupedNodesCounter: MutableMap<String, Int>
 
-    private fun groupNodeID(group: String, suffix: String): NodeID {
+    private fun groupNodeID(
+        group: String,
+        suffix: String,
+    ): NodeID {
         require(group.isNotEmpty()) { "Group name cannot be empty" }
         require(PREFIX_SPLITTER !in group) { "Group name cannot contain '@' character" }
         require(SUFFIX_SPLITTER !in group) { "Group name cannot contain '#' character" }
@@ -46,13 +48,13 @@ interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
         val nodeName = node.id.name
         val atIndex = nodeName.indexOf('@')
         val hashIndex = nodeName.indexOf('#')
-        
-        if (atIndex == -1 || atIndex == 0 ) return null
+
+        if (atIndex == -1 || atIndex == 0) return null
         if (hashIndex == -1 || atIndex + 1 >= hashIndex) return null
 
         val groupName = nodeName.substring(atIndex + 1, hashIndex)
         if (groupName.isEmpty()) return null
-        
+
         return groupName
     }
 
@@ -69,7 +71,10 @@ interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
      * @throws IllegalArgumentException If the group name or suffix is invalid.
      * @throws edu.jhu.cobra.commons.graph.EntityAlreadyExistException If a node with the generated ID already exists.
      */
-    fun addGroupNode(group: String, suffix: String? = null): N {
+    fun addGroupNode(
+        group: String,
+        suffix: String? = null,
+    ): N {
         require(group in groupedNodesCounter) { "Group $group should exist" }
         val counter = groupedNodesCounter.compute(group) { _, v -> v!! + 1 }
         val groupedNodeID = groupNodeID(group, suffix ?: counter.toString())
@@ -84,7 +89,10 @@ interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
      * @return The newly added node associated with the same group.
      * @throws IllegalArgumentException If the node ID format is invalid or the group does not exist.
      */
-    fun addGroupNode(sameGroupNode: AbcNode, suffix: String? = null): N {
+    fun addGroupNode(
+        sameGroupNode: AbcNode,
+        suffix: String? = null,
+    ): N {
         val group = getGroupName(node = sameGroupNode)
         require(group != null) { "Node ID format is invalid: ${sameGroupNode.id.name}" }
         return addGroupNode(group, suffix)
@@ -98,9 +106,11 @@ interface TraitNodeGroup<N : AbcNode, E: AbcEdge>: IGraph<N, E> {
      * @return The grouped node if it exists, or `null` otherwise.
      * @throws IllegalArgumentException If the group name or suffix is invalid.
      */
-    fun getGroupNode(group: String, suffix: String): N? {
+    fun getGroupNode(
+        group: String,
+        suffix: String,
+    ): N? {
         val groupedNodeID = groupNodeID(group, suffix)
         return getNode(whoseID = groupedNodeID)
     }
-
 }
