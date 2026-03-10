@@ -4,13 +4,11 @@ kotlinx = "1.10.2"
 kover = "0.9.1"
 ktlint = "14.0.1"
 detekt = "1.23.8"
-javaSource = "8"
-javaTarget = "8"
+jvm = "8"
 cobra-commons-value = "0.1.0"
 mapdb = "3.0.5"
 jgrapht = "1.4.0"
 neo4j = "3.5.35"
-
 
 [libraries]
 neo4j-core = { module = "org.neo4j:neo4j", version.ref = "neo4j" }
