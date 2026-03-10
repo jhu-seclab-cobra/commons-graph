@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.strVal
-import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -15,6 +14,9 @@ import kotlin.concurrent.write
  * Wraps the same delta semantics as [DeltaStorageImpl] with [ReentrantReadWriteLock]
  * for concurrent access. Multiple concurrent reads are allowed; writes are exclusive.
  *
+ * Uses [HashSet] for deleted-entity holders (protected by the existing RW lock),
+ * providing O(1) contains checks instead of CopyOnWriteArraySet's O(n) linear scan.
+ *
  * The base layer is never mutated. `close()` only closes the present layer;
  * the base layer lifecycle is managed externally.
  *
@@ -25,8 +27,9 @@ class DeltaConcurStorageImpl(
     private val baseDelta: IStorage,
     private val presentDelta: IStorage = NativeStorageImpl(),
 ) : IStorage {
-    private val deletedNodesHolder = CopyOnWriteArraySet<NodeID>()
-    private val deletedEdgesHolder = CopyOnWriteArraySet<EdgeID>()
+    // HashSet protected by the RW lock — O(1) contains vs CopyOnWriteArraySet's O(n)
+    private val deletedNodesHolder = HashSet<NodeID>()
+    private val deletedEdgesHolder = HashSet<EdgeID>()
 
     private val lock = ReentrantReadWriteLock()
     private val isClosed = AtomicBoolean(false)
@@ -39,9 +42,11 @@ class DeltaConcurStorageImpl(
         get() {
             if (isClosed.get()) throw AccessClosedStorageException()
             return lock.read {
-                (baseDelta.nodeIDs + presentDelta.nodeIDs)
-                    .filter { it !in deletedNodesHolder }
-                    .toSet()
+                val result = HashSet<NodeID>(baseDelta.nodeIDs.size + presentDelta.nodeIDs.size)
+                result.addAll(baseDelta.nodeIDs)
+                result.addAll(presentDelta.nodeIDs)
+                result.removeAll(deletedNodesHolder)
+                result
             }
         }
 
@@ -49,9 +54,11 @@ class DeltaConcurStorageImpl(
         get() {
             if (isClosed.get()) throw AccessClosedStorageException()
             return lock.read {
-                (baseDelta.edgeIDs + presentDelta.edgeIDs)
-                    .filter { it !in deletedEdgesHolder }
-                    .toSet()
+                val result = HashSet<EdgeID>(baseDelta.edgeIDs.size + presentDelta.edgeIDs.size)
+                result.addAll(baseDelta.edgeIDs)
+                result.addAll(presentDelta.edgeIDs)
+                result.removeAll(deletedEdgesHolder)
+                result
             }
         }
 
@@ -86,9 +93,15 @@ class DeltaConcurStorageImpl(
     override fun getNodeProperties(id: NodeID): Map<String, IValue> {
         if (!containsNode(id)) throw EntityNotExistException(id)
         return lock.read {
-            val baseProps = if (baseDelta.containsNode(id)) baseDelta.getNodeProperties(id) else emptyMap()
-            val presentProps = if (presentDelta.containsNode(id)) presentDelta.getNodeProperties(id) else emptyMap()
-            (baseProps + presentProps).filterValues { it.core != "_deleted_" }
+            val inBase = baseDelta.containsNode(id)
+            val inPresent = presentDelta.containsNode(id)
+            if (inBase && !inPresent) return@read baseDelta.getNodeProperties(id)
+            if (inPresent && !inBase) return@read presentDelta.getNodeProperties(id)
+            val result = HashMap<String, IValue>()
+            result.putAll(baseDelta.getNodeProperties(id))
+            result.putAll(presentDelta.getNodeProperties(id))
+            result.values.removeAll { it.core == "_deleted_" }
+            result
         }
     }
 
@@ -112,8 +125,8 @@ class DeltaConcurStorageImpl(
             if (!containsNode(id)) throw EntityNotExistException(id)
             if (presentDelta.containsNode(id)) presentDelta.deleteNode(id)
             if (!baseDelta.containsNode(id)) return@write
-            baseDelta.getOutgoingEdges(id).forEach { deletedEdgesHolder.add(it) }
-            baseDelta.getIncomingEdges(id).forEach { deletedEdgesHolder.add(it) }
+            deletedEdgesHolder.addAll(baseDelta.getOutgoingEdges(id))
+            deletedEdgesHolder.addAll(baseDelta.getIncomingEdges(id))
             deletedNodesHolder.add(id)
         }
 
@@ -151,9 +164,15 @@ class DeltaConcurStorageImpl(
     override fun getEdgeProperties(id: EdgeID): Map<String, IValue> {
         if (!containsEdge(id)) throw EntityNotExistException(id)
         return lock.read {
-            val baseProps = if (baseDelta.containsEdge(id)) baseDelta.getEdgeProperties(id) else emptyMap()
-            val presentProps = if (presentDelta.containsEdge(id)) presentDelta.getEdgeProperties(id) else emptyMap()
-            (baseProps + presentProps).filterValues { it.core != "_deleted_" }
+            val inBase = baseDelta.containsEdge(id)
+            val inPresent = presentDelta.containsEdge(id)
+            if (inBase && !inPresent) return@read baseDelta.getEdgeProperties(id)
+            if (inPresent && !inBase) return@read presentDelta.getEdgeProperties(id)
+            val result = HashMap<String, IValue>()
+            result.putAll(baseDelta.getEdgeProperties(id))
+            result.putAll(presentDelta.getEdgeProperties(id))
+            result.values.removeAll { it.core == "_deleted_" }
+            result
         }
     }
 
@@ -190,14 +209,24 @@ class DeltaConcurStorageImpl(
         lock.read {
             val base = if (baseDelta.containsNode(id)) baseDelta.getIncomingEdges(id) else emptySet()
             val present = if (presentDelta.containsNode(id)) presentDelta.getIncomingEdges(id) else emptySet()
-            (base + present).filter { it !in deletedEdgesHolder }.toSet()
+            if (deletedEdgesHolder.isEmpty()) return@read base + present
+            val result = HashSet<EdgeID>(base.size + present.size)
+            result.addAll(base)
+            result.addAll(present)
+            result.removeAll(deletedEdgesHolder)
+            result
         }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> =
         lock.read {
             val base = if (baseDelta.containsNode(id)) baseDelta.getOutgoingEdges(id) else emptySet()
             val present = if (presentDelta.containsNode(id)) presentDelta.getOutgoingEdges(id) else emptySet()
-            (base + present).filter { it !in deletedEdgesHolder }.toSet()
+            if (deletedEdgesHolder.isEmpty()) return@read base + present
+            val result = HashSet<EdgeID>(base.size + present.size)
+            result.addAll(base)
+            result.addAll(present)
+            result.removeAll(deletedEdgesHolder)
+            result
         }
 
     // ============================================================================
