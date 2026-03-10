@@ -19,8 +19,10 @@ import java.util.LinkedList
  * @param N The type of nodes in the graph, must extend [AbcNode].
  * @param E The type of edges in the graph, must extend [AbcEdge].
  */
-abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closeable {
-
+@Suppress("TooManyFunctions")
+abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
+    IGraph<N, E>,
+    Closeable {
     abstract val storage: IStorage
 
     override val nodeIDs: MutableSet<NodeID> = mutableSetOf()
@@ -46,18 +48,19 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         }
 
     override val Label.ancestors: Sequence<Label>
-        get() = sequence {
-            val visited = mutableSetOf<Label>()
-            val stack = LinkedList<Label>().also { it.add(this@ancestors) }
-            while (stack.isNotEmpty()) {
-                val current = stack.removeFirst()
-                if (current in visited) continue
-                visited.add(current)
-                val parents = current.parents.values
-                yieldAll(elements = parents)
-                stack.addAll(elements = parents)
+        get() =
+            sequence {
+                val visited = mutableSetOf<Label>()
+                val stack = LinkedList<Label>().also { it.add(this@ancestors) }
+                while (stack.isNotEmpty()) {
+                    val current = stack.removeFirst()
+                    if (current in visited) continue
+                    visited.add(current)
+                    val parents = current.parents.values
+                    yieldAll(elements = parents)
+                    stack.addAll(elements = parents)
+                }
             }
-        }
 
     override var Label.changes: Set<EdgeID>
         get() = changeRecorder[this].orEmpty()
@@ -144,8 +147,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         return newNodeObj(nid = whoseID)
     }
 
-    override fun containNode(whoseID: NodeID): Boolean =
-        nodeIDs.contains(whoseID) && storage.containsNode(whoseID)
+    override fun containNode(whoseID: NodeID): Boolean = nodeIDs.contains(whoseID) && storage.containsNode(whoseID)
 
     override fun delNode(whoseID: NodeID) {
         if (!nodeIDs.remove(whoseID) || !storage.containsNode(whoseID)) return
@@ -167,7 +169,10 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         return newEdgeObj(withID.also { edgeIDs.add(it) })
     }
 
-    override fun addEdge(withID: EdgeID, label: Label): E {
+    override fun addEdge(
+        withID: EdgeID,
+        label: Label,
+    ): E {
         val edge = getEdge(whoseID = withID) ?: addEdge(withID = withID)
         edge.labels += label
         return edge
@@ -178,15 +183,17 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         return newEdgeObj(eid = whoseID)
     }
 
-    override fun containEdge(whoseID: EdgeID): Boolean =
-        edgeIDs.contains(whoseID) && storage.containsEdge(whoseID)
+    override fun containEdge(whoseID: EdgeID): Boolean = edgeIDs.contains(whoseID) && storage.containsEdge(whoseID)
 
     override fun delEdge(whoseID: EdgeID) {
         if (!edgeIDs.remove(whoseID) || !storage.containsEdge(whoseID)) return
         storage.deleteEdge(id = whoseID)
     }
 
-    override fun delEdge(whoseID: EdgeID, label: Label) {
+    override fun delEdge(
+        whoseID: EdgeID,
+        label: Label,
+    ) {
         val edge = getEdge(whoseID = whoseID) ?: return
         edge.labels -= label
         if (edge.labels.isEmpty()) delEdge(whoseID = whoseID)
@@ -201,33 +208,60 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
 
     override fun getOutgoingEdges(of: NodeID): Sequence<E> {
         if (of !in nodeIDs || !storage.containsNode(of)) return emptySequence()
-        return storage.getOutgoingEdges(of).filter { it in edgeIDs }.asSequence().map { newEdgeObj(it) }
+        return storage
+            .getOutgoingEdges(of)
+            .filter { it in edgeIDs }
+            .asSequence()
+            .map { newEdgeObj(it) }
     }
 
     override fun getIncomingEdges(of: NodeID): Sequence<E> {
         if (of !in nodeIDs || !storage.containsNode(of)) return emptySequence()
-        return storage.getIncomingEdges(of).filter { it in edgeIDs }.asSequence().map { newEdgeObj(it) }
+        return storage
+            .getIncomingEdges(of)
+            .filter { it in edgeIDs }
+            .asSequence()
+            .map { newEdgeObj(it) }
     }
 
-    override fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<E> =
-        getOutgoingEdges(of).filter(cond).filterVisitable(label)
+    override fun getOutgoingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<E> = getOutgoingEdges(of).filter(cond).filterVisitable(label)
 
-    override fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<E> =
-        getIncomingEdges(of).filter(cond).filterVisitable(label)
+    override fun getIncomingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<E> = getIncomingEdges(of).filter(cond).filterVisitable(label)
 
-    override fun getParents(of: NodeID, edgeCond: (E) -> Boolean): Sequence<N> =
-        getIncomingEdges(of).filter(edgeCond).map { newNodeObj(it.srcNid) }
+    override fun getParents(
+        of: NodeID,
+        edgeCond: (E) -> Boolean,
+    ): Sequence<N> = getIncomingEdges(of).filter(edgeCond).map { newNodeObj(it.srcNid) }
 
-    override fun getChildren(of: NodeID, edgeCond: (E) -> Boolean): Sequence<N> =
-        getOutgoingEdges(of).filter(edgeCond).map { newNodeObj(it.dstNid) }
+    override fun getChildren(
+        of: NodeID,
+        edgeCond: (E) -> Boolean,
+    ): Sequence<N> = getOutgoingEdges(of).filter(edgeCond).map { newNodeObj(it.dstNid) }
 
-    override fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<N> =
-        getOutgoingEdges(of, label, cond).mapNotNull { getNode(it.dstNid) }
+    override fun getChildren(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<N> = getOutgoingEdges(of, label, cond).mapNotNull { getNode(it.dstNid) }
 
-    override fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<N> =
-        getIncomingEdges(of, label, cond).mapNotNull { getNode(it.srcNid) }
+    override fun getParents(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<N> = getIncomingEdges(of, label, cond).mapNotNull { getNode(it.srcNid) }
 
-    override fun getAncestors(of: NodeID, edgeCond: (E) -> Boolean) = sequence {
+    override fun getAncestors(
+        of: NodeID,
+        edgeCond: (E) -> Boolean,
+    ) = sequence {
         if (of !in nodeIDs || !storage.containsNode(of)) return@sequence
         val visited = hashSetOf<NodeID>()
         val stack = mutableListOf(of)
@@ -243,7 +277,10 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         }
     }
 
-    override fun getDescendants(of: NodeID, edgeCond: (E) -> Boolean) = sequence {
+    override fun getDescendants(
+        of: NodeID,
+        edgeCond: (E) -> Boolean,
+    ) = sequence {
         if (of !in nodeIDs || !storage.containsNode(of)) return@sequence
         val visited = hashSetOf<NodeID>()
         val queue = LinkedList<NodeID>().apply { add(of) }
@@ -259,7 +296,11 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
         }
     }
 
-    override fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<N> =
+    override fun getDescendants(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
             val queue = LinkedList<NodeID>().apply { add(of) }
@@ -274,7 +315,11 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
             }
         }
 
-    override fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean): Sequence<N> =
+    override fun getAncestors(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean,
+    ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
             val queue = LinkedList<NodeID>().apply { add(of) }
@@ -299,19 +344,23 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E>, Closea
     private fun Sequence<E>.filterVisitable(by: Label): Sequence<E> {
         if (by == Label.SUPREMUM) return this
         val allEdges = this.toList()
-        val allVisitable = allEdges.flatMap { e ->
-            e.labels.filter { l ->
-                by == l || by.compareTo(l)?.let { it > 0 } ?: false
+        val allVisitable =
+            allEdges
+                .flatMap { e ->
+                    e.labels.filter { l ->
+                        by == l || by.compareTo(l)?.let { it > 0 } ?: false
+                    }
+                }.toSet()
+        val allNotCovered =
+            allVisitable.filter { cur ->
+                !allVisitable.any { other ->
+                    other != cur && other.compareTo(cur)?.let { it > 0 } ?: false
+                }
             }
-        }.toSet()
-        val allNotCovered = allVisitable.filter { cur ->
-            !allVisitable.any { other ->
-                other != cur && other.compareTo(cur)?.let { it > 0 } ?: false
-            }
-        }
-        return allEdges.filter { edge ->
-            edge.labels.any { it in allNotCovered }
-        }.asSequence()
+        return allEdges
+            .filter { edge ->
+                edge.labels.any { it in allNotCovered }
+            }.asSequence()
     }
 
     override fun close() {

@@ -15,8 +15,8 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
  * @param N The node type.
  * @param E The edge type.
  */
+@Suppress("TooManyFunctions")
 interface IGraph<N : AbcNode, E : AbcEdge> {
-
     val nodeIDs: Set<NodeID>
 
     val edgeIDs: Set<EdgeID>
@@ -72,7 +72,10 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
     fun addEdge(withID: EdgeID): E
 
-    fun addEdge(withID: EdgeID, label: Label): E
+    fun addEdge(
+        withID: EdgeID,
+        label: Label,
+    ): E
 
     fun getEdge(whoseID: EdgeID): E?
 
@@ -80,7 +83,10 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
     fun delEdge(whoseID: EdgeID)
 
-    fun delEdge(whoseID: EdgeID, label: Label)
+    fun delEdge(
+        whoseID: EdgeID,
+        label: Label,
+    )
 
     // endregion
 
@@ -92,25 +98,61 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
     fun getOutgoingEdges(of: NodeID): Sequence<E>
 
-    fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
+    fun getOutgoingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<E>
 
-    fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
+    fun getIncomingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<E>
 
-    fun getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getChildren(
+        of: NodeID,
+        edgeCond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getParents(
+        of: NodeID,
+        edgeCond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+    fun getChildren(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+    fun getParents(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getDescendants(
+        of: NodeID,
+        edgeCond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
+    fun getAncestors(
+        of: NodeID,
+        edgeCond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+    fun getDescendants(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
-    fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+    fun getAncestors(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N>
 
     // endregion
 }

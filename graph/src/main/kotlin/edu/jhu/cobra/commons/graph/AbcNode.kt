@@ -15,7 +15,9 @@ import edu.jhu.cobra.commons.value.strVal
  * @param name The node identifier string.
  * @see IEntity.ID
  */
-data class NodeID(val name: String) : IEntity.ID {
+data class NodeID(
+    val name: String,
+) : IEntity.ID {
     /**
      * Returns the string representation of this identifier.
      *
@@ -52,7 +54,9 @@ data class NodeID(val name: String) : IEntity.ID {
  * @see IEntity
  * @see NodeID
  */
-abstract class AbcNode(protected val storage: IStorage) : AbcEntity() {
+abstract class AbcNode(
+    protected val storage: IStorage,
+) : AbcEntity() {
     /**
      * Represents the type information for a node.
      */
@@ -86,16 +90,17 @@ abstract class AbcNode(protected val storage: IStorage) : AbcEntity() {
      * @param name The property name.
      * @param value The property value.
      */
-    override fun setProp(name: String, value: IValue?) =
-        storage.setNodeProperties(id, mapOf(name to value))
+    override fun setProp(
+        name: String,
+        value: IValue?,
+    ) = storage.setNodeProperties(id, mapOf(name to value))
 
     /**
      * Sets multiple properties for the node.
      *
      * @param props Map of property names to values.
      */
-    override fun setProps(props: Map<String, IValue?>) =
-        storage.setNodeProperties(id, props)
+    override fun setProps(props: Map<String, IValue?>) = storage.setNodeProperties(id, props)
 
     /**
      * Returns a property value from the node.
@@ -125,7 +130,7 @@ abstract class AbcNode(protected val storage: IStorage) : AbcEntity() {
      *
      * @return String containing node ID and type.
      */
-    override fun toString(): String = "{id=${id}, type=${this.type}}"
+    override fun toString(): String = "{id=$id, type=${this.type}}"
 
     /**
      * Returns the hash code based on string representation.

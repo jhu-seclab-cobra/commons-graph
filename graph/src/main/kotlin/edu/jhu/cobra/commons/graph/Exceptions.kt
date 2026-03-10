@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-
 /**
  * Thrown when an entity with the given ID does not exist.
  *
@@ -10,7 +9,9 @@ package edu.jhu.cobra.commons.graph
  * @param id The ID of the entity that was not found.
  * @see IEntity.ID
  */
-class EntityNotExistException(id: IEntity.ID) : Exception("Entity ID $id does not exist.")
+class EntityNotExistException(
+    id: IEntity.ID,
+) : Exception("Entity ID $id does not exist.")
 
 /**
  * Thrown when an entity with the given ID already exists.
@@ -21,7 +22,9 @@ class EntityNotExistException(id: IEntity.ID) : Exception("Entity ID $id does no
  * @param id The ID of the entity that already exists.
  * @see IEntity.ID
  */
-class EntityAlreadyExistException(id: IEntity.ID) : Exception("Entity ID $id already exists.")
+class EntityAlreadyExistException(
+    id: IEntity.ID,
+) : Exception("Entity ID $id already exists.")
 
 /**
  * Thrown when an invalid property name is used for an entity.
@@ -33,7 +36,10 @@ class EntityAlreadyExistException(id: IEntity.ID) : Exception("Entity ID $id alr
  * @param eid The ID of the entity for which the invalid property was attempted.
  * @see IEntity.ID
  */
-class InvalidPropNameException(propName: String, eid: IEntity.ID?) : Exception("Invalid name $propName in entity $eid.")
+class InvalidPropNameException(
+    propName: String,
+    eid: IEntity.ID?,
+) : Exception("Invalid name $propName in entity $eid.")
 
 /**
  * Thrown when an operation is attempted on a storage that has already been closed.
@@ -53,8 +59,9 @@ class AccessClosedStorageException : IllegalStateException("Try to access closed
  * @param id The ID of the entity in the frozen layer.
  * @see IEntity.ID
  */
-class FrozenLayerModificationException(id: IEntity.ID) :
-    IllegalStateException("Cannot modify frozen-layer entity: $id")
+class FrozenLayerModificationException(
+    id: IEntity.ID,
+) : IllegalStateException("Cannot modify frozen-layer entity: $id")
 
 /**
  * Thrown when a write operation is attempted on a frozen storage.
