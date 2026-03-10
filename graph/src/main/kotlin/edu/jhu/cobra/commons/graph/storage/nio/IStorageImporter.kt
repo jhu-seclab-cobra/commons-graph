@@ -20,6 +20,9 @@ interface IStorageImporter {
      * @param predicate An optional filter predicate to selectively import entities. Defaults to importing all entities.
      * @return The storage with the imported entities.
      */
-    fun import(srcFile: Path, into: IStorage, predicate: EntityFilter = { true }): IStorage
-
+    fun import(
+        srcFile: Path,
+        into: IStorage,
+        predicate: EntityFilter = { true },
+    ): IStorage
 }
