@@ -22,8 +22,8 @@ class DeltaStorageImpl(
     private val presentDelta: IStorage = NativeStorageImpl(),
 ) : IStorage {
     private var isClosed: Boolean = false
-    private val deletedNodesHolder = hashSetOf<NodeID>()
-    private val deletedEdgesHolder = hashSetOf<EdgeID>()
+    private val deletedNodesHolder = HashSet<NodeID>()
+    private val deletedEdgesHolder = HashSet<EdgeID>()
 
     // ============================================================================
     // PROPERTIES AND STATISTICS
@@ -32,17 +32,21 @@ class DeltaStorageImpl(
     override val nodeIDs: Set<NodeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
-            return (baseDelta.nodeIDs + presentDelta.nodeIDs)
-                .filter { it !in deletedNodesHolder }
-                .toSet()
+            val result = HashSet<NodeID>(baseDelta.nodeIDs.size + presentDelta.nodeIDs.size)
+            result.addAll(baseDelta.nodeIDs)
+            result.addAll(presentDelta.nodeIDs)
+            result.removeAll(deletedNodesHolder)
+            return result
         }
 
     override val edgeIDs: Set<EdgeID>
         get() {
             if (isClosed) throw AccessClosedStorageException()
-            return (baseDelta.edgeIDs + presentDelta.edgeIDs)
-                .filter { it !in deletedEdgesHolder }
-                .toSet()
+            val result = HashSet<EdgeID>(baseDelta.edgeIDs.size + presentDelta.edgeIDs.size)
+            result.addAll(baseDelta.edgeIDs)
+            result.addAll(presentDelta.edgeIDs)
+            result.removeAll(deletedEdgesHolder)
+            return result
         }
 
     // ============================================================================
@@ -68,9 +72,17 @@ class DeltaStorageImpl(
 
     override fun getNodeProperties(id: NodeID): Map<String, IValue> {
         if (!containsNode(id)) throw EntityNotExistException(id)
-        val baseProps = if (baseDelta.containsNode(id)) baseDelta.getNodeProperties(id) else emptyMap()
-        val presentProps = if (presentDelta.containsNode(id)) presentDelta.getNodeProperties(id) else emptyMap()
-        return (baseProps + presentProps).filterValues { it.core != "_deleted_" }
+        val inBase = baseDelta.containsNode(id)
+        val inPresent = presentDelta.containsNode(id)
+        // Fast path: node only in one layer — skip merging
+        if (inBase && !inPresent) return baseDelta.getNodeProperties(id)
+        if (inPresent && !inBase) return presentDelta.getNodeProperties(id)
+        // Merge: base first, present overlays
+        val result = HashMap<String, IValue>()
+        result.putAll(baseDelta.getNodeProperties(id))
+        result.putAll(presentDelta.getNodeProperties(id))
+        result.values.removeAll { it.core == "_deleted_" }
+        return result
     }
 
     override fun setNodeProperties(
@@ -121,9 +133,17 @@ class DeltaStorageImpl(
 
     override fun getEdgeProperties(id: EdgeID): Map<String, IValue> {
         if (!containsEdge(id)) throw EntityNotExistException(id)
-        val baseProps = if (baseDelta.containsEdge(id)) baseDelta.getEdgeProperties(id) else emptyMap()
-        val presentProps = if (presentDelta.containsEdge(id)) presentDelta.getEdgeProperties(id) else emptyMap()
-        return (baseProps + presentProps).filterValues { it.core != "_deleted_" }
+        val inBase = baseDelta.containsEdge(id)
+        val inPresent = presentDelta.containsEdge(id)
+        // Fast path: edge only in one layer — skip merging
+        if (inBase && !inPresent) return baseDelta.getEdgeProperties(id)
+        if (inPresent && !inBase) return presentDelta.getEdgeProperties(id)
+        // Merge: base first, present overlays
+        val result = HashMap<String, IValue>()
+        result.putAll(baseDelta.getEdgeProperties(id))
+        result.putAll(presentDelta.getEdgeProperties(id))
+        result.values.removeAll { it.core == "_deleted_" }
+        return result
     }
 
     override fun setEdgeProperties(
@@ -154,13 +174,23 @@ class DeltaStorageImpl(
     override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
         val base = if (baseDelta.containsNode(id)) baseDelta.getIncomingEdges(id) else emptySet()
         val present = if (presentDelta.containsNode(id)) presentDelta.getIncomingEdges(id) else emptySet()
-        return (base + present).filter { it !in deletedEdgesHolder }.toSet()
+        if (deletedEdgesHolder.isEmpty()) return base + present
+        val result = HashSet<EdgeID>(base.size + present.size)
+        result.addAll(base)
+        result.addAll(present)
+        result.removeAll(deletedEdgesHolder)
+        return result
     }
 
     override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
         val base = if (baseDelta.containsNode(id)) baseDelta.getOutgoingEdges(id) else emptySet()
         val present = if (presentDelta.containsNode(id)) presentDelta.getOutgoingEdges(id) else emptySet()
-        return (base + present).filter { it !in deletedEdgesHolder }.toSet()
+        if (deletedEdgesHolder.isEmpty()) return base + present
+        val result = HashSet<EdgeID>(base.size + present.size)
+        result.addAll(base)
+        result.addAll(present)
+        result.removeAll(deletedEdgesHolder)
+        return result
     }
 
     // ============================================================================
