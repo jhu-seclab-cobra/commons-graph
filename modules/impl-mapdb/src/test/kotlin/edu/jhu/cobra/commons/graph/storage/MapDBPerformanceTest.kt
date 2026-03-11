@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.numVal
-import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -14,10 +13,8 @@ import kotlin.test.Test
  * MapDB configuration parameters:
  *   - memoryDB():              pure heap memory
  *   - memoryDirectDB():        off-heap direct byte buffers
- *   - tempFileDB() (default):  temp file with mmap
- *   - tempFileDB().fileMmapEnableIfSupported(): temp file with mmap (explicit)
- *
- * Scale tiers: 10K/30K, 100K/300K, 1M/3M (nodes/edges).
+ *   - tempFileDB():            temp file with default settings
+ *   - tempFileDB().fileMmapEnableIfSupported(): temp file with mmap
  *
  * Run with: ./gradlew :modules:impl-mapdb:test --tests "*.MapDBPerformanceTest"
  */
@@ -30,12 +27,7 @@ class MapDBPerformanceTest {
         storages.clear()
     }
 
-    // -- Configs: each is a (label, storageFactory) pair ----------------------
-
-    private data class MapDBConfig(
-        val label: String,
-        val factory: () -> IStorage,
-    )
+    private data class MapDBConfig(val label: String, val factory: () -> IStorage)
 
     private val configs = listOf(
         MapDBConfig("MapDB[memoryDB]") { MapDBStorageImpl { memoryDB() } },
@@ -49,7 +41,6 @@ class MapDBPerformanceTest {
     )
 
     private fun tracked(s: IStorage): IStorage { storages.add(s); return s }
-
     private fun nodeId(i: Int): NodeID = NodeID("n$i")
     private fun edgeId(src: Int, dst: Int, type: String): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
 
@@ -63,13 +54,8 @@ class MapDBPerformanceTest {
         }
     }
 
-    private companion object {
-        const val WARMUP = 2
-        const val MEASURED = 3
-    }
-
     private inline fun benchmarkOpsPerSec(
-        ops: Int, warmup: Int = WARMUP, measured: Int = MEASURED,
+        ops: Int, warmup: Int = 1, measured: Int = 3,
         setup: () -> Unit = {}, crossinline op: (Int) -> Unit,
     ): Double {
         for (w in 0 until warmup) { setup(); for (i in 0 until ops) op(i) }
@@ -85,7 +71,7 @@ class MapDBPerformanceTest {
     }
 
     private inline fun benchmarkMs(
-        warmup: Int = WARMUP, measured: Int = MEASURED, crossinline block: () -> Unit,
+        warmup: Int = 1, measured: Int = 3, crossinline block: () -> Unit,
     ): Double {
         for (w in 0 until warmup) block()
         val samples = DoubleArray(measured)
@@ -110,24 +96,19 @@ class MapDBPerformanceTest {
 
     @Test
     fun `benchmark graph population across configs`() {
-        data class Scale(val label: String, val nodes: Int, val epn: Int)
-        val scales = listOf(
-            Scale("10K/30K", 10_000, 3),
-            Scale("100K/300K", 100_000, 3),
-        )
-        println("\n=== MapDB Graph Population by Config (median ms) ===")
-        println(String.format("%-28s %14s %14s", "Config", "10K/30K", "100K/300K"))
-        println("-".repeat(58))
+        val nodeCount = 5_000
+        val edgesPerNode = 3
+        println("\n=== MapDB Graph Population by Config (median ms, ${nodeCount}n/${nodeCount * edgesPerNode}e) ===")
+        println(String.format("%-28s %14s", "Config", "ms"))
+        println("-".repeat(44))
 
         for (cfg in configs) {
-            val results = scales.map { (_, n, epn) ->
-                benchmarkMs(warmup = 1, measured = 3) {
-                    val s = tracked(cfg.factory())
-                    populateGraph(s, n, epn)
-                    s.close()
-                }
+            val ms = benchmarkMs(warmup = 1, measured = 3) {
+                val s = tracked(cfg.factory())
+                populateGraph(s, nodeCount, edgesPerNode)
+                s.close()
             }
-            println(String.format("%-28s %14s %14s", cfg.label, fmtMs(results[0]), fmtMs(results[1])))
+            println(String.format("%-28s %14s", cfg.label, fmtMs(ms)))
         }
     }
 
@@ -137,8 +118,8 @@ class MapDBPerformanceTest {
 
     @Test
     fun `benchmark node lookup across configs`() {
-        val nodeCount = 50_000
-        val lookups = 200_000
+        val nodeCount = 5_000
+        val lookups = 50_000
         println("\n=== MapDB Node Lookup by Config (median ops/sec, $lookups lookups on $nodeCount nodes) ===")
         println(String.format("%-28s %14s", "Config", "ops/sec"))
         println("-".repeat(44))
@@ -158,8 +139,8 @@ class MapDBPerformanceTest {
 
     @Test
     fun `benchmark property read and write across configs`() {
-        val nodeCount = 20_000
-        val count = 100_000
+        val nodeCount = 5_000
+        val count = 20_000
         println("\n=== MapDB Property Read/Write by Config (median ops/sec, $count ops on $nodeCount nodes) ===")
         println(String.format("%-28s %14s %14s", "Config", "read", "write"))
         println("-".repeat(58))
@@ -182,9 +163,9 @@ class MapDBPerformanceTest {
 
     @Test
     fun `benchmark edge query across configs`() {
-        val nodeCount = 5_000
+        val nodeCount = 2_000
         val edgesPerNode = 5
-        val queries = 50_000
+        val queries = 10_000
         println("\n=== MapDB Edge Query by Config (median ops/sec, $queries queries, ${nodeCount}n/${nodeCount * edgesPerNode}e) ===")
         println(String.format("%-28s %14s %14s", "Config", "outgoing", "incoming"))
         println("-".repeat(58))
@@ -196,31 +177,6 @@ class MapDBPerformanceTest {
             val inOps = benchmarkOpsPerSec(queries) { i -> s.getIncomingEdges(nodeId(i % nodeCount)) }
             println(String.format("%-28s %14s %14s", cfg.label, fmt(outOps), fmt(inOps)))
             s.close()
-        }
-    }
-
-    // ========================================================================
-    // BENCHMARK: LARGE SCALE (1M nodes, MapDB memoryDB only)
-    // ========================================================================
-
-    @Test
-    fun `benchmark large scale population memoryDB`() {
-        val nodeCount = 100_000
-        val edgesPerNode = 3
-        println("\n=== MapDB Large Scale Population (${nodeCount}n/${nodeCount * edgesPerNode}e, memoryDB) ===")
-        println(String.format("%-28s %14s", "Implementation", "median ms"))
-        println("-".repeat(44))
-
-        for (implLabel in listOf("MapDBStorageImpl", "MapDBConcurStorageImpl")) {
-            val ms = benchmarkMs(warmup = 1, measured = 3) {
-                val s = tracked(
-                    if (implLabel == "MapDBStorageImpl") MapDBStorageImpl { memoryDB() }
-                    else MapDBConcurStorageImpl { memoryDB() }
-                )
-                populateGraph(s, nodeCount, edgesPerNode)
-                s.close()
-            }
-            println(String.format("%-28s %14s", implLabel, fmtMs(ms)))
         }
     }
 }

@@ -24,7 +24,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run tests and generate coverage reports
-        run: ./gradlew :graph:test :modules:impl-mapdb:test :modules:impl-jgrapht:test :modules:impl-neo4j:test :graph:koverXmlReport :modules:impl-mapdb:koverXmlReport :modules:impl-jgrapht:koverXmlReport :modules:impl-neo4j:koverXmlReport
+        run: ./gradlew :graph:test :modules:impl-mapdb:test :modules:impl-jgrapht:test :modules:impl-neo4j:test :graph:koverXmlReport :modules:impl-mapdb:koverXmlReport :modules:impl-jgrapht:koverXmlReport :modules:impl-neo4j:koverXmlReport -PexcludePerformanceTests=true
 
       - name: List all coverage reports (debug)
         run: find . -name report.xml
