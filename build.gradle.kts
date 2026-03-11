@@ -60,6 +60,9 @@ subprojects {
         testLogging {
             showStandardStreams = true
         }
+        if (project.hasProperty("excludePerformanceTests")) {
+            exclude("**/*PerformanceTest*")
+        }
     }
 
     // ----- Publishing -----
