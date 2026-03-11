@@ -20,21 +20,6 @@ class ExceptionsTest {
     }
 
     @Test
-    fun `test InvalidPropNameException message`() {
-        val id = NodeID("node1")
-        val ex = InvalidPropNameException("meta_bad", id)
-        assertTrue(ex.message!!.contains("meta_bad"))
-        assertTrue(ex.message!!.contains("node1"))
-    }
-
-    @Test
-    fun `test InvalidPropNameException with null id`() {
-        val ex = InvalidPropNameException("meta_bad", null)
-        assertTrue(ex.message!!.contains("meta_bad"))
-        assertTrue(ex.message!!.contains("null"))
-    }
-
-    @Test
     fun `test AccessClosedStorageException message`() {
         val ex = AccessClosedStorageException()
         assertTrue(ex.message!!.contains("closed"))
@@ -45,12 +30,6 @@ class ExceptionsTest {
         val id = NodeID("frozen_node")
         val ex = FrozenLayerModificationException(id)
         assertTrue(ex.message!!.contains("frozen_node"))
-    }
-
-    @Test
-    fun `test StorageFrozenException message`() {
-        val ex = StorageFrozenException()
-        assertTrue(ex.message!!.contains("frozen"))
     }
 
     @Test

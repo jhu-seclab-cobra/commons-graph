@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.TestSimpleGraph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestSimpleGraph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId2
@@ -120,45 +119,38 @@ class AbcSimpleGraphTest {
 
     // endregion
 
-    // region Constraint boundary: uniqueness checks only cached edges
+    // region Storage delegation
 
     @Test
-    fun `test addEdge_storageOnlyEdgeSameDirection_doesNotBlockNew`() {
-        val testGraph = TestSimpleGraph(storage)
-        testGraph.addNode(nodeId1)
-        testGraph.addNode(nodeId2)
+    fun `test addEdge_storageOnlyEdgeSameDirection_blocksNew`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
         storage.addEdge(EdgeID(nodeId1, nodeId2, "old"))
 
-        val newEid = EdgeID(nodeId1, nodeId2, "new")
-        val edge = testGraph.addEdge(newEid)
-
-        assertNotNull(edge)
+        assertFailsWith<EntityAlreadyExistException> {
+            graph.addEdge(EdgeID(nodeId1, nodeId2, "new"))
+        }
     }
 
     @Test
-    fun `test addEdge_writesToBothCacheAndStorage`() {
-        val testGraph = TestSimpleGraph(storage)
-        testGraph.addNode(nodeId1)
-        testGraph.addNode(nodeId2)
+    fun `test addEdge_writesToStorage`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
         val eid = EdgeID(nodeId1, nodeId2, "rel")
 
-        testGraph.addEdge(eid)
+        graph.addEdge(eid)
 
-        assertTrue(testGraph.exposeEdgeIDs().contains(eid))
         assertTrue(storage.containsEdge(eid))
     }
 
     @Test
-    fun `test addEdge_preExistingInStorage_reuseWithoutDuplicate`() {
+    fun `test addEdge_preExistingInStorage_throwsEntityAlreadyExist`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         val eid = EdgeID(nodeId1, nodeId2, "rel")
         storage.addEdge(eid)
 
-        val edge = graph.addEdge(eid)
-
-        assertEquals(eid, edge.id)
-        assertTrue(storage.containsEdge(eid))
+        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(eid) }
     }
 
     // endregion
@@ -187,13 +179,13 @@ class AbcSimpleGraphTest {
     }
 
     @Test
-    fun `test getEdge_inStorageButNotCache_returnsNull`() {
+    fun `test getEdge_inStorage_returnsEdge`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         val eid = EdgeID(nodeId1, nodeId2, "rel")
         storage.addEdge(eid)
 
-        assertNull(graph.getEdge(eid))
+        assertNotNull(graph.getEdge(eid))
     }
 
     // endregion

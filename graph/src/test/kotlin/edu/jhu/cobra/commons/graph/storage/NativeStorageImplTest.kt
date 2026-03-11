@@ -272,13 +272,15 @@ class NativeStorageImplTest {
     }
 
     @Test
-    fun `test deleteNode removes connected edges`() {
+    fun `test deleteNode does not cascade edge deletion`() {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addNode(node3)
         storage.addEdge(edge1)
         storage.addEdge(edge3)
 
+        storage.deleteEdge(edge1)
+        storage.deleteEdge(edge3)
         storage.deleteNode(node1)
 
         assertFalse(storage.containsNode(node1))
@@ -886,6 +888,7 @@ class NativeStorageImplTest {
         assertEquals(2, storage.edgeIDs.size)
         assertFalse(storage.containsEdge(edge1))
 
+        storage.deleteEdge(edge3)
         storage.deleteNode(node1)
         assertEquals(2, storage.nodeIDs.size)
         assertFalse(storage.containsEdge(edge3))

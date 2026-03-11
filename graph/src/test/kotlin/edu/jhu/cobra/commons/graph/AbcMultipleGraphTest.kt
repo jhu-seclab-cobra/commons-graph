@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.TestMultipleGraph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestMultipleGraph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.edgeId2
@@ -11,6 +10,7 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.nodeId4
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.*
 
 class AbcMultipleGraphTest {
@@ -753,113 +753,280 @@ class AbcMultipleGraphTest {
         targetStorage.close()
     }
 
-    // endregion
-
-    // region Cache/storage consistency
-
     @Test
-    fun `test containNode_inStorageButNotCache_returnsFalse`() {
-        storage.addNode(nodeId1)
-
-        assertFalse(graph.containNode(nodeId1))
+    fun `test labelCompareTo_cachedResult_returnsFromCache`() {
+        val parent = Label("p")
+        val child = Label("c")
+        with(graph) {
+            child.parents = mapOf("up" to parent)
+            val first = parent.compareTo(child)
+            val second = parent.compareTo(child)
+            assertEquals(first, second)
+            assertNotNull(second)
+            assertTrue(second!! > 0)
+        }
     }
 
     @Test
-    fun `test containNode_inCacheButNotStorage_returnsFalse`() {
-        val testGraph = TestMultipleGraph(storage)
-        testGraph.exposeNodeIDs().add(nodeId1)
-
-        assertFalse(testGraph.containNode(nodeId1))
+    fun `test labelCompareTo_reverseCacheHit_returnsNegated`() {
+        val parent = Label("rp")
+        val child = Label("rc")
+        with(graph) {
+            child.parents = mapOf("up" to parent)
+            parent.compareTo(child)
+            val reversed = child.compareTo(parent)
+            assertNotNull(reversed)
+            assertTrue(reversed!! < 0)
+        }
     }
 
     @Test
-    fun `test containEdge_inStorageButNotCache_returnsFalse`() {
+    fun `test labelAncestors_withCycle_terminates`() {
+        val a = Label("cycA")
+        val b = Label("cycB")
+        with(graph) {
+            a.parents = mapOf("up" to b)
+            b.parents = mapOf("up" to a)
+            val ancestors = a.ancestors.toList()
+            assertTrue(ancestors.contains(b))
+            assertTrue(ancestors.contains(a))
+        }
+    }
+
+    @Test
+    fun `test loadLattice_emptyStorage_noOp`() {
+        val emptyStorage = NativeStorageImpl()
+        graph.loadLattice(emptyStorage)
+        emptyStorage.close()
+    }
+
+    @Test
+    fun `test loadLattice_noChanges_onlyLoadsHierarchy`() {
+        val targetStorage = NativeStorageImpl()
+        val parent = Label("lp")
+        val child = Label("lc")
+        with(graph) { child.parents = mapOf("up" to parent) }
+        graph.storeLattice(targetStorage)
+
+        targetStorage.setMeta("__changes__", null)
+
+        val newGraph = createTestMultipleGraph(NativeStorageImpl())
+        newGraph.loadLattice(targetStorage)
+
+        with(newGraph) {
+            assertEquals(mapOf("up" to parent), child.parents)
+        }
+        targetStorage.close()
+    }
+
+    @Test
+    fun `test delEdge_nonExistentEdge_noOp`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        storage.addEdge(edgeId1)
-
+        graph.delEdge(edgeId1)
         assertFalse(graph.containEdge(edgeId1))
     }
 
     @Test
-    fun `test containEdge_inCacheButNotStorage_returnsFalse`() {
-        val testGraph = TestMultipleGraph(storage)
-        testGraph.exposeEdgeIDs().add(edgeId1)
-
-        assertFalse(testGraph.containEdge(edgeId1))
+    fun `test delEdge_withLabel_nonExistentEdge_noOp`() {
+        graph.delEdge(edgeId1, Label("a"))
+        assertFalse(graph.containEdge(edgeId1))
     }
 
     @Test
-    fun `test getNode_inStorageButNotCache_returnsNull`() {
-        storage.addNode(nodeId1)
-
-        assertNull(graph.getNode(nodeId1))
+    fun `test getAncestors_nonExistentNode_returnsEmpty`() {
+        assertTrue(graph.getAncestors(nodeId1).toList().isEmpty())
     }
 
     @Test
-    fun `test getEdge_inStorageButNotCache_returnsNull`() {
+    fun `test filterVisitable_coveredLabelsEliminated`() {
+        val grandparent = Label("gp2")
+        val parent = Label("p2")
+        val child = Label("c2")
+        with(graph) {
+            child.parents = mapOf("up" to parent)
+            parent.parents = mapOf("up" to grandparent)
+        }
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        graph.addNode(nodeId3)
+        graph.addEdge(EdgeID(nodeId1, nodeId2, "r1"), child)
+        graph.addEdge(EdgeID(nodeId1, nodeId3, "r2"), parent)
+
+        val edges = graph.getOutgoingEdges(nodeId1, grandparent).toList()
+        assertTrue(edges.isNotEmpty())
+    }
+
+    @Test
+    fun `test addNode_alreadyInStorage_throwsEntityAlreadyExist`() {
+        storage.addNode(nodeId1, mapOf("key" to "val".strVal))
+
+        assertFailsWith<EntityAlreadyExistException> { graph.addNode(nodeId1) }
+    }
+
+    @Test
+    fun `test addEdge_alreadyInStorage_throwsEntityAlreadyExist`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         storage.addEdge(edgeId1)
 
-        assertNull(graph.getEdge(edgeId1))
+        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(edgeId1) }
     }
 
     @Test
-    fun `test getAllNodes_cacheOnlyEntry_filteredOut`() {
-        val testGraph = TestMultipleGraph(storage)
-        testGraph.addNode(nodeId1)
-        testGraph.exposeNodeIDs().add(nodeId2)
-
-        val ids = testGraph.getAllNodes().map { it.id }.toSet()
-
-        assertEquals(setOf(nodeId1), ids)
-    }
-
-    @Test
-    fun `test getAllEdges_cacheOnlyEntry_filteredOut`() {
-        val testGraph = TestMultipleGraph(storage)
-        testGraph.addNode(nodeId1)
-        testGraph.addNode(nodeId2)
-        testGraph.addEdge(edgeId1)
-        val eid2 = EdgeID(nodeId1, nodeId2, "phantom")
-        testGraph.exposeEdgeIDs().add(eid2)
-
-        val ids = testGraph.getAllEdges().map { it.id }.toSet()
-
-        assertEquals(setOf(edgeId1), ids)
-    }
-
-    @Test
-    fun `test getOutgoingEdges_storageOnlyEdge_filteredOut`() {
-        val testGraph = TestMultipleGraph(storage)
-        testGraph.addNode(nodeId1)
-        testGraph.addNode(nodeId2)
-        storage.addEdge(edgeId1)
-
-        val edges = testGraph.getOutgoingEdges(nodeId1).toList()
-
+    fun `test getIncomingEdges_nonExistentNode_returnsEmpty`() {
+        val edges = graph.getIncomingEdges(nodeId1).toList()
         assertTrue(edges.isEmpty())
     }
 
     @Test
-    fun `test delNode_notInCache_doesNotRemoveFromStorage`() {
+    fun `test storeLattice_withChanges_roundTrips`() {
+        val label = Label("sl")
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        graph.addEdge(edgeId1, label)
+
+        val targetStorage = NativeStorageImpl()
+        graph.storeLattice(targetStorage)
+
+        val newGraph = createTestMultipleGraph(NativeStorageImpl())
+        newGraph.loadLattice(targetStorage)
+
+        with(newGraph) {
+            assertTrue(label.changes.contains(edgeId1))
+        }
+        targetStorage.close()
+    }
+
+    @Test
+    fun `test getDescendants_withLabel_cycle_terminates`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        val label = Label("cyc")
+        graph.addEdge(EdgeID(nodeId1, nodeId2, "fwd"), label)
+        graph.addEdge(EdgeID(nodeId2, nodeId1, "back"), label)
+
+        val descendants = graph.getDescendants(nodeId1, label).toList()
+        assertTrue(descendants.any { it.id == nodeId2 })
+        assertEquals(descendants.distinctBy { it.id }.size, descendants.size)
+    }
+
+    @Test
+    fun `test getAncestors_withLabel_cycle_terminates`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        val label = Label("cyc2")
+        graph.addEdge(EdgeID(nodeId1, nodeId2, "fwd"), label)
+        graph.addEdge(EdgeID(nodeId2, nodeId1, "back"), label)
+
+        val ancestors = graph.getAncestors(nodeId2, label).toList()
+        assertTrue(ancestors.any { it.id == nodeId1 })
+        assertEquals(ancestors.distinctBy { it.id }.size, ancestors.size)
+    }
+
+    @Test
+    fun `test storeLattice_appendsToExistingMeta`() {
+        val label1 = Label("phase1")
+        with(graph) { label1.parents = mapOf("up" to Label("root")) }
+        val targetStorage = NativeStorageImpl()
+        graph.storeLattice(targetStorage)
+
+        val graph2 = createTestMultipleGraph(NativeStorageImpl())
+        val label2 = Label("phase2")
+        with(graph2) { label2.parents = mapOf("up" to Label("root")) }
+        graph2.storeLattice(targetStorage)
+
+        val newGraph = createTestMultipleGraph(NativeStorageImpl())
+        newGraph.loadLattice(targetStorage)
+        with(newGraph) {
+            assertEquals(mapOf("up" to Label("root")), label1.parents)
+            assertEquals(mapOf("up" to Label("root")), label2.parents)
+        }
+        targetStorage.close()
+    }
+
+    // endregion
+
+    // region Storage delegation
+
+    @Test
+    fun `test containNode_delegatesToStorage`() {
+        storage.addNode(nodeId1)
+
+        assertTrue(graph.containNode(nodeId1))
+    }
+
+    @Test
+    fun `test containEdge_delegatesToStorage`() {
+        storage.addNode(nodeId1)
+        storage.addNode(nodeId2)
+        storage.addEdge(edgeId1)
+
+        assertTrue(graph.containEdge(edgeId1))
+    }
+
+    @Test
+    fun `test getNode_delegatesToStorage`() {
+        storage.addNode(nodeId1)
+
+        assertNotNull(graph.getNode(nodeId1))
+    }
+
+    @Test
+    fun `test getEdge_delegatesToStorage`() {
+        storage.addNode(nodeId1)
+        storage.addNode(nodeId2)
+        storage.addEdge(edgeId1)
+
+        assertNotNull(graph.getEdge(edgeId1))
+    }
+
+    @Test
+    fun `test nodeIDs_reflectsStorageState`() {
+        storage.addNode(nodeId1)
+
+        assertTrue(graph.nodeIDs.contains(nodeId1))
+    }
+
+    @Test
+    fun `test edgeIDs_reflectsStorageState`() {
+        storage.addNode(nodeId1)
+        storage.addNode(nodeId2)
+        storage.addEdge(edgeId1)
+
+        assertTrue(graph.edgeIDs.contains(edgeId1))
+    }
+
+    @Test
+    fun `test getOutgoingEdges_includesStorageAddedEdges`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        storage.addEdge(edgeId1)
+
+        val edges = graph.getOutgoingEdges(nodeId1).toList()
+
+        assertEquals(1, edges.size)
+        assertEquals(edgeId1, edges.first().id)
+    }
+
+    @Test
+    fun `test delNode_deletesFromStorage`() {
         storage.addNode(nodeId1)
 
         graph.delNode(nodeId1)
 
-        assertTrue(storage.containsNode(nodeId1))
+        assertFalse(storage.containsNode(nodeId1))
     }
 
     @Test
-    fun `test delEdge_notInCache_doesNotRemoveFromStorage`() {
+    fun `test delEdge_deletesFromStorage`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         storage.addEdge(edgeId1)
 
         graph.delEdge(edgeId1)
 
-        assertTrue(storage.containsEdge(edgeId1))
+        assertFalse(storage.containsEdge(edgeId1))
     }
 
     // endregion
@@ -867,15 +1034,20 @@ class AbcMultipleGraphTest {
     // region Close
 
     @Test
-    fun `test close_clearsNodeAndEdgeCaches`() {
+    fun `test close_storesLatticeState`() {
+        val label = Label("closeTest")
+        with(graph) { label.parents = mapOf("up" to Label("root")) }
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        graph.addEdge(edgeId1)
+        graph.addEdge(edgeId1, label)
 
         graph.close()
 
-        assertTrue(graph.nodeIDs.isEmpty())
-        assertTrue(graph.edgeIDs.isEmpty())
+        val newGraph = createTestMultipleGraph(NativeStorageImpl())
+        newGraph.loadLattice(storage)
+        with(newGraph) {
+            assertEquals(mapOf("up" to Label("root")), label.parents)
+        }
     }
 
     // endregion

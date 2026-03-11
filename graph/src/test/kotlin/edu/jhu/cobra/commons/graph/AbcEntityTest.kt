@@ -302,5 +302,82 @@ class AbcEntityTest {
         assertEquals("PERSON", entity.nodeType.name)
     }
 
+    @Test
+    fun `test entityType_enumType_setAndGet_roundTrips`() {
+        storage.addNode(NodeID("entity_enum1"))
+        val entity = EnumTypeEntity(storage, NodeID("entity_enum1"))
+
+        assertEquals(NodeKind.SOURCE, entity.kind)
+        entity.kind = NodeKind.SINK
+        assertEquals(NodeKind.SINK, entity.kind)
+    }
+
+    @Test
+    fun `test entityType_enumType_setValue_sameValue_noOp`() {
+        storage.addNode(NodeID("entity_enum2"))
+        val entity = EnumTypeEntity(storage, NodeID("entity_enum2"))
+
+        entity.kind = NodeKind.SINK
+        entity.kind = NodeKind.SINK
+        assertEquals(NodeKind.SINK, entity.kind)
+    }
+
+    @Test
+    fun `test entityType_enumType_customName_usesCustomStorageKey`() {
+        storage.addNode(NodeID("entity_enum3"))
+        val entity = EnumTypeCustomNameEntity(storage, NodeID("entity_enum3"))
+
+        entity.kind = NodeKind.SINK
+        val propValue = entity.getProp("myKindProp") as? StrVal
+        assertEquals("SINK", propValue?.core)
+    }
+
+    @Test
+    fun `test entityType_enumType_getValue_fromStorage`() {
+        storage.addNode(NodeID("entity_enum4"))
+        val entity = EnumTypeCustomNameEntity2(storage, NodeID("entity_enum4"))
+
+        entity.setProp("myKind", "SINK".strVal)
+        assertEquals(NodeKind.SINK, entity.kind)
+    }
+
     // endregion
+
+    enum class NodeKind : IEntity.Type {
+        SOURCE,
+        SINK,
+    }
+
+    private class EnumTypeEntity(
+        storage: NativeStorageImpl,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "EnumTypeEntity"
+            }
+        var kind: NodeKind by EntityType(default = NodeKind.SOURCE)
+    }
+
+    private class EnumTypeCustomNameEntity(
+        storage: NativeStorageImpl,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "EnumTypeCustomNameEntity"
+            }
+        var kind: NodeKind by EntityType("myKindProp", default = NodeKind.SOURCE)
+    }
+
+    private class EnumTypeCustomNameEntity2(
+        storage: NativeStorageImpl,
+        override val id: NodeID,
+    ) : AbcNode(storage) {
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "EnumTypeCustomNameEntity2"
+            }
+        var kind: NodeKind by EntityType("myKind", default = NodeKind.SOURCE)
+    }
 }

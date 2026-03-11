@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.*
-import edu.jhu.cobra.commons.value.numVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -27,25 +26,21 @@ class GraphPerformanceTest {
 
     // -- Storage factories for graph backends ---------------------------------
 
-    private val storageNames = listOf(
-        "NativeStorage",
-        "NativeConcurStorage",
-        "DeltaStorage",
-        "PhasedStorage",
-    )
+    private val storageNames =
+        listOf(
+            "NativeStorage",
+            "NativeConcurStorage",
+            "LayeredStorage",
+        )
 
     private fun createStorage(name: String): IStorage {
-        val storage = when (name) {
-            "NativeStorage" -> NativeStorageImpl()
-            "NativeConcurStorage" -> NativeConcurStorageImpl()
-            "DeltaStorage" -> {
-                val base = NativeStorageImpl()
-                closeables.add(base)
-                DeltaStorageImpl(base)
+        val storage =
+            when (name) {
+                "NativeStorage" -> NativeStorageImpl()
+                "NativeConcurStorage" -> NativeConcurStorageImpl()
+                "LayeredStorage" -> LayeredStorageImpl()
+                else -> throw IllegalArgumentException("Unknown: $name")
             }
-            "PhasedStorage" -> PhasedStorageImpl()
-            else -> throw IllegalArgumentException("Unknown: $name")
-        }
         closeables.add(storage)
         return storage
     }
@@ -67,7 +62,12 @@ class GraphPerformanceTest {
     }
 
     private fun nodeId(i: Int): NodeID = NodeID("n$i")
-    private fun edgeId(src: Int, dst: Int, type: String): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
+
+    private fun edgeId(
+        src: Int,
+        dst: Int,
+        type: String,
+    ): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
 
     private fun populateMultipleGraph(
         graph: IGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>,
@@ -113,7 +113,9 @@ class GraphPerformanceTest {
         measured: Int = MEASURED,
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) { for (i in 0 until ops) op(i) }
+        for (w in 0 until warmup) {
+            for (i in 0 until ops) op(i)
+        }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
@@ -126,11 +128,12 @@ class GraphPerformanceTest {
         return samples[measured / 2]
     }
 
-    private fun fmt(ops: Double): String = when {
-        ops >= 1_000_000 -> String.format("%.2fM", ops / 1_000_000)
-        ops >= 1_000 -> String.format("%.1fK", ops / 1_000)
-        else -> String.format("%.0f", ops)
-    }
+    private fun fmt(ops: Double): String =
+        when {
+            ops >= 1_000_000 -> String.format("%.2fM", ops / 1_000_000)
+            ops >= 1_000 -> String.format("%.1fK", ops / 1_000)
+            else -> String.format("%.0f", ops)
+        }
 
     private fun fmtMs(ms: Double): String = String.format("%.1f", ms)
 
@@ -140,27 +143,37 @@ class GraphPerformanceTest {
 
     @Test
     fun `benchmark multiple graph population with different storages`() {
-        data class Scale(val label: String, val nodes: Int, val epn: Int)
-        val scales = listOf(
-            Scale("10K/30K", 10_000, 3),
-            Scale("100K/300K", 100_000, 3),
+        data class Scale(
+            val label: String,
+            val nodes: Int,
+            val epn: Int,
         )
+        val scales =
+            listOf(
+                Scale("10K/30K", 10_000, 3),
+                Scale("100K/300K", 100_000, 3),
+            )
         println("\n=== AbcMultipleGraph Population (median ms, nodes/edges) ===")
         println(String.format("%-20s %14s %14s", "Storage", "10K/30K", "100K/300K"))
         println("-".repeat(50))
 
         for (name in storageNames) {
-            val results = scales.map { (_, n, epn) ->
-                benchmarkMs(warmup = 1, measured = 3) {
-                    val g = createMultipleGraph(name)
-                    populateMultipleGraph(g, n, epn)
-                    g.close()
+            val results =
+                scales.map { (_, n, epn) ->
+                    benchmarkMs(warmup = 1, measured = 3) {
+                        val g = createMultipleGraph(name)
+                        populateMultipleGraph(g, n, epn)
+                        g.close()
+                    }
                 }
-            }
-            println(String.format(
-                "%-20s %14s %14s",
-                name, fmtMs(results[0]), fmtMs(results[1]),
-            ))
+            println(
+                String.format(
+                    "%-20s %14s %14s",
+                    name,
+                    fmtMs(results[0]),
+                    fmtMs(results[1]),
+                ),
+            )
         }
     }
 
@@ -177,11 +190,12 @@ class GraphPerformanceTest {
         println("-".repeat(36))
 
         for (name in storageNames) {
-            val ms = benchmarkMs(warmup = 1, measured = 3) {
-                val g = createSimpleGraph(name)
-                populateMultipleGraph(g, nodeCount, edgesPerNode)
-                g.close()
-            }
+            val ms =
+                benchmarkMs(warmup = 1, measured = 3) {
+                    val g = createSimpleGraph(name)
+                    populateMultipleGraph(g, nodeCount, edgesPerNode)
+                    g.close()
+                }
             println(String.format("%-20s %14s", name, fmtMs(ms)))
         }
     }
@@ -209,10 +223,16 @@ class GraphPerformanceTest {
             // Descendants is expensive — use fewer iterations
             val descendOps = benchmarkOpsPerSec(1_000) { i -> g.getDescendants(nodeId(i % nodeCount)).take(20).count() }
 
-            println(String.format(
-                "%-20s %12s %12s %12s %12s",
-                name, fmt(getNodeOps), fmt(outEdgeOps), fmt(childrenOps), fmt(descendOps),
-            ))
+            println(
+                String.format(
+                    "%-20s %12s %12s %12s %12s",
+                    name,
+                    fmt(getNodeOps),
+                    fmt(outEdgeOps),
+                    fmt(childrenOps),
+                    fmt(descendOps),
+                ),
+            )
             g.close()
         }
     }
@@ -244,32 +264,40 @@ class GraphPerformanceTest {
             }
 
             // Assign labels to edges
-            val assignMs = benchmarkMs(warmup = 1, measured = 3) {
-                var idx = 0
-                for (eid in g.edgeIDs.take(nodeCount * edgesPerNode)) {
-                    val edge = g.getEdge(eid) ?: continue
-                    with(g) { edge.labels = setOf(labels[idx % labelCount]) }
-                    idx++
+            val assignMs =
+                benchmarkMs(warmup = 1, measured = 3) {
+                    var idx = 0
+                    for (eid in g.edgeIDs.take(nodeCount * edgesPerNode)) {
+                        val edge = g.getEdge(eid) ?: continue
+                        with(g) { edge.labels = setOf(labels[idx % labelCount]) }
+                        idx++
+                    }
                 }
-            }
 
             // Filtered edge query using mid-level label
             val midLabel = labels[labelCount / 2]
-            val filteredOps = benchmarkOpsPerSec(queryCount) { i ->
-                g.getOutgoingEdges(nodeId(i % nodeCount), midLabel).count()
-            }
+            val filteredOps =
+                benchmarkOpsPerSec(queryCount) { i ->
+                    g.getOutgoingEdges(nodeId(i % nodeCount), midLabel).count()
+                }
 
             // Store/load lattice
-            val storeMs = benchmarkMs(warmup = 1, measured = 3) {
-                val tempStorage = NativeStorageImpl()
-                g.storeLattice(tempStorage)
-                tempStorage.close()
-            }
+            val storeMs =
+                benchmarkMs(warmup = 1, measured = 3) {
+                    val tempStorage = NativeStorageImpl()
+                    g.storeLattice(tempStorage)
+                    tempStorage.close()
+                }
 
-            println(String.format(
-                "%-20s %14s %14s %14s",
-                name, fmtMs(assignMs), fmt(filteredOps), fmtMs(storeMs),
-            ))
+            println(
+                String.format(
+                    "%-20s %14s %14s %14s",
+                    name,
+                    fmtMs(assignMs),
+                    fmt(filteredOps),
+                    fmtMs(storeMs),
+                ),
+            )
             g.close()
         }
     }
