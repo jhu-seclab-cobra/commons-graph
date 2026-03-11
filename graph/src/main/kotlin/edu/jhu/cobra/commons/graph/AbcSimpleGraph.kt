@@ -9,10 +9,7 @@ package edu.jhu.cobra.commons.graph
  */
 abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGraph<N, E>() {
     override fun addEdge(withID: EdgeID): E {
-        val existing =
-            storage
-                .getOutgoingEdges(withID.srcNid)
-                .any { it.dstNid == withID.dstNid && it in edgeIDs }
+        val existing = storage.getOutgoingEdges(withID.srcNid).any { it.dstNid == withID.dstNid }
         if (existing) throw EntityAlreadyExistException(withID)
         return super.addEdge(withID)
     }
