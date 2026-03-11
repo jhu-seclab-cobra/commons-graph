@@ -126,7 +126,7 @@ abstract class AbcEdge(
      * @param name The property name.
      * @return The property value, or null if absent.
      */
-    override fun getProp(name: String): IValue? = storage.getEdgeProperties(id)[name]
+    override fun getProp(name: String): IValue? = storage.getEdgeProperty(id, name)
 
     /**
      * Returns all properties of the edge.
@@ -141,7 +141,7 @@ abstract class AbcEdge(
      * @param name The property name.
      * @return True if the property exists, false otherwise.
      */
-    override fun containProp(name: String): Boolean = storage.getEdgeProperties(id)[name] != null
+    override fun containProp(name: String): Boolean = storage.getEdgeProperty(id, name) != null
 
     /**
      * Returns a string representation of the edge.
