@@ -57,9 +57,6 @@ subprojects {
 
     tasks.withType<Test> {
         maxHeapSize = "8g"
-        testLogging {
-            showStandardStreams = true
-        }
         if (project.hasProperty("excludePerformanceTests")) {
             exclude("**/*PerformanceTest*")
         }

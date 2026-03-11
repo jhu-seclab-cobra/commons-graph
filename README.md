@@ -230,7 +230,7 @@ mapdbIO.export(Paths.get("graph.mapdb"), storage)
 
 ## Performance Characteristics
 
-Benchmarks use warmup iterations + median of multiple measured iterations. Scale is measured in node/edge counts.
+Benchmarks use warmup iterations (JIT stabilization) + median of multiple measured iterations. Scale is measured in node/edge counts. Results below were measured on Apple M4 Pro / JDK 8 / 8 GB test heap. Absolute numbers vary by hardware; relative comparisons between backends are stable.
 
 Run benchmarks:
 ```shell
@@ -241,22 +241,162 @@ Run benchmarks:
 ./gradlew :modules:impl-neo4j:test --tests "*.Neo4jPerformanceTest"
 ```
 
-### Throughput guidelines (relative, not absolute)
+### Core storage — Graph population (median ms)
 
-| Operation | Native | NativeConcur | Delta | Phased | JGraphT | MapDB (memory) | Neo4j |
-|-----------|--------|-------------|-------|--------|---------|----------------|-------|
-| Node lookup | Fastest | ~20-40% overhead | Fast (2-layer check) | Scales with layers | Comparable | Slower (serialization) | Slowest (transaction) |
-| Property read | Fastest | RW lock overhead | Fast (single-layer) / Slower (merge) | Scales with layers | Comparable | Serialization cost | Transaction cost |
-| Edge query | Fastest (split in/out index) | RW lock overhead | Merge cost for both layers | Merge across all layers | JGraphT pseudograph lookup | SetVal deserialization | Transaction + cache |
-| Population (1M/3M) | Fast | Moderate | ~2x Native | ~1.5x Native | Comparable to Native | Varies by config | 10-100x slower |
+| Implementation | 10K/30K | 100K/300K | 1M/3M |
+|----------------|--------:|----------:|------:|
+| NativeStorageImpl | 5.8 | 99.4 | 2,345 |
+| NativeConcurStorageImpl | 6.0 | 97.7 | 2,299 |
+| DeltaStorageImpl | 7.3 | 111.1 | 2,541 |
+| DeltaConcurStorageImpl | 7.7 | 128.6 | 2,544 |
+| PhasedStorageImpl | 6.9 | 107.4 | 2,588 |
 
-### Scaling behavior
+### Core storage — Operation throughput (median ops/sec)
 
-- **NativeStorageImpl**: O(1) all operations. Heap-bound — graphs >8GB cause GC pressure.
-- **DeltaStorageImpl**: Property merge cost when data spans both layers. Single-layer fast-paths avoid merge. `DeltaConcurStorageImpl` adds RW lock overhead.
-- **PhasedStorageImpl**: Query cost grows linearly with layer count. Keep layers ≤ 3-4; use `compactLayers()` to merge. Freezing a layer with 2M nodes + 20M edges takes ~20-40s.
-- **MapDB**: `memoryDB()` vs `tempFileDB()` — memory configs faster for reads, file configs handle larger-than-heap data. Mmap configs benefit from OS page cache for repeated access.
-- **Neo4j**: Transaction overhead dominates. Scale tests use smaller datasets (1K-10K nodes). Suitable when Neo4j ecosystem features (Cypher, clustering) are needed.
+| Operation | Native | NativeConcur | Delta | DeltaConcur | Phased |
+|-----------|-------:|-------------:|------:|------------:|-------:|
+| Node add (1M) | 6.25M | 6.28M | 5.93M | 5.73M | 6.06M |
+| Edge add (1M) | 2.84M | 2.84M | 2.08M | 2.12M | 2.24M |
+| Node lookup (500K on 100K) | 58.1M | 50.8M | 55.0M | 46.6M | 53.5M |
+| Property read (200K on 50K) | 14.3M | 20.3M | 15.4M | 13.0M | 12.7M |
+| Property write (200K on 50K) | 18.0M | 17.1M | 11.1M | 10.1M | 14.8M |
+| Edge query — outgoing | 42.8M | 17.2M | 4.20M | 3.57M | 4.15M |
+| Edge query — incoming | 43.8M | 17.3M | 4.30M | 4.28M | 4.20M |
+| Node delete (2K from 10K) | 1.89M | 1.90M | 2.10M | 2.01M | 2.19M |
+
+### Delta storage — Base vs overlay lookup (200K lookups on 50K nodes)
+
+| Scenario | DeltaStorage | DeltaConcur |
+|----------|-------------:|------------:|
+| Base-only | 20.4M | 17.0M |
+| Overlay-only | 21.8M | 19.2M |
+| Both-layers | 7.61M | 7.12M |
+
+### Phased storage — Multi-layer query (100K queries, 10K nodes/layer)
+
+| Layers | containsNode | getNodeProperties |
+|-------:|-------------:|------------------:|
+| 1 | 35.9M | 15.5M |
+| 3 | 16.5M | 8.72M |
+| 5 | 13.8M | 6.09M |
+| 10 | 7.12M | 3.72M |
+
+### JGraphT backend
+
+| Operation | JgraphtStorage | JgraphtConcur |
+|-----------|---------------:|--------------:|
+| Population 1M/3M (ms) | 6,525 | 6,181 |
+| Node lookup (500K on 100K) | 35.3M | 52.8M |
+| Property read (200K on 50K) | 27.7M | 13.8M |
+| Property write (200K on 50K) | 21.8M | 9.64M |
+| Edge query — outgoing | 5.79M | 4.40M |
+| Edge query — incoming | 5.17M | 4.41M |
+
+### MapDB backend — Config comparison (5K nodes / 15K edges)
+
+| Config | Population (ms) | Node lookup | Prop read | Prop write | Edge query (out) |
+|--------|----------------:|------------:|----------:|-----------:|-----------------:|
+| MapDB[memoryDB] | 200 | 2.07M | 1.49M | 136K | 374K |
+| MapDB[memoryDirectDB] | 200 | 1.58M | 1.51M | 137K | 378K |
+| MapDB[tempFileDB] | 11,471 | 47.6K | 45.4K | 1.7K | 22.5K |
+| MapDB[tempFile+mmap] | 216 | 1.55M | 1.45M | 126K | 372K |
+| MapDBConcur[memoryDB] | 207 | 1.50M | 369K | 130K | 372K |
+| MapDBConcur[memDirect] | 206 | 1.50M | 374K | 131K | 362K |
+| MapDBConcur[tempFile] | 11,487 | 47.5K | 11.4K | 1.7K | 22.6K |
+| MapDBConcur[tmpFile+mm] | 222 | 1.52M | 376K | 123K | 367K |
+
+**Key MapDB findings**: `tempFileDB()` without mmap is 50-100x slower than memory/mmap configs. Always use `fileMmapEnableIfSupported()` for file-backed storage. Memory and mmap configs perform comparably.
+
+### Neo4j backend
+
+| Operation | Neo4jStorageImpl |
+|-----------|----------------:|
+| Population 10K/30K (ms) | 1,385 |
+| Node lookup (20K on 5K) | 19.1M |
+| Property read (10K on 2K) | 418K |
+| Property write (10K on 2K) | 36.0K |
+| Edge query — outgoing | 310K |
+| Edge query — incoming | 315K |
+
+### Graph-level queries (100K queries on 10K nodes / 50K edges)
+
+| Storage | getNode | getOutEdges | getChildren | getDescendants |
+|---------|--------:|------------:|------------:|---------------:|
+| NativeStorage | 21.9M | 3.41M | 2.35M | 303K |
+| NativeConcurStorage | 19.6M | 3.49M | 2.65M | 133K |
+| DeltaStorage | 23.1M | 2.92M | 2.21M | 127K |
+| PhasedStorage | 24.3M | 2.76M | 2.11M | 573K |
+
+### Lattice operations (5K nodes / 15K edges, 5-label hierarchy)
+
+| Storage | Label assignment (ms) | Filtered query (ops/sec) | storeLattice (ms) |
+|---------|---------:|------------------------:|---------:|
+| NativeStorage | 5.1 | 950K | 0.9 |
+| NativeConcurStorage | 3.8 | 1.24M | 0.9 |
+| DeltaStorage | 3.7 | 1.01M | 0.5 |
+| PhasedStorage | 3.9 | 882K | 0.5 |
+
+### Cross-backend comparison — Node lookup (ops/sec)
+
+| Backend | Scale | ops/sec |
+|---------|-------|--------:|
+| NativeStorageImpl | 500K lookups on 100K nodes | 58,140,000 |
+| NativeConcurStorageImpl | 500K lookups on 100K nodes | 50,780,000 |
+| DeltaStorageImpl | 500K lookups on 100K nodes | 55,030,000 |
+| PhasedStorageImpl | 500K lookups on 100K nodes | 53,530,000 |
+| JgraphtStorageImpl | 500K lookups on 100K nodes | 35,340,000 |
+| JgraphtConcurStorageImpl | 500K lookups on 100K nodes | 52,830,000 |
+| MapDBStorageImpl [memoryDB] | 50K lookups on 5K nodes | 2,070,000 |
+| MapDBStorageImpl [tempFile+mmap] | 50K lookups on 5K nodes | 1,550,000 |
+| MapDBStorageImpl [tempFileDB] | 50K lookups on 5K nodes | 47,600 |
+| Neo4jStorageImpl | 20K lookups on 5K nodes | 19,100,000 |
+
+### Cross-backend comparison — Property read (ops/sec)
+
+| Backend | Scale | ops/sec |
+|---------|-------|--------:|
+| NativeStorageImpl | 200K ops on 50K nodes | 14,280,000 |
+| NativeConcurStorageImpl | 200K ops on 50K nodes | 20,280,000 |
+| DeltaStorageImpl | 200K ops on 50K nodes | 15,410,000 |
+| PhasedStorageImpl | 200K ops on 50K nodes | 12,670,000 |
+| JgraphtStorageImpl | 200K ops on 50K nodes | 27,650,000 |
+| JgraphtConcurStorageImpl | 200K ops on 50K nodes | 13,830,000 |
+| MapDBStorageImpl [memoryDB] | 20K ops on 5K nodes | 1,490,000 |
+| MapDBStorageImpl [tempFile+mmap] | 20K ops on 5K nodes | 1,450,000 |
+| MapDBStorageImpl [tempFileDB] | 20K ops on 5K nodes | 45,400 |
+| Neo4jStorageImpl | 10K ops on 2K nodes | 418,400 |
+
+### Cross-backend comparison — Edge query outgoing (ops/sec)
+
+| Backend | Scale | ops/sec |
+|---------|-------|--------:|
+| NativeStorageImpl | 100K queries on 10K nodes | 42,750,000 |
+| NativeConcurStorageImpl | 100K queries on 10K nodes | 17,220,000 |
+| DeltaStorageImpl | 100K queries on 10K nodes | 4,200,000 |
+| PhasedStorageImpl | 100K queries on 10K nodes | 4,150,000 |
+| JgraphtStorageImpl | 100K queries on 10K nodes | 5,790,000 |
+| JgraphtConcurStorageImpl | 100K queries on 10K nodes | 4,400,000 |
+| MapDBStorageImpl [memoryDB] | 10K queries on 2K nodes | 374,400 |
+| MapDBStorageImpl [tempFile+mmap] | 10K queries on 2K nodes | 371,600 |
+| MapDBStorageImpl [tempFileDB] | 10K queries on 2K nodes | 22,500 |
+| Neo4jStorageImpl | 10K queries on 2K nodes | 310,000 |
+
+### Cross-backend comparison — Graph population (median ms)
+
+| Backend | 10K nodes / 30K edges | 100K nodes / 300K edges | 1M nodes / 3M edges |
+|---------|----------------------:|------------------------:|--------------------:|
+| NativeStorageImpl | 5.8 | 99.4 | 2,345 |
+| NativeConcurStorageImpl | 6.0 | 97.7 | 2,299 |
+| DeltaStorageImpl | 7.3 | 111.1 | 2,541 |
+| DeltaConcurStorageImpl | 7.7 | 128.6 | 2,544 |
+| PhasedStorageImpl | 6.9 | 107.4 | 2,588 |
+| JgraphtStorageImpl | 17.0 | 201.9 | 6,525 |
+| JgraphtConcurStorageImpl | 12.0 | 199.9 | 6,181 |
+| MapDBStorageImpl [memoryDB] | — | — | — |
+| Neo4jStorageImpl | — | — | 1,385 (10K/30K only) |
+
+MapDB population: 5K nodes / 15K edges — memoryDB: 200 ms, tempFileDB: 11,471 ms, tempFile+mmap: 216 ms.
+Neo4j population: 1K/3K: 195 ms, 5K/15K: 703 ms, 10K/30K: 1,385 ms.
 
 ### Memory and disk usage estimates
 
