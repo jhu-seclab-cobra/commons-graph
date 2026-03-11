@@ -4,8 +4,8 @@ import edu.jhu.cobra.commons.graph.*
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
-class PhasedStorageImplTest {
-    private lateinit var storage: PhasedStorageImpl
+class LayeredStorageImplTest {
+    private lateinit var storage: LayeredStorageImpl
 
     private val node1 = StorageTestUtils.node1
     private val node2 = StorageTestUtils.node2
@@ -16,7 +16,7 @@ class PhasedStorageImplTest {
 
     @BeforeTest
     fun setup() {
-        storage = PhasedStorageImpl()
+        storage = LayeredStorageImpl()
     }
 
     @AfterTest
@@ -162,13 +162,13 @@ class PhasedStorageImplTest {
     }
 
     @Test
-    fun `test freezeAndPushLayer increments layerCount`() {
+    fun `test freeze increments layerCount`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
         assertEquals(2, storage.layerCount)
 
         storage.addNode(node2)
-        storage.freezeAndPushLayer()
+        storage.freeze()
         assertEquals(3, storage.layerCount)
     }
 
@@ -177,7 +177,7 @@ class PhasedStorageImplTest {
         storage.addNode(node1, mapOf("name" to "Node1".strVal))
         storage.addNode(node2)
         storage.addEdge(edge1, mapOf("weight" to 1.0.numVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.containsNode(node2))
@@ -191,7 +191,7 @@ class PhasedStorageImplTest {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node3)
 
@@ -207,7 +207,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test addNode in new layer after freeze`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node3)
         assertTrue(storage.containsNode(node1))
@@ -217,7 +217,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test addNode throws if node already in frozen layer`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertFailsWith<EntityAlreadyExistException> { storage.addNode(node1) }
     }
@@ -225,7 +225,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test addEdge with src in frozen layer and dst in active layer`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node2)
         storage.addEdge(edge1)
@@ -241,7 +241,7 @@ class PhasedStorageImplTest {
     fun `test addEdge between two frozen layer nodes`() {
         storage.addNode(node1)
         storage.addNode(node2)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addEdge(edge1)
         assertTrue(storage.containsEdge(edge1))
@@ -252,7 +252,7 @@ class PhasedStorageImplTest {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node3)
         storage.addEdge(edge3)
@@ -266,7 +266,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test property overlay across layers`() {
         storage.addNode(node1, mapOf("a" to "frozen_a".strVal, "b" to "frozen_b".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.setNodeProperties(node1, mapOf("a" to "active_a".strVal))
 
@@ -280,7 +280,7 @@ class PhasedStorageImplTest {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1, mapOf("x" to "frozen".strVal, "y" to "frozen_y".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.setEdgeProperties(edge1, mapOf("x" to "active".strVal))
 
@@ -292,7 +292,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test metadata overlay across layers`() {
         storage.setMeta("key", "frozen".strVal)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.setMeta("key", "active".strVal)
         assertEquals("active", (storage.getMeta("key") as StrVal).core)
@@ -301,7 +301,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test metadata falls through to frozen layer`() {
         storage.setMeta("key", "frozen".strVal)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertEquals("frozen", (storage.getMeta("key") as StrVal).core)
     }
@@ -313,7 +313,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test deleteNode on frozen layer throws FrozenLayerModificationException`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertFailsWith<FrozenLayerModificationException> { storage.deleteNode(node1) }
         assertTrue(storage.containsNode(node1))
@@ -324,7 +324,7 @@ class PhasedStorageImplTest {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertFailsWith<FrozenLayerModificationException> { storage.deleteEdge(edge1) }
         assertTrue(storage.containsEdge(edge1))
@@ -333,7 +333,7 @@ class PhasedStorageImplTest {
     @Test
     fun `test deleteNode on active layer succeeds after freeze`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node3)
         storage.deleteNode(node3)
@@ -344,7 +344,7 @@ class PhasedStorageImplTest {
     fun `test deleteEdge on active layer succeeds after freeze`() {
         storage.addNode(node1)
         storage.addNode(node2)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addEdge(edge1)
         storage.deleteEdge(edge1)
@@ -353,48 +353,19 @@ class PhasedStorageImplTest {
 
     // endregion
 
-    // region Freeze (full read-only)
-
-    @Test
-    fun `test freeze makes storage read-only`() {
-        storage.addNode(node1)
-        assertFalse(storage.isFrozen)
-
-        storage.freeze()
-        assertTrue(storage.isFrozen)
-
-        assertTrue(storage.containsNode(node1))
-
-        assertFailsWith<StorageFrozenException> { storage.addNode(node2) }
-        assertFailsWith<StorageFrozenException> { storage.deleteNode(node1) }
-        assertFailsWith<StorageFrozenException> { storage.setNodeProperties(node1, mapOf()) }
-        assertFailsWith<StorageFrozenException> { storage.setMeta("k", "v".strVal) }
-        assertFailsWith<StorageFrozenException> { storage.clear() }
-        assertFailsWith<StorageFrozenException> { storage.freezeAndPushLayer() }
-    }
-
-    @Test
-    fun `test freeze is idempotent`() {
-        storage.freeze()
-        storage.freeze()
-        assertTrue(storage.isFrozen)
-    }
-
-    // endregion
-
     // region Compact layers
 
     @Test
-    fun `test compactLayers merges frozen layers`() {
+    fun `test compact merges frozen layers`() {
         storage.addNode(node1, mapOf("phase" to "1".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node2, mapOf("phase" to "2".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertEquals(3, storage.layerCount)
 
-        storage.compactLayers(2)
+        storage.compact(2)
         assertEquals(2, storage.layerCount)
 
         assertTrue(storage.containsNode(node1))
@@ -404,12 +375,12 @@ class PhasedStorageImplTest {
     }
 
     @Test
-    fun `test compactLayers throws on invalid topN`() {
+    fun `test compact throws on invalid topN`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
-        assertFailsWith<IllegalArgumentException> { storage.compactLayers(0) }
-        assertFailsWith<IllegalArgumentException> { storage.compactLayers(2) }
+        assertFailsWith<IllegalArgumentException> { storage.compact(0) }
+        assertFailsWith<IllegalArgumentException> { storage.compact(2) }
     }
 
     // endregion
@@ -421,11 +392,11 @@ class PhasedStorageImplTest {
         storage.addNode(node1, mapOf("type" to "ASTNode".strVal))
         storage.addNode(node2, mapOf("type" to "ASTNode".strVal))
         storage.addEdge(edge1, mapOf("type" to "ASTEdge".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         storage.addNode(node3, mapOf("type" to "CFGNode".strVal))
         storage.addEdge(edge2, mapOf("type" to "CFGEdge".strVal))
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.containsNode(node2))
@@ -446,7 +417,7 @@ class PhasedStorageImplTest {
     fun `test temporary dummy node in active layer can be deleted`() {
         storage.addNode(node1)
         storage.addNode(node2)
-        storage.freezeAndPushLayer()
+        storage.freeze()
 
         val dummyEntry = NodeID("dummy_entry")
         val dummyEdge = EdgeID(dummyEntry, node1, "cfg_entry")
@@ -463,12 +434,167 @@ class PhasedStorageImplTest {
 
     // endregion
 
-    // region Clear with frozen layers
+    // region Metadata across layers
+
+    @Test
+    fun `test metaNames merges frozen and active layers`() {
+        storage.setMeta("frozenKey", "v1".strVal)
+        storage.freeze()
+        storage.setMeta("activeKey", "v2".strVal)
+
+        val names = storage.metaNames
+        assertTrue(names.contains("frozenKey"))
+        assertTrue(names.contains("activeKey"))
+    }
+
+    @Test
+    fun `test getMeta searches multiple frozen layers`() {
+        storage.setMeta("layer1", "v1".strVal)
+        storage.freeze()
+        storage.setMeta("layer2", "v2".strVal)
+        storage.freeze()
+
+        assertEquals("v1", (storage.getMeta("layer1") as StrVal).core)
+        assertEquals("v2", (storage.getMeta("layer2") as StrVal).core)
+        assertNull(storage.getMeta("nonexistent"))
+    }
+
+    // endregion
+
+    // region Edge property overlay across layers
+
+    @Test
+    fun `test setEdgeProperties on frozen layer edge creates active layer copy`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        storage.addEdge(edge1, mapOf("x" to "frozen".strVal))
+        storage.freeze()
+
+        storage.setEdgeProperties(edge1, mapOf("x" to "active".strVal))
+        assertEquals("active", (storage.getEdgeProperties(edge1)["x"] as StrVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperties merges across frozen and active layers`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        storage.addEdge(edge1, mapOf("a" to "frozen_a".strVal))
+        storage.freeze()
+
+        storage.setEdgeProperties(edge1, mapOf("b" to "active_b".strVal))
+        val props = storage.getEdgeProperties(edge1)
+        assertEquals("frozen_a", (props["a"] as StrVal).core)
+        assertEquals("active_b", (props["b"] as StrVal).core)
+    }
+
+    @Test
+    fun `test getOutgoingEdges merges across frozen and active layers`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        storage.addEdge(edge1)
+        storage.freeze()
+
+        storage.addNode(node3)
+        storage.addEdge(edge3) // node1 -> node3
+
+        val outgoing = storage.getOutgoingEdges(node1)
+        assertEquals(2, outgoing.size)
+        assertTrue(outgoing.contains(edge1))
+        assertTrue(outgoing.contains(edge3))
+    }
+
+    @Test
+    fun `test getIncomingEdges merges across frozen and active layers`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        storage.addEdge(edge1) // node1 -> node2
+        storage.freeze()
+
+        storage.addNode(node3)
+        val edge = EdgeID(node3, node2, "extra")
+        storage.addEdge(edge)
+
+        val incoming = storage.getIncomingEdges(node2)
+        assertEquals(2, incoming.size)
+        assertTrue(incoming.contains(edge1))
+        assertTrue(incoming.contains(edge))
+    }
+
+    // endregion
+
+    // region Error paths
+
+    @Test
+    fun `test deleteNode throws EntityNotExistException for non-existent node`() {
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(node1) }
+    }
+
+    @Test
+    fun `test deleteEdge throws EntityNotExistException for non-existent edge`() {
+        assertFailsWith<EntityNotExistException> { storage.deleteEdge(edge1) }
+    }
+
+    @Test
+    fun `test setNodeProperties throws EntityNotExistException for non-existent node`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.setNodeProperties(node1, mapOf("a" to "v".strVal))
+        }
+    }
+
+    @Test
+    fun `test setEdgeProperties throws EntityNotExistException for non-existent edge`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.setEdgeProperties(edge1, mapOf("a" to "v".strVal))
+        }
+    }
+
+    @Test
+    fun `test getNodeProperties throws EntityNotExistException for non-existent node`() {
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(node1) }
+    }
+
+    @Test
+    fun `test getEdgeProperties throws EntityNotExistException for non-existent edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties(edge1) }
+    }
+
+    @Test
+    fun `test getIncomingEdges throws EntityNotExistException for non-existent node`() {
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(node1) }
+    }
+
+    @Test
+    fun `test getOutgoingEdges throws EntityNotExistException for non-existent node`() {
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(node1) }
+    }
+
+    @Test
+    fun `test addEdge throws EntityNotExistException when dst missing`() {
+        storage.addNode(node1)
+        assertFailsWith<EntityNotExistException> { storage.addEdge(edge1) }
+    }
+
+    @Test
+    fun `test addEdge throws EntityNotExistException when src missing`() {
+        storage.addNode(node2)
+        assertFailsWith<EntityNotExistException> { storage.addEdge(edge1) }
+    }
+
+    // endregion
+
+    // region Close and clear
+
+    @Test
+    fun `test close is idempotent`() {
+        storage.close()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
+    }
 
     @Test
     fun `test clear removes frozen layers and active layer`() {
         storage.addNode(node1)
-        storage.freezeAndPushLayer()
+        storage.freeze()
         storage.addNode(node2)
 
         assertTrue(storage.clear())
