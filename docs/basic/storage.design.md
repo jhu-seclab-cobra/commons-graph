@@ -2,8 +2,8 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `CompactFrozenStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `CompactFrozenStorageImpl` implements `IStorage` (read-only); `LayeredStorageImpl` implements `IStorage` (composes N frozen `IStorage` layers + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
+- **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes N frozen `IStorage` layers + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
 - **Abstract**: `IStorage` (implemented by all storage types); `IStorageExporter` (implemented by `NativeCsvIOImpl`); `IStorageImporter` (implemented by `NativeCsvIOImpl`)
 - **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityAlreadyExistException` raised on duplicate add; `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when attempting to delete entities from frozen layers in `LayeredStorageImpl`
 - **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `IValue`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
@@ -11,8 +11,7 @@
 The storage layer is the **backend-agnostic persistence contract** for graph data. It provides two tiers of storage capability:
 
 1. **Flat storage** (`NativeStorageImpl`, external `MapDBStorageImpl` / `JgraphtStorageImpl` / `Neo4jStorageImpl`) — single-layer, full CRUD
-2. **Compact frozen storage** (`CompactFrozenStorageImpl`) — read-only `IStorage` that encodes each entity's properties into a single `ByteArray`, reducing heap objects from ~2P+1 per entity (P = property count) to 1. Designed as the frozen layer backend for `LayeredStorageImpl`, replacing `NativeStorageImpl` or MapDB in that role. Supports optional `SoftReference` caching for hot-data acceleration
-3. **Layered storage** (`LayeredStorageImpl`) — N frozen layers + 1 mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`; inject `CompactFrozenStorageImpl` for reduced GC pressure)
+2. **Layered storage** (`LayeredStorageImpl`) — N frozen layers + 1 mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`)
 
 The storage layer does **not** own graph traversal logic, entity type construction, or backend-specific optimization — those belong to the graph layer and module implementations respectively.
 
@@ -125,75 +124,6 @@ keyPool:         HashMap<String, String>   ← deduplicates property key strings
 
 ---
 
-### CompactFrozenStorageImpl
-
-**Responsibility:** Read-only `IStorage` that stores each entity's properties as a single compact `ByteArray`, minimizing heap object count for frozen layers.
-
-**State / Fields:**
-
-```
-nodeData:       HashMap<NodeID, ByteArray>                         ← compact-encoded properties per node
-edgeData:       HashMap<EdgeID, ByteArray>                         ← compact-encoded properties per edge
-outEdges:       HashMap<NodeID, Set<EdgeID>>                       ← precomputed outgoing adjacency (immutable)
-inEdges:        HashMap<NodeID, Set<EdgeID>>                       ← precomputed incoming adjacency (immutable)
-metaData:       HashMap<String, ByteArray>                         ← compact-encoded metadata values
-nodeCache:      HashMap<NodeID, SoftReference<Map<String, IValue>>> ← optional hot-data cache (SoftReference, GC-reclaimable)
-edgeCache:      HashMap<EdgeID, SoftReference<Map<String, IValue>>> ← optional hot-data cache
-```
-
-**Binary encoding format (per entity ByteArray):**
-
-```
-┌──────────┬──────────┬────────┬──────────┬──────────┬────────┐
-│ propCount│ key (UTF-8, length-prefixed) │ type tag │ value  │ ... repeat
-│ 2 bytes  │ 2 bytes (len) + bytes        │ 1 byte   │ varies │
-└──────────┴──────────┴────────┴──────────┴──────────┴────────┘
-
-Type tags:
-  0x01 = NumVal(Byte)    → 1 byte
-  0x02 = NumVal(Short)   → 2 bytes
-  0x03 = NumVal(Int)     → 4 bytes
-  0x04 = NumVal(Long)    → 8 bytes
-  0x05 = NumVal(Float)   → 4 bytes
-  0x06 = NumVal(Double)  → 8 bytes
-  0x07 = BoolVal         → 1 byte
-  0x08 = StrVal          → 2 bytes (len) + UTF-8 bytes
-  0x09 = SetVal          → 4 bytes (count) + recursive encoded elements
-```
-
-**Read operations:**
-
-| Method | Behavior | Complexity |
-|--------|----------|------------|
-| `getNodeProperty(id, name)` | Check `nodeCache` SoftReference → on miss, scan `nodeData[id]` ByteArray to target key, decode single value | O(P) scan, ~100-200ns |
-| `getNodeProperties(id)` | Check `nodeCache` → on miss, decode all properties from ByteArray, populate cache | O(P) decode, ~200-500ns |
-| `getIncomingEdges(id)` | Return precomputed `inEdges[id]` | O(1) lookup |
-| `getOutgoingEdges(id)` | Return precomputed `outEdges[id]` | O(1) lookup |
-
-**Write operations:** All mutation methods (`addNode`, `addEdge`, `setNodeProperties`, `setEdgeProperties`, `deleteNode`, `deleteEdge`) throw `UnsupportedOperationException`. This storage is read-only by design.
-
-**Ingestion (construction-time only):**
-
-Data is populated via `transferTo` from a source `IStorage` during `LayeredStorageImpl.freeze()`. The `addNode`/`addEdge` implementations encode incoming `Map<String, IValue>` properties into `ByteArray` format during construction. After construction completes, the storage transitions to read-only mode and rejects further mutations.
-
-**Key design decisions:**
-
-- **One ByteArray per entity:** Reduces heap objects from ~2P+1 (P HashMap.Node + P IValue + 1 HashMap) to 1 ByteArray per entity. For 2M entities × 5 properties: from ~22M objects to ~2M objects.
-- **On-demand single-property decode:** `getNodeProperty(id, name)` scans the ByteArray and decodes only the matched property, avoiding full deserialization. This is ~100-200ns vs MapDB's ~3-6μs full-entry deserialization.
-- **SoftReference cache:** Decoded `Map<String, IValue>` is cached via `SoftReference`. Hot data returns cached result (~50ns); GC reclaims cache entries under memory pressure without OOM risk.
-- **Read-only contract:** Frozen layers are immutable. Rejecting writes at the storage level (rather than relying on `LayeredStorageImpl` routing) provides defense-in-depth.
-
-**Performance characteristics:**
-
-| Scenario | NativeStorageImpl | MapDB | CompactFrozenStorageImpl |
-|----------|-------------------|-------|--------------------------|
-| Heap objects per entity | ~2P+1 | 0 | 1 |
-| Single property read | ~50ns | ~3-6μs | ~100-200ns (miss) / ~50ns (cache hit) |
-| Full property read | ~50ns | ~3-6μs | ~200-500ns (miss) / ~50ns (cache hit) |
-| GC impact (2M entities, P=5) | ~22M objects | ~0 | ~2M objects |
-
----
-
 ### LayeredStorageImpl
 
 **Responsibility:** Multi-layer freeze-and-stack `IStorage` for phased analysis pipelines. Composes N frozen layers (read-only) + one mutable active layer. Writes target the active layer only. Deletion is restricted to the active layer — frozen layers are immutable.
@@ -203,7 +133,7 @@ Data is populated via `transferTo` from a source `IStorage` during `LayeredStora
 ```
 frozenLayers:       MutableList<IStorage>   ← bottom-to-top order; each is a frozen IStorage
 activeLayer:        IStorage                ← current mutable layer, full CRUD
-frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets (default: NativeStorageImpl; inject CompactFrozenStorageImpl for reduced GC)
+frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets (default: NativeStorageImpl)
 ```
 
 **Layer management API (concrete class methods, not inherited from IStorage):**
@@ -307,14 +237,6 @@ Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv
 - `addEdge` must reject edges whose src or dst node does not exist with `EntityNotExistException`
 - Property access/modification on non-existent entities must throw `EntityNotExistException`
 - `deleteNode` does not cascade — graph layer must remove edges first
-
-### CompactFrozenStorageImpl
-
-- All mutation methods must throw `UnsupportedOperationException`
-- `getNodeProperty`/`getEdgeProperty` must return `null` for absent property keys (not throw)
-- ByteArray encoding must be lossless: decode(encode(properties)) must equal original properties
-- SoftReference cache must not change observable behavior — cache miss and cache hit must return identical results
-- `close()` must clear all data maps and caches; subsequent operations must throw `AccessClosedStorageException`
 
 ### LayeredStorageImpl
 

@@ -14,7 +14,7 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 - **Connections:** Upstream services → Graph domain API (`IGraph`) → Storage contract (`IStorage`) → Backend implementations / Layered storage composers.
 
 **Scope Boundaries**
-- **Owned:** Graph domain vocabulary, entity identity model, graph/storage contracts, layered storage composition, compact frozen encoding, node grouping trait, label lattice framework, metadata contract, import/export contract concepts.
+- **Owned:** Graph domain vocabulary, entity identity model, graph/storage contracts, layered storage composition, node grouping trait, label lattice framework, metadata contract, import/export contract concepts.
 - **Not Owned:** Backend-specific tuning (MapDB, JGraphT, Neo4j implementations), graph algorithm libraries, database lifecycle operations, external deployment concerns.
 
 ## 2. Concepts
@@ -38,9 +38,7 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
             +--> Layered storage (freeze-and-stack)
                     +--> [LayeredStorage: N frozen layers + 1 active layer]
                             |
-                            +--> frozen layers (read-only, compact encoding)
-                            |       +--> [CompactFrozenStorage: 1 ByteArray per entity]
-                            |       +--> [SoftReference cache for hot-data acceleration]
+                            +--> frozen layers (read-only, injectable factory)
                             +--> active layer (in-heap, mutable, sole write target)
 ```
 
@@ -58,11 +56,8 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 - **Layered storage as composition**
     Layered storage composes N frozen `IStorage` instances plus one mutable active layer into a unified `IStorage` view. The domain layer sees a single `IStorage`; internally, reads cascade through layers (active → frozen in reverse order), writes target only the active layer, and freeze transitions migrate active data to read-only frozen storage. Deletion is restricted to the active layer — frozen layers are immutable. Query resolution follows a simple two-phase cascade without deletion tracking.
 
-- **Compact frozen encoding**
-    Frozen layers store each entity's properties as a single compact byte sequence rather than as a per-property object graph. This trades a small decode cost per read (~100-200ns) for a dramatic reduction in heap object count — from ~2P+1 objects per entity (P = property count) to 1. The encoding is strictly read-only; mutation is rejected at the storage level. A `SoftReference`-based cache accelerates repeated reads on hot entities while remaining GC-safe under memory pressure.
-
 - **Phase-based freezing**
-    Static analysis proceeds in phases (AST construction → CFG → DFG → analysis). Each phase completes a set of graph mutations that become read-only in subsequent phases. Layered storage exploits this by freezing completed phases into compact read-only storage, reducing heap object count and GC overhead while keeping the active phase's data in fast heap memory. The `compact` operation merges accumulated frozen layers to keep query chain length bounded. In typical static analysis workloads, frozen layers contain structural data (AST, CFG) that is relatively small, while the active layer holds analysis state that dominates memory usage.
+    Static analysis proceeds in phases (AST construction → CFG → DFG → analysis). Each phase completes a set of graph mutations that become read-only in subsequent phases. Layered storage exploits this by freezing completed phases into read-only storage while keeping the active phase's data in fast heap memory. The `compact` operation merges accumulated frozen layers to keep query chain length bounded. In typical static analysis workloads, frozen layers contain structural data (AST, CFG) that is relatively small, while the active layer holds analysis state that dominates memory usage.
 
 - **Analysis state externalization**
     High-frequency analysis state (abstract values, dataflow facts) produced during fixpoint iteration should be stored outside `IStorage` in direct-indexed arrays keyed by node sequential IDs. This avoids `IValue` boxing and `HashMap` overhead on the hottest code path, achieving ~5-10ns read/write latency with zero GC allocation per access.
@@ -78,7 +73,7 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 **Data Contracts**
 - **With upstream modules:** Inputs must be valid IDs and property names; outputs are graph/entity views or explicit domain exceptions.
 - **With storage implementations:** Storage must preserve ID semantics, enforce existence constraints, and expose deterministic adjacency/property behavior.
-- **With layered storage composers:** Flat storage instances serve as building blocks; composers manage layer lifecycle, freeze transitions, and query routing. Compact frozen storage serves as the optimized frozen layer backend.
+- **With layered storage composers:** Flat storage instances serve as building blocks; composers manage layer lifecycle, freeze transitions, and query routing.
 - **With trait modules:** Trait behaviors must reuse `IGraph`/`IStorage` invariants and must not redefine entity identity semantics.
 
 **Internal Processing Flow**
@@ -86,8 +81,8 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 2. **Graph-level contract checks**: Graph layer enforces graph policy (existence, uniqueness, variant rules).
 3. **Storage dispatch**: Graph delegates persistence and adjacency operations to `IStorage`.
 4. **Layer routing** (layered storage only): Writes go to active layer; reads cascade active → frozen layers (reverse order); deletes restricted to active layer.
-5. **Entity/property materialization**: Returned IDs are exposed as typed entity views; property operations are resolved by storage. Frozen layers decode properties on demand from compact byte encoding, with SoftReference caching for hot data.
-6. **Freeze transition** (layered storage only): On `freeze`, active layer data is encoded into compact byte format and transferred to a frozen storage instance, active layer is replaced with empty heap storage.
+5. **Entity/property materialization**: Returned IDs are exposed as typed entity views; property operations are resolved by storage.
+6. **Freeze transition** (layered storage only): On `freeze`, active layer data is transferred to a frozen storage instance via `transferTo`, active layer is replaced with empty heap storage.
 7. **Result/exception propagation**: Success returns typed domain outputs; contract violations raise explicit domain exceptions.
 
 ## 4. Scenarios
@@ -96,10 +91,10 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 
 - **Boundary:** A request attempts to create an edge whose source node is missing. The graph/storage contract rejects it with `EntityNotExistException` instead of creating implicit nodes.
 
-- **Interaction (layered):** A static analysis tool builds an AST graph, freezes it, then builds CFG edges on top of the frozen AST. The AST data is encoded into compact byte arrays (reducing heap objects by ~10x), while CFG construction writes to a fresh in-heap active layer. Property reads for AST nodes transparently cascade to the frozen layer, where they are decoded on demand and cached via SoftReference.
+- **Interaction (layered):** A static analysis tool builds an AST graph, freezes it, then builds CFG edges on top of the frozen AST. The AST data is transferred to a frozen layer, while CFG construction writes to a fresh in-heap active layer. Property reads for AST nodes transparently cascade to the frozen layer.
 
 - **Interaction (active-only deletion):** During CFG construction, the tool creates temporary dummy entry/exit nodes in the active layer, then deletes them before freezing. Deletion succeeds because the nodes are in the active layer. Attempting to delete a frozen AST node throws `FrozenLayerModificationException`.
 
 - **Interaction (layer compaction):** After multiple freeze cycles, 5 frozen layers have accumulated. The tool calls `compact(3)` to merge the top 3 layers into one, reducing query cascade depth from 6 to 4 without changing visible behavior.
 
-- **Interaction (analysis state):** During fixpoint iteration, the analysis engine stores abstract states in a direct-indexed array outside `IStorage`, keyed by node sequential ID. Structural properties (node type, source location) are read from the frozen layer via compact encoding. This separation keeps the hot path (~5-10ns array access) independent from the bulk graph data path (~100-200ns frozen layer decode).
+- **Interaction (analysis state):** During fixpoint iteration, the analysis engine stores abstract states in a direct-indexed array outside `IStorage`, keyed by node sequential ID. Structural properties (node type, source location) are read from the frozen layer. This separation keeps the hot path (~5-10ns array access) independent from the bulk graph data path.
