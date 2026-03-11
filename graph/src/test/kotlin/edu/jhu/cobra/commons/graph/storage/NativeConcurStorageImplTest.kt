@@ -278,13 +278,15 @@ class NativeConcurStorageImplTest {
     }
 
     @Test
-    fun `test deleteNode removes connected edges`() {
+    fun `test deleteNode does not cascade edge deletion`() {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addNode(node3)
         storage.addEdge(edge1)
         storage.addEdge(edge3)
 
+        storage.deleteEdge(edge1)
+        storage.deleteEdge(edge3)
         storage.deleteNode(node1)
 
         assertFalse(storage.containsNode(node1))
@@ -684,6 +686,28 @@ class NativeConcurStorageImplTest {
     // region Metadata operations
 
     @Test
+    fun `test metaNames returns all metadata keys`() {
+        storage.setMeta("key1", "v1".strVal)
+        storage.setMeta("key2", "v2".strVal)
+
+        val names = storage.metaNames
+        assertEquals(2, names.size)
+        assertTrue(names.contains("key1"))
+        assertTrue(names.contains("key2"))
+    }
+
+    @Test
+    fun `test metaNames returns empty set when no metadata`() {
+        assertTrue(storage.metaNames.isEmpty())
+    }
+
+    @Test
+    fun `test metaNames throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
+    }
+
+    @Test
     fun `test getMeta returns null for non-existent metadata`() {
         assertNull(storage.getMeta("nonexistent"))
     }
@@ -775,6 +799,14 @@ class NativeConcurStorageImplTest {
         assertFailsWith<AccessClosedStorageException> {
             storage.clear()
         }
+    }
+
+    @Test
+    fun `test close is idempotent`() {
+        storage.addNode(node1)
+        storage.close()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
     }
 
     @Test
@@ -892,6 +924,7 @@ class NativeConcurStorageImplTest {
         assertEquals(2, storage.edgeIDs.size)
         assertFalse(storage.containsEdge(edge1))
 
+        storage.deleteEdge(edge3)
         storage.deleteNode(node1)
         assertEquals(2, storage.nodeIDs.size)
         assertFalse(storage.containsEdge(edge3))

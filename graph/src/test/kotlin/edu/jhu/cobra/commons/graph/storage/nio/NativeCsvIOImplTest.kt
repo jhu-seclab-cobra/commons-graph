@@ -107,6 +107,50 @@ class NativeCsvIOImplTest {
     // region Export
 
     @Test
+    fun `test export throws on existing non-empty nodes csv`() {
+        val dir = tempDir.resolve("existing_csv")
+        dir.createDirectories()
+        dir.resolve("nodes.csv").writeText("ID\ndata")
+
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.export(dir, storage)
+        }
+    }
+
+    @Test
+    fun `test export throws on existing non-empty edges csv`() {
+        val dir = tempDir.resolve("existing_edges_csv")
+        dir.createDirectories()
+        dir.resolve("edges.csv").writeText("ID\ndata")
+
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.export(dir, storage)
+        }
+    }
+
+    @Test
+    fun `test import throws on missing nodes csv`() {
+        val dir = tempDir.resolve("no_nodes")
+        dir.createDirectories()
+
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, NativeStorageImpl())
+        }
+    }
+
+    @Test
+    fun `test import throws on empty nodes csv`() {
+        val dir = tempDir.resolve("empty_nodes_import")
+        dir.createDirectories()
+        dir.resolve("nodes.csv").createFile()
+        dir.resolve("edges.csv").writeText("ID\n")
+
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, NativeStorageImpl())
+        }
+    }
+
+    @Test
     fun `test export creates directory if not exists`() {
         storage.addNode(node1)
         val exportPath = tempDir.resolve("new_dir")
@@ -395,6 +439,94 @@ class NativeCsvIOImplTest {
         assertEquals("", (props["prop2"] as StrVal).core)
 
         importedStorage.close()
+    }
+
+    @Test
+    fun `test export with backslash in property values`() {
+        storage.addNode(
+            node1,
+            mapOf("path" to "C:\\Users\\test\\file".strVal),
+        )
+        val exportPath = tempDir.resolve("backslash_chars")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        val props = importedStorage.getNodeProperties(node1)
+        assertEquals("C:\\Users\\test\\file", (props["path"] as StrVal).core)
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test export with carriage return in property values`() {
+        storage.addNode(
+            node1,
+            mapOf("text" to "line1\r\nline2\rline3".strVal),
+        )
+        val exportPath = tempDir.resolve("cr_chars")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        val props = importedStorage.getNodeProperties(node1)
+        assertEquals("line1\r\nline2\rline3", (props["text"] as StrVal).core)
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test export with sparse node properties`() {
+        storage.addNode(node1, mapOf("name" to "A".strVal, "age" to 1.numVal))
+        storage.addNode(node2, mapOf("name" to "B".strVal))
+        storage.addNode(node3, mapOf("age" to 3.numVal))
+        val exportPath = tempDir.resolve("sparse_props")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        assertEquals(3, importedStorage.nodeIDs.size)
+        val props1 = importedStorage.getNodeProperties(node1)
+        assertEquals("A", (props1["name"] as StrVal).core)
+        assertEquals(1, (props1["age"] as NumVal).core)
+        val props2 = importedStorage.getNodeProperties(node2)
+        assertEquals("B", (props2["name"] as StrVal).core)
+        val props3 = importedStorage.getNodeProperties(node3)
+        assertEquals(3, (props3["age"] as NumVal).core)
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test export with sparse edge properties`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        storage.addNode(node3)
+        storage.addEdge(edge1, mapOf("weight" to 1.0.numVal, "label" to "a".strVal))
+        storage.addEdge(edge2, mapOf("weight" to 2.0.numVal))
+        val exportPath = tempDir.resolve("sparse_edge_props")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        assertEquals(2, importedStorage.edgeIDs.size)
+        val p1 = importedStorage.getEdgeProperties(edge1)
+        assertEquals(1.0, (p1["weight"] as NumVal).core)
+        assertEquals("a", (p1["label"] as StrVal).core)
+        val p2 = importedStorage.getEdgeProperties(edge2)
+        assertEquals(2.0, (p2["weight"] as NumVal).core)
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test isValidFile returns false for directory with empty nodes csv`() {
+        val dir = tempDir.resolve("empty_nodes")
+        dir.createDirectories()
+        dir.resolve("nodes.csv").createFile()
+        dir.resolve("edges.csv").writeText("ID\n")
+
+        assertFalse(NativeCsvIOImpl.isValidFile(dir))
     }
 
     // endregion

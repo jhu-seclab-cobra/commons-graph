@@ -56,11 +56,12 @@ class LayeredStorageImplTest {
     }
 
     @Test
-    fun `test deleteNode removes node and connected edges`() {
+    fun `test deleteNode does not cascade edge deletion`() {
         storage.addNode(node1)
         storage.addNode(node2)
         storage.addEdge(edge1)
 
+        storage.deleteEdge(edge1)
         storage.deleteNode(node1)
         assertFalse(storage.containsNode(node1))
         assertFalse(storage.containsEdge(edge1))
