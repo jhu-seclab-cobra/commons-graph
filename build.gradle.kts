@@ -55,6 +55,13 @@ subprojects {
         "testImplementation"(kotlin("test"))
     }
 
+    tasks.withType<Test> {
+        maxHeapSize = "8g"
+        testLogging {
+            showStandardStreams = true
+        }
+    }
+
     // ----- Publishing -----
 
     configure<PublishingExtension> {
