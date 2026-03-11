@@ -2,17 +2,17 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `DeltaStorageImpl`, `DeltaConcurStorageImpl`, `PhasedStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `DeltaStorageImpl` implements `IStorage` (composes two `IStorage` as frozen base + mutable overlay); `DeltaConcurStorageImpl` wraps `DeltaStorageImpl` with `ReentrantReadWriteLock`; `PhasedStorageImpl` implements `IStorage` (composes N frozen layers + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
+- **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `CompactFrozenStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `CompactFrozenStorageImpl` implements `IStorage` (read-only); `LayeredStorageImpl` implements `IStorage` (composes N frozen `IStorage` layers + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
 - **Abstract**: `IStorage` (implemented by all storage types); `IStorageExporter` (implemented by `NativeCsvIOImpl`); `IStorageImporter` (implemented by `NativeCsvIOImpl`)
-- **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityAlreadyExistException` raised on duplicate add; `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when attempting to delete entities from frozen layers in `PhasedStorageImpl`; `StorageFrozenException` raised on write operations after `PhasedStorageImpl.freeze()`
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `IValue`. Orchestrator: `IStorage` implementations. Composers: `DeltaStorageImpl` / `PhasedStorageImpl` (layer multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
+- **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityAlreadyExistException` raised on duplicate add; `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when attempting to delete entities from frozen layers in `LayeredStorageImpl`
+- **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `IValue`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
 
-The storage layer is the **backend-agnostic persistence contract** for graph data. It provides three tiers of storage capability:
+The storage layer is the **backend-agnostic persistence contract** for graph data. It provides two tiers of storage capability:
 
 1. **Flat storage** (`NativeStorageImpl`, external `MapDBStorageImpl` / `JgraphtStorageImpl` / `Neo4jStorageImpl`) — single-layer, full CRUD
-2. **Delta storage** (`DeltaStorageImpl`) — two-layer overlay with frozen base + mutable present; supports full deletion tracking across layers via `deletedNodesHolder` / `deletedEdgesHolder`
-3. **Phased storage** (`PhasedStorageImpl`) — multi-layer freeze-and-stack model for static analysis pipelines; deletion restricted to active layer only; frozen layers migrated to off-heap storage (e.g., MapDB `readOnly`) to reduce GC pressure
+2. **Compact frozen storage** (`CompactFrozenStorageImpl`) — read-only `IStorage` that encodes each entity's properties into a single `ByteArray`, reducing heap objects from ~2P+1 per entity (P = property count) to 1. Designed as the frozen layer backend for `LayeredStorageImpl`, replacing `NativeStorageImpl` or MapDB in that role. Supports optional `SoftReference` caching for hot-data acceleration
+3. **Layered storage** (`LayeredStorageImpl`) — N frozen layers + 1 mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`; inject `CompactFrozenStorageImpl` for reduced GC pressure)
 
 The storage layer does **not** own graph traversal logic, entity type construction, or backend-specific optimization — those belong to the graph layer and module implementations respectively.
 
@@ -38,12 +38,14 @@ interface IStorage : Closeable {
     fun containsNode(id: NodeID): Boolean
     fun addNode(id: NodeID, properties: Map<String, IValue> = emptyMap())
     fun getNodeProperties(id: NodeID): Map<String, IValue>
+    fun getNodeProperty(id: NodeID, name: String): IValue?
     fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>)
     fun deleteNode(id: NodeID)
 
     fun containsEdge(id: EdgeID): Boolean
     fun addEdge(id: EdgeID, properties: Map<String, IValue> = emptyMap())
     fun getEdgeProperties(id: EdgeID): Map<String, IValue>
+    fun getEdgeProperty(id: EdgeID, name: String): IValue?
     fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>)
     fun deleteEdge(id: EdgeID)
 
@@ -68,6 +70,8 @@ interface IStorage : Closeable {
 |--------|----------|-------|--------|--------|
 | `addNode` | Creates a node with optional initial properties | `id`: NodeID; `properties`: initial property map | — | `EntityAlreadyExistException` if exists |
 | `addEdge` | Creates an edge with optional initial properties | `id`: EdgeID; `properties`: initial property map | — | `EntityAlreadyExistException` if exists; `EntityNotExistException` if src/dst missing |
+| `getNodeProperty` | Returns a single property value without constructing the full map | `id`: NodeID; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
+| `getEdgeProperty` | Returns a single property value without constructing the full map | `id`: EdgeID; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
 | `setNodeProperties` | Atomically adds, updates, and deletes properties | `id`: NodeID; `properties`: map where null values signal deletion | — | `EntityNotExistException` if missing |
 | `setEdgeProperties` | Same as `setNodeProperties` for edges | `id`: EdgeID; `properties`: map | — | `EntityNotExistException` if missing |
 | `deleteNode` | Removes a node; does **not** cascade edge deletion by contract | `id`: NodeID | — | `EntityNotExistException` if missing |
@@ -82,6 +86,7 @@ interface IStorage : Closeable {
 - `nodeIDs`/`edgeIDs` are `Set` — snapshot semantics; callers should not assume live iteration.
 - `addNode`/`addEdge` take `Map<String, IValue>` — bulk property initialization avoids a redundant `setNodeProperties` round-trip.
 - `setNodeProperties`/`setEdgeProperties` accept `IValue?` — null values signal deletion; a single call can atomically add, update, and delete properties.
+- `getNodeProperty`/`getEdgeProperty` — single-property access with default implementation `getNodeProperties(id)[name]`. Layered implementations override for O(1) early-return without full map merge.
 - `getMeta`/`setMeta` — metadata (e.g., graph name, version) stored as named properties on a special reserved node, avoiding a separate metadata structure.
 - `deleteNode` does not cascade by contract — the graph layer is responsible for removing associated edges before calling `deleteNode`.
 
@@ -89,20 +94,21 @@ interface IStorage : Closeable {
 
 ### NativeStorageImpl
 
-**Responsibility:** Pure in-memory `IStorage` implementation using `LinkedHashMap` (single-threaded).
+**Responsibility:** Pure in-memory `IStorage` implementation using `HashMap` (single-threaded).
 
 **State / Fields:**
 
 ```
-nodeProperties:  LinkedHashMap<NodeID, MutableMap<String, IValue>>
-edgeProperties:  LinkedHashMap<EdgeID, MutableMap<String, IValue>>
-incomingEdges:   HashMap<NodeID, MutableSet<EdgeID>>
-outgoingEdges:   HashMap<NodeID, MutableSet<EdgeID>>
+nodeProperties:  MutableMap<NodeID, MutableMap<String, IValue>>
+edgeProperties:  MutableMap<EdgeID, MutableMap<String, IValue>>
+outEdges:        HashMap<NodeID, MutableSet<EdgeID>>
+inEdges:         HashMap<NodeID, MutableSet<EdgeID>>
+keyPool:         HashMap<String, String>   ← deduplicates property key strings across entities
 ```
 
 - All operations are O(1) average.
 - No synchronization — not thread-safe.
-- Metadata stored as properties on a dedicated meta node.
+- Property key interning: all property keys are deduplicated via `keyPool` so entities sharing the same property name (e.g., "weight") reference the same `String` object, reducing heap overhead.
 - After `close()`, all maps are cleared and `isClosed` is set; subsequent operations throw `AccessClosedStorageException`.
 
 ---
@@ -115,112 +121,123 @@ outgoingEdges:   HashMap<NodeID, MutableSet<EdgeID>>
 
 - Multiple concurrent reads are allowed (read lock).
 - Writes are exclusive (write lock).
-- `nodeIDs`/`edgeIDs` snapshot the key sets inside the read lock, returning a `List`-backed sequence to avoid holding the lock during caller iteration.
+- Property key interning via `keyPool` (same as `NativeStorageImpl`; safe because writes are already lock-protected).
 
 ---
 
-### DeltaStorageImpl
+### CompactFrozenStorageImpl
 
-**Responsibility:** Two-layer `IStorage` implementation composing a frozen `baseDelta` and a mutable `presentDelta`. Reads cascade from present to base; writes go to present only. Supports full deletion across both layers via `deletedNodesHolder` / `deletedEdgesHolder` and `"_deleted_"` sentinel values for property deletion.
+**Responsibility:** Read-only `IStorage` that stores each entity's properties as a single compact `ByteArray`, minimizing heap object count for frozen layers.
 
 **State / Fields:**
 
 ```
-baseDelta:     IStorage           ← frozen/read-only base layer (injected)
-presentDelta:  IStorage           ← mutable overlay (default: NativeStorageImpl)
-deletedNodesHolder: Set<NodeID>   ← tracks nodes deleted from baseDelta
-deletedEdgesHolder: Set<EdgeID>   ← tracks edges deleted from baseDelta
+nodeData:       HashMap<NodeID, ByteArray>                         ← compact-encoded properties per node
+edgeData:       HashMap<EdgeID, ByteArray>                         ← compact-encoded properties per edge
+outEdges:       HashMap<NodeID, Set<EdgeID>>                       ← precomputed outgoing adjacency (immutable)
+inEdges:        HashMap<NodeID, Set<EdgeID>>                       ← precomputed incoming adjacency (immutable)
+metaData:       HashMap<String, ByteArray>                         ← compact-encoded metadata values
+nodeCache:      HashMap<NodeID, SoftReference<Map<String, IValue>>> ← optional hot-data cache (SoftReference, GC-reclaimable)
+edgeCache:      HashMap<EdgeID, SoftReference<Map<String, IValue>>> ← optional hot-data cache
 ```
 
-**Query resolution order:**
-1. Check `deletedNodesHolder` / `deletedEdgesHolder` — if deleted, entity does not exist
-2. Check `presentDelta` — if present, return (properties filtered for `"_deleted_"` sentinel)
-3. Fall back to `baseDelta`
+**Binary encoding format (per entity ByteArray):**
 
-**Deletion semantics:**
-- Deleting a `presentDelta` entity: removed from `presentDelta` directly
-- Deleting a `baseDelta` entity: added to `deletedNodesHolder` / `deletedEdgesHolder`; associated edges tracked transitively
-- Property deletion: stored as `"_deleted_"` sentinel in `presentDelta` overlay, filtered out on read
+```
+┌──────────┬──────────┬────────┬──────────┬──────────┬────────┐
+│ propCount│ key (UTF-8, length-prefixed) │ type tag │ value  │ ... repeat
+│ 2 bytes  │ 2 bytes (len) + bytes        │ 1 byte   │ varies │
+└──────────┴──────────┴────────┴──────────┴──────────┴────────┘
+
+Type tags:
+  0x01 = NumVal(Byte)    → 1 byte
+  0x02 = NumVal(Short)   → 2 bytes
+  0x03 = NumVal(Int)     → 4 bytes
+  0x04 = NumVal(Long)    → 8 bytes
+  0x05 = NumVal(Float)   → 4 bytes
+  0x06 = NumVal(Double)  → 8 bytes
+  0x07 = BoolVal         → 1 byte
+  0x08 = StrVal          → 2 bytes (len) + UTF-8 bytes
+  0x09 = SetVal          → 4 bytes (count) + recursive encoded elements
+```
+
+**Read operations:**
+
+| Method | Behavior | Complexity |
+|--------|----------|------------|
+| `getNodeProperty(id, name)` | Check `nodeCache` SoftReference → on miss, scan `nodeData[id]` ByteArray to target key, decode single value | O(P) scan, ~100-200ns |
+| `getNodeProperties(id)` | Check `nodeCache` → on miss, decode all properties from ByteArray, populate cache | O(P) decode, ~200-500ns |
+| `getIncomingEdges(id)` | Return precomputed `inEdges[id]` | O(1) lookup |
+| `getOutgoingEdges(id)` | Return precomputed `outEdges[id]` | O(1) lookup |
+
+**Write operations:** All mutation methods (`addNode`, `addEdge`, `setNodeProperties`, `setEdgeProperties`, `deleteNode`, `deleteEdge`) throw `UnsupportedOperationException`. This storage is read-only by design.
+
+**Ingestion (construction-time only):**
+
+Data is populated via `transferTo` from a source `IStorage` during `LayeredStorageImpl.freeze()`. The `addNode`/`addEdge` implementations encode incoming `Map<String, IValue>` properties into `ByteArray` format during construction. After construction completes, the storage transitions to read-only mode and rejects further mutations.
 
 **Key design decisions:**
-- `baseDelta` is never modified — all mutations go to `presentDelta` or deleted holders
-- `close()` only closes `presentDelta`; `baseDelta` lifecycle is managed externally (shared between instances in multi-thread scenarios)
-- `clear()` only clears `presentDelta`, not `baseDelta`
+
+- **One ByteArray per entity:** Reduces heap objects from ~2P+1 (P HashMap.Node + P IValue + 1 HashMap) to 1 ByteArray per entity. For 2M entities × 5 properties: from ~22M objects to ~2M objects.
+- **On-demand single-property decode:** `getNodeProperty(id, name)` scans the ByteArray and decodes only the matched property, avoiding full deserialization. This is ~100-200ns vs MapDB's ~3-6μs full-entry deserialization.
+- **SoftReference cache:** Decoded `Map<String, IValue>` is cached via `SoftReference`. Hot data returns cached result (~50ns); GC reclaims cache entries under memory pressure without OOM risk.
+- **Read-only contract:** Frozen layers are immutable. Rejecting writes at the storage level (rather than relying on `LayeredStorageImpl` routing) provides defense-in-depth.
+
+**Performance characteristics:**
+
+| Scenario | NativeStorageImpl | MapDB | CompactFrozenStorageImpl |
+|----------|-------------------|-------|--------------------------|
+| Heap objects per entity | ~2P+1 | 0 | 1 |
+| Single property read | ~50ns | ~3-6μs | ~100-200ns (miss) / ~50ns (cache hit) |
+| Full property read | ~50ns | ~3-6μs | ~200-500ns (miss) / ~50ns (cache hit) |
+| GC impact (2M entities, P=5) | ~22M objects | ~0 | ~2M objects |
 
 ---
 
-### DeltaConcurStorageImpl
+### LayeredStorageImpl
 
-**Responsibility:** Thread-safe wrapper around `DeltaStorageImpl` semantics using `ReentrantReadWriteLock`.
-
-**State / Fields:** Same as `DeltaStorageImpl`, plus `ReentrantReadWriteLock` and `AtomicInteger` counters.
-
-- Multiple concurrent reads allowed (read lock)
-- Writes are exclusive (write lock)
-- `CopyOnWriteArraySet` for deleted holders ensures safe concurrent iteration
-
----
-
-### PhasedStorageImpl
-
-**Responsibility:** Concrete `IStorage` implementation for static analysis pipelines. Composes N frozen layers (read-only) + one mutable active layer (in-heap). No intermediate interfaces — phased-specific API exposed as concrete class methods.
+**Responsibility:** Multi-layer freeze-and-stack `IStorage` for phased analysis pipelines. Composes N frozen layers (read-only) + one mutable active layer. Writes target the active layer only. Deletion is restricted to the active layer — frozen layers are immutable.
 
 **State / Fields:**
 
 ```
-frozenLayers:       List<IStorage>      ← bottom-to-top order; each is a frozen IStorage
-activeLayer:        NativeStorageImpl   ← current mutable layer, full CRUD
-frozenLayerFactory: () -> IStorage      ← factory for frozen layer targets (default: NativeStorageImpl; inject MapDB for off-heap)
-isFrozen:           Boolean             ← when true, all writes throw StorageFrozenException
+frozenLayers:       MutableList<IStorage>   ← bottom-to-top order; each is a frozen IStorage
+activeLayer:        IStorage                ← current mutable layer, full CRUD
+frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets (default: NativeStorageImpl; inject CompactFrozenStorageImpl for reduced GC)
 ```
 
-**Phased API (concrete class methods, not inherited from IStorage):**
+**Layer management API (concrete class methods, not inherited from IStorage):**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `freezeAndPushLayer` | Transfers active layer data to a new frozen `IStorage`, closes active layer, creates new empty active layer | — | — | `StorageFrozenException` if frozen |
-| `compactLayers` | Merges top N frozen layers into one to reduce query chain length | `topN`: number of layers | — | `IllegalArgumentException` if out of range |
-| `freeze` | Makes entire storage read-only; idempotent | — | — | — |
+| `freeze` | Transfers active layer data to a new frozen `IStorage` created by `frozenLayerFactory`, closes old active layer, creates new empty active layer | — | — | `AccessClosedStorageException` if closed |
+| `compact` | Merges top N frozen layers into one to reduce query chain length | `topN`: number of layers | — | `IllegalArgumentException` if out of range |
 | `layerCount` | Total layers (frozen + active) | — | `Int` | — |
-| `isFrozen` | Whether storage is fully frozen | — | `Boolean` | — |
 
-**Deletion constraint:** Only entities in the active layer can be deleted. Attempting to delete a frozen-layer entity throws `FrozenLayerModificationException`. This eliminates the need for `deletedNodesHolder` / `deletedEdgesHolder` and `"_deleted_"` sentinels.
+**Deletion constraint:** Only entities in the active layer can be deleted. Attempting to delete a frozen-layer entity throws `FrozenLayerModificationException`. No deletion tracking sets or sentinel values are needed.
 
 **Query resolution order (properties — overlay semantics):**
-1. `activeLayer` — if entity has property, return it
+1. `activeLayer` — if entity has the property, return it
 2. `frozenLayers` in reverse order (most recently frozen first) — first match wins
 
 **Query resolution (adjacency — merge semantics):**
 - Edges are append-only across layers; `getIncomingEdges` / `getOutgoingEdges` merge results from all layers
 
+**Single-property optimization:** `getNodeProperty` / `getEdgeProperty` check active layer first, then iterate frozen layers in reverse with early return. Avoids constructing a merged property map when only one value is needed.
+
+**Write routing for cross-layer properties:** When `setNodeProperties` targets a node that exists only in frozen layers, a shadow entry is created in `activeLayer` to hold the overlay properties. Same for edges.
+
 **Freeze data flow:**
 
 ```
-freezeAndPushLayer():
+freeze():
   activeLayer.transferTo(frozenLayerFactory())  → bulk write to target
   activeLayer.close()                           → release heap memory
   frozenLayers.add(frozenTarget)
   activeLayer = NativeStorageImpl()             → fresh empty heap layer
 ```
 
-**Design rationale:** `PhasedStorageImpl` is the only freeze-and-stack implementation. Introducing `IFreezableStorage` / `ILayeredStorage` interfaces would add inheritance complexity without benefit — there are no other implementations to abstract over. Upstream code that needs only `IStorage` works transparently; code that needs phased-specific methods holds a `PhasedStorageImpl` reference directly.
-
-See `docs/impl/phased-immutable-storage.md` for performance analysis, freeze optimization, and static analysis workflow mapping.
-
----
-
-### DeltaStorageImpl vs PhasedStorageImpl
-
-| Dimension | DeltaStorageImpl | PhasedStorageImpl |
-|-----------|-----------------|-------------------|
-| Layers | 2 (base + present) | N (frozen stack + active) |
-| Deletion scope | Full (both layers, via deleted holders) | Active layer only (frozen layers immutable) |
-| Deleted tracking | `deletedNodesHolder` / `deletedEdgesHolder` + `"_deleted_"` sentinel | None needed |
-| Query complexity | 3-way check (deleted → present → base) | 2-way cascade (active → frozen stack) |
-| Off-heap support | Manual (pass MapDB as `baseDelta`) | Built-in (`freezeAndPushLayer` auto-migrates) |
-| Use case | General-purpose; supports full graph mutation including frozen-layer deletion | Static analysis pipelines; append-heavy with phase-based freezing |
-
-Both share `IStorage` interface and are interchangeable. Use `DeltaStorageImpl` when frozen-layer deletion is needed (incremental analysis, graph restructuring); use `PhasedStorageImpl` for the common static analysis workflow (build → freeze → build → freeze → analyze).
+**Design rationale:** Restricting deletion to the active layer eliminates deletion tracking sets and sentinel values. Query resolution is a simple 2-way cascade (active → frozen stack). The N-layer model supports arbitrary freeze depth — a single frozen layer suffices for simple pipelines, while multiple layers accommodate multi-phase analysis.
 
 ---
 
@@ -277,8 +294,7 @@ Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv
 | `AccessClosedStorageException` | Operation on closed storage |
 | `EntityAlreadyExistException` | Adding an already-existing node or edge |
 | `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src or dst node |
-| `FrozenLayerModificationException` | Attempting to delete an entity that belongs to a frozen layer in `PhasedStorageImpl` |
-| `StorageFrozenException` | Write operation on `PhasedStorageImpl` after `freeze()` |
+| `FrozenLayerModificationException` | Attempting to delete an entity that belongs to a frozen layer in `LayeredStorageImpl` |
 
 ---
 
@@ -292,20 +308,23 @@ Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv
 - Property access/modification on non-existent entities must throw `EntityNotExistException`
 - `deleteNode` does not cascade — graph layer must remove edges first
 
-### DeltaStorageImpl
+### CompactFrozenStorageImpl
 
-- `baseDelta` is never mutated; all writes go to `presentDelta`
-- `deletedNodesHolder` / `deletedEdgesHolder` must be checked before all read operations
-- `"_deleted_"` sentinel must be filtered from property reads
-- `close()` only closes `presentDelta`; `baseDelta` lifecycle is external
+- All mutation methods must throw `UnsupportedOperationException`
+- `getNodeProperty`/`getEdgeProperty` must return `null` for absent property keys (not throw)
+- ByteArray encoding must be lossless: decode(encode(properties)) must equal original properties
+- SoftReference cache must not change observable behavior — cache miss and cache hit must return identical results
+- `close()` must clear all data maps and caches; subsequent operations must throw `AccessClosedStorageException`
 
-### PhasedStorageImpl
+### LayeredStorageImpl
 
 - `deleteNode` / `deleteEdge` must throw `FrozenLayerModificationException` if entity is not in `activeLayer`
-- `freezeAndPushLayer` must fully transfer active layer data before closing it
+- `freeze` must fully transfer active layer data before closing it
 - Property overlay: active layer values take precedence over frozen layer values for the same key
 - Adjacency merge: `getIncomingEdges` / `getOutgoingEdges` must merge results from all layers
-- Layer count should stay ≤ 3-4; use `compactLayers` to merge when exceeding threshold
+- `setNodeProperties` / `setEdgeProperties` on frozen-layer entities must create shadow entries in `activeLayer`
+- `addNode` / `addEdge` must check all layers for duplicates before adding to active layer
+- Layer count should stay bounded; use `compact` to merge when exceeding threshold
 
 ### IStorageImporter implementations
 
