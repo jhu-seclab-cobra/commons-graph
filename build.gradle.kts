@@ -56,9 +56,16 @@ subprojects {
     }
 
     tasks.withType<Test> {
-        maxHeapSize = "8g"
-        if (project.hasProperty("excludePerformanceTests")) {
+        if (!project.hasProperty("includePerformanceTests")) {
             exclude("**/*PerformanceTest*")
+        } else {
+            maxHeapSize = "8g"
+            jvmArgs(
+                "-XX:+UseG1GC",
+                "-XX:MaxGCPauseMillis=200",
+                "-XX:G1HeapRegionSize=32m",
+                "-XX:InitiatingHeapOccupancyPercent=45",
+            )
         }
     }
 

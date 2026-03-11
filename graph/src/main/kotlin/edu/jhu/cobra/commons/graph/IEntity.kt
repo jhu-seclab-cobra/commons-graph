@@ -60,7 +60,7 @@ sealed interface IEntity {
     val type: Type
 
     /**
-     * Sets a primitive property value by name (cache only).
+     * Sets a primitive property value by name.
      *
      * @param byName The property name.
      * @param newVal The new primitive value, or null to remove.
@@ -89,7 +89,7 @@ sealed interface IEntity {
     fun setProps(props: Map<String, IValue?>)
 
     /**
-     * Returns a primitive property value by name (cache only).
+     * Returns a primitive property value by name.
      *
      * @param byName The property name.
      * @return The primitive value, or null if absent.
@@ -112,18 +112,18 @@ sealed interface IEntity {
     fun getAllProps(): Map<String, IValue>
 
     /**
-     * Returns true if the property exists in the cache.
+     * Returns true if the property exists.
      *
      * @param name The property name.
-     * @return True if present in cache, false otherwise.
+     * @return True if present, false otherwise.
      */
     fun containProp(name: String): Boolean
 
     /**
-     * Returns true if the property exists in the cache.
+     * Returns true if the property exists.
      *
      * @param byName The property name.
-     * @return True if present in cache, false otherwise.
+     * @return True if present, false otherwise.
      */
     operator fun contains(byName: String): Boolean = containProp(byName)
 }

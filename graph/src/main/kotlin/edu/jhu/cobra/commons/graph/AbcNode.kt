@@ -108,7 +108,7 @@ abstract class AbcNode(
      * @param name The property name.
      * @return The property value, or null if absent.
      */
-    override fun getProp(name: String): IValue? = storage.getNodeProperties(id)[name]
+    override fun getProp(name: String): IValue? = storage.getNodeProperty(id, name)
 
     /**
      * Returns all properties of the node.
@@ -123,7 +123,7 @@ abstract class AbcNode(
      * @param name The property name.
      * @return True if the property exists, false otherwise.
      */
-    override fun containProp(name: String): Boolean = name in storage.getNodeProperties(id)
+    override fun containProp(name: String): Boolean = storage.getNodeProperty(id, name) != null
 
     /**
      * Returns a string representation of the node.
