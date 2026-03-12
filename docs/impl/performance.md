@@ -213,13 +213,9 @@ Already implemented. `metaNames` at line 194 already returns `metaProperties.key
 
 Already implemented. `deleteNode` at line 100 already inlines edge removal without intermediate ArrayList or per-edge `deleteEdge` calls.
 
-### P6-2: Benchmark NodeID Pre-allocation
+### ~~P6-2: Benchmark NodeID Pre-allocation~~ — Pre-existing
 
-- **File(s)**: `StoragePerformanceTest.kt`, `OptimizationBenchmarkTest.kt`, `GraphPerformanceTest.kt`
-- **Hypothesis**: Some benchmarks create `NodeID("n$i")` inside measured loops. Pre-allocating `Array(nodeCount) { NodeID("n$it") }` and indexing by `i % nodeCount` gives pure storage-operation measurements without allocation noise.
-- **Risk**: Low — test-only change.
-- **Priority**: Medium — prerequisite for accurate P6-5 evaluation.
-- **Cross-metric concern**: None — test infrastructure only.
+Already implemented. `StoragePerformanceTest`, `Phase1BenchmarkTest`, `OptimizationBenchmarkTest`, and `GraphPerformanceTest` all use pre-allocated `nodeIdPool` arrays.
 
 ### ~~P6-6: getDescendants LinkedList -> ArrayDeque~~ — KEEP
 
