@@ -27,21 +27,6 @@ class EntityAlreadyExistException(
 ) : Exception("Entity ID $id already exists.")
 
 /**
- * Thrown when an invalid property name is used for an entity.
- *
- * The property name is invalid if it starts with "meta_".
- *
- * @constructor Creates an exception for an invalid property name.
- * @param propName The name of the invalid property.
- * @param eid The ID of the entity for which the invalid property was attempted.
- * @see IEntity.ID
- */
-class InvalidPropNameException(
-    propName: String,
-    eid: IEntity.ID?,
-) : Exception("Invalid name $propName in entity $eid.")
-
-/**
  * Thrown when an operation is attempted on a storage that has already been closed.
  *
  * Used within graph storage systems to indicate that the storage context is no longer active or accessible.
@@ -62,13 +47,3 @@ class AccessClosedStorageException : IllegalStateException("Try to access closed
 class FrozenLayerModificationException(
     id: IEntity.ID,
 ) : IllegalStateException("Cannot modify frozen-layer entity: $id")
-
-/**
- * Thrown when a write operation is attempted on a frozen storage.
- *
- * After [edu.jhu.cobra.commons.graph.storage.PhasedStorageImpl.freeze] is called,
- * all write operations throw this exception.
- *
- * @constructor Creates an exception for writing to frozen storage.
- */
-class StorageFrozenException : IllegalStateException("Cannot write to frozen storage")
