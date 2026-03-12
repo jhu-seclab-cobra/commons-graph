@@ -48,7 +48,10 @@ class StoragePerformanceTest {
         return storage
     }
 
-    private fun nodeId(i: Int): NodeID = NodeID("n$i")
+    // Pre-allocated NodeID pool — avoids string concatenation + allocation inside measured loops
+    private val nodeIdPool = Array(1_000_001) { NodeID("n$it") }
+
+    private fun nodeId(i: Int): NodeID = nodeIdPool[i]
 
     private fun edgeId(
         src: Int,

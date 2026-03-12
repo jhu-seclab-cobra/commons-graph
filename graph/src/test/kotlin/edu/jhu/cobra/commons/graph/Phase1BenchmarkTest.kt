@@ -12,7 +12,7 @@ import kotlin.test.Test
  *
  * Measures:
  * - B8: Graph-layer redundant ID set overhead (dual lookup, memory)
- * - P0: IStorage property access latency (baseline for AnalysisStateStore comparison)
+ * - P0: IStorage property access latency vs direct array baseline
  *
  * Run with: ./gradlew :graph:test --tests "*.Phase1BenchmarkTest" -PincludePerformanceTests
  */
@@ -25,7 +25,9 @@ class Phase1BenchmarkTest {
         closeables.clear()
     }
 
-    private fun nodeId(i: Int): NodeID = NodeID("n$i")
+    private val nodeIdPool = Array(100_001) { NodeID("n$it") }
+
+    private fun nodeId(i: Int): NodeID = nodeIdPool[i]
 
     private fun edgeId(
         src: Int,
@@ -268,7 +270,7 @@ class Phase1BenchmarkTest {
                 storage.setNodeProperties(nodeId(i % nodeCount), mapOf("state" to i.numVal))
             }
 
-        // Direct array approach: simulating what AnalysisStateStore would do
+        // Direct array approach: O(1) indexed access without HashMap overhead
         val states = arrayOfNulls<IValue>(nodeCount)
         for (i in 0 until nodeCount) states[i] = 0.numVal
 
