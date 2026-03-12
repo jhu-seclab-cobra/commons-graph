@@ -92,6 +92,8 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 | 3 | B3-A | Wrapper cache (read-only) | getDescendants (Layered) | +26% (714.2K -> 898.9K) |
 | 5 | P5-3 | Redundant isClosed elimination | NativeStorage node delete | +10% (1.45M -> 1.59M) |
 | 5 | P5-4 | Inlined containsNode checks | LayeredStorage property write | +7% (15.08M -> 16.08M) |
+| 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (NativeStorage) | +27% (325.5K -> 412.5K) |
+| 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (LayeredStorage) | +10% (667.3K -> 736.3K) |
 
 ---
 
@@ -192,13 +194,17 @@ Round 6 — Structural storage optimizations and traversal fixes.
 
 Sort order: bug fixes first, then by priority (high -> low), within same priority prefer lower risk.
 
-### P6-1: AbcMultipleGraph.getAncestors ArrayList -> ArrayDeque (Bug fix)
+### ~~P6-1: AbcMultipleGraph.getAncestors ArrayList -> ArrayDeque (Bug fix)~~ — Pre-existing
 
-- **File(s)**: `AbcMultipleGraph.kt`
-- **Hypothesis**: `getAncestors` uses `mutableListOf(of)` (ArrayList) with `stack.removeAt(0)` — O(n) per removal for BFS. `getDescendants` already uses `LinkedList` with `removeFirst()` — O(1). Replacing with `ArrayDeque` gives O(1) `removeFirst()` without LinkedList per-node object overhead. At depth D with branching factor B, total removals = O(B^D); current cost O(B^(2D)), fixed cost O(B^D).
-- **Risk**: Low — algorithm fix, no API change.
-- **Priority**: Bug fix — correctness of time complexity.
-- **Cross-metric concern**: None — isolated to one method, no storage layer changes.
+Already implemented. `getAncestors` at line 280 already uses `ArrayDeque`.
+
+### ~~P6-3: NativeStorageImpl.metaNames Defensive Copy Elimination~~ — Pre-existing
+
+Already implemented. `metaNames` at line 194 already returns `metaProperties.keys` directly.
+
+### ~~P6-4: NativeStorageImpl.deleteNode Inline Edge Cleanup~~ — Pre-existing
+
+Already implemented. `deleteNode` at line 100 already inlines edge removal without intermediate ArrayList or per-edge `deleteEdge` calls.
 
 ### P6-2: Benchmark NodeID Pre-allocation
 
@@ -207,22 +213,6 @@ Sort order: bug fixes first, then by priority (high -> low), within same priorit
 - **Risk**: Low — test-only change.
 - **Priority**: Medium — prerequisite for accurate P6-5 evaluation.
 - **Cross-metric concern**: None — test infrastructure only.
-
-### P6-3: NativeStorageImpl.metaNames Defensive Copy Elimination
-
-- **File(s)**: `NativeStorageImpl.kt`
-- **Hypothesis**: `metaNames` getter returns `metaProperties.keys` directly instead of `.toSet()` copy. Consistent with `nodeIDs`/`edgeIDs` which already return `keys` directly.
-- **Risk**: Low — single line change, off hot path.
-- **Priority**: Low — consistency fix.
-- **Cross-metric concern**: None — not benchmarked, not on hot path.
-
-### P6-4: NativeStorageImpl.deleteNode Inline Edge Cleanup
-
-- **File(s)**: `NativeStorageImpl.kt`
-- **Hypothesis**: `deleteNode` currently iterates connected edges and calls `deleteEdge(it)` per edge, each re-checking `ensureOpen()` + `hasEdge()`. Inlining the edge removal eliminates N redundant checks where N = node degree.
-- **Risk**: Low — internal refactor, same semantics.
-- **Priority**: Low — `deleteNode` is not a hot path.
-- **Cross-metric concern**: None — isolated to delete path.
 
 ### P6-5: Columnar Property Storage (NativeStorageImpl)
 
@@ -283,13 +273,11 @@ Sort order: bug fixes first, then by priority (high -> low), within same priorit
 - **Priority**: High — directly attacks B2 bottleneck (~176MB savings at 1M nodes). Addresses Key Insight #1.
 - **Go/no-go gate**: KEEP only if **no metric regresses >10%** across full benchmark suite.
 
-### P6-6: getDescendants LinkedList -> ArrayDeque (Consistency fix)
+### ~~P6-6: getDescendants LinkedList -> ArrayDeque~~ — KEEP
 
 - **File(s)**: `AbcMultipleGraph.kt`
-- **Hypothesis**: `getDescendants(of, edgeCond)` at line 298 uses `LinkedList<NodeID>()` as BFS queue. `getAncestors` already uses `ArrayDeque` (after P6-1). `LinkedList` allocates a `Node` object per element (~32B), while `ArrayDeque` uses a single backing array. The label-filtered variants `getDescendants(of, label, cond)` and `getAncestors(of, label, cond)` at lines 310-346 also use `LinkedList`.
-- **Risk**: Low — same pattern as P6-1.
-- **Priority**: Low — consistency with P6-1. getDescendants benchmarked at 898.9K ops/s; minor improvement from reduced allocation.
-- **Cross-metric concern**: None — isolated to traversal methods.
+- **Change**: Replaced `LinkedList` with `ArrayDeque` in `getDescendants(of, edgeCond)`, `getDescendants(of, label, cond)`, `getAncestors(of, label, cond)`, and `Label.ancestors`. Removed unused `java.util.LinkedList` import.
+- **Impact**: getDescendants (NativeStorage) +27% (325.5K -> 412.5K), getDescendants (LayeredStorage) +10% (667.3K -> 736.3K). No regression on other metrics (population, getNode, lattice ops all within JVM noise).
 
 ---
 

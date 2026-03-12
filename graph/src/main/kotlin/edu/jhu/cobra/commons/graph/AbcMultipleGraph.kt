@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.*
 import java.io.Closeable
-import java.util.LinkedList
 
 /**
  * Abstract directed multi-graph allowing multiple edges between the same pair of
@@ -63,7 +62,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         get() =
             sequence {
                 val visited = mutableSetOf<Label>()
-                val stack = LinkedList<Label>().also { it.add(this@ancestors) }
+                val stack = ArrayDeque<Label>().also { it.add(this@ancestors) }
                 while (stack.isNotEmpty()) {
                     val current = stack.removeFirst()
                     if (current in visited) continue
@@ -295,7 +294,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ) = sequence {
         if (!storage.containsNode(of)) return@sequence
         val visited = hashSetOf<NodeID>()
-        val queue = LinkedList<NodeID>().apply { add(of) }
+        val queue = ArrayDeque<NodeID>().apply { add(of) }
         while (queue.isNotEmpty()) {
             val currentId = queue.removeFirst()
             if (!visited.add(currentId)) continue
@@ -314,7 +313,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
-            val queue = LinkedList<NodeID>().apply { add(of) }
+            val queue = ArrayDeque<NodeID>().apply { add(of) }
             while (queue.isNotEmpty()) {
                 val current = queue.removeFirst()
                 getChildren(current, label, cond).forEach { child ->
@@ -333,7 +332,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
-            val queue = LinkedList<NodeID>().apply { add(of) }
+            val queue = ArrayDeque<NodeID>().apply { add(of) }
             while (queue.isNotEmpty()) {
                 val current = queue.removeFirst()
                 getParents(current, label, cond).forEach { parent ->
