@@ -77,6 +77,23 @@ interface IStorage : Closeable {
     fun getNodeProperties(id: NodeID): Map<String, IValue>
 
     /**
+     * Returns a single property value of a node by name.
+     *
+     * Default delegates to [getNodeProperties]; implementations may override
+     * for O(1) direct access without constructing the full property map.
+     *
+     * @param id The ID of the node.
+     * @param name The property name.
+     * @return The property value, or null if the property is absent.
+     * @throws AccessClosedStorageException If storage is closed.
+     * @throws EntityNotExistException If node does not exist.
+     */
+    fun getNodeProperty(
+        id: NodeID,
+        name: String,
+    ): IValue? = getNodeProperties(id)[name]
+
+    /**
      * Updates properties of a specific node.
      *
      * Properties with null values will be deleted from the node.
@@ -135,6 +152,23 @@ interface IStorage : Closeable {
      * @throws EntityNotExistException If edge does not exist.
      */
     fun getEdgeProperties(id: EdgeID): Map<String, IValue>
+
+    /**
+     * Returns a single property value of an edge by name.
+     *
+     * Default delegates to [getEdgeProperties]; implementations may override
+     * for O(1) direct access without constructing the full property map.
+     *
+     * @param id The ID of the edge.
+     * @param name The property name.
+     * @return The property value, or null if the property is absent.
+     * @throws AccessClosedStorageException If storage is closed.
+     * @throws EntityNotExistException If edge does not exist.
+     */
+    fun getEdgeProperty(
+        id: EdgeID,
+        name: String,
+    ): IValue? = getEdgeProperties(id)[name]
 
     /**
      * Updates properties of a specific edge.
