@@ -6,68 +6,291 @@ Paired design: `storage.design.md`
 
 ## Current Baseline
 
-Benchmarked on macOS (Apple Silicon), JDK 21, G1GC with `-XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m`.
+Benchmarked on macOS (Apple Silicon), JDK 8, G1GC with `-XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m`.
+Each metric is the **median of 3 independent JVM invocations** per the benchmark reliability standards.
 
 Run with:
 ```bash
-./gradlew :graph:test --tests "*.Phase1BenchmarkTest" -PincludePerformanceTests
-./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests
-./gradlew :graph:test --tests "*.OptimizationBenchmarkTest" -PincludePerformanceTests
+./gradlew :graph:test --tests "*.Phase1BenchmarkTest" -PincludePerformanceTests --rerun
+./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
+./gradlew :graph:test --tests "*.GraphPerformanceTest" -PincludePerformanceTests --rerun
 ```
 
 JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`
 
-### Graph-Level Operations (50K nodes, 150K edges)
+> **Note**: NativeStorageImpl uses row-oriented storage (`Map<NodeID, MutableMap<String, IValue>>`).
+> P6-5 columnar optimization was reverted due to functional test incompatibility.
 
-| Operation | ops/s |
+### Graph-Level Query Operations (10K nodes, 50K edges, 100K queries)
+
+| Storage | getNode | getOutEdges | getChildren | getDescendants |
+|---|---|---|---|---|
+| NativeStorage | 31.21M | 7.04M | 4.61M | 323.4K |
+| NativeConcurStorage | 33.58M | 7.78M | 4.18M | 144.9K |
+| LayeredStorage | 53.27M | 7.72M | 4.51M | 508.4K |
+
+### Graph Population (median ms)
+
+| Storage | 10K/30K | 100K/300K |
+|---|---|---|
+| NativeStorage (MultipleGraph) | 5.0 | 108.8 |
+| NativeConcurStorage (MultipleGraph) | 5.5 | 84.8 |
+| LayeredStorage (MultipleGraph) | 4.9 | 82.7 |
+| NativeStorage (SimpleGraph) | — | 104.6 |
+| NativeConcurStorage (SimpleGraph) | — | 124.9 |
+| LayeredStorage (SimpleGraph) | — | 100.8 |
+
+### Storage-Level Operations
+
+#### Node Operations
+
+| Implementation | Lookup (500K ops) | Add 1M | Delete (2K from 10K) |
+|---|---|---|---|
+| NativeStorageImpl | 83.38M | 3.15M | 3.05M |
+| NativeConcurStorageImpl | 60.37M | 3.49M | 3.14M |
+| LayeredStorageImpl | 81.96M | 4.50M | 2.98M |
+
+#### Edge Operations
+
+| Implementation | Add 1M | Outgoing Query | Incoming Query |
+|---|---|---|---|
+| NativeStorageImpl | 2.11M | 27.78M | 75.03M |
+| NativeConcurStorageImpl | 1.99M | 25.00M | 55.67M |
+| LayeredStorageImpl | 1.79M | 46.57M | 43.31M |
+
+> ⚠ Edge query numbers show high variance across JVM invocations (JIT cross-contamination).
+
+#### Property Read/Write (200K ops on 50K nodes)
+
+| Implementation | Read | Write |
+|---|---|---|
+| NativeStorageImpl | 22.14M | 18.89M |
+| NativeConcurStorageImpl | 37.00M | 16.86M |
+| LayeredStorageImpl | 43.84M | 18.20M |
+
+> ⚠ Property read/write shows high variance (up to 2x) across JVM invocations due to JIT cross-contamination from sequential test execution in the same JVM.
+
+#### Population (Storage-Level, median ms)
+
+| Implementation | 10K/30K | 100K/300K | 1M/3M |
+|---|---|---|---|
+| NativeStorageImpl | 4.9 | 121.9 | 3106.2 |
+| NativeConcurStorageImpl | 5.4 | 135.2 | 3174.2 |
+| LayeredStorageImpl | 6.1 | 105.2 | 3396.8 |
+
+#### Mixed Workload (50K iterations, median ms)
+
+| Implementation | median ms |
 |---|---|
-| graph.containNode | 46.15M |
-| graph.getNode (NativeStorage) | 15.80M |
-| graph.getNode (NativeConcurStorage) | 27.01M |
-| graph.getNode (LayeredStorage) | 24.15M |
-| graph.getOutgoingEdges (NativeStorage) | 5.88M |
-| graph.getOutgoingEdges (LayeredStorage) | 6.50M |
-| graph.getDescendants (LayeredStorage) | 898.9K |
+| NativeStorageImpl | 17.6 |
+| NativeConcurStorageImpl | 26.0 |
+| LayeredStorageImpl | 23.0 |
 
-### LayeredStorage Operations (50K nodes, 200K ops)
+### LayeredStorage Multi-Layer Query (100K queries, 10K nodes/layer)
 
-| Operation | ops/s |
-|---|---|
-| containsNode (1 layer) | 32.55M |
-| containsNode (10 layers) | 18.00M |
-| property read | 46.92M |
-| property write | 23.00M |
-| outgoing edge query | 21.99M |
-| incoming edge query | 14.31M |
-| getProps (1 layer) | 30.85M |
-| getProps (10 layers) | 17.00M |
+| Layers | containsNode | getProps |
+|---|---|---|
+| 1 | 82.11M | 54.67M |
+| 3 | 62.67M | 43.82M |
+| 5 | 52.87M | 36.07M |
+| 10 | 30.56M | 22.24M |
 
-### NativeStorageImpl Operations
+### Lattice Operations (5K nodes, 15K edges, 5 labels)
 
-| Operation | ops/s |
-|---|---|
-| Property Read | 46.58M |
-| Property Write | 18.91M |
-| Edge Add 1M | 2.24M |
-| Node Delete | 2.57M |
-| Node Add 1M | 3.35M |
-| Population 100K/300K | 149.0 ms |
-| Population 1M/3M | 3149.7 ms |
+| Storage | assignLabels (ms) | filteredQuery (ops/s) | storeLattice (ms) |
+|---|---|---|---|
+| NativeStorage | 5.2 | 971.0K | 1.6 |
+| NativeConcurStorage | 3.5 | 1.09M | 0.5 |
+| LayeredStorage | 3.9 | 1.06M | 0.4 |
 
-### Fixpoint State Access (P0)
+### Fixpoint State Access (P0, 50K nodes, 200K iterations)
 
 | Approach | Read | Write |
 |---|---|---|
-| IStorage (HashMap) | 38-44M ops/s | 11-24M ops/s |
-| AnalysisStateStore (array) | 1800-2059M ops/s | 163-173M ops/s |
+| IStorage (HashMap) | 30.36M | 34.18M |
+| Direct array (simulated) | 2060.96M | 169.40M |
+| Speedup | 68x | 5x |
+
+> P0 run 1 was discarded as outlier (>20% deviation: IStorage read 80.25M, Direct read 415.73M).
 
 ### Memory (50K nodes, 150K edges)
 
 | Metric | MB |
 |---|---|
-| Storage only | 89.6 |
-| Storage + graph | 92.1 |
-| Graph overhead | 2.5 |
+| Storage only | 69.0 |
+| Storage + graph | 69.6 |
+| Graph overhead | 0.6 |
+
+### Fixpoint Memory (P0, 100K nodes)
+
+| Approach | MB |
+|---|---|
+| IStorage (HashMap per node) | 39.7 |
+| Direct Array\<IValue\> | 3.4 |
+| Savings | 11.6x |
+
+---
+
+## JDK 8 vs JDK 21 Comparison
+
+Median of 3 independent JVM invocations per JDK version. Same hardware, same G1GC flags.
+JDK 8: Azul Zulu 8.0.442 (HotSpot). JDK 21: Eclipse Temurin 21.0.6+7 (HotSpot).
+
+> **Note**: Earlier benchmarks incorrectly used GraalVM CE 21.0.2 (Graal JIT) instead of HotSpot,
+> producing misleading regressions on getNode (-26% to -34%) and ConcurrentHashMap lookup (-60%).
+> The data below uses the correct HotSpot C2 JIT on both JDKs.
+
+### Graph-Level Query Operations (10K nodes, 50K edges, 100K queries)
+
+| Storage | Metric | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|---|
+| NativeStorage | getNode | 31.21M | 40.25M | **+29%** |
+| NativeStorage | getOutEdges | 7.04M | 8.21M | +17% |
+| NativeStorage | getChildren | 4.61M | 4.29M | -7% |
+| NativeStorage | getDescendants | 323.4K | 370.8K | +15% |
+| NativeConcurStorage | getNode | 33.58M | 46.82M | **+39%** |
+| NativeConcurStorage | getOutEdges | 7.78M | 7.92M | +2% |
+| NativeConcurStorage | getChildren | 4.18M | 4.62M | +11% |
+| NativeConcurStorage | getDescendants | 144.9K | 156.2K | +8% |
+| LayeredStorage | getNode | 53.27M | 69.12M | **+30%** |
+| LayeredStorage | getOutEdges | 7.72M | 8.16M | +6% |
+| LayeredStorage | getChildren | 4.51M | 4.67M | +4% |
+| LayeredStorage | getDescendants | 508.4K | 961.8K | **+89%** |
+
+### Storage Node Operations
+
+| Implementation | Metric | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|---|
+| NativeStorageImpl | Lookup | 83.38M | 83.42M | +0% |
+| NativeStorageImpl | Delete | 3.05M | 2.17M | **-29%** |
+| NativeConcurStorageImpl | Lookup | 60.37M | 61.95M | +3% |
+| NativeConcurStorageImpl | Delete | 3.14M | 3.14M | +0% |
+| LayeredStorageImpl | Lookup | 81.96M | 84.79M | +3% |
+| LayeredStorageImpl | Delete | 2.98M | 3.30M | +11% |
+
+### Property Read/Write (200K ops on 50K nodes)
+
+| Implementation | Metric | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|---|
+| NativeStorageImpl | Read | 22.14M | 55.14M | **+149%** |
+| NativeStorageImpl | Write | 18.89M | 14.43M | **-24%** |
+| NativeConcurStorageImpl | Read | 37.00M | 16.33M | **-56%** |
+| NativeConcurStorageImpl | Write | 16.86M | 9.76M | **-42%** |
+| LayeredStorageImpl | Read | 43.84M | 15.84M | **-64%** |
+| LayeredStorageImpl | Write | 18.20M | 7.72M | **-58%** |
+
+> ⚠ Property read/write exhibits up to 2x variance on both JDKs due to JIT cross-contamination.
+> NativeStorage read +149% vs Concur/Layered read -56%/-64% is not a JDK effect — it reflects
+> JIT compilation order noise within the same JVM. These numbers are unreliable for JDK comparison.
+
+### Population (median ms, lower = better)
+
+| Implementation | Scale | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|---|
+| NativeStorageImpl | 1M/3M | 3106.2 | 2218.3 | **-29%** |
+| NativeConcurStorageImpl | 1M/3M | 3174.2 | 2233.6 | **-30%** |
+| LayeredStorageImpl | 1M/3M | 3396.8 | 2249.2 | **-34%** |
+
+### Graph Population (median ms, lower = better)
+
+| Storage | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|
+| NativeStorage (Multiple 100K/300K) | 108.8 | 91.7 | -16% |
+| NativeConcurStorage (Multiple 100K/300K) | 84.8 | 77.2 | -9% |
+| LayeredStorage (Multiple 100K/300K) | 82.7 | 80.4 | -3% |
+| NativeStorage (Simple 100K/300K) | 104.6 | 98.5 | -6% |
+| NativeConcurStorage (Simple 100K/300K) | 124.9 | 90.4 | **-28%** |
+| LayeredStorage (Simple 100K/300K) | 100.8 | 85.0 | -16% |
+
+### Memory (50K nodes, 150K edges)
+
+| Metric | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|
+| Storage only | 69.0 MB | 71.0 MB | +3% |
+| IStorage per node (100K) | 39.7 MB | 40.4 MB | +2% |
+
+### Fixpoint State Access (P0, 50K nodes, 200K iterations)
+
+| Approach | Metric | JDK 8 | JDK 21 | Delta |
+|---|---|---|---|---|
+| IStorage | Read | 30.36M | 96.32M | **+217%** |
+| IStorage | Write | 34.18M | 30.19M | -12% |
+| Direct array | Read | 2060.96M | 402.92M | **-80%** |
+| Direct array | Write | 169.40M | 104.20M | **-38%** |
+
+> ⚠ P0 numbers are heavily affected by JIT noise. JDK 8 P0 run 1 was discarded as an outlier
+> (IStorage read 80.25M vs median 30.36M). JDK 21 IStorage read (96.32M) is consistent with JDK 8's
+> outlier run, suggesting all P0 variation is JIT-driven, not JDK-driven. Direct array read difference
+> (-80%) reflects different JIT optimization of trivial array access patterns between JDK versions.
+
+### JDK 21 Analysis Summary
+
+**JDK 21 improvements (consistent across runs):**
+- **getNode +29% to +39%** — HotSpot C2 JIT in JDK 21 produces better speculative inlining for HashMap.get and virtual dispatch paths
+- **getDescendants +15% to +89%** — BFS traversal benefits from improved JIT optimization of ArrayDeque and iterator patterns
+- **Bulk population 29-34% faster** — G1GC improvements in JDK 21 reduce pause overhead during bulk allocation
+- **Graph population 3-28% faster** — consistent improvement across all storage types and graph types
+
+**JDK 21 regressions:**
+- **NativeStorage node delete -29%** — HashMap removal path regression (isolated to NativeStorage; other impls unchanged or improved)
+
+**Inconclusive (JIT cross-contamination noise):**
+- Property read/write: contradictory results (+149% on Native, -56% on Concur) indicate JIT compilation order, not JDK behavior
+- P0 fixpoint: IStorage read +217% but this matches JDK 8's discarded outlier; likely JIT warm-up artifact
+- Edge query: not re-tested in this round; known >2x variance
+
+**Recommendation**: JDK 21 (HotSpot Temurin) is **recommended** over JDK 8 for this workload. The read-heavy hot paths (getNode, getOutEdges, getDescendants) are all faster, and bulk population shows consistent 29-34% improvement. The only regression (NativeStorage delete -29%) is on a cold path. Memory footprint is unchanged (+2-3%).
+
+---
+
+## HotSpot C2 vs GraalVM CE (JDK 21)
+
+Both on JDK 21, same hardware, same G1GC flags. Median of 3 independent JVM invocations.
+HotSpot C2: Eclipse Temurin 21.0.6+7. GraalVM CE: GraalVM Community 21.0.2+13-jvmci-23.1-b30.
+
+### Graph-Level Query Operations (10K nodes, 50K edges, 100K queries)
+
+| Storage | Metric | GraalVM CE | HotSpot C2 | Delta |
+|---|---|---|---|---|
+| NativeStorage | getNode | 23.05M | 40.25M | **+75%** |
+| NativeStorage | getOutEdges | 7.90M | 8.21M | +4% |
+| NativeStorage | getChildren | 4.04M | 4.29M | +6% |
+| NativeConcurStorage | getNode | 22.12M | 46.82M | **+112%** |
+| NativeConcurStorage | getOutEdges | 7.18M | 7.92M | +10% |
+| NativeConcurStorage | getDescendants | 693.7K | 156.2K | **-77%** |
+| LayeredStorage | getNode | 34.99M | 69.12M | **+97%** |
+| LayeredStorage | getOutEdges | 5.50M | 8.16M | **+48%** |
+| LayeredStorage | getDescendants | 861.5K | 961.8K | +12% |
+
+### Storage Node Operations
+
+| Implementation | Metric | GraalVM CE | HotSpot C2 | Delta |
+|---|---|---|---|---|
+| NativeStorageImpl | Lookup | 88.51M | 83.42M | -6% |
+| NativeStorageImpl | Delete | 1.55M | 2.17M | **+40%** |
+| NativeConcurStorageImpl | Lookup | 24.30M | 61.95M | **+155%** |
+| LayeredStorageImpl | Lookup | 69.51M | 84.79M | **+22%** |
+
+### Population (median ms, lower = better)
+
+| Implementation | Scale | GraalVM CE | HotSpot C2 | Delta |
+|---|---|---|---|---|
+| NativeStorageImpl | 1M/3M | 2340.1 | 2218.3 | -5% |
+| NativeConcurStorageImpl | 1M/3M | 2271.5 | 2233.6 | -2% |
+| LayeredStorageImpl | 1M/3M | 2397.5 | 2249.2 | -6% |
+
+### Analysis
+
+**HotSpot C2 advantages:**
+- **getNode +75% to +112%** — C2's speculative inlining of `HashMap.get` and virtual dispatch is significantly more effective than Graal CE's compilation strategy for this call pattern
+- **ConcurrentHashMap single-threaded lookup +155%** — Graal CE severely underperforms on ConcurrentHashMap's VarHandle-based read path; C2 optimizes this to near-HashMap speed
+- **LayeredStorage getOutEdges +48%** — UnionSet/LazyMergedMap view traversal benefits from C2's type profiling
+
+**GraalVM CE advantages:**
+- **NativeConcurStorage getDescendants +345%** (693.7K vs 156.2K) — Graal's partial escape analysis likely eliminates intermediate iterator/ArrayDeque allocations in BFS traversal more aggressively than C2
+- **NativeStorage Lookup +6%** — marginal, within noise
+
+**Conclusion**: For HashMap/ConcurrentHashMap-intensive graph workloads, HotSpot C2 is the clear winner. GraalVM CE's advantage on getDescendants (BFS traversal with heavy allocation) suggests Graal's partial escape analysis is superior for allocation-heavy loops, but this does not compensate for the 75-155% regression on the dominant hot paths. GraalVM Enterprise (Oracle GraalVM) may close the gap but was not tested.
 
 ---
 
@@ -95,12 +318,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 | 5 | P5-4 | Inlined containsNode checks | LayeredStorage property write | +7% (15.08M -> 16.08M) |
 | 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (NativeStorage) | +27% (325.5K -> 412.5K) |
 | 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (LayeredStorage) | +10% (667.3K -> 736.3K) |
-| 6 | P6-5 | Columnar node property storage | NativeStorage property write | +7.6% (17.58M -> 18.91M) |
-| 6 | P6-5 | Columnar node property storage | NativeStorage edge add 1M | +26.6% (1.77M -> 2.24M) |
-| 6 | P6-5 | Columnar node property storage | NativeStorage node delete | +61.6% (1.59M -> 2.57M) |
-| 6 | P6-5 | Columnar node property storage | NativeStorage population 1M/3M | -14.0% latency (3663.6ms -> 3149.7ms) |
-| 6 | P6-5 | Columnar node property storage | LayeredStorage property read | +26.2% (37.19M -> 46.92M) |
-| 6 | P6-5 | Columnar node property storage | LayeredStorage property write | +45.8% (15.77M -> 23.00M) |
+| 6 | P6-5 | Columnar node property storage | — | Reverted (functional test incompatibility) |
 
 ---
 
@@ -192,59 +410,21 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 | MapDB | Off-heap B-tree storage | ~3-6us serialize/deserialize per access | Serialization overhead negates GC benefit. Shifts GC pressure from Old Gen to Young Gen. 20-40x amplification on graph traversal paths. |
 | RocksDB | Off-heap KV with prefix seek | ~100ns JNI/call overhead | Not needed — frozen layer is point-query only. Platform-specific native libs. |
 | Chronicle Map | Off-heap HashMap with flyweight | mmap setup complexity | Overhead not justified for current use case. |
+| P6-5 | Columnar node property storage | Perf improved but reverted | ColumnViewMap iteration order (HashSet) broke CsvWriter short-circuit evaluation in `addAll`. Functional test failures in NativeCsvIOImplTest. Reverted to row-oriented storage. |
 
 ---
 
 ## Candidates
 
-Round 6 — Structural storage optimizations and traversal fixes.
-
-Sort order: bug fixes first, then by priority (high -> low), within same priority prefer lower risk.
-
-### ~~P6-1: AbcMultipleGraph.getAncestors ArrayList -> ArrayDeque (Bug fix)~~ — Pre-existing
-
-Already implemented. `getAncestors` at line 280 already uses `ArrayDeque`.
-
-### ~~P6-3: NativeStorageImpl.metaNames Defensive Copy Elimination~~ — Pre-existing
-
-Already implemented. `metaNames` at line 194 already returns `metaProperties.keys` directly.
-
-### ~~P6-4: NativeStorageImpl.deleteNode Inline Edge Cleanup~~ — Pre-existing
-
-Already implemented. `deleteNode` at line 100 already inlines edge removal without intermediate ArrayList or per-edge `deleteEdge` calls.
-
-### ~~P6-2: Benchmark NodeID Pre-allocation~~ — Pre-existing
-
-Already implemented. `StoragePerformanceTest`, `Phase1BenchmarkTest`, `OptimizationBenchmarkTest`, and `GraphPerformanceTest` all use pre-allocated `nodeIdPool` arrays.
-
-### ~~P6-6: getDescendants LinkedList -> ArrayDeque~~ — KEEP
-
-- **File(s)**: `AbcMultipleGraph.kt`
-- **Change**: Replaced `LinkedList` with `ArrayDeque` in `getDescendants(of, edgeCond)`, `getDescendants(of, label, cond)`, `getAncestors(of, label, cond)`, and `Label.ancestors`. Removed unused `java.util.LinkedList` import.
-- **Impact**: getDescendants (NativeStorage) +27% (325.5K -> 412.5K), getDescendants (LayeredStorage) +10% (667.3K -> 736.3K). No regression on other metrics (population, getNode, lattice ops all within JVM noise).
-
-### ~~P6-5: Columnar Property Storage (NativeStorageImpl)~~ — KEEP
-
-- **File(s)**: `NativeStorageImpl.kt`
-- **Change**: Replaced row-oriented `nodeProperties: Map<NodeID, MutableMap<String, IValue>>` with column-oriented `nodeSet: MutableSet<NodeID>` + `nodeColumns: HashMap<String, HashMap<NodeID, IValue>>`. One HashMap per property name instead of one per node. `getNodeProperties` returns a lightweight `ColumnViewMap` that reads columns lazily. `getNodeProperty` does two direct HashMap lookups. Edge properties remain row-oriented.
-- **Impact**: All metrics improved or neutral. No regression >10%.
-  - NativeStorage property read +2.1% (45.62M -> 46.58M)
-  - NativeStorage property write +7.6% (17.58M -> 18.91M)
-  - NativeStorage edge add 1M +26.6% (1.77M -> 2.24M)
-  - NativeStorage node delete +61.6% (1.59M -> 2.57M)
-  - NativeStorage population 1M/3M -14.0% latency (3663.6ms -> 3149.7ms)
-  - LayeredStorage property read +26.2% (37.19M -> 46.92M)
-  - LayeredStorage property write +45.8% (15.77M -> 23.00M)
-  - Node lookup, edge queries, mixed workload: within JVM noise
-- **Key difference from rejected B2-B**: B2-B changed the lookup algorithm (O(1) -> O(P)). Columnar keeps `getNodeProperty` at O(1) via two HashMap lookups. Gains come from eliminating per-entity HashMap overhead (~176B per node) without changing the access pattern.
+_Empty — no active optimization round._
 
 ---
 
 ## Remaining Known Bottlenecks
 
-### B2: Per-Entity MutableMap Property Storage (Partially resolved)
+### B2: Per-Entity MutableMap Property Storage
 
-Node properties now use columnar storage (P6-5), eliminating per-node HashMap overhead. **Edge properties still use row-oriented `Map<EdgeID, MutableMap<String, IValue>>`**. At 3M edges x 3 properties, edge property maps contribute ~540MB. Columnar edge storage is the next candidate if further memory reduction is needed.
+Both node and edge properties use row-oriented `Map<ID, MutableMap<String, IValue>>`. P6-5 columnar node storage was reverted due to CsvWriter compatibility issues. At scale (1M nodes x 3 properties + 3M edges x 3 properties), per-entity HashMap overhead is significant (~176B per entity map instance). Columnar storage remains a viable candidate if the CsvWriter iteration-order dependency is fixed first.
 
 ### B1-B: Integer Edge Indexing
 
@@ -278,3 +458,6 @@ After B8 removal, remaining graph->storage overhead (~1.17x for containNode) com
 10. **Eclipse Collections is the likely next step for memory optimization.** Primitive-specialized open-addressing hash tables could achieve memory savings without the read-path regressions seen in B2-B and B1-B.
 11. **Stored Map type affects JIT optimization paths.** Changing `toMutableMap()` (LinkedHashMap) to `HashMap()` in NativeStorageImpl caused -59% regression on unrelated node lookup. JIT inlines and specializes based on observed runtime types; changing the concrete Map type invalidates speculative optimizations across the entire call chain.
 12. **Always measure the full benchmark matrix, not just the target metric.** A change to one storage operation can regress unrelated operations due to JIT compilation budget effects, cache pollution, or type profile invalidation. The decision rule: KEEP only if no metric regresses >10%.
+13. **JIT cross-contamination produces unreliable numbers in sequential benchmarks.** Running multiple storage implementations in the same JVM (as our test suites do) shares JIT compilation budgets. Property read/write and edge query metrics showed up to 2x variance across 3 independent JVM invocations. Median of 3 runs mitigates but does not eliminate this noise. Separate JVM per implementation (or JMH `@Fork`) is required for precise comparisons.
+14. **Performance optimizations must not break functional invariants.** P6-5 columnar storage showed throughput improvements but changed `getNodeProperties` iteration order from LinkedHashMap (insertion-ordered) to HashSet (arbitrary). This broke CsvWriter's short-circuit evaluation in `addAll`, causing 3 test failures. Always run the full functional test suite after performance changes.
+15. **JIT compiler choice matters more than JDK version.** GraalVM CE 21 vs HotSpot C2 21 showed 75-155% difference on HashMap/ConcurrentHashMap hot paths — far larger than JDK 8 vs 21 differences (29-39%). Always verify which JIT compiler is active (Gradle toolchain may silently select GraalVM CE from SDKMAN). GraalVM CE excels at partial escape analysis (BFS traversal +345%) but underperforms on standard collection read paths.
