@@ -5,6 +5,7 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Unique identifier for an edge in the graph.
@@ -52,6 +53,35 @@ data class EdgeID(
         NodeID(value[1] as StrVal),
         value[2].core.toString(),
     )
+
+    companion object {
+        private val pool = ConcurrentHashMap<EdgeID, EdgeID>()
+
+        /**
+         * Returns a deduplicated [EdgeID] for the given parameters.
+         *
+         * Auto-interns the [srcNid] and [dstNid] via [NodeID.of].
+         * Reuses existing instances to reduce allocation and GC pressure.
+         *
+         * @param srcNid The source node identifier.
+         * @param dstNid The destination node identifier.
+         * @param eType The edge type name.
+         * @return A cached or newly interned [EdgeID].
+         */
+        fun of(
+            srcNid: NodeID,
+            dstNid: NodeID,
+            eType: String,
+        ): EdgeID {
+            val key = EdgeID(NodeID.of(srcNid.name), NodeID.of(dstNid.name), eType)
+            return pool.getOrPut(key) { key }
+        }
+
+        /**
+         * Clears the intern pool. Intended for testing or when resetting state.
+         */
+        fun clearPool() = pool.clear()
+    }
 }
 
 /**
