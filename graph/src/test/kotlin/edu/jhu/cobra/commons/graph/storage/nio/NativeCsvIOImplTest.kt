@@ -644,4 +644,88 @@ class NativeCsvIOImplTest {
     }
 
     // endregion
+
+    // region Metadata
+
+    @Test
+    fun `test export and import preserves metadata`() {
+        storage.addNode(node1)
+        storage.setMeta("simple", "hello".strVal)
+        storage.setMeta("number", 42.numVal)
+        val exportPath = tempDir.resolve("meta_test")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        assertEquals("hello", (importedStorage.getMeta("simple") as StrVal).core)
+        assertEquals(42, (importedStorage.getMeta("number") as NumVal).core)
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test export and import preserves lattice metadata`() {
+        storage.addNode(node1)
+        storage.addNode(node2)
+        val labelAParents = mapOf<String, IValue>("parent" to "root".strVal).mapVal
+        val labelBParents = mapOf<String, IValue>("parent" to "labelA".strVal).mapVal
+        val labelAChanges = listOf(edge1.serialize).listVal
+        storage.setMeta("__lp_labelA__", labelAParents)
+        storage.setMeta("__lp_labelB__", labelBParents)
+        storage.setMeta("__lc_labelA__", labelAChanges)
+        val exportPath = tempDir.resolve("lattice_meta")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        val importedAParents = importedStorage.getMeta("__lp_labelA__") as MapVal
+        assertEquals("root", (importedAParents["parent"] as StrVal).core)
+        val importedBParents = importedStorage.getMeta("__lp_labelB__") as MapVal
+        assertEquals("labelA", (importedBParents["parent"] as StrVal).core)
+        val importedAChanges = importedStorage.getMeta("__lc_labelA__") as ListVal
+        assertEquals(edge1.serialize, importedAChanges[0])
+
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test import without meta file is backward compatible`() {
+        storage.addNode(node1, mapOf("name" to "Node1".strVal))
+        val exportPath = tempDir.resolve("no_meta")
+        NativeCsvIOImpl.export(exportPath, storage)
+        // Remove meta.csv to simulate old export format
+        exportPath.resolve("meta.csv").toFile().delete()
+
+        val importedStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, importedStorage)
+
+        assertEquals(1, importedStorage.nodeIDs.size)
+        assertTrue(importedStorage.containsNode(node1))
+        assertTrue(importedStorage.metaNames.isEmpty())
+        importedStorage.close()
+    }
+
+    @Test
+    fun `test round-trip preserves metadata across multiple exports`() {
+        storage.addNode(node1)
+        storage.setMeta("counter", 1.numVal)
+        var currentPath = tempDir.resolve("meta_round_1")
+        NativeCsvIOImpl.export(currentPath, storage)
+
+        for (i in 2..3) {
+            val imported = NativeStorageImpl()
+            NativeCsvIOImpl.import(currentPath, imported)
+            currentPath = tempDir.resolve("meta_round_$i")
+            NativeCsvIOImpl.export(currentPath, imported)
+            imported.close()
+        }
+
+        val finalStorage = NativeStorageImpl()
+        NativeCsvIOImpl.import(currentPath, finalStorage)
+        assertEquals(1, (finalStorage.getMeta("counter") as NumVal).core)
+        finalStorage.close()
+    }
+
+    // endregion
 }

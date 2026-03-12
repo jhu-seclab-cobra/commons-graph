@@ -45,20 +45,11 @@ data class NodeID(
     companion object {
         private val pool = ConcurrentHashMap<String, NodeID>()
 
-        /**
-         * Returns a deduplicated [NodeID] for the given name.
-         *
-         * Reuses existing instances to reduce allocation and GC pressure.
-         *
-         * @param name The node identifier string.
-         * @return A cached or newly interned [NodeID].
-         */
-        fun of(name: String): NodeID = pool.getOrPut(name) { NodeID(name) }
+        // Returns a deduplicated NodeID for the given name to reduce allocation and GC pressure.
+        internal fun of(name: String): NodeID = pool.getOrPut(name) { NodeID(name) }
 
-        /**
-         * Clears the intern pool. Intended for testing or when resetting state.
-         */
-        fun clearPool() = pool.clear()
+        // Clears the intern pool for testing or state reset.
+        internal fun clearPool() = pool.clear()
     }
 }
 

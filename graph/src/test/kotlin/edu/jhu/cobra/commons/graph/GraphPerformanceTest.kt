@@ -250,8 +250,8 @@ class GraphPerformanceTest {
         val labelCount = 5
         val queryCount = 50_000
         println("\n=== Lattice Operations (${nodeCount}n/${nodeCount * edgesPerNode}e, $labelCount labels) ===")
-        println(String.format("%-20s %14s %14s %14s", "Storage", "assignLabels", "filteredQuery", "storeLattice"))
-        println("-".repeat(64))
+        println(String.format("%-20s %14s %14s", "Storage", "assignLabels", "filteredQuery"))
+        println("-".repeat(50))
 
         for (name in storageNames) {
             val g = createMultipleGraph(name)
@@ -271,7 +271,7 @@ class GraphPerformanceTest {
                     var idx = 0
                     for (eid in g.edgeIDs.take(nodeCount * edgesPerNode)) {
                         val edge = g.getEdge(eid) ?: continue
-                        with(g) { edge.labels = setOf(labels[idx % labelCount]) }
+                        edge.labels = setOf(labels[idx % labelCount])
                         idx++
                     }
                 }
@@ -283,21 +283,12 @@ class GraphPerformanceTest {
                     g.getOutgoingEdges(nodeId(i % nodeCount), midLabel).count()
                 }
 
-            // Store/load lattice
-            val storeMs =
-                benchmarkMs(warmup = 1, measured = 3) {
-                    val tempStorage = NativeStorageImpl()
-                    g.storeLattice(tempStorage)
-                    tempStorage.close()
-                }
-
             println(
                 String.format(
-                    "%-20s %14s %14s %14s",
+                    "%-20s %14s %14s",
                     name,
                     fmtMs(assignMs),
                     fmt(filteredOps),
-                    fmtMs(storeMs),
                 ),
             )
             g.close()
