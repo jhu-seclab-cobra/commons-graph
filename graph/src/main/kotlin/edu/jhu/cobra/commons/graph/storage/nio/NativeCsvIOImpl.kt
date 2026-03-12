@@ -35,6 +35,8 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private val escapeRegex = escapeMap.keys.joinToString("|") { Regex.escape(it) }.toRegex()
     private val unescapeRegex = unescapeMap.keys.joinToString("|") { Regex.escape(it) }.toRegex()
 
+    private const val META_FILE = "meta.csv"
+
     private class CsvWriter(
         path: Path,
     ) : Closeable {
@@ -44,6 +46,8 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         private val nodeWriter: BufferedWriter
         private val edgeFile = path.resolve("edges.csv")
         private val edgeWriter: BufferedWriter
+        private val metaFile = path.resolve(META_FILE)
+        private val metaWriter: BufferedWriter
 
         private var isNodeHeaderChanged: Boolean = false
         private val nodeHeaders = LinkedHashSet<String>()
@@ -54,11 +58,14 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         init {
             require(!nodeFile.exists() || nodeFile.fileSize() <= 0) { "File $nodeFile already exists" }
             require(!edgeFile.exists() || edgeFile.fileSize() <= 0) { "File $edgeFile already exists" }
+            require(!metaFile.exists() || metaFile.fileSize() <= 0) { "File $metaFile already exists" }
             if (path.notExists()) path.createDirectories()
             nodeWriter = nodeFile.createFile().bufferedWriter()
             nodeWriter.appendLine("ID")
             edgeWriter = edgeFile.createFile().bufferedWriter()
             edgeWriter.appendLine("ID")
+            metaWriter = metaFile.createFile().bufferedWriter()
+            metaWriter.appendLine("name${CSV_DELIMITER}value")
         }
 
         private fun getWriter(id: IEntity.ID): BufferedWriter {
@@ -94,6 +101,17 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             writer.appendLine()
         }
 
+        fun writeMeta(
+            name: String,
+            value: IValue,
+        ) {
+            require(!isClosed) { "The file is closed" }
+            val serName = name.replace(escapeRegex) { r -> escapeMap[r.value] ?: r.value }
+            val rawSerValue = DftCharBufferSerializerImpl.serialize(value)
+            val serValue = rawSerValue.replace(escapeRegex) { r -> escapeMap[r.value] ?: r.value }
+            metaWriter.appendLine("$serName$CSV_DELIMITER$serValue")
+        }
+
         private fun updateHeader(
             file: File,
             header: LinkedHashSet<String>,
@@ -121,6 +139,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             if (isClosed) return
             nodeWriter.close()
             edgeWriter.close()
+            metaWriter.close()
             if (isNodeHeaderChanged) updateHeader(nodeFile.toFile(), nodeHeaders)
             if (isEdgeHeaderChanged) updateHeader(edgeFile.toFile(), edgeHeaders)
             isClosed = true
@@ -134,6 +153,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
 
         private val nodeFile = path.resolve("nodes.csv")
         private val edgeFile = path.resolve("edges.csv")
+        private val metaFile = path.resolve(META_FILE)
 
         init {
             require(nodeFile.exists() && nodeFile.fileSize() > 0) { "File $nodeFile is empty" }
@@ -191,6 +211,25 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 }
             }
 
+        fun readMeta(): Iterator<Pair<String, IValue>> =
+            iterator {
+                if (!metaFile.exists()) return@iterator
+                val reader = metaFile.bufferedReader()
+                try {
+                    reader.readLine() // skip header "name,value"
+                    for (line in reader.lineSequence()) {
+                        val parts = line.split(CSV_DELIMITER_REGEX, limit = 2)
+                        if (parts.size < 2) continue
+                        val name = parts[0].replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value }
+                        val rawValue = parts[1].replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value }
+                        val value = deserialize(rawValue) ?: continue
+                        yield(name to value)
+                    }
+                } finally {
+                    reader.close()
+                }
+            }
+
         override fun close() {
             isClosed = true
         }
@@ -210,6 +249,10 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         CsvWriter(path = dstFile).use { writer ->
             from.nodeIDs.filter(predicate).forEach { writer.write(it, from.getNodeProperties(it)) }
             from.edgeIDs.filter(predicate).forEach { writer.write(it, from.getEdgeProperties(it)) }
+            for (name in from.metaNames) {
+                val value = from.getMeta(name) ?: continue
+                writer.writeMeta(name, value)
+            }
         }
         return dstFile
     }
@@ -224,6 +267,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             validNodes.forEach { (nid, properties) -> into.addNode(nid, properties) }
             val validEdges = reader.readEdges().asSequence().filter { (eid) -> predicate(eid) }
             validEdges.forEach { (eid, properties) -> into.addEdge(eid, properties) }
+            reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
         return into
     }

@@ -466,7 +466,7 @@ class AbcMultipleGraphTest {
 
         val edge = graph.addEdge(edgeId1, label)
 
-        with(graph) { assertTrue(edge.labels.contains(label)) }
+        assertTrue(edge.labels.contains(label))
     }
 
     @Test
@@ -479,10 +479,8 @@ class AbcMultipleGraphTest {
 
         graph.addEdge(edgeId1, labelB)
 
-        with(graph) {
-            val edge = getEdge(edgeId1)!!
-            assertTrue(edge.labels.containsAll(setOf(labelA, labelB)))
-        }
+        val edge = graph.getEdge(edgeId1)!!
+        assertTrue(edge.labels.containsAll(setOf(labelA, labelB)))
     }
 
     @Test
@@ -497,11 +495,9 @@ class AbcMultipleGraphTest {
         graph.delEdge(edgeId1, labelA)
 
         assertTrue(graph.containEdge(edgeId1))
-        with(graph) {
-            val edge = getEdge(edgeId1)!!
-            assertFalse(edge.labels.contains(labelA))
-            assertTrue(edge.labels.contains(labelB))
-        }
+        val edge = graph.getEdge(edgeId1)!!
+        assertFalse(edge.labels.contains(labelA))
+        assertTrue(edge.labels.contains(labelB))
     }
 
     @Test
@@ -733,24 +729,15 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test storeLattice_loadLattice_roundTrips`() {
+    fun `test labelParents_writeThroughToStorage`() {
         val parent = Label("parent")
         val child = Label("child")
         with(graph) { child.parents = mapOf("rel" to parent) }
-        graph.addNode(nodeId1)
-        graph.addNode(nodeId2)
-        graph.addEdge(edgeId1, child)
 
-        val targetStorage = NativeStorageImpl()
-        graph.storeLattice(targetStorage)
-
-        val newGraph = createTestMultipleGraph(NativeStorageImpl())
-        newGraph.loadLattice(targetStorage)
-
+        val newGraph = createTestMultipleGraph(storage)
         with(newGraph) {
             assertEquals(mapOf("rel" to parent), child.parents)
         }
-        targetStorage.close()
     }
 
     @Test
@@ -794,29 +781,16 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test loadLattice_emptyStorage_noOp`() {
-        val emptyStorage = NativeStorageImpl()
-        graph.loadLattice(emptyStorage)
-        emptyStorage.close()
-    }
+    fun `test labelChanges_writeThroughToStorage`() {
+        graph.addNode(nodeId1)
+        graph.addNode(nodeId2)
+        val label = Label("wt")
+        graph.addEdge(edgeId1, label)
 
-    @Test
-    fun `test loadLattice_noChanges_onlyLoadsHierarchy`() {
-        val targetStorage = NativeStorageImpl()
-        val parent = Label("lp")
-        val child = Label("lc")
-        with(graph) { child.parents = mapOf("up" to parent) }
-        graph.storeLattice(targetStorage)
-
-        targetStorage.setMeta("__changes__", null)
-
-        val newGraph = createTestMultipleGraph(NativeStorageImpl())
-        newGraph.loadLattice(targetStorage)
-
+        val newGraph = createTestMultipleGraph(storage)
         with(newGraph) {
-            assertEquals(mapOf("up" to parent), child.parents)
+            assertTrue(label.changes.contains(edgeId1))
         }
-        targetStorage.close()
     }
 
     @Test
@@ -880,20 +854,21 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test storeLattice_withChanges_roundTrips`() {
-        val label = Label("sl")
+    fun `test transferTo_copiesLatticeData`() {
+        val parent = Label("tp")
+        val child = Label("tc")
+        with(graph) { child.parents = mapOf("up" to parent) }
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        graph.addEdge(edgeId1, label)
+        graph.addEdge(edgeId1, child)
 
         val targetStorage = NativeStorageImpl()
-        graph.storeLattice(targetStorage)
+        storage.transferTo(targetStorage)
 
-        val newGraph = createTestMultipleGraph(NativeStorageImpl())
-        newGraph.loadLattice(targetStorage)
-
+        val newGraph = createTestMultipleGraph(targetStorage)
         with(newGraph) {
-            assertTrue(label.changes.contains(edgeId1))
+            assertEquals(mapOf("up" to parent), child.parents)
+            assertTrue(child.changes.contains(edgeId1))
         }
         targetStorage.close()
     }
@@ -925,24 +900,21 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test storeLattice_appendsToExistingMeta`() {
+    fun `test allLabels_reflectsRegisteredLabels`() {
+        val root = Label("root")
         val label1 = Label("phase1")
-        with(graph) { label1.parents = mapOf("up" to Label("root")) }
-        val targetStorage = NativeStorageImpl()
-        graph.storeLattice(targetStorage)
-
-        val graph2 = createTestMultipleGraph(NativeStorageImpl())
         val label2 = Label("phase2")
-        with(graph2) { label2.parents = mapOf("up" to Label("root")) }
-        graph2.storeLattice(targetStorage)
-
-        val newGraph = createTestMultipleGraph(NativeStorageImpl())
-        newGraph.loadLattice(targetStorage)
-        with(newGraph) {
-            assertEquals(mapOf("up" to Label("root")), label1.parents)
-            assertEquals(mapOf("up" to Label("root")), label2.parents)
+        with(graph) {
+            root.parents = emptyMap()
+            label1.parents = mapOf("up" to root)
+            label2.parents = mapOf("up" to root)
         }
-        targetStorage.close()
+
+        with(graph) {
+            assertTrue(allLabels.contains(label1))
+            assertTrue(allLabels.contains(label2))
+            assertTrue(allLabels.contains(root))
+        }
     }
 
     // endregion
@@ -1034,19 +1006,17 @@ class AbcMultipleGraphTest {
     // region Close
 
     @Test
-    fun `test close_storesLatticeState`() {
+    fun `test latticeState_persistedWithoutClose`() {
         val label = Label("closeTest")
         with(graph) { label.parents = mapOf("up" to Label("root")) }
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         graph.addEdge(edgeId1, label)
 
-        graph.close()
-
-        val newGraph = createTestMultipleGraph(NativeStorageImpl())
-        newGraph.loadLattice(storage)
+        val newGraph = createTestMultipleGraph(storage)
         with(newGraph) {
             assertEquals(mapOf("up" to Label("root")), label.parents)
+            assertTrue(label.changes.contains(edgeId1))
         }
     }
 

@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.ConcurrentHashMap
 
@@ -57,18 +58,8 @@ data class EdgeID(
     companion object {
         private val pool = ConcurrentHashMap<EdgeID, EdgeID>()
 
-        /**
-         * Returns a deduplicated [EdgeID] for the given parameters.
-         *
-         * Auto-interns the [srcNid] and [dstNid] via [NodeID.of].
-         * Reuses existing instances to reduce allocation and GC pressure.
-         *
-         * @param srcNid The source node identifier.
-         * @param dstNid The destination node identifier.
-         * @param eType The edge type name.
-         * @return A cached or newly interned [EdgeID].
-         */
-        fun of(
+        // Returns a deduplicated EdgeID, auto-interning srcNid/dstNid via NodeID.of.
+        internal fun of(
             srcNid: NodeID,
             dstNid: NodeID,
             eType: String,
@@ -77,10 +68,8 @@ data class EdgeID(
             return pool.getOrPut(key) { key }
         }
 
-        /**
-         * Clears the intern pool. Intended for testing or when resetting state.
-         */
-        fun clearPool() = pool.clear()
+        // Clears the intern pool for testing or state reset.
+        internal fun clearPool() = pool.clear()
     }
 }
 
@@ -131,6 +120,20 @@ abstract class AbcEdge(
      * @return The edge type.
      */
     val eType: String get() = id.eType
+
+    /**
+     * Visibility labels assigned to this edge.
+     *
+     * @return Set of labels currently assigned.
+     */
+    var labels: Set<Label>
+        get() {
+            val labelList = getTypeProp<ListVal>(name = "labels")?.core.orEmpty()
+            return labelList.map { Label(core = it.core.toString()) }.toSet()
+        }
+        set(values) {
+            setProp(name = "labels", value = values.map { it.core }.listVal)
+        }
 
     /**
      * Sets a property value for the edge.

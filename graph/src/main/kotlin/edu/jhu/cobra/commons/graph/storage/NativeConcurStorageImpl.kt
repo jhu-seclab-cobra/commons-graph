@@ -123,6 +123,14 @@ class NativeConcurStorageImpl : IStorage {
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
             if (!hasNode(id)) throw EntityNotExistException(id)
+            for (eid in outEdges[id]!!) {
+                inEdges[eid.dstNid]?.remove(eid)
+                edgeProperties.remove(eid)
+            }
+            for (eid in inEdges[id]!!) {
+                outEdges[eid.srcNid]?.remove(eid)
+                edgeProperties.remove(eid)
+            }
             outEdges.remove(id)
             inEdges.remove(id)
             nodeProperties.remove(id)

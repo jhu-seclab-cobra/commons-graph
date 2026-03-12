@@ -1,23 +1,26 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.value.*
+import edu.jhu.cobra.commons.value.ListVal
+import edu.jhu.cobra.commons.value.MapVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.listVal
+import edu.jhu.cobra.commons.value.mapVal
+import edu.jhu.cobra.commons.value.strVal
 import java.io.Closeable
 
 /**
  * Abstract directed multi-graph allowing multiple edges between the same pair of
  * nodes, with integrated label-based edge visibility.
  *
- * Label hierarchy, change tracking, comparison caching, and storage serialization
- * are implemented directly. Label-filtered methods use the visibility rule: an edge
- * is visitable under label `by` if at least one of its labels `l` satisfies
- * `by == l` or `by > l` in the lattice hierarchy.
+ * Implements [IPartialOrderSet] with write-through persistence: label hierarchy
+ * and change records are stored in [IStorage] metadata and always kept in sync.
  *
- * Node and edge identity is delegated to the underlying [storage] — the graph
- * does not maintain separate ID sets. All entity existence checks resolve
- * directly through [IStorage.containsNode] / [IStorage.containsEdge].
+ * Label-filtered methods use the visibility rule: an edge is visitable under
+ * label `by` if at least one of its labels `l` satisfies `by == l` or `by > l`
+ * in the poset hierarchy.
  *
- * Auto-persists lattice state on [close].
+ * Node and edge identity is delegated to the underlying [storage].
  *
  * @param N The type of nodes in the graph, must extend [AbcNode].
  * @param E The type of edges in the graph, must extend [AbcEdge].
@@ -25,6 +28,7 @@ import java.io.Closeable
 @Suppress("TooManyFunctions")
 abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     IGraph<N, E>,
+    IPartialOrderSet,
     Closeable {
     abstract val storage: IStorage
 
@@ -36,7 +40,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     protected abstract fun newEdgeObj(eid: EdgeID): E
 
-    // B3-A: wrapper object cache — avoids re-creating node/edge wrappers on each access
+    // B3-A: wrapper object cache
     private val nodeCache = HashMap<NodeID, N>()
     private val edgeCache = HashMap<EdgeID, E>()
 
@@ -44,18 +48,28 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     private fun cachedEdge(eid: EdgeID): E = edgeCache.getOrPut(eid) { newEdgeObj(eid) }
 
-    // region ILabelLattice implementation
+    // region IPartialOrderSet — write-through to storage metadata
 
-    private val hierarchy = mutableMapOf<Label, MutableMap<String, Label>>()
-    private val changeRecorder = mutableMapOf<Label, Set<EdgeID>>()
     private val queryCache = mutableMapOf<Pair<Label, Label>, Int?>()
 
-    override val allLabels: Set<Label> get() = hierarchy.keys + Label.INFIMUM + Label.SUPREMUM
+    override val allLabels: Set<Label>
+        get() {
+            val names = storage.metaNames
+                .filter { it.startsWith(PARENTS_PREFIX) && it.endsWith(META_SUFFIX) }
+                .map { Label(it.removePrefix(PARENTS_PREFIX).removeSuffix(META_SUFFIX)) }
+                .toSet()
+            return names + Label.INFIMUM + Label.SUPREMUM
+        }
 
     override var Label.parents: Map<String, Label>
-        get() = hierarchy[this].orEmpty()
+        get() {
+            val meta = storage.getMeta(parentsKey(this)) as? MapVal ?: return emptyMap()
+            return meta.mapValues { (_, v) -> Label((v as StrVal).core) }
+        }
         set(value) {
-            hierarchy[this] = value.toMutableMap()
+            val serialized = value.mapValues { (_, v) -> v.core.strVal }.mapVal
+            storage.setMeta(parentsKey(this), serialized)
+            queryCache.clear()
         }
 
     override val Label.ancestors: Sequence<Label>
@@ -74,22 +88,16 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             }
 
     override var Label.changes: Set<EdgeID>
-        get() = changeRecorder[this].orEmpty()
-        set(value) {
-            changeRecorder[this] = value.toMutableSet()
-        }
-
-    override var AbcEdge.labels: Set<Label>
         get() {
-            val labelList = getTypeProp<ListVal>(name = "labels")?.core.orEmpty()
-            return labelList.map { Label(core = it.core.toString()) }.toSet()
+            val meta = storage.getMeta(changesKey(this)) as? ListVal ?: return emptySet()
+            return meta.map { EdgeID(it as ListVal) }.toSet()
         }
-        set(values) {
-            val labelList = getTypeProp<ListVal>(name = "labels")?.core.orEmpty()
-            val curLabels = labelList.map { Label(core = it.core.toString()) }.toSet()
-            (curLabels - values).forEach { delete -> delete.changes -= id }
-            (values - curLabels).forEach { newAdd -> newAdd.changes += id }
-            setProp(name = "labels", value = values.map { it.core }.listVal)
+        set(value) {
+            if (value.isEmpty()) {
+                storage.setMeta(changesKey(this), null)
+            } else {
+                storage.setMeta(changesKey(this), value.map { it.serialize }.listVal)
+            }
         }
 
     override fun Label.compareTo(other: Label): Int? {
@@ -108,39 +116,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             queryCache[this to other] = -1
             return -1
         }
-
         return null
-    }
-
-    override fun storeLattice(into: IStorage) {
-        val curMap = mutableMapOf<String, IValue>()
-        allLabels.forEach { curLabel ->
-            if (curLabel == Label.INFIMUM || curLabel == Label.SUPREMUM) return@forEach
-            curMap[curLabel.core] = curLabel.parents.mapValues { (_, vs) -> vs.core.strVal }.mapVal
-        }
-        val preMap = into.getMeta("__lattice__") as? MapVal
-        val newMap = preMap?.core.orEmpty() + curMap
-        into.setMeta("__lattice__", newMap.mapVal)
-        val preChanges = into.getMeta("__changes__") as? MapVal
-        val curChanges = changeRecorder.map { (l, cs) -> l.core to cs.map { it.serialize }.listVal }
-        val newChanges = preChanges?.core.orEmpty() + curChanges
-        into.setMeta("__changes__", newChanges.mapVal)
-    }
-
-    override fun loadLattice(from: IStorage) {
-        val loadLattice = from.getMeta("__lattice__") as? MapVal ?: return
-        loadLattice.forEach { (labelName, parentsName) ->
-            val parentMap = parentsName as MapVal
-            val parents = parentMap.mapValues { (_, prev) -> Label(prev as StrVal) }
-            Label(labelName).parents += parents
-        }
-        val loadRecords = from.getMeta("__changes__") as? MapVal ?: return
-        loadRecords.core.forEach { (labelCore, changesCore) ->
-            val loadLabel = Label(core = labelCore)
-            val curChanges = changeRecorder[loadLabel].orEmpty()
-            val loadChanges = (changesCore as ListVal).map { EdgeID(it as ListVal) }
-            changeRecorder[loadLabel] = curChanges + loadChanges
-        }
     }
 
     // endregion
@@ -190,7 +166,8 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         label: Label,
     ): E {
         val edge = getEdge(whoseID = withID) ?: addEdge(withID = withID)
-        edge.labels += label
+        edge.labels = edge.labels + label
+        label.changes += withID
         return edge
     }
 
@@ -212,8 +189,11 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         label: Label,
     ) {
         val edge = getEdge(whoseID = whoseID) ?: return
-        edge.labels -= label
-        if (edge.labels.isEmpty()) delEdge(whoseID = whoseID)
+        val oldLabels = edge.labels
+        val newLabels = oldLabels - label
+        edge.labels = newLabels
+        if (label in oldLabels) label.changes -= whoseID
+        if (newLabels.isEmpty()) delEdge(whoseID = whoseID)
     }
 
     override fun getAllEdges(doSatfy: (E) -> Boolean): Sequence<E> =
@@ -374,8 +354,17 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     }
 
     override fun close() {
-        storeLattice(storage)
         nodeCache.clear()
         edgeCache.clear()
+    }
+
+    companion object {
+        private const val PARENTS_PREFIX = "__lp_"
+        private const val CHANGES_PREFIX = "__lc_"
+        private const val META_SUFFIX = "__"
+
+        private fun parentsKey(label: Label): String = "$PARENTS_PREFIX${label.core}$META_SUFFIX"
+
+        private fun changesKey(label: Label): String = "$CHANGES_PREFIX${label.core}$META_SUFFIX"
     }
 }
