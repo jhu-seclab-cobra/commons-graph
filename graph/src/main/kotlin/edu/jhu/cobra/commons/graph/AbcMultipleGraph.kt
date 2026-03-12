@@ -37,6 +37,14 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     protected abstract fun newEdgeObj(eid: EdgeID): E
 
+    // B3-A: wrapper object cache — avoids re-creating node/edge wrappers on each access
+    private val nodeCache = HashMap<NodeID, N>()
+    private val edgeCache = HashMap<EdgeID, E>()
+
+    private fun cachedNode(nid: NodeID): N = nodeCache.getOrPut(nid) { newNodeObj(nid) }
+
+    private fun cachedEdge(eid: EdgeID): E = edgeCache.getOrPut(eid) { newEdgeObj(eid) }
+
     // region ILabelLattice implementation
 
     private val hierarchy = mutableMapOf<Label, MutableMap<String, Label>>()
@@ -147,7 +155,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getNode(whoseID: NodeID): N? {
         if (!storage.containsNode(whoseID)) return null
-        return newNodeObj(nid = whoseID)
+        return cachedNode(whoseID)
     }
 
     override fun containNode(whoseID: NodeID): Boolean = storage.containsNode(whoseID)
@@ -155,14 +163,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun delNode(whoseID: NodeID) {
         if (!storage.containsNode(whoseID)) return
         val allEdges = storage.getOutgoingEdges(whoseID) + storage.getIncomingEdges(whoseID)
-        allEdges.forEach { storage.deleteEdge(it) }
+        allEdges.forEach { eid ->
+            edgeCache.remove(eid)
+            storage.deleteEdge(eid)
+        }
+        nodeCache.remove(whoseID)
         storage.deleteNode(id = whoseID)
     }
 
     override fun getAllNodes(doSatfy: (N) -> Boolean): Sequence<N> =
         storage.nodeIDs
             .asSequence()
-            .map { newNodeObj(it) }
+            .map { cachedNode(it) }
             .filter(doSatfy)
 
     // endregion
@@ -185,13 +197,14 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getEdge(whoseID: EdgeID): E? {
         if (!storage.containsEdge(whoseID)) return null
-        return newEdgeObj(eid = whoseID)
+        return cachedEdge(whoseID)
     }
 
     override fun containEdge(whoseID: EdgeID): Boolean = storage.containsEdge(whoseID)
 
     override fun delEdge(whoseID: EdgeID) {
         if (!storage.containsEdge(whoseID)) return
+        edgeCache.remove(whoseID)
         storage.deleteEdge(id = whoseID)
     }
 
@@ -207,7 +220,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getAllEdges(doSatfy: (E) -> Boolean): Sequence<E> =
         storage.edgeIDs
             .asSequence()
-            .map { newEdgeObj(it) }
+            .map { cachedEdge(it) }
             .filter(doSatfy)
 
     // endregion
@@ -216,12 +229,12 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getOutgoingEdges(of: NodeID): Sequence<E> {
         if (!storage.containsNode(of)) return emptySequence()
-        return storage.getOutgoingEdges(of).asSequence().map { newEdgeObj(it) }
+        return storage.getOutgoingEdges(of).asSequence().map { cachedEdge(it) }
     }
 
     override fun getIncomingEdges(of: NodeID): Sequence<E> {
         if (!storage.containsNode(of)) return emptySequence()
-        return storage.getIncomingEdges(of).asSequence().map { newEdgeObj(it) }
+        return storage.getIncomingEdges(of).asSequence().map { cachedEdge(it) }
     }
 
     override fun getOutgoingEdges(
@@ -239,12 +252,12 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getParents(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = getIncomingEdges(of).filter(edgeCond).map { newNodeObj(it.srcNid) }
+    ): Sequence<N> = getIncomingEdges(of).filter(edgeCond).map { cachedNode(it.srcNid) }
 
     override fun getChildren(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = getOutgoingEdges(of).filter(edgeCond).map { newNodeObj(it.dstNid) }
+    ): Sequence<N> = getOutgoingEdges(of).filter(edgeCond).map { cachedNode(it.dstNid) }
 
     override fun getChildren(
         of: NodeID,
@@ -264,14 +277,14 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ) = sequence {
         if (!storage.containsNode(of)) return@sequence
         val visited = hashSetOf<NodeID>()
-        val stack = mutableListOf(of)
-        while (stack.isNotEmpty()) {
-            val currentId = stack.removeAt(0)
+        val queue = ArrayDeque<NodeID>().apply { add(of) }
+        while (queue.isNotEmpty()) {
+            val currentId = queue.removeFirst()
             if (!visited.add(currentId)) continue
             storage.getIncomingEdges(currentId).forEach { edgeID ->
-                if (!edgeCond(newEdgeObj(edgeID))) return@forEach
-                yield(newNodeObj(nid = edgeID.srcNid))
-                stack.add(edgeID.srcNid)
+                if (!edgeCond(cachedEdge(edgeID))) return@forEach
+                yield(cachedNode(edgeID.srcNid))
+                queue.add(edgeID.srcNid)
             }
         }
     }
@@ -287,8 +300,8 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             val currentId = queue.removeFirst()
             if (!visited.add(currentId)) continue
             storage.getOutgoingEdges(currentId).forEach { edgeID ->
-                if (!edgeCond(newEdgeObj(edgeID))) return@forEach
-                yield(newNodeObj(nid = edgeID.dstNid))
+                if (!edgeCond(cachedEdge(edgeID))) return@forEach
+                yield(cachedNode(edgeID.dstNid))
                 queue.add(edgeID.dstNid)
             }
         }
@@ -363,5 +376,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun close() {
         storeLattice(storage)
+        nodeCache.clear()
+        edgeCache.clear()
     }
 }
