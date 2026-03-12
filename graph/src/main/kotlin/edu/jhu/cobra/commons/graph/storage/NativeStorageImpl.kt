@@ -259,7 +259,6 @@ class NativeStorageImpl : IStorage {
         private val nodeId: NodeID,
         private val columns: HashMap<String, HashMap<NodeID, IValue>>,
     ) : AbstractMap<String, IValue>() {
-
         override val entries: Set<Map.Entry<String, IValue>>
             get() {
                 val result = LinkedHashMap<String, IValue>()
