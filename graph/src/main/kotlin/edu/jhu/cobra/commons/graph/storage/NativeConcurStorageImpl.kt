@@ -20,6 +20,9 @@ class NativeConcurStorageImpl : IStorage {
 
     private val lock = ReentrantReadWriteLock()
 
+    // Deduplicates property key strings across entities (e.g., "weight" shared by all nodes)
+    private val keyPool = HashMap<String, String>()
+
     // Entity property stores — LinkedHashMap preserves insertion order for nodeIDs/edgeIDs
     private val nodeProperties: MutableMap<NodeID, MutableMap<String, IValue>> = mutableMapOf()
     private val edgeProperties: MutableMap<EdgeID, MutableMap<String, IValue>> = mutableMapOf()
@@ -36,6 +39,14 @@ class NativeConcurStorageImpl : IStorage {
     private fun hasNode(id: NodeID): Boolean = id in nodeProperties
 
     private fun hasEdge(id: EdgeID): Boolean = id in edgeProperties
+
+    private fun internKey(key: String): String = keyPool.getOrPut(key) { key }
+
+    private fun internKeys(props: Map<String, IValue>): MutableMap<String, IValue> {
+        val result = HashMap<String, IValue>(props.size)
+        for ((k, v) in props) result[internKey(k)] = v
+        return result
+    }
 
     private fun removeEdgeInternal(id: EdgeID) {
         outEdges[id.srcNid]?.remove(id)
@@ -77,7 +88,7 @@ class NativeConcurStorageImpl : IStorage {
     ) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
         if (hasNode(id)) throw EntityAlreadyExistException(id = id)
-        nodeProperties[id] = properties.toMutableMap()
+        nodeProperties[id] = internKeys(properties)
         outEdges[id] = HashSet()
         inEdges[id] = HashSet()
     }
@@ -88,6 +99,15 @@ class NativeConcurStorageImpl : IStorage {
             nodeProperties[id] ?: throw EntityNotExistException(id = id)
         }
 
+    override fun getNodeProperty(
+        id: NodeID,
+        name: String,
+    ): IValue? =
+        lock.readLock().withLock {
+            if (isClosed) throw AccessClosedStorageException()
+            (nodeProperties[id] ?: throw EntityNotExistException(id = id))[name]
+        }
+
     override fun setNodeProperties(
         id: NodeID,
         properties: Map<String, IValue?>,
@@ -95,7 +115,7 @@ class NativeConcurStorageImpl : IStorage {
         if (isClosed) throw AccessClosedStorageException()
         val container = nodeProperties[id] ?: throw EntityNotExistException(id = id)
         properties.forEach { (key, value) ->
-            if (value != null) container[key] = value else container.remove(key)
+            if (value != null) container[internKey(key)] = value else container.remove(key)
         }
     }
 
@@ -103,10 +123,6 @@ class NativeConcurStorageImpl : IStorage {
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
             if (!hasNode(id)) throw EntityNotExistException(id)
-            val connected = HashSet<EdgeID>(outEdges[id]!!.size + inEdges[id]!!.size)
-            connected.addAll(outEdges[id]!!)
-            connected.addAll(inEdges[id]!!)
-            connected.forEach { removeEdgeInternal(it) }
             outEdges.remove(id)
             inEdges.remove(id)
             nodeProperties.remove(id)
@@ -132,13 +148,22 @@ class NativeConcurStorageImpl : IStorage {
         if (!hasNode(id.dstNid)) throw EntityNotExistException(id.dstNid)
         outEdges[id.srcNid]!!.add(id)
         inEdges[id.dstNid]!!.add(id)
-        edgeProperties[id] = properties.toMutableMap()
+        edgeProperties[id] = internKeys(properties)
     }
 
     override fun getEdgeProperties(id: EdgeID): Map<String, IValue> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
             edgeProperties[id] ?: throw EntityNotExistException(id = id)
+        }
+
+    override fun getEdgeProperty(
+        id: EdgeID,
+        name: String,
+    ): IValue? =
+        lock.readLock().withLock {
+            if (isClosed) throw AccessClosedStorageException()
+            (edgeProperties[id] ?: throw EntityNotExistException(id = id))[name]
         }
 
     override fun setEdgeProperties(
@@ -148,7 +173,7 @@ class NativeConcurStorageImpl : IStorage {
         if (isClosed) throw AccessClosedStorageException()
         val container = edgeProperties[id] ?: throw EntityNotExistException(id = id)
         properties.forEach { (key, value) ->
-            if (value != null) container[key] = value else container.remove(key)
+            if (value != null) container[internKey(key)] = value else container.remove(key)
         }
     }
 
@@ -219,6 +244,7 @@ class NativeConcurStorageImpl : IStorage {
             edgeProperties.clear()
             nodeProperties.clear()
             metaProperties.clear()
+            keyPool.clear()
             true
         }
 
