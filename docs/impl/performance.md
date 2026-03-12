@@ -35,8 +35,8 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|
 | containsNode (1 layer) | 32.55M |
 | containsNode (10 layers) | 18.00M |
-| property read | 37.19M |
-| property write | 15.77M |
+| property read | 46.92M |
+| property write | 23.00M |
 | outgoing edge query | 21.99M |
 | incoming edge query | 14.31M |
 | getProps (1 layer) | 30.85M |
@@ -46,12 +46,13 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 
 | Operation | ops/s |
 |---|---|
-| Property Read | 45.62M |
-| Property Write | 17.58M |
-| Edge Add 1M | 1.77M |
-| Node Delete | 1.59M |
-| Population 100K/300K | 182.1 ms |
-| Population 1M/3M | 3663.6 ms |
+| Property Read | 46.58M |
+| Property Write | 18.91M |
+| Edge Add 1M | 2.24M |
+| Node Delete | 2.57M |
+| Node Add 1M | 3.35M |
+| Population 100K/300K | 149.0 ms |
+| Population 1M/3M | 3149.7 ms |
 
 ### Fixpoint State Access (P0)
 
@@ -94,6 +95,12 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 | 5 | P5-4 | Inlined containsNode checks | LayeredStorage property write | +7% (15.08M -> 16.08M) |
 | 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (NativeStorage) | +27% (325.5K -> 412.5K) |
 | 6 | P6-6 | LinkedList -> ArrayDeque in BFS | getDescendants (LayeredStorage) | +10% (667.3K -> 736.3K) |
+| 6 | P6-5 | Columnar node property storage | NativeStorage property write | +7.6% (17.58M -> 18.91M) |
+| 6 | P6-5 | Columnar node property storage | NativeStorage edge add 1M | +26.6% (1.77M -> 2.24M) |
+| 6 | P6-5 | Columnar node property storage | NativeStorage node delete | +61.6% (1.59M -> 2.57M) |
+| 6 | P6-5 | Columnar node property storage | NativeStorage population 1M/3M | -14.0% latency (3663.6ms -> 3149.7ms) |
+| 6 | P6-5 | Columnar node property storage | LayeredStorage property read | +26.2% (37.19M -> 46.92M) |
+| 6 | P6-5 | Columnar node property storage | LayeredStorage property write | +45.8% (15.77M -> 23.00M) |
 
 ---
 
@@ -214,78 +221,34 @@ Already implemented. `deleteNode` at line 100 already inlines edge removal witho
 - **Priority**: Medium — prerequisite for accurate P6-5 evaluation.
 - **Cross-metric concern**: None — test infrastructure only.
 
-### P6-5: Columnar Property Storage (NativeStorageImpl)
-
-- **File(s)**: `NativeStorageImpl.kt`
-- **Hypothesis**: Replace per-entity `MutableMap<String, IValue>` with per-property-name columns.
-
-  Current (row-oriented):
-  ```
-  nodeProperties: Map<NodeID, MutableMap<String, IValue>>
-  edgeProperties: Map<EdgeID, MutableMap<String, IValue>>
-  ```
-  Each entity has its own LinkedHashMap (~176B overhead: 48B object header + 128B backing array at default capacity 16).
-
-  Proposed (column-oriented):
-  ```
-  nodeSet: MutableSet<NodeID>
-  nodeColumns: HashMap<String, HashMap<NodeID, IValue>>
-  edgeColumns: HashMap<String, HashMap<EdgeID, IValue>>
-  ```
-
-  **Object analysis at 1M nodes x 5 properties:**
-
-  | Metric | Row-oriented | Column-oriented | Delta |
-  |---|---|---|---|
-  | HashMap instances | 1M + 1 | 5 + 1 | **-99.9999%** |
-  | Total entries | ~6M | ~6M | same |
-  | Memory overhead | ~368MB | ~192MB | **-48%** |
-  | GC-traced objects | ~7M | ~6M | -14% |
-
-  **Per-API cross-metric impact analysis:**
-
-  | API | Current | Columnar | Expected Impact |
-  |---|---|---|---|
-  | `getNodeProperty(id, name)` | `nodeProperties[id]!![name]` — 2 lookups | `nodeColumns[name]?.get(id)` — 2 lookups (outer <=20 keys) | **Neutral**: same O(1), outer map is tiny and L1-cacheable |
-  | `getNodeProperties(id)` | returns stored `MutableMap` directly — zero alloc | returns `ColumnViewMap(id, nodeColumns)` — 1 object alloc | **Minor regression possible**: allocates view; but NOT the hot path |
-  | `containsNode(id)` | `id in nodeProperties` | `id in nodeSet` | **Neutral**: both O(1) HashMap lookup |
-  | `addNode(id, props)` | creates LinkedHashMap per entity | `nodeSet.add(id)` + scatter into columns | **Improvement**: eliminates per-entity map allocation |
-  | `deleteNode(id)` | `nodeProperties.remove(id)` — O(1) | `nodeSet.remove(id)` + iterate all columns — O(P) | **Minor regression**: P typically <=20; edge cascade dominates |
-  | `setNodeProperties(id, props)` | `container[key] = value` | `nodeColumns[key]!![id] = value` | **Neutral**: same number of map operations |
-  | `nodeIDs` | `nodeProperties.keys` | `nodeSet` | **Neutral**: direct set reference |
-
-  **Cross-metric regression risk assessment:**
-
-  P5-5 showed that changing `toMutableMap()` (LinkedHashMap) to `HashMap()` caused -59% regression on *unrelated* node lookup (Key Insight #11). Columnar storage changes:
-  1. The type returned by `getNodeProperties` — from direct `MutableMap` to a view object. Callers iterating the returned map will see different JIT profiles.
-  2. The internal storage structure — JIT may specialize based on observed map types.
-  3. `LayeredStorageImpl` delegates to `NativeStorageImpl` — columnar changes propagate through all layered operations.
-
-  **Mitigation strategy:**
-  - Implement for node properties first (not edges). Measure full matrix before proceeding.
-  - `getNodeProperties` returns lightweight `ColumnViewMap` with `get(key)` delegating to `nodeColumns[key]?.get(id)`. Cold path (`entries`/`size`) materializes lazily.
-  - If view causes regression, fall back to HashMap copy (trades allocation for JIT stability).
-  - Benchmark must cover **all** metrics: property read/write, containsNode, population, node delete, edge queries, mixed workload, and LayeredStorage operations.
-
-  **Key difference from rejected B2-B:** B2-B regressed `getNodeProperty` from O(1) to O(P) due to array scan. Columnar keeps `getNodeProperty` at O(1) via two HashMap lookups. Memory saving comes from eliminating per-entity HashMap structure overhead, not from changing the lookup algorithm.
-
-- **Risk**: High — fundamental storage restructure. P5-5 JIT precedent.
-- **Priority**: High — directly attacks B2 bottleneck (~176MB savings at 1M nodes). Addresses Key Insight #1.
-- **Go/no-go gate**: KEEP only if **no metric regresses >10%** across full benchmark suite.
-
 ### ~~P6-6: getDescendants LinkedList -> ArrayDeque~~ — KEEP
 
 - **File(s)**: `AbcMultipleGraph.kt`
 - **Change**: Replaced `LinkedList` with `ArrayDeque` in `getDescendants(of, edgeCond)`, `getDescendants(of, label, cond)`, `getAncestors(of, label, cond)`, and `Label.ancestors`. Removed unused `java.util.LinkedList` import.
 - **Impact**: getDescendants (NativeStorage) +27% (325.5K -> 412.5K), getDescendants (LayeredStorage) +10% (667.3K -> 736.3K). No regression on other metrics (population, getNode, lattice ops all within JVM noise).
 
+### ~~P6-5: Columnar Property Storage (NativeStorageImpl)~~ — KEEP
+
+- **File(s)**: `NativeStorageImpl.kt`
+- **Change**: Replaced row-oriented `nodeProperties: Map<NodeID, MutableMap<String, IValue>>` with column-oriented `nodeSet: MutableSet<NodeID>` + `nodeColumns: HashMap<String, HashMap<NodeID, IValue>>`. One HashMap per property name instead of one per node. `getNodeProperties` returns a lightweight `ColumnViewMap` that reads columns lazily. `getNodeProperty` does two direct HashMap lookups. Edge properties remain row-oriented.
+- **Impact**: All metrics improved or neutral. No regression >10%.
+  - NativeStorage property read +2.1% (45.62M -> 46.58M)
+  - NativeStorage property write +7.6% (17.58M -> 18.91M)
+  - NativeStorage edge add 1M +26.6% (1.77M -> 2.24M)
+  - NativeStorage node delete +61.6% (1.59M -> 2.57M)
+  - NativeStorage population 1M/3M -14.0% latency (3663.6ms -> 3149.7ms)
+  - LayeredStorage property read +26.2% (37.19M -> 46.92M)
+  - LayeredStorage property write +45.8% (15.77M -> 23.00M)
+  - Node lookup, edge queries, mixed workload: within JVM noise
+- **Key difference from rejected B2-B**: B2-B changed the lookup algorithm (O(1) -> O(P)). Columnar keeps `getNodeProperty` at O(1) via two HashMap lookups. Gains come from eliminating per-entity HashMap overhead (~176B per node) without changing the access pattern.
+
 ---
 
 ## Remaining Known Bottlenecks
 
-### B2: Per-Entity MutableMap Property Storage
+### B2: Per-Entity MutableMap Property Storage (Partially resolved)
 
-`NativeStorageImpl` stores `Map<NodeID, MutableMap<String, IValue>>`. Each node/edge holds its own `MutableMap`, incurring ~180B structure overhead per entity + 32B per HashMap.Node entry. At 1M nodes x 5 properties: ~540MB. Schema array (B2-B) was rejected due to read regression. Columnar storage (P6-5) is the next candidate.
+Node properties now use columnar storage (P6-5), eliminating per-node HashMap overhead. **Edge properties still use row-oriented `Map<EdgeID, MutableMap<String, IValue>>`**. At 3M edges x 3 properties, edge property maps contribute ~540MB. Columnar edge storage is the next candidate if further memory reduction is needed.
 
 ### B1-B: Integer Edge Indexing
 
