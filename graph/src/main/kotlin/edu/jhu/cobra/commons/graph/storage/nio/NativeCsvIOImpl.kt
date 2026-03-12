@@ -75,9 +75,9 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         ) {
             val writer = getWriter(id)
             if (id is NodeID) {
-                isNodeHeaderChanged = isNodeHeaderChanged || nodeHeaders.addAll(props.keys)
+                isNodeHeaderChanged = nodeHeaders.addAll(props.keys) || isNodeHeaderChanged
             } else {
-                isEdgeHeaderChanged = isEdgeHeaderChanged || edgeHeaders.addAll(props.keys)
+                isEdgeHeaderChanged = edgeHeaders.addAll(props.keys) || isEdgeHeaderChanged
             }
             val headerSequence = if (id is NodeID) nodeHeaders.asSequence() else edgeHeaders.asSequence()
             val orderProps = sequenceOf(id.serialize) + headerSequence.map(props::get)
