@@ -27,6 +27,21 @@ class EntityAlreadyExistException(
 ) : Exception("Entity ID $id already exists.")
 
 /**
+ * Thrown when an invalid property name is used on an entity.
+ *
+ * Used when a property name is reserved or otherwise not allowed.
+ *
+ * @constructor Creates an exception for an invalid property name.
+ * @param propName The invalid property name.
+ * @param eid The entity ID, or null if not applicable.
+ * @see IEntity.ID
+ */
+class InvalidPropNameException(
+    propName: String,
+    eid: IEntity.ID?,
+) : Exception("Invalid name $propName in entity $eid.")
+
+/**
  * Thrown when an operation is attempted on a storage that has already been closed.
  *
  * Used within graph storage systems to indicate that the storage context is no longer active or accessible.
