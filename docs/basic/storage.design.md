@@ -3,7 +3,7 @@
 ## Design Overview
 
 - **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes N frozen `IStorage` layers + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes at most one frozen `IStorage` layer + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
 - **Abstract**: `IStorage` (implemented by all storage types); `IStorageExporter` (implemented by `NativeCsvIOImpl`); `IStorageImporter` (implemented by `NativeCsvIOImpl`)
 - **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityAlreadyExistException` raised on duplicate add; `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when attempting to delete entities from frozen layers in `LayeredStorageImpl`
 - **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `IValue`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
@@ -11,7 +11,7 @@
 The storage layer is the **backend-agnostic persistence contract** for graph data. It provides two tiers of storage capability:
 
 1. **Flat storage** (`NativeStorageImpl`, external `MapDBStorageImpl` / `JgraphtStorageImpl` / `Neo4jStorageImpl`) — single-layer, full CRUD
-2. **Layered storage** (`LayeredStorageImpl`) — N frozen layers + 1 mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`)
+2. **Layered storage** (`LayeredStorageImpl`) — at most one frozen layer (read-only) + one mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`)
 
 The storage layer does **not** own graph traversal logic, entity type construction, or backend-specific optimization — those belong to the graph layer and module implementations respectively.
 
@@ -73,10 +73,10 @@ interface IStorage : Closeable {
 | `getEdgeProperty` | Returns a single property value without constructing the full map | `id`: EdgeID; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
 | `setNodeProperties` | Atomically adds, updates, and deletes properties | `id`: NodeID; `properties`: map where null values signal deletion | — | `EntityNotExistException` if missing |
 | `setEdgeProperties` | Same as `setNodeProperties` for edges | `id`: EdgeID; `properties`: map | — | `EntityNotExistException` if missing |
-| `deleteNode` | Removes a node; does **not** cascade edge deletion by contract | `id`: NodeID | — | `EntityNotExistException` if missing |
+| `deleteNode` | Removes a node and cascades deletion of all incoming/outgoing edges | `id`: NodeID | — | `EntityNotExistException` if missing |
 | `deleteEdge` | Removes an edge | `id`: EdgeID | — | `EntityNotExistException` if missing |
 | `metaNames` | Returns all metadata property names | — | `Set<String>` | `AccessClosedStorageException` if closed |
-| `getMeta` / `setMeta` | Reads/writes metadata as named properties on a special reserved node | `name`: key; `value`: IValue or null | `IValue?` | — |
+| `getMeta` / `setMeta` | Reads/writes metadata as named key-value pairs in a dedicated metadata map | `name`: key; `value`: IValue or null | `IValue?` | — |
 | `clear` | Removes all nodes, edges, and metadata | — | `Boolean` | `AccessClosedStorageException` if closed |
 | `transferTo` | Default method. Copies all nodes, edges, and metadata into `target` | `target`: destination `IStorage` | — | `EntityAlreadyExistException` if target has conflicts |
 
@@ -86,8 +86,8 @@ interface IStorage : Closeable {
 - `addNode`/`addEdge` take `Map<String, IValue>` — bulk property initialization avoids a redundant `setNodeProperties` round-trip.
 - `setNodeProperties`/`setEdgeProperties` accept `IValue?` — null values signal deletion; a single call can atomically add, update, and delete properties.
 - `getNodeProperty`/`getEdgeProperty` — single-property access with default implementation `getNodeProperties(id)[name]`. Layered implementations override for O(1) early-return without full map merge.
-- `getMeta`/`setMeta` — metadata (e.g., graph name, version) stored as named properties on a special reserved node, avoiding a separate metadata structure.
-- `deleteNode` does not cascade by contract — the graph layer is responsible for removing associated edges before calling `deleteNode`.
+- `getMeta`/`setMeta` — metadata (e.g., graph name, version, label lattice) stored in a dedicated key-value map, separate from node/edge properties.
+- `deleteNode` cascades edge deletion — all incoming and outgoing edges are removed inline before the node is deleted. This ensures storage-level consistency without requiring the graph layer to remove edges first.
 
 ---
 
@@ -102,12 +102,10 @@ nodeProperties:  MutableMap<NodeID, MutableMap<String, IValue>>
 edgeProperties:  MutableMap<EdgeID, MutableMap<String, IValue>>
 outEdges:        HashMap<NodeID, MutableSet<EdgeID>>
 inEdges:         HashMap<NodeID, MutableSet<EdgeID>>
-keyPool:         HashMap<String, String>   ← deduplicates property key strings across entities
 ```
 
 - All operations are O(1) average.
 - No synchronization — not thread-safe.
-- Property key interning: all property keys are deduplicated via `keyPool` so entities sharing the same property name (e.g., "weight") reference the same `String` object, reducing heap overhead.
 - After `close()`, all maps are cleared and `isClosed` is set; subsequent operations throw `AccessClosedStorageException`.
 
 ---
@@ -120,18 +118,18 @@ keyPool:         HashMap<String, String>   ← deduplicates property key strings
 
 - Multiple concurrent reads are allowed (read lock).
 - Writes are exclusive (write lock).
-- Property key interning via `keyPool` (same as `NativeStorageImpl`; safe because writes are already lock-protected).
+- Property key interning via `keyPool`: all property keys are deduplicated so entities sharing the same property name reference the same `String` object, reducing heap overhead. Safe because writes are already lock-protected.
 
 ---
 
 ### LayeredStorageImpl
 
-**Responsibility:** Multi-layer freeze-and-stack `IStorage` for phased analysis pipelines. Composes N frozen layers (read-only) + one mutable active layer. Writes target the active layer only. Deletion is restricted to the active layer — frozen layers are immutable.
+**Responsibility:** Multi-layer freeze-and-stack `IStorage` for phased analysis pipelines. Composes at most one frozen layer (read-only) + one mutable active layer. Writes target the active layer only. Deletion is restricted to the active layer — frozen layers are immutable.
 
 **State / Fields:**
 
 ```
-frozenLayers:       MutableList<IStorage>   ← bottom-to-top order; each is a frozen IStorage
+frozenLayers:       MutableList<IStorage>   ← merge-on-freeze keeps at most 1 frozen layer
 activeLayer:        IStorage                ← current mutable layer, full CRUD
 frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets (default: NativeStorageImpl)
 ```
@@ -140,34 +138,37 @@ frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `freeze` | Transfers active layer data to a new frozen `IStorage` created by `frozenLayerFactory`, closes old active layer, creates new empty active layer | — | — | `AccessClosedStorageException` if closed |
-| `compact` | Merges top N frozen layers into one to reduce query chain length | `topN`: number of layers | — | `IllegalArgumentException` if out of range |
-| `layerCount` | Total layers (frozen + active) | — | `Int` | — |
+| `freeze` | Merges all existing frozen layers and the active layer into a single new frozen `IStorage` created by `frozenLayerFactory`, closes old layers, and creates a new empty active layer. After freeze, there is always exactly one frozen layer. | — | — | `AccessClosedStorageException` if closed |
+| `compact` | Merges top N frozen layers into one to reduce query chain length. With merge-on-freeze there is at most one frozen layer, so this is effectively a no-op when `topN` is 1. | `topN`: number of layers | — | `IllegalArgumentException` if out of range |
+| `layerCount` | Total layers (frozen + active). Always 1 (no frozen) or 2 (one frozen + active). | — | `Int` | — |
 
 **Deletion constraint:** Only entities in the active layer can be deleted. Attempting to delete a frozen-layer entity throws `FrozenLayerModificationException`. No deletion tracking sets or sentinel values are needed.
 
 **Query resolution order (properties — overlay semantics):**
 1. `activeLayer` — if entity has the property, return it
-2. `frozenLayers` in reverse order (most recently frozen first) — first match wins
+2. Single frozen layer — fallback
 
 **Query resolution (adjacency — merge semantics):**
-- Edges are append-only across layers; `getIncomingEdges` / `getOutgoingEdges` merge results from all layers
+- Edges are append-only across layers; `getIncomingEdges` / `getOutgoingEdges` merge results from both layers
 
-**Single-property optimization:** `getNodeProperty` / `getEdgeProperty` check active layer first, then iterate frozen layers in reverse with early return. Avoids constructing a merged property map when only one value is needed.
+**Single-property optimization:** `getNodeProperty` / `getEdgeProperty` check active layer first, then the frozen layer with early return. Avoids constructing a merged property map when only one value is needed.
 
-**Write routing for cross-layer properties:** When `setNodeProperties` targets a node that exists only in frozen layers, a shadow entry is created in `activeLayer` to hold the overlay properties. Same for edges.
+**Write routing for cross-layer properties:** When `setNodeProperties` targets a node that exists only in the frozen layer, a shadow entry is created in `activeLayer` to hold the overlay properties. Same for edges.
 
 **Freeze data flow:**
 
 ```
 freeze():
-  activeLayer.transferTo(frozenLayerFactory())  → bulk write to target
-  activeLayer.close()                           → release heap memory
-  frozenLayers.add(frozenTarget)
-  activeLayer = NativeStorageImpl()             → fresh empty heap layer
+  merged = frozenLayerFactory()
+  for each existing frozen layer:
+    merge into merged, then close
+  merge activeLayer into merged
+  activeLayer.close()
+  frozenLayers = [merged]                     → always exactly one frozen layer
+  activeLayer = NativeStorageImpl()           → fresh empty heap layer
 ```
 
-**Design rationale:** Restricting deletion to the active layer eliminates deletion tracking sets and sentinel values. Query resolution is a simple 2-way cascade (active → frozen stack). The N-layer model supports arbitrary freeze depth — a single frozen layer suffices for simple pipelines, while multiple layers accommodate multi-phase analysis.
+**Design rationale:** Restricting deletion to the active layer eliminates deletion tracking sets and sentinel values. Merge-on-freeze ensures query resolution is always a simple 2-way lookup (active then single frozen), keeping query depth at O(1).
 
 ---
 
@@ -213,7 +214,7 @@ interface IStorageImporter {
 
 **Responsibility:** CSV-based `IStorageExporter` and `IStorageImporter` implementation.
 
-Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv`). Each row encodes entity ID and property values as a serialized `MapVal` column. Import reads back and merges into the target storage (existing entities are updated; absent entities are created).
+Exports nodes, edges, and metadata as three CSV files in a directory (`nodes.csv`, `edges.csv`, `meta.csv`). Each node/edge row encodes entity ID and property values as a serialized `MapVal` column. Each metadata entry is a name-value pair row in `meta.csv`. Import reads back and merges into the target storage (existing entities are updated; absent entities are created).
 
 ---
 
@@ -236,7 +237,7 @@ Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv
 - `addNode`/`addEdge` must reject duplicate IDs with `EntityAlreadyExistException`
 - `addEdge` must reject edges whose src or dst node does not exist with `EntityNotExistException`
 - Property access/modification on non-existent entities must throw `EntityNotExistException`
-- `deleteNode` does not cascade — graph layer must remove edges first
+- `deleteNode` cascades — all incoming/outgoing edges are removed inline before the node is deleted
 
 ### LayeredStorageImpl
 
@@ -246,7 +247,7 @@ Exports nodes and edges as two CSV files in a directory (`nodes.csv`, `edges.csv
 - Adjacency merge: `getIncomingEdges` / `getOutgoingEdges` must merge results from all layers
 - `setNodeProperties` / `setEdgeProperties` on frozen-layer entities must create shadow entries in `activeLayer`
 - `addNode` / `addEdge` must check all layers for duplicates before adding to active layer
-- Layer count should stay bounded; use `compact` to merge when exceeding threshold
+- Layer count is always 1 or 2 due to merge-on-freeze; `compact` is effectively a no-op
 
 ### IStorageImporter implementations
 

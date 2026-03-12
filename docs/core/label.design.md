@@ -1,14 +1,14 @@
-# TraitLabelLattice Design
+# Label System Design
 
 ## Design Overview
 
-- **Classes**: `Label`, `ILabelLattice`, `AbcBasicLabelLattice`, `DefaultLatticeImpl`, `JgraphtLatticeImpl`, `TraitLabelLattice`, `AbcLabelGraph`, `AbcLabelSimpleGraph`, `AbcLabelMultiGraph`
-- **Relationships**: `DefaultLatticeImpl` extends `AbcBasicLabelLattice`; `JgraphtLatticeImpl` extends `AbcBasicLabelLattice`; `AbcBasicLabelLattice` implements `ILabelLattice`; `TraitLabelLattice` extends `IGraph` and `ILabelLattice`; `AbcLabelGraph` extends `AbcBasicGraph` and implements `TraitLabelLattice`; `AbcLabelGraph` contains `AbcBasicLabelLattice` (composition, one-way); `AbcLabelSimpleGraph` extends `AbcLabelGraph`; `AbcLabelMultiGraph` extends `AbcLabelGraph`
-- **Abstract**: `ILabelLattice` (implemented by `AbcBasicLabelLattice`); `AbcBasicLabelLattice` (extended by `DefaultLatticeImpl`, `JgraphtLatticeImpl`); `TraitLabelLattice` (implemented by `AbcLabelGraph`); `AbcLabelGraph` (extended by `AbcLabelSimpleGraph`, `AbcLabelMultiGraph`)
-- **Exceptions**: `IllegalArgumentException` raised by `JgraphtLatticeImpl` on parent reassignment or `loadLattice` conflict; `EntityNotExistException` raised by `TraitLabelLattice.addEdge` on missing src/dst node
-- **Dependency roles**: Data holders: `Label`. Orchestrator: `AbcLabelGraph` (bridges lattice to graph via composition). Helpers: `AbcBasicLabelLattice` (lattice logic, injected by constructor).
+- **Classes**: `Label`, `IPartialOrderSet`, `AbcMultipleGraph` (label integration), `AbcEdge` (label storage)
+- **Relationships**: `IPartialOrderSet` defines the poset contract; `AbcMultipleGraph` implements `IPartialOrderSet` with write-through persistence to `IStorage` metadata; `AbcEdge.labels` is a public property storing label assignments
+- **Abstract**: `IPartialOrderSet` (implemented by `AbcMultipleGraph`)
+- **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
+- **Dependency roles**: Data holders: `Label`. Orchestrator: `AbcMultipleGraph` (bridges lattice to graph). Helpers: `IStorage` (persistence of lattice metadata).
 
-`TraitLabelLattice` is an optional graph trait that adds **label-based edge visibility** on top of standard `IGraph` operations. It owns a partial-order (poset) structure over `Label` values, label assignment to edges, visibility-filtered graph traversal, and lattice persistence into/from `IStorage` metadata. It does **not** own graph topology, node/edge storage, or the traversal algorithms of the base graph — it only filters which edges are visible under a given label.
+The label system provides **label-based edge visibility** integrated into `IGraph`, `IPartialOrderSet`, and `AbcMultipleGraph`. The poset structure over `Label` values is defined by `IPartialOrderSet`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are declared on `IGraph`. `AbcMultipleGraph` implements both interfaces with **write-through persistence** -- all mutations to `Label.parents` and `Label.changes` immediately write to `IStorage` metadata. Label-filtered methods filter edges by visibility: an edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy. Non-label overloads default to `Label.SUPREMUM`, which sees all edges.
 
 ---
 
@@ -22,6 +22,7 @@
 
 ```kotlin
 data class Label(val core: String) {
+    constructor(strVal: StrVal) : this(strVal.core)
     companion object {
         val INFIMUM  = Label("infimum")   // Greatest Lower Bound — below all labels
         val SUPREMUM = Label("supremum")  // Least Upper Bound   — above all labels
@@ -29,181 +30,100 @@ data class Label(val core: String) {
 }
 ```
 
-A `Label`'s ordering is not intrinsic — it is defined by the lattice structure. `INFIMUM` and `SUPREMUM` are special sentinel bounds.
+A `Label`'s ordering is not intrinsic -- it is defined by the lattice structure. `INFIMUM` and `SUPREMUM` are special sentinel bounds and should not be assigned to edges.
 
 ---
 
-### ILabelLattice
+### IPartialOrderSet
 
-**Responsibility:** Pure poset contract providing member extensions on `Label` and `AbcEdge` for lattice operations.
+**Responsibility:** Contract for a label partial-order set (poset) controlling edge visibility.
 
 **Methods:**
 
 ```kotlin
-interface ILabelLattice {
+interface IPartialOrderSet {
     val allLabels: Set<Label>
 
-    var Label.parents: Map<String, Label>   // typed parent relationships
-    val Label.ancestors: Sequence<Label>    // all ancestors via BFS/DFS
-    var Label.changes: Set<EdgeID>          // edges modified when this label changed
-    var AbcEdge.labels: Set<Label>          // labels attached to an edge
+    var Label.parents: Map<String, Label>
+    val Label.ancestors: Sequence<Label>
+    var Label.changes: Set<EdgeID>
 
     fun Label.compareTo(other: Label): Int?
-
-    fun storeLattice(into: IStorage)        // serialize poset + change log → storage metadata
-    fun loadLattice(from: IStorage)         // restore poset + change log from storage metadata
 }
 ```
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `Label.parents` (get/set) | Reads/writes typed parent relationships for a label | — | `Map<String, Label>` | `IllegalArgumentException` (JgraphtLatticeImpl: immutable after set) |
-| `Label.ancestors` | Returns all ancestors via BFS/DFS traversal | — | `Sequence<Label>` | — |
-| `Label.changes` (get/set) | Reads/writes the set of edge IDs modified under this label | — | `Set<EdgeID>` | — |
-| `AbcEdge.labels` (get/set) | Reads/writes the set of labels attached to an edge | — | `Set<Label>` | — |
-| `Label.compareTo(other)` | Compares two labels in the poset | `other`: Label | `Int?` — 0 if equal, positive if higher, negative if lower, null if incomparable | — |
-| `storeLattice` | Serializes poset and change log to storage metadata | `into`: IStorage | — | — |
-| `loadLattice` | Restores poset and change log from storage metadata | `from`: IStorage | — | `IllegalArgumentException` (JgraphtLatticeImpl: parent conflicts) |
+| `allLabels` | All labels registered in the poset, including `INFIMUM` and `SUPREMUM` | -- | `Set<Label>` | -- |
+| `Label.parents` (get/set) | Reads/writes typed parent relationships for a label | -- | `Map<String, Label>` | -- |
+| `Label.ancestors` | All ancestor labels traversing upwards through parent hierarchy via BFS | -- | `Sequence<Label>` | -- |
+| `Label.changes` (get/set) | Reads/writes the set of edge IDs whose label set was modified involving this label | -- | `Set<EdgeID>` | -- |
+| `Label.compareTo(other)` | Compares two labels in the poset | `other`: Label | `Int?` -- 0 if equal, positive if this > other, negative if this < other, null if incomparable | -- |
 
-All properties are **member extensions** — they are only accessible within a scope that provides an `ILabelLattice` receiver. This is what requires the composition pattern in `AbcLabelGraph`.
+All properties except `allLabels` are **member extensions** -- they are only accessible within a scope that provides an `IPartialOrderSet` receiver.
 
 ---
 
-### AbcBasicLabelLattice
+### AbcEdge.labels
 
-**Responsibility:** Abstract base implementing `ILabelLattice` with change tracking, comparison cache, and persistence logic.
+**Responsibility:** Stores the set of visibility labels assigned to an edge.
+
+```kotlin
+var labels: Set<Label>
+```
+
+`labels` is a public property on `AbcEdge`. Getting reads from a `ListVal` property named `"labels"` on the edge via storage. Setting overwrites it and is not automatically tracked in `Label.changes` -- callers (e.g., `AbcMultipleGraph.addEdge(withID, label)`) are responsible for updating change records.
+
+---
+
+### Label-filtered methods on IGraph
+
+These methods are declared on `IGraph` alongside the non-label overloads:
+
+```kotlin
+fun addEdge(withID: EdgeID, label: Label): E
+fun delEdge(whoseID: EdgeID, label: Label)
+
+fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
+fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
+fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
+```
+
+| Method | Behavior | Input | Output | Errors |
+|--------|----------|-------|--------|--------|
+| `addEdge(withID, label)` | Creates edge (or reuses existing) and assigns label; records edge in `label.changes` | `withID`: EdgeID; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
+| `delEdge(whoseID, label)` | Removes label from edge; removes edge from `label.changes`; if no labels remain, deletes the edge; no-op if edge does not exist | `whoseID`: EdgeID; `label`: Label | -- | -- |
+| `getOutgoingEdges` / `getIncomingEdges` (with label) | Same as non-label overloads but only returns edges visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<E>` | -- |
+| `getChildren` / `getParents` (with label) | Returns adjacent nodes via label-filtered outgoing/incoming edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | -- |
+| `getDescendants` / `getAncestors` (with label) | BFS traversal of all reachable nodes via label-filtered edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | -- |
+
+**Edge visibility rule:** An edge is **visitable** under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded. `Label.SUPREMUM` sees all edges.
+
+---
+
+### AbcMultipleGraph (label implementation)
+
+**Responsibility:** Implements `IPartialOrderSet` with write-through persistence to `IStorage` metadata.
+
+All mutations to `Label.parents` and `Label.changes` immediately write to `IStorage` metadata via `setMeta`. `allLabels` is derived by scanning metadata key names matching the parents prefix pattern. `Label.parents` setter also clears the comparison cache.
 
 **Persistence format:**
 
-| Key | Content |
-|-----|---------|
-| `__lattice__` | `MapVal` of `labelName → MapVal<relType, parentName>` |
-| `__changes__` | `MapVal` of `labelName → ListVal<serialized EdgeID>` |
+Lattice metadata is stored using prefixed keys in `IStorage` metadata:
 
----
+| Key pattern | Content |
+|-------------|---------|
+| `__lp_<labelName>__` | `MapVal` of `relType -> parentName` (parent relationships for a label) |
+| `__lc_<labelName>__` | `ListVal` of serialized `EdgeID` values (change-tracked edges for a label) |
 
-### DefaultLatticeImpl
+`allLabels` is derived by scanning metadata keys matching `__lp_*__`, plus `INFIMUM` and `SUPREMUM`.
 
-**Responsibility:** Mutable poset implementation using `HashMap` — suitable for dynamic or test scenarios.
+**Comparison cache:** `compareTo` results are cached in a `MutableMap<Pair<Label, Label>, Int?>`. The cache is cleared whenever `Label.parents` is set.
 
-- Stores parents in `HashMap<Label, MutableMap<String, Label>>`
-- Parents are **mutable** — the hierarchy can be rebuilt at any time
-- Ancestor traversal: BFS with visited set (cycle-safe)
-
----
-
-### JgraphtLatticeImpl
-
-**Responsibility:** Immutable poset implementation using JGraphT `SimpleDirectedGraph` — suitable for static, pre-defined lattices.
-
-- Stores the hierarchy as `SimpleDirectedGraph<Label, NamedEdge>` from JGraphT
-- Parents are **immutable once set** — reassigning throws `IllegalArgumentException`
-- Ancestor traversal: DFS via `incomingEdgesOf`
-
-Choosing between implementations is done at `AbcLabelGraph` construction time:
-
-```kotlin
-class MyGraph(name: String) : AbcLabelSimpleGraph<MyNode, MyEdge>(name) {
-    // default: DefaultLatticeImpl()
-}
-
-class MyStaticGraph(name: String)
-    : AbcLabelSimpleGraph<MyNode, MyEdge>(name, JgraphtLatticeImpl()) {
-    // uses JGraphT-backed immutable lattice
-}
-```
-
----
-
-### TraitLabelLattice
-
-**Responsibility:** Graph integration trait extending `IGraph` and `ILabelLattice` with label-filtered graph operations.
-
-**Methods:**
-
-```kotlin
-interface TraitLabelLattice<N : AbcNode, E : AbcEdge> : IGraph<N, E>, ILabelLattice {
-
-    fun addEdge(withID: EdgeID, label: Label): E
-    fun delEdge(whoseID: EdgeID, label: Label)
-
-    fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
-    fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
-    fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-    fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-    fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-    fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-}
-```
-
-| Method | Behavior | Input | Output | Errors |
-|--------|----------|-------|--------|--------|
-| `addEdge(withID, label)` | Creates edge and assigns label | `withID`: EdgeID; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
-| `delEdge(whoseID, label)` | Removes label from edge; if no labels remain, deletes the edge | `whoseID`: EdgeID; `label`: Label | — | — |
-| `getChildren` / `getParents` / `getDescendants` / `getAncestors` (with label) | Same as `IGraph` traversal but only visits edges visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | — |
-
-**Edge visibility rule:** An edge is **visitable** under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded (avoids double-counting in multi-label edges).
-
-Since `TraitLabelLattice : ILabelLattice`, all member extensions (`AbcEdge.labels`, `Label.compareTo`, etc.) are in scope within the default method bodies — no `with(lattice) { ... }` wrapper is needed.
-
----
-
-### AbcLabelGraph
-
-**Responsibility:** Abstract base bridging `TraitLabelLattice` to `AbcBasicGraph` via composition with `latticeImpl`.
-
-Kotlin does not support delegating **member extension properties** via `by`. `AbcLabelGraph` solves this by holding a `latticeImpl` and manually forwarding each member extension:
-
-```kotlin
-abstract class AbcLabelGraph<N : AbcNode, E : AbcEdge>(
-    name: String,
-    protected val latticeImpl: AbcBasicLabelLattice = DefaultLatticeImpl()
-) : AbcBasicGraph<N, E>(name), TraitLabelLattice<N, E> {
-
-    override val allLabels get() = latticeImpl.allLabels
-
-    override var Label.parents: Map<String, Label>
-        get() = with(latticeImpl) { this@parents.parents }
-        set(value) = with(latticeImpl) { this@parents.parents = value }
-
-    override val Label.ancestors: Sequence<Label>
-        get() = with(latticeImpl) { this@ancestors.ancestors }
-
-    override var Label.changes: Set<EdgeID>
-        get() = with(latticeImpl) { this@changes.changes }
-        set(value) = with(latticeImpl) { this@changes.changes = value }
-
-    override var AbcEdge.labels: Set<Label>
-        get() = with(latticeImpl) { this@labels.labels }
-        set(value) = with(latticeImpl) { this@labels.labels = value }
-
-    override fun Label.compareTo(other: Label): Int? =
-        with(latticeImpl) { compareTo(other) }
-
-    override fun storeLattice(into: IStorage) = latticeImpl.storeLattice(into)
-    override fun loadLattice(from: IStorage)  = latticeImpl.loadLattice(from)
-
-    override fun close() {
-        latticeImpl.storeLattice(storage)   // auto-persist on close
-        super.close()
-    }
-}
-```
-
----
-
-### AbcLabelSimpleGraph / AbcLabelMultiGraph
-
-**Responsibility:** Concrete label graph variants combining label trait with simple/multi edge policy.
-
-```kotlin
-abstract class AbcLabelSimpleGraph<N : AbcNode, E : AbcEdge>(name: String)
-    : AbcLabelGraph<N, E>(name) {
-    // addEdge enforces at-most-one-edge per (src, dst) before delegating
-}
-```
-
-Concrete graph classes extend these and only implement `newNodeObj`/`newEdgeObj`.
+**`close()` behavior:** Clears internal wrapper object caches only. Lattice state does not require explicit persistence on close because all mutations are write-through.
 
 ---
 
@@ -217,46 +137,48 @@ class MyEdge(storage: IStorage, override val id: EdgeID) : AbcEdge(storage) {
     override val type = object : AbcEdge.Type { override val name = "link" }
 }
 
-class MyGraph(name: String) : AbcLabelSimpleGraph<MyNode, MyEdge>(name) {
+class MyGraph : AbcMultipleGraph<MyNode, MyEdge>() {
     override val storage = NativeStorageImpl()
     override fun newNodeObj(nid: NodeID) = MyNode(storage, nid)
     override fun newEdgeObj(eid: EdgeID) = MyEdge(storage, eid)
 }
 
-val graph = MyGraph("catalog")
+val graph = MyGraph()
 
-// Define label hierarchy (ILabelLattice member extension in scope via graph)
-val public    = Label("public")
-val protected = Label("protected")
-val private   = Label("private")
+// Define label hierarchy (IPartialOrderSet member extensions in scope via graph receiver)
+with(graph) {
+    val public    = Label("public")
+    val protected = Label("protected")
+    val private   = Label("private")
 
-public.parents    = mapOf("sub" to protected)
-protected.parents = mapOf("sub" to private)
+    public.parents    = mapOf("sub" to protected)
+    protected.parents = mapOf("sub" to private)
 
-// Add nodes and edges with labels
-graph.addNode(NodeID("a"))
-graph.addNode(NodeID("b"))
-graph.addNode(NodeID("c"))
+    // Add nodes and edges with labels
+    addNode(NodeID("a"))
+    addNode(NodeID("b"))
+    addNode(NodeID("c"))
 
-val eid1 = EdgeID(NodeID("a"), NodeID("b"), "link")
-val eid2 = EdgeID(NodeID("b"), NodeID("c"), "link")
+    val eid1 = EdgeID(NodeID("a"), NodeID("b"), "link")
+    val eid2 = EdgeID(NodeID("b"), NodeID("c"), "link")
 
-graph.addEdge(eid1, public)     // visible under public, protected, private
-graph.addEdge(eid2, private)    // visible only under private
+    addEdge(eid1, public)     // visible under public, protected, private
+    addEdge(eid2, private)    // visible only under private
 
-// Label-filtered traversal
-graph.getChildren(NodeID("a"), public).toList()    // [b]   (eid1 is public-visible)
-graph.getChildren(NodeID("b"), public).toList()    // []    (eid2 is private-only)
-graph.getChildren(NodeID("b"), private).toList()   // [c]   (private ≥ private)
+    // Label-filtered traversal
+    getChildren(NodeID("a"), public).toList()    // [b]   (eid1 is public-visible)
+    getChildren(NodeID("b"), public).toList()    // []    (eid2 is private-only)
+    getChildren(NodeID("b"), private).toList()   // [c]   (private >= private)
 
-graph.getDescendants(NodeID("a"), public).toList()  // [b]
-graph.getDescendants(NodeID("a"), private).toList() // [b, c]
+    getDescendants(NodeID("a"), public).toList()  // [b]
+    getDescendants(NodeID("a"), private).toList() // [b, c]
 
-// Remove a label without deleting the edge
-graph.delEdge(eid1, public)   // eid1 now has no labels → edge deleted
+    // Remove a label without deleting the edge
+    delEdge(eid1, public)   // eid1 now has no labels -> edge deleted
+}
 
-// Auto-persist and close
-graph.close()   // storeLattice(storage) called automatically
+// Clears internal caches only (lattice state is already persisted via write-through)
+graph.close()
 ```
 
 ---
@@ -265,37 +187,20 @@ graph.close()   // storeLattice(storage) called automatically
 
 | Exception | When raised |
 |-----------|------------|
-| `IllegalArgumentException` | Setting parents on `JgraphtLatticeImpl` after already set; restoring lattice from storage with `JgraphtLatticeImpl` when parents conflict |
 | `EntityNotExistException` | `addEdge` with missing src/dst node (from `IGraph`) |
 
-`delEdge` on non-existent edge is a no-op.
+`delEdge(whoseID, label)` on a non-existent edge is a no-op.
 
 ---
 
 ## Validation Rules
 
-### JgraphtLatticeImpl
-
-- Parents are immutable once set; reassignment throws `IllegalArgumentException`
-- `loadLattice` rejects conflicting parent relationships with `IllegalArgumentException`
-
-### TraitLabelLattice
-
-- `addEdge(withID, label)` requires both src and dst nodes to exist
-- `delEdge(whoseID, label)` removes only the specified label; edge is deleted only when no labels remain
-
-### AbcLabelSimpleGraph
-
-- At most one edge per directed `(src, dst)` pair (same constraint as `AbcSimpleGraph`)
-
 ### Label
 
-- `Label.INFIMUM` is below all labels; `Label.SUPREMUM` is above all labels — these are structural bounds and should not be assigned to edges
+- `Label.INFIMUM` is below all labels; `Label.SUPREMUM` is above all labels -- these are structural bounds and should not be assigned to edges
 
-### Known Issues in Current Implementation
+### IGraph (label-filtered operations)
 
-| Location | Issue |
-|----------|-------|
-| `AbcBasicLabelLattice.compareTo` | `compareTo` logic is inverted in the first ancestor-check loop — `this > other` cases are never detected. The condition `if (label != other)` should be `if (label != this)`. |
-| `AbcBasicLabelLattice.storeLattice` | Calls old `setMeta("key" to value)` vararg signature; must be updated to `setMeta("key", value)` per new `IStorage` contract. |
-| `Label.kt` context receiver functions | All `context(ILabelLattice)` extension functions on `IGraph` use the old entity-first `getEdge(from: AbcNode, ...)` signatures; must be migrated to ID-first after `TraitLabelLattice` is in place. |
+- `addEdge(withID, label)` requires both src and dst nodes to exist
+- `delEdge(whoseID, label)` removes only the specified label; the edge is deleted only when no labels remain
+- `delEdge(whoseID, label)` on a non-existent edge is a no-op
