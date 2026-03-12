@@ -2,11 +2,11 @@
 
 ## Design Overview
 
-- **Classes**: `NodeID`, `EdgeID`, `IEntity`, `IEntity.ID`, `IEntity.Type`, `AbcBasicEntity`, `AbcNode`, `AbcEdge`
-- **Relationships**: `NodeID` implements `IEntity.ID`; `EdgeID` implements `IEntity.ID`; `AbcNode` extends `AbcBasicEntity` and implements `IEntity`; `AbcEdge` extends `AbcBasicEntity` and implements `IEntity`; `AbcNode` contains `IStorage` (one-way); `AbcEdge` contains `IStorage` (one-way)
-- **Abstract**: `IEntity` (sealed; implemented by `AbcNode`, `AbcEdge`); `AbcBasicEntity` (extended by `AbcNode`, `AbcEdge`)
-- **Exceptions**: `InvalidPropNameException` raised by `IEntity` on reserved property name prefix; `EntityNotExistException` raised by storage layer on missing entity
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcNode` / `AbcEdge` (bridge identity to storage-backed property access). Helpers: `AbcBasicEntity` (property delegate utilities).
+- **Classes**: `NodeID`, `EdgeID`, `IEntity`, `IEntity.ID`, `IEntity.Type`, `AbcEntity`, `AbcNode`, `AbcEdge`
+- **Relationships**: `NodeID` implements `IEntity.ID`; `EdgeID` implements `IEntity.ID`; `AbcNode` extends `AbcEntity` and implements `IEntity`; `AbcEdge` extends `AbcEntity` and implements `IEntity`
+- **Abstract**: `IEntity` (sealed; implemented by `AbcNode`, `AbcEdge`); `AbcEntity` (extended by `AbcNode`, `AbcEdge`)
+- **Exceptions**: `InvalidPropNameException` defined for reserved property name prefix (not currently enforced at entity level); `EntityNotExistException` raised by storage layer on missing entity
+- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcNode` / `AbcEdge` (bridge identity to storage-backed property access). Helpers: `AbcEntity` (property delegate utilities).
 
 The entity layer defines how graph elements are **identified** and how they **expose properties**. It does **not** store data — it delegates all property reads and writes to the injected `IStorage`.
 
@@ -43,14 +43,14 @@ data class NodeID(val name: String) : IEntity.ID {
 ```kotlin
 data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
     val serialize: ListVal       // → ListVal(srcNid.serialize, dstNid.serialize, eType.strVal)
-    val asString: String         // → "srcName>dstName:eType"
+    val asString: String         // → "$srcNid-$eType-$dstNid"
 }
 ```
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `serialize` | Serializes to `ListVal` | — | `ListVal(srcNid.serialize, dstNid.serialize, eType.strVal)` | — |
-| `asString` | Returns formatted string | — | `"srcName>dstName:eType"` | — |
+| `asString` | Returns formatted string | — | `"srcName-eType-dstName"` | — |
 
 **Design rationale:** Encoding `(src, dst, type)` in the ID enables O(1) edge lookup by identity without requiring an adjacency scan, and keeps edge semantics explicit at every call site.
 
@@ -86,36 +86,22 @@ sealed interface IEntity {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `setProp` | Sets a single property (null removes it) | `name`: property name; `value`: IValue or null | — | `InvalidPropNameException` if reserved prefix |
-| `setProps` | Sets multiple properties atomically | `props`: map of name→value | — | `InvalidPropNameException` if reserved prefix |
+| `setProp` | Sets a single property (null removes it) | `name`: property name; `value`: IValue or null | — | — |
+| `setProps` | Sets multiple properties atomically | `props`: map of name→value | — | — |
 | `getProp` | Reads a single property | `name`: property name | `IValue?` | — |
 | `getAllProps` | Returns all properties | — | `Map<String, IValue>` | — |
 | `containProp` | Checks property existence | `name`: property name | `Boolean` | — |
 | `set` / `get` / `contains` | Operator sugar delegating to setProp/getProp/containProp | same as above | same as above | same as above |
 
-Property names prefixed with reserved tokens (e.g., `meta_`) are forbidden — `InvalidPropNameException` is thrown if used.
-
 ---
 
-### AbcBasicEntity
+### AbcEntity
 
-**Responsibility:** Provides Kotlin property delegate helpers for typed domain entity fields.
+**Responsibility:** Provides property delegate utilities for subclasses and a public typed accessor for property retrieval.
 
-**Methods / Delegates:**
+`AbcEntity` contains protected delegate helpers (`EntityProperty`, `EntityType`) that subclasses use to declare storage-backed properties. These delegates call `getProp`/`setProp` internally, so all reads/writes go through storage.
 
-```kotlin
-// Non-nullable typed property, with default
-var name: StrVal by EntityProperty(default = "unnamed".strVal)
-
-// Nullable typed property
-var label: StrVal? by EntityProperty()
-
-// Enum-backed type property (name auto-prefixed with lowercase class name)
-enum class Kind { PERSON, ORG }
-var kind: Kind by EntityType(default = Kind.PERSON)
-```
-
-These delegates call `getProp`/`setProp` internally, so all reads/writes go through storage.
+**Public Methods:**
 
 `getTypeProp<T>(name)` is the unchecked typed accessor; returns `null` if the value is absent or the cast fails.
 
@@ -128,13 +114,13 @@ These delegates call `getProp`/`setProp` internally, so all reads/writes go thro
 **State / Fields:**
 
 ```kotlin
-abstract class AbcNode(val storage: IStorage) : AbcBasicEntity(), IEntity {
+abstract class AbcNode : AbcEntity() {
     abstract override val id: NodeID
     abstract override val type: AbcNode.Type
+    fun doUseStorage(target: IStorage): Boolean
 }
 ```
 
-- `storage: IStorage` — injected storage reference (one-way dependency)
 - `doUseStorage(target: IStorage): Boolean` — returns true if the entity's storage matches the given target (used for entity provenance verification)
 
 Subclasses only need to provide `id`, `type`, and the storage reference. All property behavior is inherited.
@@ -148,16 +134,19 @@ Subclasses only need to provide `id`, `type`, and the storage reference. All pro
 **State / Fields:**
 
 ```kotlin
-abstract class AbcEdge(val storage: IStorage) : AbcBasicEntity(), IEntity {
+abstract class AbcEdge : AbcEntity() {
     abstract override val id: EdgeID
     abstract override val type: AbcEdge.Type
     val srcNid: NodeID get() = id.srcNid
     val dstNid: NodeID get() = id.dstNid
+    val eType: String get() = id.eType
+    var labels: Set<Label>
 }
 ```
 
-- `storage: IStorage` — injected storage reference (one-way dependency)
 - `srcNid` / `dstNid` — convenience accessors delegating to `id`
+- `eType` — convenience accessor for the edge type string, delegating to `id.eType`
+- `labels` — the set of `Label` values assigned to this edge, backed by storage property `"labels"`. Used by the label visibility system (see `docs/basic/label.design.md`).
 
 ---
 
@@ -199,14 +188,11 @@ No global functions; all operations are instance methods on sealed types.
 
 | Exception | When raised |
 |-----------|------------|
-| `InvalidPropNameException` | Property name uses reserved prefix (e.g., `meta_`) |
+| `InvalidPropNameException` | Defined for reserved property name prefix (e.g., `meta_`), but not currently enforced at entity level |
 | `EntityNotExistException` | Node/edge does not exist in storage (from storage layer) |
 
 ---
 
 ## Validation Rules
 
-### IEntity
-
-- Property names must not use reserved prefixes (e.g., `meta_`); enforced by `setProp`, `setProps`, and operator `set`
-- Reserved prefix check applies to all property write operations across `AbcNode` and `AbcEdge`
+No validation rules are currently enforced at the entity level. Reserved property name prefix checking (`InvalidPropNameException`) is defined but not enforced in entity-level write operations.
