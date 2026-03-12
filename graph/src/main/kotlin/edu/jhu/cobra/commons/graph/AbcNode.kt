@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Unique identifier for a node in the graph.
@@ -40,6 +41,25 @@ data class NodeID(
      * @param strVal The string value representing the node identifier.
      */
     constructor(strVal: StrVal) : this(strVal.core)
+
+    companion object {
+        private val pool = ConcurrentHashMap<String, NodeID>()
+
+        /**
+         * Returns a deduplicated [NodeID] for the given name.
+         *
+         * Reuses existing instances to reduce allocation and GC pressure.
+         *
+         * @param name The node identifier string.
+         * @return A cached or newly interned [NodeID].
+         */
+        fun of(name: String): NodeID = pool.getOrPut(name) { NodeID(name) }
+
+        /**
+         * Clears the intern pool. Intended for testing or when resetting state.
+         */
+        fun clearPool() = pool.clear()
+    }
 }
 
 /**
