@@ -163,14 +163,14 @@ class LayeredStorageImplTest {
     }
 
     @Test
-    fun `test freeze increments layerCount`() {
+    fun `test freeze merges into single frozen layer`() {
         storage.addNode(node1)
         storage.freeze()
         assertEquals(2, storage.layerCount)
 
         storage.addNode(node2)
         storage.freeze()
-        assertEquals(3, storage.layerCount)
+        assertEquals(2, storage.layerCount)
     }
 
     @Test
@@ -357,16 +357,16 @@ class LayeredStorageImplTest {
     // region Compact layers
 
     @Test
-    fun `test compact merges frozen layers`() {
+    fun `test compact is no-op with single frozen layer`() {
         storage.addNode(node1, mapOf("phase" to "1".strVal))
         storage.freeze()
 
         storage.addNode(node2, mapOf("phase" to "2".strVal))
         storage.freeze()
 
-        assertEquals(3, storage.layerCount)
+        assertEquals(2, storage.layerCount)
 
-        storage.compact(2)
+        storage.compact(1)
         assertEquals(2, storage.layerCount)
 
         assertTrue(storage.containsNode(node1))

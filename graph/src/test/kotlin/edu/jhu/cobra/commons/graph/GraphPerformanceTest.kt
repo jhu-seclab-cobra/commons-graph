@@ -61,7 +61,9 @@ class GraphPerformanceTest {
         return g
     }
 
-    private fun nodeId(i: Int): NodeID = NodeID("n$i")
+    private val nodeIdPool = Array(100_001) { NodeID("n$it") }
+
+    private fun nodeId(i: Int): NodeID = nodeIdPool[i]
 
     private fun edgeId(
         src: Int,

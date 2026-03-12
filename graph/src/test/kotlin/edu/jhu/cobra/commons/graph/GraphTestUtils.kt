@@ -1,9 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcEdge
-import edu.jhu.cobra.commons.graph.AbcNode
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 
@@ -60,10 +56,6 @@ object GraphTestUtils {
         override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
 
         override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
-
-        fun exposeNodeIDs(): MutableSet<NodeID> = nodeIDs
-
-        fun exposeEdgeIDs(): MutableSet<EdgeID> = edgeIDs
     }
 
     fun createTestSimpleGraph(storage: IStorage = NativeStorageImpl()): AbcSimpleGraph<TestNode, TestEdge> =
@@ -83,9 +75,5 @@ object GraphTestUtils {
         override fun newNodeObj(nid: NodeID) = TestNode(storage, nid)
 
         override fun newEdgeObj(eid: EdgeID) = TestEdge(storage, eid)
-
-        fun exposeNodeIDs(): MutableSet<NodeID> = nodeIDs
-
-        fun exposeEdgeIDs(): MutableSet<EdgeID> = edgeIDs
     }
 }
