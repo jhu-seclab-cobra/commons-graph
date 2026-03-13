@@ -18,7 +18,7 @@ Run with:
 
 JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`
 
-> **Note**: NativeStorageImpl uses row-oriented storage (`Map<NodeID, MutableMap<String, IValue>>`).
+> **Note**: NativeStorageImpl uses row-oriented storage (`Map<String, MutableMap<String, IValue>>`).
 > P6-5 columnar optimization was reverted due to functional test incompatibility.
 
 ### Graph-Level Query Operations (10K nodes, 50K edges, 100K queries)
@@ -97,11 +97,11 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 
 ### Lattice Operations (5K nodes, 15K edges, 5 labels)
 
-| Storage | assignLabels (ms) | filteredQuery (ops/s) | storeLattice (ms) |
-|---|---|---|---|
-| NativeStorage | 5.2 | 971.0K | 1.6 |
-| NativeConcurStorage | 3.5 | 1.09M | 0.5 |
-| LayeredStorage | 3.9 | 1.06M | 0.4 |
+| Storage | assignLabels (ms) | filteredQuery (ops/s) |
+|---|---|---|
+| NativeStorage | 5.2 | 971.0K |
+| NativeConcurStorage | 3.5 | 1.09M |
+| LayeredStorage | 3.9 | 1.06M |
 
 ### Fixpoint State Access (P0, 50K nodes, 200K iterations)
 
@@ -309,8 +309,8 @@ HotSpot C2: Eclipse Temurin 21.0.6+7. GraalVM CE: GraalVM Community 21.0.2+13-jv
 | 2 | B6-A | UnionSet for edge queries | outgoing edge query | +5.6x (3.93M -> 21.99M) |
 | 2 | B6-A | UnionSet for edge queries | incoming edge query | +3.4x (4.24M -> 14.31M) |
 | 2 | — | Combined Phase 2 | mixed workload | -14% latency (51.8 ms -> 44.4 ms) |
-| 3 | B7 | NodeID intern pool | getNode (Layered) | +14% (21.34M -> 24.15M) |
-| 3 | B1-A | EdgeID intern pool | getNode (NativeConcur) | +26% (15.64M -> 19.65M) |
+| 3 | B7 | NodeID intern pool | getNode (Layered) | +14% — superseded by value class NodeID |
+| 3 | B1-A | EdgeID intern pool | getNode (NativeConcur) | +26% — superseded by IStorage String keys |
 | 3 | B3-A | Wrapper cache (read-only) | getNode (NativeConcur) | +56% (17.29M -> 27.01M) |
 | 3 | B3-A | Wrapper cache (read-only) | getOutEdges (Layered) | +60% (4.07M -> 6.50M) |
 | 3 | B3-A | Wrapper cache (read-only) | getDescendants (Layered) | +26% (714.2K -> 898.9K) |
@@ -360,17 +360,15 @@ HotSpot C2: Eclipse Temurin 21.0.6+7. GraalVM CE: GraalVM Community 21.0.2+13-jv
 - **Change**: `getOutgoingEdges`/`getIncomingEdges` return `UnionSet(frozenEdges, activeEdges)` instead of creating a new HashSet. Fast paths return backing set directly when one side is empty.
 - **Impact**: Outgoing +5.6x, incoming +3.4x. LayeredStorage edge queries approach NativeStorage speed.
 
-### Phase 3: B7 — NodeID Intern Pool
+### Phase 3: B7 — NodeID Intern Pool (Superseded)
 
 - **File(s)**: `NodeID.kt`
-- **Change**: `NodeID.of(name)` returns cached instances via `ConcurrentHashMap`. Opt-in API — existing `NodeID()` constructor unchanged.
-- **Impact**: getNode (Layered) +14%. Population overhead within JVM noise.
+- **Status**: Superseded. `NodeID` is now a `value class` (zero-cost `String` wrapper). Interning is unnecessary because `value class` compiles to `String` at runtime with no heap allocation.
 
-### Phase 3: B1-A — EdgeID Intern Pool
+### Phase 3: B1-A — EdgeID Intern Pool (Superseded)
 
 - **File(s)**: `EdgeID.kt`
-- **Change**: `EdgeID.of(src, dst, type)` returns cached instances via `ConcurrentHashMap`, auto-interns NodeID fields. Opt-in API.
-- **Impact**: getNode (NativeConcur) +26%. **Caveat**: population regression -29% to -42% at 0% cache hit rate. Use `EdgeID.of()` for read-heavy workloads only; use `EdgeID()` constructor for population.
+- **Status**: Superseded. `IStorage` now uses `String` vertex IDs and `ArcKey` arc IDs. `EdgeID` is a short-lived domain-layer boundary object; deduplication is handled by `edgeCache` in `AbcMultipleGraph`.
 
 ### Phase 3: B3-A — Node/Edge Wrapper Cache (Read-Only)
 
@@ -424,15 +422,15 @@ _Empty — no active optimization round._
 
 ### B2: Per-Entity MutableMap Property Storage
 
-Both node and edge properties use row-oriented `Map<ID, MutableMap<String, IValue>>`. P6-5 columnar node storage was reverted due to CsvWriter compatibility issues. At scale (1M nodes x 3 properties + 3M edges x 3 properties), per-entity HashMap overhead is significant (~176B per entity map instance). Columnar storage remains a viable candidate if the CsvWriter iteration-order dependency is fixed first.
+Both vertex and arc properties use row-oriented `Map<String, MutableMap<String, IValue>>` / `Map<ArcKey, MutableMap<String, IValue>>`. P6-5 columnar storage was reverted due to CsvWriter compatibility issues. At scale (1M vertices x 3 properties + 3M arcs x 3 properties), per-entity HashMap overhead is significant (~176B per entity map instance). Columnar storage remains a viable candidate if the CsvWriter iteration-order dependency is fixed first.
 
 ### B1-B: Integer Edge Indexing
 
-Internal `Int edgeSeqId` index with `IntOpenHashSet` adjacency could save ~170MB/3M edges (48B -> 4B per ref). High complexity — requires `EdgeID<->Int` bidirectional map and eclipse-collections dependency.
+Internal `Int` arc sequential ID index with `IntOpenHashSet` adjacency could save ~170MB/3M arcs (48B -> 4B per ref). Can be implemented inside `IStorage` as an optimization — `String`->`Int` mapping at the storage boundary, transparent to the graph layer. Requires eclipse-collections dependency.
 
 ### B3: Wrapper Object Allocation (Concurrency)
 
-B3-A (HashMap cache) is implemented for single-threaded access. Flyweight cursor (B3-B) would achieve zero allocation but is unsafe under concurrency.
+B3-A (HashMap cache) is implemented for single-threaded access. Flyweight cursor (B3-B) would achieve zero allocation but is unsafe under concurrency. With `IStorage` using `String`/`ArcKey` internally, wrapper caching only applies to the domain layer (`AbcNode`/`AbcEdge` objects in `edgeCache`/`nodeCache`).
 
 ### B4-A: BitSet Layer Ownership
 
@@ -450,7 +448,7 @@ After B8 removal, remaining graph->storage overhead (~1.17x for containNode) com
 2. **ByteArray is a GC leaf.** GC marks it live but traces zero internal references. Converting reference-dense object graphs into GC leaf nodes is the fundamental GC advantage of compact encoding.
 3. **Compact memory structures trade read-path performance for memory savings.** Both B2-B (schema array) and B1-B (ArrayList adjacency) showed this pattern. When the read path is hot, this trade-off is not worth it.
 4. **Cache on reads only, not writes.** B3-A initial implementation cached on both reads and writes, causing +32% population regression. Read-only caching eliminated regression while retaining +20-56% read speedup.
-5. **Intern pools help reads, hurt population.** EdgeID intern pool (B1-A) shows +26% read improvement but -29% to -42% population regression at 0% cache hit rate. Use constructors for bulk creation, `.of()` for repeated access.
+5. **Intern pools are superseded by decoupled storage IDs.** `IStorage` uses `String`/`ArcKey` directly, eliminating the need for `NodeID`/`EdgeID` interning. `NodeID` as `value class` compiles to `String` with zero allocation. `edgeCache` in `AbcMultipleGraph` provides the caching that matters (wrapper objects, not identity objects).
 6. **Zero-allocation views dominate over copy-based merging.** LazyMergedMap (+2.6x), UnionSet (+3.4-5.6x), and merge-on-freeze (+2.4-4.2x) all achieve their gains by eliminating intermediate object allocation.
 7. **Externalize hot-path state from general-purpose storage.** AnalysisStateStore achieved 42-62x read speedup by using direct array indexing instead of HashMap-based IStorage. The hottest code path should not go through generic abstractions.
 8. **MapDB shifts GC pressure, doesn't eliminate it.** Every access creates temp ByteArray + IValue objects (Young Gen), while NativeStorage keeps long-lived objects in Old Gen. For traversal-intensive workloads, MapDB Young Gen pressure is higher.

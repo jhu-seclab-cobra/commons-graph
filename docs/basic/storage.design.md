@@ -2,54 +2,66 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
+- **Classes**: `IStorage`, `ArcKey`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`, `IStorageExporter`, `IStorageImporter`, `NativeCsvIOImpl`
 - **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes at most one frozen `IStorage` layer + one mutable active layer); `NativeCsvIOImpl` implements `IStorageExporter` and `IStorageImporter`
 - **Abstract**: `IStorage` (implemented by all storage types); `IStorageExporter` (implemented by `NativeCsvIOImpl`); `IStorageImporter` (implemented by `NativeCsvIOImpl`)
 - **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityAlreadyExistException` raised on duplicate add; `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when attempting to delete entities from frozen layers in `LayeredStorageImpl`
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `IValue`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
+- **Dependency roles**: Data holders: `ArcKey`, `IValue`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers multiple `IStorage` instances). Helpers: `NativeCsvIOImpl` (inputs by argument).
 
-The storage layer is the **backend-agnostic persistence contract** for graph data. It provides two tiers of storage capability:
+The storage layer is the **backend-agnostic directed property graph engine**. It manages vertices (identified by `String`), directed arcs (identified by `ArcKey`), per-vertex and per-arc properties, adjacency indices, and metadata. It does not know about domain types (`NodeID`, `EdgeID`, `Label`) — those belong to the graph and entity layers.
+
+It provides two tiers of storage capability:
 
 1. **Flat storage** (`NativeStorageImpl`, external `MapDBStorageImpl` / `JgraphtStorageImpl` / `Neo4jStorageImpl`) — single-layer, full CRUD
 2. **Layered storage** (`LayeredStorageImpl`) — at most one frozen layer (read-only) + one mutable active layer; writes target active layer only; deletion restricted to active layer; frozen layers created via injectable factory (default: `NativeStorageImpl`)
 
-The storage layer does **not** own graph traversal logic, entity type construction, or backend-specific optimization — those belong to the graph layer and module implementations respectively.
+The same `IStorage` implementation can back both the main program-analysis graph and the label partial-order DAG.
 
 ---
 
 ## Class / Type Specifications
 
+### ArcKey
+
+**Responsibility:** Immutable identifier for a directed arc, encoding source vertex, destination vertex, and arc type.
+
+**State / Fields:**
+
+```kotlin
+data class ArcKey(val src: String, val dst: String, val type: String)
+```
+
+`ArcKey` is a pure data holder used as the arc identity in `IStorage`. The storage uses `src`/`dst` to maintain adjacency indices. `ArcKey` has no domain semantics — the meaning of `src`, `dst`, and `type` is determined by the caller.
+
+---
+
 ### IStorage
 
 **Responsibility:** Defines the minimum capability contract all storage backends must implement.
-
-**State / Fields:**
-- `nodeIDs: Set<NodeID>` — snapshot of all node IDs
-- `edgeIDs: Set<EdgeID>` — snapshot of all edge IDs
 
 **Methods:**
 
 ```kotlin
 interface IStorage : Closeable {
-    val nodeIDs: Set<NodeID>
-    val edgeIDs: Set<EdgeID>
+    val vertices: Set<String>
+    val arcs: Set<ArcKey>
 
-    fun containsNode(id: NodeID): Boolean
-    fun addNode(id: NodeID, properties: Map<String, IValue> = emptyMap())
-    fun getNodeProperties(id: NodeID): Map<String, IValue>
-    fun getNodeProperty(id: NodeID, name: String): IValue?
-    fun setNodeProperties(id: NodeID, properties: Map<String, IValue?>)
-    fun deleteNode(id: NodeID)
+    fun containsVertex(id: String): Boolean
+    fun addVertex(id: String, properties: Map<String, IValue> = emptyMap())
+    fun getVertexProperties(id: String): Map<String, IValue>
+    fun getVertexProperty(id: String, name: String): IValue?
+    fun setVertexProperties(id: String, properties: Map<String, IValue?>)
+    fun deleteVertex(id: String)
 
-    fun containsEdge(id: EdgeID): Boolean
-    fun addEdge(id: EdgeID, properties: Map<String, IValue> = emptyMap())
-    fun getEdgeProperties(id: EdgeID): Map<String, IValue>
-    fun getEdgeProperty(id: EdgeID, name: String): IValue?
-    fun setEdgeProperties(id: EdgeID, properties: Map<String, IValue?>)
-    fun deleteEdge(id: EdgeID)
+    fun containsArc(id: ArcKey): Boolean
+    fun addArc(id: ArcKey, properties: Map<String, IValue> = emptyMap())
+    fun getArcProperties(id: ArcKey): Map<String, IValue>
+    fun getArcProperty(id: ArcKey, name: String): IValue?
+    fun setArcProperties(id: ArcKey, properties: Map<String, IValue?>)
+    fun deleteArc(id: ArcKey)
 
-    fun getIncomingEdges(id: NodeID): Set<EdgeID>
-    fun getOutgoingEdges(id: NodeID): Set<EdgeID>
+    fun getIncomingArcs(id: String): Set<ArcKey>
+    fun getOutgoingArcs(id: String): Set<ArcKey>
 
     val metaNames: Set<String>
     fun getMeta(name: String): IValue?
@@ -58,8 +70,8 @@ interface IStorage : Closeable {
     fun clear(): Boolean
 
     fun transferTo(target: IStorage) {
-        for (nodeId in nodeIDs) target.addNode(nodeId, getNodeProperties(nodeId))
-        for (edgeId in edgeIDs) target.addEdge(edgeId, getEdgeProperties(edgeId))
+        for (v in vertices) target.addVertex(v, getVertexProperties(v))
+        for (a in arcs) target.addArc(a, getArcProperties(a))
         for (name in metaNames) target.setMeta(name, getMeta(name))
     }
 }
@@ -67,27 +79,29 @@ interface IStorage : Closeable {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addNode` | Creates a node with optional initial properties | `id`: NodeID; `properties`: initial property map | — | `EntityAlreadyExistException` if exists |
-| `addEdge` | Creates an edge with optional initial properties | `id`: EdgeID; `properties`: initial property map | — | `EntityAlreadyExistException` if exists; `EntityNotExistException` if src/dst missing |
-| `getNodeProperty` | Returns a single property value without constructing the full map | `id`: NodeID; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
-| `getEdgeProperty` | Returns a single property value without constructing the full map | `id`: EdgeID; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
-| `setNodeProperties` | Atomically adds, updates, and deletes properties | `id`: NodeID; `properties`: map where null values signal deletion | — | `EntityNotExistException` if missing |
-| `setEdgeProperties` | Same as `setNodeProperties` for edges | `id`: EdgeID; `properties`: map | — | `EntityNotExistException` if missing |
-| `deleteNode` | Removes a node and cascades deletion of all incoming/outgoing edges | `id`: NodeID | — | `EntityNotExistException` if missing |
-| `deleteEdge` | Removes an edge | `id`: EdgeID | — | `EntityNotExistException` if missing |
+| `addVertex` | Creates a vertex with optional initial properties | `id`: String; `properties`: initial property map | — | `EntityAlreadyExistException` if exists |
+| `addArc` | Creates an arc with optional initial properties; both src and dst vertices must exist | `id`: ArcKey; `properties`: initial property map | — | `EntityAlreadyExistException` if exists; `EntityNotExistException` if src/dst missing |
+| `getVertexProperty` | Returns a single property value without constructing the full map | `id`: String; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
+| `getArcProperty` | Returns a single property value without constructing the full map | `id`: ArcKey; `name`: property key | `IValue?` | `EntityNotExistException` if missing |
+| `setVertexProperties` | Atomically adds, updates, and deletes properties | `id`: String; `properties`: map where null values signal deletion | — | `EntityNotExistException` if missing |
+| `setArcProperties` | Same as `setVertexProperties` for arcs | `id`: ArcKey; `properties`: map | — | `EntityNotExistException` if missing |
+| `deleteVertex` | Removes a vertex and cascades deletion of all incoming/outgoing arcs | `id`: String | — | `EntityNotExistException` if missing |
+| `deleteArc` | Removes an arc | `id`: ArcKey | — | `EntityNotExistException` if missing |
 | `metaNames` | Returns all metadata property names | — | `Set<String>` | `AccessClosedStorageException` if closed |
 | `getMeta` / `setMeta` | Reads/writes metadata as named key-value pairs in a dedicated metadata map | `name`: key; `value`: IValue or null | `IValue?` | — |
-| `clear` | Removes all nodes, edges, and metadata | — | `Boolean` | `AccessClosedStorageException` if closed |
-| `transferTo` | Default method. Copies all nodes, edges, and metadata into `target` | `target`: destination `IStorage` | — | `EntityAlreadyExistException` if target has conflicts |
+| `clear` | Removes all vertices, arcs, and metadata | — | `Boolean` | `AccessClosedStorageException` if closed |
+| `transferTo` | Default method. Copies all vertices, arcs, and metadata into `target` | `target`: destination `IStorage` | — | `EntityAlreadyExistException` if target has conflicts |
 
 **Key design decisions:**
 
-- `nodeIDs`/`edgeIDs` are `Set` — snapshot semantics; callers should not assume live iteration.
-- `addNode`/`addEdge` take `Map<String, IValue>` — bulk property initialization avoids a redundant `setNodeProperties` round-trip.
-- `setNodeProperties`/`setEdgeProperties` accept `IValue?` — null values signal deletion; a single call can atomically add, update, and delete properties.
-- `getNodeProperty`/`getEdgeProperty` — single-property access with default implementation `getNodeProperties(id)[name]`. Layered implementations override for O(1) early-return without full map merge.
-- `getMeta`/`setMeta` — metadata (e.g., graph name, version, label lattice) stored in a dedicated key-value map, separate from node/edge properties.
-- `deleteNode` cascades edge deletion — all incoming and outgoing edges are removed inline before the node is deleted. This ensures storage-level consistency without requiring the graph layer to remove edges first.
+- `vertices`/`arcs` are `Set` — snapshot semantics; callers should not assume live iteration.
+- `addVertex`/`addArc` take `Map<String, IValue>` — bulk property initialization avoids a redundant `setVertexProperties` round-trip.
+- `setVertexProperties`/`setArcProperties` accept `IValue?` — null values signal deletion; a single call can atomically add, update, and delete properties.
+- `getVertexProperty`/`getArcProperty` — single-property access with default implementation `getVertexProperties(id)[name]`. Layered implementations override for O(1) early-return without full map merge.
+- `getMeta`/`setMeta` — metadata (e.g., graph name, version) stored in a dedicated key-value map, separate from vertex/arc properties.
+- `deleteVertex` cascades arc deletion — all incoming and outgoing arcs are removed inline before the vertex is deleted.
+- All vertex IDs are `String`, all arc IDs are `ArcKey` — no domain type coupling.
+- `addArc` shares a single `ArcKey` instance across both adjacency indices (outgoing and incoming) to avoid duplicate objects.
 
 ---
 
@@ -98,10 +112,10 @@ interface IStorage : Closeable {
 **State / Fields:**
 
 ```
-nodeProperties:  MutableMap<NodeID, MutableMap<String, IValue>>
-edgeProperties:  MutableMap<EdgeID, MutableMap<String, IValue>>
-outEdges:        HashMap<NodeID, MutableSet<EdgeID>>
-inEdges:         HashMap<NodeID, MutableSet<EdgeID>>
+vertexProperties:  MutableMap<String, MutableMap<String, IValue>>
+arcProperties:     MutableMap<ArcKey, MutableMap<String, IValue>>
+outArcs:           HashMap<String, MutableSet<ArcKey>>
+inArcs:            HashMap<String, MutableSet<ArcKey>>
 ```
 
 - All operations are O(1) average.
@@ -129,9 +143,9 @@ inEdges:         HashMap<NodeID, MutableSet<EdgeID>>
 **State / Fields:**
 
 ```
-frozenLayers:       MutableList<IStorage>   ← merge-on-freeze keeps at most 1 frozen layer
-activeLayer:        IStorage                ← current mutable layer, full CRUD
-frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets (default: NativeStorageImpl)
+frozenLayers:       MutableList<IStorage>   <- merge-on-freeze keeps at most 1 frozen layer
+activeLayer:        IStorage                <- current mutable layer, full CRUD
+frozenLayerFactory: () -> IStorage          <- factory for frozen layer targets (default: NativeStorageImpl)
 ```
 
 **Layer management API (concrete class methods, not inherited from IStorage):**
@@ -149,11 +163,11 @@ frozenLayerFactory: () -> IStorage          ← factory for frozen layer targets
 2. Single frozen layer — fallback
 
 **Query resolution (adjacency — merge semantics):**
-- Edges are append-only across layers; `getIncomingEdges` / `getOutgoingEdges` merge results from both layers
+- Arcs are append-only across layers; `getIncomingArcs` / `getOutgoingArcs` merge results from both layers
 
-**Single-property optimization:** `getNodeProperty` / `getEdgeProperty` check active layer first, then the frozen layer with early return. Avoids constructing a merged property map when only one value is needed.
+**Single-property optimization:** `getVertexProperty` / `getArcProperty` check active layer first, then the frozen layer with early return. Avoids constructing a merged property map when only one value is needed.
 
-**Write routing for cross-layer properties:** When `setNodeProperties` targets a node that exists only in the frozen layer, a shadow entry is created in `activeLayer` to hold the overlay properties. Same for edges.
+**Write routing for cross-layer properties:** When `setVertexProperties` targets a vertex that exists only in the frozen layer, a shadow entry is created in `activeLayer` to hold the overlay properties. Same for arcs.
 
 **Freeze data flow:**
 
@@ -164,8 +178,8 @@ freeze():
     merge into merged, then close
   merge activeLayer into merged
   activeLayer.close()
-  frozenLayers = [merged]                     → always exactly one frozen layer
-  activeLayer = NativeStorageImpl()           → fresh empty heap layer
+  frozenLayers = [merged]                     -> always exactly one frozen layer
+  activeLayer = NativeStorageImpl()           -> fresh empty heap layer
 ```
 
 **Design rationale:** Restricting deletion to the active layer eliminates deletion tracking sets and sentinel values. Merge-on-freeze ensures query resolution is always a simple 2-way lookup (active then single frozen), keeping query depth at O(1).
@@ -177,7 +191,7 @@ freeze():
 **Responsibility:** Exports a subset of entities from `IStorage` to a file.
 
 ```kotlin
-typealias EntityFilter = (IEntity.ID) -> Boolean
+typealias EntityFilter = (String) -> Boolean
 
 interface IStorageExporter {
     fun export(dstFile: Path, from: IStorage, predicate: EntityFilter = { true }): Path
@@ -206,7 +220,7 @@ interface IStorageImporter {
 | `isValidFile` | Validates file contains the expected format | `file`: file path | `Boolean` | — |
 | `import` | Reads and merges entities into target storage (existing updated, absent created) | `srcFile`: source path; `into`: target storage; `predicate`: entity filter | `IStorage` — the target storage | IO / format exceptions |
 
-`EntityFilter` is a predicate on entity IDs — either `NodeID` or `EdgeID`. It is applied during export/import to select a subset of entities.
+`EntityFilter` is a predicate on vertex IDs (`String`). It is applied during export/import to select a subset of entities.
 
 ---
 
@@ -214,7 +228,7 @@ interface IStorageImporter {
 
 **Responsibility:** CSV-based `IStorageExporter` and `IStorageImporter` implementation.
 
-Exports nodes, edges, and metadata as three CSV files in a directory (`nodes.csv`, `edges.csv`, `meta.csv`). Each node/edge row encodes entity ID and property values as a serialized `MapVal` column. Each metadata entry is a name-value pair row in `meta.csv`. Import reads back and merges into the target storage (existing entities are updated; absent entities are created).
+Exports vertices, arcs, and metadata as three CSV files in a directory (`vertices.csv`, `arcs.csv`, `meta.csv`). Each vertex/arc row encodes entity ID and property values as a serialized `MapVal` column. Each metadata entry is a name-value pair row in `meta.csv`. Import reads back and merges into the target storage (existing entities are updated; absent entities are created).
 
 ---
 
@@ -223,8 +237,8 @@ Exports nodes, edges, and metadata as three CSV files in a directory (`nodes.csv
 | Exception | When raised |
 |-----------|------------|
 | `AccessClosedStorageException` | Operation on closed storage |
-| `EntityAlreadyExistException` | Adding an already-existing node or edge |
-| `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src or dst node |
+| `EntityAlreadyExistException` | Adding an already-existing vertex or arc |
+| `EntityNotExistException` | Accessing/modifying a non-existent vertex or arc; adding an arc with missing src or dst vertex |
 | `FrozenLayerModificationException` | Attempting to delete an entity that belongs to a frozen layer in `LayeredStorageImpl` |
 
 ---
@@ -234,19 +248,19 @@ Exports nodes, edges, and metadata as three CSV files in a directory (`nodes.csv
 ### IStorage implementations (flat)
 
 - Operations on closed storage must throw `AccessClosedStorageException`
-- `addNode`/`addEdge` must reject duplicate IDs with `EntityAlreadyExistException`
-- `addEdge` must reject edges whose src or dst node does not exist with `EntityNotExistException`
+- `addVertex`/`addArc` must reject duplicate IDs with `EntityAlreadyExistException`
+- `addArc` must reject arcs whose src or dst vertex does not exist with `EntityNotExistException`
 - Property access/modification on non-existent entities must throw `EntityNotExistException`
-- `deleteNode` cascades — all incoming/outgoing edges are removed inline before the node is deleted
+- `deleteVertex` cascades — all incoming/outgoing arcs are removed inline before the vertex is deleted
 
 ### LayeredStorageImpl
 
-- `deleteNode` / `deleteEdge` must throw `FrozenLayerModificationException` if entity is not in `activeLayer`
+- `deleteVertex` / `deleteArc` must throw `FrozenLayerModificationException` if entity is not in `activeLayer`
 - `freeze` must fully transfer active layer data before closing it
 - Property overlay: active layer values take precedence over frozen layer values for the same key
-- Adjacency merge: `getIncomingEdges` / `getOutgoingEdges` must merge results from all layers
-- `setNodeProperties` / `setEdgeProperties` on frozen-layer entities must create shadow entries in `activeLayer`
-- `addNode` / `addEdge` must check all layers for duplicates before adding to active layer
+- Adjacency merge: `getIncomingArcs` / `getOutgoingArcs` must merge results from all layers
+- `setVertexProperties` / `setArcProperties` on frozen-layer entities must create shadow entries in `activeLayer`
+- `addVertex` / `addArc` must check all layers for duplicates before adding to active layer
 - Layer count is always 1 or 2 due to merge-on-freeze; `compact` is effectively a no-op
 
 ### IStorageImporter implementations
