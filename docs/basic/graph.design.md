@@ -2,15 +2,17 @@
 
 ## Design Overview
 
-- **Classes**: `IGraph`, `IPartialOrderSet`, `AbcMultipleGraph`, `AbcSimpleGraph`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `IPartialOrderSet`; `AbcSimpleGraph` extends `AbcMultipleGraph`; `AbcMultipleGraph` contains `IStorage` (one-way)
+- **Classes**: `IGraph`, `IPoset`, `AbcMultipleGraph`, `AbcSimpleGraph`
+- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `IPoset`; `AbcSimpleGraph` extends `AbcMultipleGraph`; `AbcMultipleGraph` contains two `IStorage` instances (one-way): one for the main graph, one for the label poset
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
 - **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `AccessClosedStorageException` raised on storage access after close
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and storage). Helpers: `IStorage` (inputs by constructor injection).
+- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories, graph storage, and poset storage). Helpers: `IStorage` (inputs by constructor injection).
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle — those belong to `IStorage` and its implementations.
 
 The graph layer is **storage-tier agnostic**: `AbcMultipleGraph` accepts any `IStorage` via constructor injection — flat (`NativeStorageImpl`, `MapDBStorageImpl`) or layered (`LayeredStorageImpl`). Layered storage composition is transparent to the graph layer; all query routing and freeze transitions are handled within the storage tier. See `docs/basic/storage.design.md` for the full storage type hierarchy.
+
+The graph layer **converts domain IDs to storage primitives** at the boundary: `NodeID.name` -> `String` vertex ID, `EdgeID` -> `ArcKey`. The storage layer operates on `String` and `ArcKey` only.
 
 ---
 
@@ -18,7 +20,7 @@ The graph layer is **storage-tier agnostic**: `AbcMultipleGraph` accepts any `IS
 
 ### IGraph
 
-**Responsibility:** Domain-facing contract defining node/edge CRUD and structural traversal. Label-filtered overloads accept `Label` parameters; the label poset hierarchy itself is defined by `IPartialOrderSet`.
+**Responsibility:** Domain-facing contract defining node/edge CRUD and structural traversal. Label-filtered overloads accept `Label` parameters; the label poset hierarchy itself is defined by `IPoset`.
 
 **State / Fields:**
 - `nodeIDs: Set<NodeID>` — all node IDs in the graph
@@ -91,33 +93,37 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 - `nodeIDs`/`edgeIDs` are `Set`, reflecting the ID-first model; uniqueness is guaranteed by ID semantics.
 - Traversal methods accept an optional edge predicate, allowing traversal scoped to edge types or properties.
 - `getAllNodes`/`getAllEdges` accept a node/edge predicate, providing in-sequence filtering without materializing a full collection.
-- Label poset hierarchy is defined by `IPartialOrderSet` (see `docs/basic/label.design.md`); `IGraph` only consumes labels via label-filtered query overloads.
+- Label poset hierarchy is defined by `IPoset` (see `docs/basic/label.design.md`); `IGraph` only consumes labels via label-filtered query overloads.
 
 ---
 
 ### AbcMultipleGraph
 
-**Responsibility:** Canonical `IGraph` and `IPartialOrderSet` implementation scaffold coordinating entity factories with storage. Implements `Closeable`. Allows multiple parallel edges between the same `(src, dst)` pair. Label lattice state is write-through to `IStorage` metadata.
+**Responsibility:** Canonical `IGraph` and `IPoset` implementation scaffold coordinating entity factories with dual storage. Implements `Closeable`. Allows multiple parallel edges between the same `(src, dst)` pair. Label poset state is stored in a dedicated poset `IStorage` instance.
 
 **State / Fields:**
 
 ```
 AbcMultipleGraph
-├── abstract storage: IStorage        <- injected by subclass
-├── override nodeIDs: Set<NodeID>     <- delegates to storage.nodeIDs
-├── override edgeIDs: Set<EdgeID>     <- delegates to storage.edgeIDs
-├── newNodeObj(nid): N                <- subclass entity factory (protected abstract)
-└── newEdgeObj(eid): E                <- subclass entity factory (protected abstract)
+├── abstract graphStore: IStorage      <- main graph storage, injected by subclass
+├── abstract posetStore: IStorage      <- label hierarchy storage, injected by subclass
+├── override nodeIDs: Set<NodeID>      <- derives from graphStore.vertices
+├── override edgeIDs: Set<EdgeID>      <- derives from graphStore.arcs
+├── newNodeObj(nid): N                 <- subclass entity factory (protected abstract)
+└── newEdgeObj(eid): E                 <- subclass entity factory (protected abstract)
 ```
 
 **Storage delegation:**
-`nodeIDs`/`edgeIDs` delegate directly to `storage.nodeIDs`/`storage.edgeIDs` — there is no separate in-memory cache.
+`nodeIDs` derives from `graphStore.vertices` by wrapping each `String` as `NodeID`. `edgeIDs` derives from `graphStore.arcs` by wrapping each `ArcKey` as `EdgeID`. There is no separate in-memory ID cache.
+
+**ID conversion at boundary:**
+All graph operations convert domain IDs to storage primitives: `NodeID.name` -> `String`, `EdgeID` -> `ArcKey(srcNid.name, dstNid.name, eType)`. Reverse conversion uses `NodeID(string)` and `EdgeID.of(arcKey)`.
 
 **Traversal implementation:**
-Both `getDescendants` and `getAncestors` use BFS (`ArrayDeque` + `removeFirst`). They delegate adjacency lookup to `getOutgoingEdges`/`getIncomingEdges`, which in turn call `storage.getOutgoingEdges`/`getIncomingEdges`.
+Both `getDescendants` and `getAncestors` use BFS (`ArrayDeque` + `removeFirst`). They delegate adjacency lookup to `getOutgoingEdges`/`getIncomingEdges`, which in turn call `graphStore.getOutgoingArcs`/`getIncomingArcs`.
 
 **Close behavior:**
-`close()` clears internal wrapper-object caches (`nodeCache`, `edgeCache`). Label lattice state is already write-through to storage metadata and requires no explicit persist step.
+`close()` clears internal wrapper-object caches (`nodeCache`, `edgeCache`). Poset state is in the poset store and requires no explicit persist step.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -150,7 +156,7 @@ Traits are optional capabilities layered on top of `IGraph` via interface mixin.
 
 **`TraitNodeGroup`** is a pure interface — `groupedNodesCounter` and four methods are the complete contract. The graph class implements it directly alongside `AbcSimpleGraph`/`AbcMultipleGraph`.
 
-Label lattice functionality is defined by `IPartialOrderSet` and implemented in `AbcMultipleGraph` with write-through persistence to `IStorage` metadata. See `docs/basic/label.design.md` for details.
+Label poset functionality is defined by `IPoset` and implemented in `AbcMultipleGraph` using a dedicated poset `IStorage` instance. See `docs/basic/label.design.md` for details.
 
 See `docs/basic/group.design.md` for `TraitNodeGroup` details.
 
@@ -161,17 +167,18 @@ See `docs/basic/group.design.md` for `TraitNodeGroup` details.
 **Flat storage (default):**
 
 ```kotlin
-class MyNode(storage: IStorage, override val id: NodeID) : AbcNode(storage) {
+class MyNode(store: IStorage, override val id: NodeID) : AbcNode(store) {
     override val type = object : AbcNode.Type { override val name = "MyNode" }
 }
-class MyEdge(storage: IStorage, override val id: EdgeID) : AbcEdge(storage) {
+class MyEdge(store: IStorage, override val id: EdgeID) : AbcEdge(store) {
     override val type = object : AbcEdge.Type { override val name = "MyEdge" }
 }
 
 val graph = object : AbcMultipleGraph<MyNode, MyEdge>() {
-    override val storage = NativeStorageImpl()
-    override fun newNodeObj(nid: NodeID) = MyNode(storage, nid)
-    override fun newEdgeObj(eid: EdgeID) = MyEdge(storage, eid)
+    override val graphStore = NativeStorageImpl()
+    override val posetStore = NativeStorageImpl()
+    override fun newNodeObj(nid: NodeID) = MyNode(graphStore, nid)
+    override fun newEdgeObj(eid: EdgeID) = MyEdge(graphStore, eid)
 }
 
 val a = graph.addNode(NodeID("a"))
@@ -186,24 +193,24 @@ graph.delNode(a.id)                      // removes a and all its edges
 **Layered storage (static analysis pipeline):**
 
 ```kotlin
-// Same graph types — only the storage injection changes
 val layeredStorage = LayeredStorageImpl()
 
 val graph = object : AbcMultipleGraph<MyNode, MyEdge>() {
-    override val storage: IStorage = layeredStorage
-    override fun newNodeObj(nid: NodeID) = MyNode(storage, nid)
-    override fun newEdgeObj(eid: EdgeID) = MyEdge(storage, eid)
+    override val graphStore: IStorage = layeredStorage
+    override val posetStore = NativeStorageImpl()
+    override fun newNodeObj(nid: NodeID) = MyNode(graphStore, nid)
+    override fun newEdgeObj(eid: EdgeID) = MyEdge(graphStore, eid)
 }
 
 // Phase 1: build AST
 buildAST(sourceCode, graph)
-layeredStorage.freeze()  // AST -> off-heap, heap freed
+layeredStorage.freeze()  // AST -> frozen, heap freed
 
 // Phase 2: build CFG on top of frozen AST
 buildCFG(graph)                     // reads AST (frozen), writes CFG (active)
-layeredStorage.freeze()             // CFG -> off-heap
+layeredStorage.freeze()             // CFG -> frozen
 
-// Phase 3: analysis — all graph data off-heap, only analysis state in heap
+// Phase 3: analysis — all graph data frozen, only analysis state in heap
 analyze(graph)
 ```
 
@@ -232,4 +239,4 @@ Deletion of a non-existent entity is a no-op at the graph level (delegates to st
 - Edge ID must be unique; multiple edges between same `(src, dst)` pair are allowed as long as EdgeIDs differ
 - Both src and dst nodes must exist before adding an edge
 - Node/edge IDs must be unique across the graph
-- `nodeIDs`/`edgeIDs` delegate directly to storage; no separate cache synchronization needed
+- `nodeIDs`/`edgeIDs` derive from storage vertices/arcs; no separate cache synchronization needed

@@ -2,13 +2,15 @@
 
 ## Design Overview
 
-- **Classes**: `NodeID`, `EdgeID`, `IEntity`, `IEntity.ID`, `IEntity.Type`, `AbcEntity`, `AbcNode`, `AbcEdge`
-- **Relationships**: `NodeID` implements `IEntity.ID`; `EdgeID` implements `IEntity.ID`; `AbcNode` extends `AbcEntity` and implements `IEntity`; `AbcEdge` extends `AbcEntity` and implements `IEntity`
+- **Classes**: `NodeID`, `EdgeID`, `ArcKey`, `IEntity`, `IEntity.ID`, `IEntity.Type`, `AbcEntity`, `AbcNode`, `AbcEdge`
+- **Relationships**: `NodeID` implements `IEntity.ID`; `EdgeID` implements `IEntity.ID`; `EdgeID` converts to/from `ArcKey`; `AbcNode` extends `AbcEntity` and implements `IEntity`; `AbcEdge` extends `AbcEntity` and implements `IEntity`
 - **Abstract**: `IEntity` (sealed; implemented by `AbcNode`, `AbcEdge`); `AbcEntity` (extended by `AbcNode`, `AbcEdge`)
 - **Exceptions**: `InvalidPropNameException` defined for reserved property name prefix (not currently enforced at entity level); `EntityNotExistException` raised by storage layer on missing entity
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcNode` / `AbcEdge` (bridge identity to storage-backed property access). Helpers: `AbcEntity` (property delegate utilities).
+- **Dependency roles**: Data holders: `NodeID`, `EdgeID`, `ArcKey`. Orchestrator: `AbcNode` / `AbcEdge` (bridge identity to storage-backed property access). Helpers: `AbcEntity` (property delegate utilities).
 
 The entity layer defines how graph elements are **identified** and how they **expose properties**. It does **not** store data — it delegates all property reads and writes to the injected `IStorage`.
+
+`NodeID` and `EdgeID` are **domain-layer boundary constructs** that exist at the `IGraph` interface level. The storage layer operates on `String` vertex IDs and `ArcKey` arc IDs. Conversion between domain IDs and storage primitives happens in `AbcMultipleGraph`.
 
 ---
 
@@ -16,14 +18,15 @@ The entity layer defines how graph elements are **identified** and how they **ex
 
 ### NodeID
 
-**Responsibility:** Canonical identity value object for nodes, constructed from a plain string name.
+**Responsibility:** Canonical identity value object for nodes, constructed from a plain string name. Zero-cost wrapper via Kotlin `value class`.
 
 **State / Fields:**
 
 ```kotlin
-data class NodeID(val name: String) : IEntity.ID {
-    val serialize: StrVal        // → StrVal(name)
-    val asString: String         // → name
+@JvmInline
+value class NodeID(val name: String) : IEntity.ID {
+    val serialize: StrVal        // -> StrVal(name)
+    val asString: String         // -> name
 }
 ```
 
@@ -31,6 +34,8 @@ data class NodeID(val name: String) : IEntity.ID {
 |--------|----------|-------|--------|--------|
 | `serialize` | Serializes to `StrVal` | — | `StrVal(name)` | — |
 | `asString` | Returns the raw name | — | `String` | — |
+
+`NodeID` compiles to `String` at runtime — no heap allocation, no interning pool needed. Equality is structural (delegated to `String.equals`).
 
 ---
 
@@ -42,8 +47,14 @@ data class NodeID(val name: String) : IEntity.ID {
 
 ```kotlin
 data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : IEntity.ID {
-    val serialize: ListVal       // → ListVal(srcNid.serialize, dstNid.serialize, eType.strVal)
-    val asString: String         // → "$srcNid-$eType-$dstNid"
+    val serialize: ListVal       // -> ListVal(srcNid.serialize, dstNid.serialize, eType.strVal)
+    val asString: String         // -> "$srcNid-$eType-$dstNid"
+
+    fun toArcKey(): ArcKey = ArcKey(srcNid.name, dstNid.name, eType)
+
+    companion object {
+        fun of(arc: ArcKey): EdgeID = EdgeID(NodeID(arc.src), NodeID(arc.dst), arc.type)
+    }
 }
 ```
 
@@ -51,8 +62,24 @@ data class EdgeID(val srcNid: NodeID, val dstNid: NodeID, val eType: String) : I
 |--------|----------|-------|--------|--------|
 | `serialize` | Serializes to `ListVal` | — | `ListVal(srcNid.serialize, dstNid.serialize, eType.strVal)` | — |
 | `asString` | Returns formatted string | — | `"srcName-eType-dstName"` | — |
+| `toArcKey` | Converts to storage-layer arc identifier | — | `ArcKey` | — |
+| `of(arc)` | Constructs EdgeID from storage-layer arc identifier | `arc`: ArcKey | `EdgeID` | — |
 
-**Design rationale:** Encoding `(src, dst, type)` in the ID enables O(1) edge lookup by identity without requiring an adjacency scan, and keeps edge semantics explicit at every call site.
+**Design rationale:** Encoding `(src, dst, type)` in the ID enables O(1) edge lookup by identity without requiring an adjacency scan, and keeps edge semantics explicit at every call site. `EdgeID` has no interning pool — deduplication is unnecessary because wrapper-object caching (`edgeCache` in `AbcMultipleGraph`) handles the hot path, and `EdgeID` instances at the boundary are short-lived lookup keys.
+
+---
+
+### ArcKey
+
+**Responsibility:** Storage-layer arc identifier encoding source vertex, destination vertex, and arc type as plain strings.
+
+**State / Fields:**
+
+```kotlin
+data class ArcKey(val src: String, val dst: String, val type: String)
+```
+
+`ArcKey` is defined in the storage module. `EdgeID.toArcKey()` and `EdgeID.of(ArcKey)` bridge between domain and storage layers.
 
 ---
 
@@ -87,7 +114,7 @@ sealed interface IEntity {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `setProp` | Sets a single property (null removes it) | `name`: property name; `value`: IValue or null | — | — |
-| `setProps` | Sets multiple properties atomically | `props`: map of name→value | — | — |
+| `setProps` | Sets multiple properties atomically | `props`: map of name->value | — | — |
 | `getProp` | Reads a single property | `name`: property name | `IValue?` | — |
 | `getAllProps` | Returns all properties | — | `Map<String, IValue>` | — |
 | `containProp` | Checks property existence | `name`: property name | `Boolean` | — |
@@ -114,7 +141,7 @@ sealed interface IEntity {
 **State / Fields:**
 
 ```kotlin
-abstract class AbcNode : AbcEntity() {
+abstract class AbcNode(protected val storage: IStorage) : AbcEntity() {
     abstract override val id: NodeID
     abstract override val type: AbcNode.Type
     fun doUseStorage(target: IStorage): Boolean
@@ -134,7 +161,7 @@ Subclasses only need to provide `id`, `type`, and the storage reference. All pro
 **State / Fields:**
 
 ```kotlin
-abstract class AbcEdge : AbcEntity() {
+abstract class AbcEdge(protected val storage: IStorage) : AbcEntity() {
     abstract override val id: EdgeID
     abstract override val type: AbcEdge.Type
     val srcNid: NodeID get() = id.srcNid
@@ -174,6 +201,10 @@ val eid = EdgeID(NodeID("alice"), NodeID("bob"), "knows")
 println(eid.srcNid)   // NodeID("alice")
 println(eid.dstNid)   // NodeID("bob")
 println(eid.eType)    // "knows"
+
+// Conversion to/from storage primitive
+val arcKey = eid.toArcKey()          // ArcKey("alice", "bob", "knows")
+val eid2 = EdgeID.of(arcKey)         // EdgeID(NodeID("alice"), NodeID("bob"), "knows")
 ```
 
 ---
