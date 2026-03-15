@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.nio
 
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
 import org.junit.After
 import org.junit.Before
@@ -47,7 +46,7 @@ class JgraphtGmlIOImplWhiteBoxTest {
 
     @Test
     fun `test export creates file at destination path`() {
-        srcStorage.addNode(NodeID("n"))
+        srcStorage.addNode()
         val result = JgraphtGmlIOImpl.export(tempFile, srcStorage)
 
         assertEquals(tempFile, result)

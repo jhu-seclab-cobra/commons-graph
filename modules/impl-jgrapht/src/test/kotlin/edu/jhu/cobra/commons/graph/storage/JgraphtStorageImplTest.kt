@@ -1,10 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
 import org.junit.Before
@@ -13,12 +10,6 @@ import kotlin.test.*
 
 class JgraphtStorageImplTest {
     private lateinit var storage: JgraphtStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge1 = EdgeID(node1, node2, "edge1")
-    private val edge2 = EdgeID(node2, node3, "edge2")
-    private val edge3 = EdgeID(node1, node3, "edge3")
 
     @Before
     fun setup() {
@@ -30,126 +21,132 @@ class JgraphtStorageImplTest {
         storage.close()
     }
 
+    private fun addThreeNodes(): Triple<String, String, String> {
+        val n1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
+        return Triple(n1, n2, n3)
+    }
+
     @Test
     fun `test basic CRUD operations`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
-        assertTrue(storage.containsNode(node1))
+        val n1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        assertTrue(storage.containsNode(n1))
         assertEquals(1, storage.nodeIDs.size)
 
-        val nodeProps = storage.getNodeProperties(node1)
+        val nodeProps = storage.getNodeProperties(n1)
         assertEquals(1, nodeProps.size)
         assertEquals("value1", (nodeProps["prop1"] as StrVal).core)
 
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal))
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "edge1", mapOf("prop1" to "value1".strVal))
 
-        assertTrue(storage.containsEdge(edge1))
+        assertTrue(storage.containsEdge(e1))
         assertEquals(1, storage.edgeIDs.size)
 
-        val edgeProps = storage.getEdgeProperties(edge1)
+        val edgeProps = storage.getEdgeProperties(e1)
         assertEquals(1, edgeProps.size)
         assertEquals("value1", (edgeProps["prop1"] as StrVal).core)
 
-        assertFailsWith<EntityAlreadyExistException> { storage.addNode(node1) }
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(NodeID("nonexistent")) }
-        assertFailsWith<EntityNotExistException> { storage.addEdge(EdgeID(node1, NodeID("nonexistent"), "edge")) }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(n1, "nonexistent", "edge") }
     }
 
     @Test
     fun `test property updates`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal))
+        val n1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "edge1", mapOf("prop1" to "value1".strVal))
 
-        storage.setNodeProperties(node1, mapOf("prop1" to "newValue".strVal, "prop2" to 42.numVal))
-        val nodeProps = storage.getNodeProperties(node1)
+        storage.setNodeProperties(n1, mapOf("prop1" to "newValue".strVal, "prop2" to 42.numVal))
+        val nodeProps = storage.getNodeProperties(n1)
         assertEquals(2, nodeProps.size)
         assertEquals("newValue", (nodeProps["prop1"] as StrVal).core)
         assertEquals(42, (nodeProps["prop2"] as NumVal).core)
 
-        storage.setEdgeProperties(edge1, mapOf("prop1" to "newValue".strVal, "prop2" to 42.numVal))
-        val edgeProps = storage.getEdgeProperties(edge1)
+        storage.setEdgeProperties(e1, mapOf("prop1" to "newValue".strVal, "prop2" to 42.numVal))
+        val edgeProps = storage.getEdgeProperties(e1)
         assertEquals(2, edgeProps.size)
         assertEquals("newValue", (edgeProps["prop1"] as StrVal).core)
         assertEquals(42, (edgeProps["prop2"] as NumVal).core)
 
-        storage.setNodeProperties(node1, mapOf("prop1" to null))
-        val updatedNodeProps = storage.getNodeProperties(node1)
+        storage.setNodeProperties(n1, mapOf("prop1" to null))
+        val updatedNodeProps = storage.getNodeProperties(n1)
         assertEquals(1, updatedNodeProps.size)
         assertNull(updatedNodeProps["prop1"])
         assertEquals(42, (updatedNodeProps["prop2"] as NumVal).core)
 
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties(NodeID("nonexistent"), mapOf("prop" to "value".strVal))
+            storage.setNodeProperties("nonexistent", mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun `test entity removal`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge3)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "edge1")
+        val e3 = storage.addEdge(n1, n3, "edge3")
 
-        storage.deleteEdge(edge1)
-        assertFalse(storage.containsEdge(edge1))
-        assertTrue(storage.containsNode(node1))
-        assertTrue(storage.containsNode(node2))
+        storage.deleteEdge(e1)
+        assertFalse(storage.containsEdge(e1))
+        assertTrue(storage.containsNode(n1))
+        assertTrue(storage.containsNode(n2))
 
-        storage.deleteNode(node1)
-        assertFalse(storage.containsNode(node1))
-        assertFalse(storage.containsEdge(edge3))
-        assertTrue(storage.containsNode(node3))
+        storage.deleteNode(n1)
+        assertFalse(storage.containsNode(n1))
+        assertFalse(storage.containsEdge(e3))
+        assertTrue(storage.containsNode(n3))
 
-        assertFailsWith<EntityNotExistException> { storage.deleteNode(NodeID("nonexistent")) }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
     }
 
     @Test
     fun `test collection views`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "edge1")
 
         val nodeIds = storage.nodeIDs.toList()
         assertEquals(2, nodeIds.size)
-        assertTrue(nodeIds.contains(node1))
-        assertTrue(nodeIds.contains(node2))
+        assertTrue(nodeIds.contains(n1))
+        assertTrue(nodeIds.contains(n2))
 
         val edgeIds = storage.edgeIDs.toList()
         assertEquals(1, edgeIds.size)
-        assertTrue(edgeIds.contains(edge1))
+        assertTrue(edgeIds.contains(e1))
 
-        storage.addNode(node3)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val n3 = storage.addNode()
+        val e2 = storage.addEdge(n2, n3, "edge2")
+        val e3 = storage.addEdge(n1, n3, "edge3")
 
-        val incomingEdges = storage.getIncomingEdges(node3)
+        val incomingEdges = storage.getIncomingEdges(n3)
         assertEquals(2, incomingEdges.size)
-        assertTrue(incomingEdges.contains(edge2))
-        assertTrue(incomingEdges.contains(edge3))
+        assertTrue(incomingEdges.contains(e2))
+        assertTrue(incomingEdges.contains(e3))
 
-        val outgoingEdges = storage.getOutgoingEdges(node1)
+        val outgoingEdges = storage.getOutgoingEdges(n1)
         assertEquals(2, outgoingEdges.size)
-        assertTrue(outgoingEdges.contains(edge1))
-        assertTrue(outgoingEdges.contains(edge3))
+        assertTrue(outgoingEdges.contains(e1))
+        assertTrue(outgoingEdges.contains(e3))
 
-        val emptyIncoming = storage.getIncomingEdges(node1)
+        val emptyIncoming = storage.getIncomingEdges(n1)
         assertTrue(emptyIncoming.isEmpty())
 
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges(NodeID("nonexistent"))
+            storage.getIncomingEdges("nonexistent")
         }
     }
 
     @Test
     fun `test empty and null values`() {
-        storage.addNode(node1)
-        assertTrue(storage.containsNode(node1))
-        assertEquals(0, storage.getNodeProperties(node1).size)
+        val n1 = storage.addNode()
+        assertTrue(storage.containsNode(n1))
+        assertEquals(0, storage.getNodeProperties(n1).size)
 
-        storage.addNode(node2, mapOf("nullProp" to NullVal))
-        val props = storage.getNodeProperties(node2)
+        val n2 = storage.addNode(mapOf("nullProp" to NullVal))
+        val props = storage.getNodeProperties(n2)
         assertEquals(1, props.size)
         assertTrue(props["nullProp"] is NullVal)
 
@@ -173,22 +170,21 @@ class JgraphtStorageImplTest {
                 "map" to mapOf("nested" to "value".strVal).mapVal,
             ).mapVal
 
-        storage.addNode(node1, mapOf("complex" to complexValue))
-        val props = storage.getNodeProperties(node1)
+        val n1 = storage.addNode(mapOf("complex" to complexValue))
+        val props = storage.getNodeProperties(n1)
         assertEquals(complexValue, props["complex"])
 
-        val specificProp = storage.getNodeProperties(node1)["complex"]
+        val specificProp = storage.getNodeProperties(n1)["complex"]
         assertEquals(complexValue, specificProp)
 
-        storage.addNode(node2)
-        storage.addEdge(edge1)
-        val edge1b = EdgeID(node1, node2, "edge1b")
-        storage.addEdge(edge1b)
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "edge1")
+        val e1b = storage.addEdge(n1, n2, "edge1b")
 
-        val outEdges = storage.getOutgoingEdges(node1)
+        val outEdges = storage.getOutgoingEdges(n1)
         assertEquals(2, outEdges.size)
-        assertTrue(outEdges.contains(edge1))
-        assertTrue(outEdges.contains(edge1b))
+        assertTrue(outEdges.contains(e1))
+        assertTrue(outEdges.contains(e1b))
     }
 
     @Test
@@ -196,33 +192,29 @@ class JgraphtStorageImplTest {
         val nodeCount = 100
         val edgesPerNode = 5
 
+        val nodeIds = mutableListOf<String>()
         for (i in 1..nodeCount) {
-            storage.addNode(
-                NodeID("largeNode$i"),
-                mapOf("index" to i.numVal, "name" to "Node $i".strVal),
-            )
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal, "name" to "Node $i".strVal)))
         }
 
-        for (i in 1..nodeCount) {
-            val srcNode = NodeID("largeNode$i")
+        for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
-                val targetIdx = ((i + j) % nodeCount) + 1
-                val dstNode = NodeID("largeNode$targetIdx")
-                storage.addEdge(EdgeID(srcNode, dstNode, "largeEdge${i}_$targetIdx"))
+                val targetIdx = ((i + j) % nodeCount)
+                storage.addEdge(nodeIds[i], nodeIds[targetIdx], "largeEdge${i + 1}_${targetIdx + 1}")
             }
         }
 
         assertEquals(nodeCount, storage.nodeIDs.size)
         assertEquals(nodeCount * edgesPerNode, storage.edgeIDs.size)
 
-        for (i in listOf(1, 25, 50, 75, 100)) {
-            if (i <= nodeCount) {
-                val nodeId = NodeID("largeNode$i")
+        for (i in listOf(0, 24, 49, 74, 99)) {
+            if (i < nodeCount) {
+                val nodeId = nodeIds[i]
                 assertTrue(storage.containsNode(nodeId))
 
                 val props = storage.getNodeProperties(nodeId)
-                assertEquals(i, (props["index"] as NumVal).core)
-                assertEquals("Node $i", (props["name"] as StrVal).core)
+                assertEquals(i + 1, (props["index"] as NumVal).core)
+                assertEquals("Node ${i + 1}", (props["name"] as StrVal).core)
 
                 val outEdges = storage.getOutgoingEdges(nodeId)
                 assertEquals(edgesPerNode, outEdges.size)
@@ -232,21 +224,19 @@ class JgraphtStorageImplTest {
 
     @Test
     fun `test exception handling`() {
-        storage.addNode(node1)
-        assertFailsWith<EntityAlreadyExistException> {
-            storage.addNode(node1)
+        val n1 = storage.addNode()
+        val n2Id = "nonexistent"
+
+        assertFailsWith<EntityNotExistException> {
+            storage.deleteNode(n2Id)
         }
 
         assertFailsWith<EntityNotExistException> {
-            storage.deleteNode(node2)
-        }
-
-        assertFailsWith<EntityNotExistException> {
-            storage.addEdge(edge1)
+            storage.addEdge(n1, "nonexistent", "edge1")
         }
 
         storage.close()
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(node2) }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
     }
 }
