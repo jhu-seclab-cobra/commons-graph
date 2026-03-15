@@ -1,11 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import java.nio.file.Files
 import java.nio.file.Path
@@ -31,8 +28,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test addNode populates node2ElementIdMap cache`() {
-        val n = NodeID("test")
-        storage.addNode(n)
+        val n = storage.addNode()
 
         assertTrue(storage.containsNode(n))
         assertEquals(setOf(n), storage.nodeIDs)
@@ -40,8 +36,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes from node2ElementIdMap cache`() {
-        val n = NodeID("test")
-        storage.addNode(n)
+        val n = storage.addNode()
         storage.deleteNode(n)
 
         assertFalse(storage.containsNode(n))
@@ -52,12 +47,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test addEdge populates edge2ElementIdMap cache`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e = EdgeID(n1, n2, "rel")
-        storage.addEdge(e)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
 
         assertTrue(storage.containsEdge(e))
         assertEquals(setOf(e), storage.edgeIDs)
@@ -65,12 +57,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge removes from edge2ElementIdMap cache`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e = EdgeID(n1, n2, "rel")
-        storage.addEdge(e)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
         storage.deleteEdge(e)
 
         assertFalse(storage.containsEdge(e))
@@ -81,18 +70,12 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes associated edges from edge2ElementIdMap`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        val n3 = NodeID("n3")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        storage.addNode(n3)
-        val e12 = EdgeID(n1, n2, "e12")
-        val e13 = EdgeID(n1, n3, "e13")
-        val e23 = EdgeID(n2, n3, "e23")
-        storage.addEdge(e12)
-        storage.addEdge(e13)
-        storage.addEdge(e23)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
+        val e12 = storage.addEdge(n1, n2, "e12")
+        val e13 = storage.addEdge(n1, n3, "e13")
+        val e23 = storage.addEdge(n2, n3, "e23")
 
         storage.deleteNode(n1)
 
@@ -105,8 +88,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test writeTx rolls back on exception`() {
-        val n = NodeID("rollback-test")
-        storage.addNode(n, mapOf("before" to "original".strVal))
+        val n = storage.addNode(mapOf("before" to "original".strVal))
 
         assertFailsWith<InvalidPropNameException> {
             storage.setNodeProperties(n, mapOf("__meta_id__" to "hack".strVal))
@@ -119,8 +101,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test readTx succeeds for read operations`() {
-        val n = NodeID("read-test")
-        storage.addNode(n, mapOf("key" to "value".strVal))
+        val n = storage.addNode(mapOf("key" to "value".strVal))
 
         val props = storage.getNodeProperties(n)
         assertEquals("value", (props["key"] as StrVal).core)
@@ -132,7 +113,7 @@ class Neo4jStorageImplWhiteBoxTest {
     fun `test storage works with fresh empty directory`() {
         assertEquals(0, storage.nodeIDs.size)
 
-        storage.addNode(NodeID("test"))
+        storage.addNode()
         assertEquals(1, storage.nodeIDs.size)
     }
 
@@ -140,12 +121,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test init block loads existing nodes and edges from database`() {
-        val n1 = NodeID("persistent1")
-        val n2 = NodeID("persistent2")
-        storage.addNode(n1, mapOf("data" to "d1".strVal))
-        storage.addNode(n2, mapOf("data" to "d2".strVal))
-        val e = EdgeID(n1, n2, "link")
-        storage.addEdge(e, mapOf("weight" to 1.numVal))
+        val n1 = storage.addNode(mapOf("data" to "d1".strVal))
+        val n2 = storage.addNode(mapOf("data" to "d2".strVal))
+        val e = storage.addEdge(n1, n2, "link", mapOf("weight" to 1.numVal))
         storage.close()
 
         val reloaded = Neo4jStorageImpl(graphDir)
@@ -163,8 +141,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test getNodeProperties excludes META_ID property`() {
-        val n = NodeID("meta-test")
-        storage.addNode(n, mapOf("visible" to "yes".strVal))
+        val n = storage.addNode(mapOf("visible" to "yes".strVal))
 
         val props = storage.getNodeProperties(n)
         assertNull(props["__meta_id__"])
@@ -174,12 +151,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test getEdgeProperties excludes META_ID property`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e = EdgeID(n1, n2, "rel")
-        storage.addEdge(e, mapOf("visible" to "yes".strVal))
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("visible" to "yes".strVal))
 
         val props = storage.getEdgeProperties(e)
         assertNull(props["__meta_id__"])
@@ -190,8 +164,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties throws InvalidPropNameException for META_ID`() {
-        val n = NodeID("test")
-        storage.addNode(n)
+        val n = storage.addNode()
 
         assertFailsWith<InvalidPropNameException> {
             storage.setNodeProperties(n, mapOf("__meta_id__" to "value".strVal))
@@ -200,12 +173,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test setEdgeProperties throws InvalidPropNameException for META_ID`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e = EdgeID(n1, n2, "rel")
-        storage.addEdge(e)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
 
         assertFailsWith<InvalidPropNameException> {
             storage.setEdgeProperties(e, mapOf("__meta_id__" to "value".strVal))
@@ -216,8 +186,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties with null removes property from Neo4j`() {
-        val n = NodeID("test")
-        storage.addNode(n, mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val n = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
 
         storage.setNodeProperties(n, mapOf("a" to null))
 
@@ -228,12 +197,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test setEdgeProperties with null removes property from Neo4j`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e = EdgeID(n1, n2, "rel")
-        storage.addEdge(e, mapOf("x" to "y".strVal, "z" to "w".strVal))
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("x" to "y".strVal, "z" to "w".strVal))
 
         storage.setEdgeProperties(e, mapOf("x" to null))
 
@@ -246,10 +212,8 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test self loop edge appears in both incoming and outgoing`() {
-        val n = NodeID("self")
-        storage.addNode(n)
-        val selfEdge = EdgeID(n, n, "loop")
-        storage.addEdge(selfEdge)
+        val n = storage.addNode()
+        val selfEdge = storage.addEdge(n, n, "loop")
 
         assertTrue(selfEdge in storage.getOutgoingEdges(n))
         assertTrue(selfEdge in storage.getIncomingEdges(n))
@@ -257,10 +221,8 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes self loop edge from cache`() {
-        val n = NodeID("self")
-        storage.addNode(n)
-        val selfEdge = EdgeID(n, n, "loop")
-        storage.addEdge(selfEdge)
+        val n = storage.addNode()
+        val selfEdge = storage.addEdge(n, n, "loop")
 
         storage.deleteNode(n)
 
@@ -299,13 +261,13 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test close sets isClosed and all operations throw`() {
-        storage.addNode(NodeID("n"))
+        storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(NodeID("n")) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(NodeID("new")) }
+        assertFailsWith<AccessClosedStorageException> { storage.containsNode("n") }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
         assertFailsWith<AccessClosedStorageException> { storage.metaNames }
         assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
         assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
@@ -315,11 +277,9 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test clear empties node and edge caches and database`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        storage.addEdge(EdgeID(n1, n2, "e"))
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdge(n1, n2, "e")
         storage.setMeta("key", "val".strVal)
 
         assertTrue(storage.clear())
@@ -331,66 +291,56 @@ class Neo4jStorageImplWhiteBoxTest {
     // -- Entity existence contracts --
 
     @Test
-    fun `test addNode duplicate throws EntityAlreadyExistException`() {
-        storage.addNode(NodeID("dup"))
-        assertFailsWith<EntityAlreadyExistException> { storage.addNode(NodeID("dup")) }
-    }
-
-    @Test
     fun `test addEdge missing src throws EntityNotExistException`() {
-        storage.addNode(NodeID("dst"))
+        val dst = storage.addNode()
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(EdgeID(NodeID("missing"), NodeID("dst"), "e"))
+            storage.addEdge("missing", dst, "e")
         }
     }
 
     @Test
     fun `test addEdge missing dst throws EntityNotExistException`() {
-        storage.addNode(NodeID("src"))
+        val src = storage.addNode()
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(EdgeID(NodeID("src"), NodeID("missing"), "e"))
+            storage.addEdge(src, "missing", "e")
         }
     }
 
     @Test
     fun `test deleteNode nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteNode(NodeID("missing")) }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode("missing") }
     }
 
     @Test
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteEdge(EdgeID(NodeID("a"), NodeID("b"), "e"))
+            storage.deleteEdge("nonexistent")
         }
     }
 
     @Test
     fun `test getNodeProperties nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(NodeID("missing")) }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("missing") }
     }
 
     @Test
     fun `test getIncomingEdges nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(NodeID("missing")) }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("missing") }
     }
 
     @Test
     fun `test getOutgoingEdges nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(NodeID("missing")) }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("missing") }
     }
 
     // -- RelationshipType uses eType --
 
     @Test
     fun `test edge type stored as Neo4j RelationshipType`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        val e1 = EdgeID(n1, n2, "KNOWS")
-        val e2 = EdgeID(n1, n2, "LIKES")
-        storage.addEdge(e1)
-        storage.addEdge(e2)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "KNOWS")
+        val e2 = storage.addEdge(n1, n2, "LIKES")
 
         assertTrue(storage.containsEdge(e1))
         assertTrue(storage.containsEdge(e2))
@@ -401,19 +351,16 @@ class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `test concurrent add nodes uses ConcurrentHashMap safely`() {
-        val threads = List(10) { threadId ->
-            Thread {
-                val nodeId = NodeID("node-$threadId")
-                storage.addNode(nodeId, mapOf("prop" to "value-$threadId".strVal))
+        val threads =
+            List(10) { threadId ->
+                Thread {
+                    storage.addNode(mapOf("prop" to "value-$threadId".strVal))
+                }
             }
-        }
 
         threads.forEach { it.start() }
         threads.forEach { it.join() }
 
         assertEquals(10, storage.nodeIDs.size)
-        for (i in 0 until 10) {
-            assertTrue(storage.containsNode(NodeID("node-$i")))
-        }
     }
 }
