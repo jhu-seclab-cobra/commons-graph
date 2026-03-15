@@ -129,4 +129,5 @@ class JgraphtGmlIOImplWhiteBoxTest {
         assertFalse(JgraphtGmlIOImpl.isValidFile(dir))
         Files.deleteIfExists(dir)
     }
+
 }
