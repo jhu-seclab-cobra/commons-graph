@@ -296,4 +296,178 @@ class Neo4jConcurStorageImplWhiteBoxTest {
         assertEquals(1, snapshot.size)
         assertEquals(2, storage.nodeIDs.size)
     }
+
+    // -- setEdgeProperties --
+
+    @Test
+    fun `test setEdgeProperties sets property on existing edge`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        storage.setEdgeProperties(e, mapOf("weight" to 42.numVal))
+
+        val props = storage.getEdgeProperties(e)
+        assertEquals(42, (props["weight"] as NumVal).core)
+    }
+
+    @Test
+    fun `test setEdgeProperties with null removes property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("x" to "y".strVal, "z" to "w".strVal))
+
+        storage.setEdgeProperties(e, mapOf("x" to null))
+
+        val props = storage.getEdgeProperties(e)
+        assertNull(props["x"])
+        assertEquals("w", (props["z"] as StrVal).core)
+    }
+
+    @Test
+    fun `test setEdgeProperties nonexistent edge throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.setEdgeProperties(-1, mapOf("key" to "val".strVal))
+        }
+    }
+
+    // -- deleteEdge --
+
+    @Test
+    fun `test deleteEdge removes edge from edge mapping cache`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        storage.deleteEdge(e)
+
+        assertFalse(storage.containsEdge(e))
+        assertEquals(0, storage.edgeIDs.size)
+    }
+
+    @Test
+    fun `test deleteEdge nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.deleteEdge(-1)
+        }
+    }
+
+    @Test
+    fun `test deleteEdge leaves nodes intact`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        storage.deleteEdge(e)
+
+        assertTrue(storage.containsNode(n1))
+        assertTrue(storage.containsNode(n2))
+    }
+
+    // -- getEdgeSrc / getEdgeDst / getEdgeType --
+
+    @Test
+    fun `test getEdgeSrc returns correct source node`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val e = storage.addEdge(src, dst, "rel")
+
+        assertEquals(src, storage.getEdgeSrc(e))
+    }
+
+    @Test
+    fun `test getEdgeSrc nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeSrc(-1)
+        }
+    }
+
+    @Test
+    fun `test getEdgeDst returns correct destination node`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val e = storage.addEdge(src, dst, "rel")
+
+        assertEquals(dst, storage.getEdgeDst(e))
+    }
+
+    @Test
+    fun `test getEdgeDst nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeDst(-1)
+        }
+    }
+
+    @Test
+    fun `test getEdgeType returns correct type string`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "FOLLOWS")
+
+        assertEquals("FOLLOWS", storage.getEdgeType(e))
+    }
+
+    @Test
+    fun `test getEdgeType nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeType(-1)
+        }
+    }
+
+    // -- getNodeProperties / getEdgeProperties nonexistent --
+
+    @Test
+    fun `test getNodeProperties nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getNodeProperties(-1)
+        }
+    }
+
+    @Test
+    fun `test getEdgeProperties nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeProperties(-1)
+        }
+    }
+
+    @Test
+    fun `test setNodeProperties nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.setNodeProperties(-1, mapOf("key" to "val".strVal))
+        }
+    }
+
+    // -- transferTo --
+
+    @Test
+    fun `test transferTo copies nodes edges and meta to target`() {
+        val n1 = storage.addNode(mapOf("label" to "A".strVal))
+        val n2 = storage.addNode(mapOf("label" to "B".strVal))
+        storage.addEdge(n1, n2, "LINKS", mapOf("w" to 1.numVal))
+        storage.setMeta("version", "2".strVal)
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("2", (target.getMeta("version") as StrVal).core)
+    }
+
+    @Test
+    fun `test transferTo throws AccessClosedStorageException when closed`() {
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> {
+            storage.transferTo(NativeStorageImpl())
+        }
+    }
+
+    // -- double-close is safe --
+
+    @Test
+    fun `test double close does not throw`() {
+        storage.close()
+        storage.close()  // second close must not throw or attempt another shutdown
+    }
 }

@@ -37,11 +37,11 @@ class Neo4jStorageImpl(
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
-    // Bidirectional mapping: IStorage Int ID <-> Neo4j Long ID
-    private val intToNeo4jNode = HashMap<Int, Long>()
-    private val neo4jNodeToInt = HashMap<Long, Int>()
-    private val intToNeo4jEdge = HashMap<Int, Long>()
-    private val neo4jEdgeToInt = HashMap<Long, Int>()
+    // Bidirectional mapping: IStorage Int ID <-> Neo4j element ID
+    private val intToNeo4jNode = HashMap<Int, String>()
+    private val neo4jNodeToInt = HashMap<String, Int>()
+    private val intToNeo4jEdge = HashMap<Int, String>()
+    private val neo4jEdgeToInt = HashMap<String, Int>()
 
     private val metaProperties = HashMap<String, IValue>()
 
@@ -76,14 +76,14 @@ class Neo4jStorageImpl(
         readTx {
             getAllNodes().forEach { node ->
                 val storageId = node.storageID.toInt()
-                intToNeo4jNode[storageId] = node.id
-                neo4jNodeToInt[node.id] = storageId
+                intToNeo4jNode[storageId] = node.elementId
+                neo4jNodeToInt[node.elementId] = storageId
                 nodeCounter = maxOf(nodeCounter, storageId + 1)
             }
             getAllRelationships().forEach { rel ->
                 val storageId = rel.storageID.toInt()
-                intToNeo4jEdge[storageId] = rel.id
-                neo4jEdgeToInt[rel.id] = storageId
+                intToNeo4jEdge[storageId] = rel.elementId
+                neo4jEdgeToInt[rel.elementId] = storageId
                 edgeCounter = maxOf(edgeCounter, storageId + 1)
             }
         }
@@ -116,8 +116,8 @@ class Neo4jStorageImpl(
             val nodeId = nodeCounter++
             val newNode = createNode()
             newNode.storageID = nodeId.toString()
-            intToNeo4jNode[nodeId] = newNode.id
-            neo4jNodeToInt[newNode.id] = nodeId
+            intToNeo4jNode[nodeId] = newNode.elementId
+            neo4jNodeToInt[newNode.elementId] = nodeId
             properties.forEach { (name, value) -> newNode[name] = value }
             nodeId
         }
@@ -132,12 +132,12 @@ class Neo4jStorageImpl(
             if (!containsNode(src)) throw EntityNotExistException(src)
             if (!containsNode(dst)) throw EntityNotExistException(dst)
             val id = edgeCounter++
-            val srcNode = getNodeById(intToNeo4jNode[src]!!)
-            val dstNode = getNodeById(intToNeo4jNode[dst]!!)
+            val srcNode = getNodeByElementId(intToNeo4jNode[src]!!)
+            val dstNode = getNodeByElementId(intToNeo4jNode[dst]!!)
             val newEdge = srcNode.createRelationshipTo(dstNode, RelationshipType.withName(type))
             newEdge.storageID = id.toString()
-            intToNeo4jEdge[id] = newEdge.id
-            neo4jEdgeToInt[newEdge.id] = id
+            intToNeo4jEdge[id] = newEdge.elementId
+            neo4jEdgeToInt[newEdge.elementId] = id
             properties.forEach { (name, value) -> newEdge[name] = value }
             id
         }
@@ -145,14 +145,14 @@ class Neo4jStorageImpl(
     override fun getNodeProperties(id: Int): Map<String, IValue> =
         readTx {
             if (!containsNode(id)) throw EntityNotExistException(id)
-            val node = getNodeById(intToNeo4jNode[id]!!)
+            val node = getNodeByElementId(intToNeo4jNode[id]!!)
             node.keys.associateWith { node[it]!! }
         }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         readTx {
             if (!containsEdge(id)) throw EntityNotExistException(id)
-            val edge = getRelationshipById(intToNeo4jEdge[id]!!)
+            val edge = getRelationshipByElementId(intToNeo4jEdge[id]!!)
             edge.keys.associateWith { edge[it]!! }
         }
 
@@ -161,7 +161,7 @@ class Neo4jStorageImpl(
         properties: Map<String, IValue?>,
     ) = writeTx {
         if (!containsNode(id)) throw EntityNotExistException(id)
-        val node = getNodeById(intToNeo4jNode[id]!!)
+        val node = getNodeByElementId(intToNeo4jNode[id]!!)
         properties.forEach { (name, value) ->
             if (value != null) node[name] = value else node.removeProperty(name)
         }
@@ -172,7 +172,7 @@ class Neo4jStorageImpl(
         properties: Map<String, IValue?>,
     ) = writeTx {
         if (!containsEdge(id)) throw EntityNotExistException(id)
-        val edge = getRelationshipById(intToNeo4jEdge[id]!!)
+        val edge = getRelationshipByElementId(intToNeo4jEdge[id]!!)
         properties.forEach { (name, value) ->
             if (value != null) edge[name] = value else edge.removeProperty(name)
         }
@@ -183,9 +183,9 @@ class Neo4jStorageImpl(
             if (!containsNode(id)) throw EntityNotExistException(id)
             val neo4jId = intToNeo4jNode.remove(id)!!
             neo4jNodeToInt.remove(neo4jId)
-            val node = getNodeById(neo4jId)
+            val node = getNodeByElementId(neo4jId)
             node.relationships.forEach { edge ->
-                val edgeIntId = neo4jEdgeToInt.remove(edge.id)
+                val edgeIntId = neo4jEdgeToInt.remove(edge.elementId)
                 if (edgeIntId != null) intToNeo4jEdge.remove(edgeIntId)
                 edge.delete()
             }
@@ -197,41 +197,41 @@ class Neo4jStorageImpl(
             if (!containsEdge(id)) throw EntityNotExistException(id)
             val neo4jId = intToNeo4jEdge.remove(id)!!
             neo4jEdgeToInt.remove(neo4jId)
-            getRelationshipById(neo4jId).delete()
+            getRelationshipByElementId(neo4jId).delete()
         }
 
     override fun getEdgeSrc(id: Int): Int =
         readTx {
             if (!containsEdge(id)) throw EntityNotExistException(id)
-            val rel = getRelationshipById(intToNeo4jEdge[id]!!)
-            neo4jNodeToInt[rel.startNode.id]!!
+            val rel = getRelationshipByElementId(intToNeo4jEdge[id]!!)
+            neo4jNodeToInt[rel.startNode.elementId]!!
         }
 
     override fun getEdgeDst(id: Int): Int =
         readTx {
             if (!containsEdge(id)) throw EntityNotExistException(id)
-            val rel = getRelationshipById(intToNeo4jEdge[id]!!)
-            neo4jNodeToInt[rel.endNode.id]!!
+            val rel = getRelationshipByElementId(intToNeo4jEdge[id]!!)
+            neo4jNodeToInt[rel.endNode.elementId]!!
         }
 
     override fun getEdgeType(id: Int): String =
         readTx {
             if (!containsEdge(id)) throw EntityNotExistException(id)
-            getRelationshipById(intToNeo4jEdge[id]!!).type.name()
+            getRelationshipByElementId(intToNeo4jEdge[id]!!).type.name()
         }
 
     override fun getIncomingEdges(id: Int): Set<Int> =
         readTx {
             if (!containsNode(id)) throw EntityNotExistException(id)
-            val node = getNodeById(intToNeo4jNode[id]!!)
-            node.getRelationships(Direction.INCOMING).mapNotNull { neo4jEdgeToInt[it.id] }.toSet()
+            val node = getNodeByElementId(intToNeo4jNode[id]!!)
+            node.getRelationships(Direction.INCOMING).mapNotNull { neo4jEdgeToInt[it.elementId] }.toSet()
         }
 
     override fun getOutgoingEdges(id: Int): Set<Int> =
         readTx {
             if (!containsNode(id)) throw EntityNotExistException(id)
-            val node = getNodeById(intToNeo4jNode[id]!!)
-            node.getRelationships(Direction.OUTGOING).mapNotNull { neo4jEdgeToInt[it.id] }.toSet()
+            val node = getNodeByElementId(intToNeo4jNode[id]!!)
+            node.getRelationships(Direction.OUTGOING).mapNotNull { neo4jEdgeToInt[it.elementId] }.toSet()
         }
 
     override val metaNames: Set<String>
