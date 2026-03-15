@@ -1,38 +1,24 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.value.IPrimitiveVal
 import edu.jhu.cobra.commons.value.IValue
+
+/**
+ * Storage-generated opaque identifier for internal entities (nodes, edges).
+ * External code should not parse or interpret these IDs.
+ */
+typealias InternalID = Int
 
 /**
  * Base interface for all graph entities, including nodes and edges.
  *
  * Provides unique identification and typed property storage for flexible graph modeling.
+ * Properties are accessed via operator syntax: `entity["key"]`, `entity["key"] = value`,
+ * `"key" in entity`.
  *
  * @see AbcNode
  * @see AbcEdge
  */
 sealed interface IEntity {
-    /**
-     * Uniquely identifies an entity within the graph.
-     *
-     * Supports various identifier types such as string or number.
-     */
-    sealed interface ID {
-        /**
-         * Returns the serialized value representing this identifier.
-         *
-         * @return The serialized identifier value.
-         */
-        val serialize: IValue
-
-        /**
-         * Returns the string representation of this identifier.
-         *
-         * @return The identifier as string.
-         */
-        val asString: String
-    }
-
     /**
      * Categorizes the type of entity (e.g., node, edge).
      */
@@ -48,9 +34,12 @@ sealed interface IEntity {
     /**
      * Returns the unique identifier for this entity.
      *
-     * @return The entity's identifier.
+     * For nodes, this is the user-facing name (uname).
+     * For edges, this is the storage-generated edge ID.
+     *
+     * @return The entity's identifier string.
      */
-    val id: ID
+    val id: String
 
     /**
      * Returns the type information for this entity.
@@ -60,56 +49,23 @@ sealed interface IEntity {
     val type: Type
 
     /**
-     * Sets a primitive property value by name.
-     *
-     * @param byName The property name.
-     * @param newVal The new primitive value, or null to remove.
-     */
-    operator fun set(
-        byName: String,
-        newVal: IPrimitiveVal?,
-    ) = setProp(byName, newVal)
-
-    /**
-     * Sets a property value by name.
-     *
-     * @param name The property name.
-     * @param value The value to set, or null to remove.
-     */
-    fun setProp(
-        name: String,
-        value: IValue?,
-    )
-
-    /**
-     * Sets multiple properties at once.
-     *
-     * @param props Map of property names to values (null to remove).
-     */
-    fun setProps(props: Map<String, IValue?>)
-
-    /**
-     * Returns a primitive property value by name.
-     *
-     * @param byName The property name.
-     * @return The primitive value, or null if absent.
-     */
-    operator fun get(byName: String): IPrimitiveVal? = getProp(byName) as? IPrimitiveVal
-
-    /**
      * Returns a property value by name.
      *
      * @param name The property name.
      * @return The property value, or null if absent.
      */
-    fun getProp(name: String): IValue?
+    operator fun get(name: String): IValue?
 
     /**
-     * Returns all properties of this entity.
+     * Sets a property value by name. Pass null to remove.
      *
-     * @return Map of property names to values.
+     * @param name The property name.
+     * @param value The value to set, or null to remove.
      */
-    fun getAllProps(): Map<String, IValue>
+    operator fun set(
+        name: String,
+        value: IValue?,
+    )
 
     /**
      * Returns true if the property exists.
@@ -117,13 +73,19 @@ sealed interface IEntity {
      * @param name The property name.
      * @return True if present, false otherwise.
      */
-    fun containProp(name: String): Boolean
+    operator fun contains(name: String): Boolean
 
     /**
-     * Returns true if the property exists.
+     * Returns all properties as an immutable map snapshot.
      *
-     * @param byName The property name.
-     * @return True if present, false otherwise.
+     * @return Map of property names to values.
      */
-    operator fun contains(byName: String): Boolean = containProp(byName)
+    fun asMap(): Map<String, IValue>
+
+    /**
+     * Updates multiple properties at once. Null values remove properties.
+     *
+     * @param props Map of property names to values (null to remove).
+     */
+    fun update(props: Map<String, IValue?>)
 }

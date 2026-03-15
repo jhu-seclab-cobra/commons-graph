@@ -1,125 +1,55 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.AbcNode.Companion.META_PREFIX
+import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.listVal
-import edu.jhu.cobra.commons.value.strVal
-import java.util.concurrent.ConcurrentHashMap
-
-/**
- * Unique identifier for an edge in the graph.
- *
- * Represents an immutable identifier composed of source node, destination node, and edge type.
- *
- * @property srcNid The source node identifier.
- * @property dstNid The destination node identifier.
- * @property eType The edge type name.
- * @constructor Creates an [EdgeID] from source, destination, and type.
- * @param srcNid The source node identifier.
- * @param dstNid The destination node identifier.
- * @param eType The edge type name.
- * @see NodeID
- * @see IEntity.ID
- */
-data class EdgeID(
-    val srcNid: NodeID,
-    val dstNid: NodeID,
-    val eType: String,
-) : IEntity.ID {
-    /**
-     * Returns the string representation of this identifier.
-     *
-     * @return The identifier as string in format "sourceNodeId-edgeType-destinationNodeId".
-     */
-    override val asString: String by lazy { "$srcNid-$eType-$dstNid" }
-
-    /**
-     * Returns the serialized edge identifier as a [ListVal].
-     *
-     * @return List containing source ID, destination ID, and edge type.
-     */
-    override val serialize: ListVal by lazy { ListVal(srcNid.serialize, dstNid.serialize, eType.strVal) }
-
-    override fun toString() = asString
-
-    /**
-     * Creates an [EdgeID] from a [ListVal].
-     *
-     * @param value List containing source ID, destination ID, and edge type.
-     */
-    constructor(value: ListVal) : this(
-        NodeID(value[0] as StrVal),
-        NodeID(value[1] as StrVal),
-        value[2].core.toString(),
-    )
-
-    companion object {
-        private val pool = ConcurrentHashMap<EdgeID, EdgeID>()
-
-        // Returns a deduplicated EdgeID, auto-interning srcNid/dstNid via NodeID.of.
-        internal fun of(
-            srcNid: NodeID,
-            dstNid: NodeID,
-            eType: String,
-        ): EdgeID {
-            val key = EdgeID(NodeID.of(srcNid.name), NodeID.of(dstNid.name), eType)
-            return pool.getOrPut(key) { key }
-        }
-
-        // Clears the intern pool for testing or state reset.
-        internal fun clearPool() = pool.clear()
-    }
-}
 
 /**
  * Abstract base class for graph edges with storage-backed property management.
  *
- * Provides property access, identity management, and storage integration for edges.
+ * The edge's [id] is the graph-layer identity string in `srcNid-eType-dstNid` format.
+ * The [internalId] is the storage-generated opaque key, invisible to external code.
+ * Structural info (source, destination, type) is read from meta properties
+ * (`__src__`, `__dst__`, `__tag__`), which store user-provided [NodeID]s.
+ * Properties prefixed with `__` are internal metadata and filtered from external access.
  *
  * @property storage The storage system for edge properties.
- * @constructor Creates an edge with the given [IStorage].
- * @param storage The storage system for edge properties.
+ * @property internalId The storage-generated opaque key for this edge.
  * @see AbcEntity
  * @see IEntity
- * @see EdgeID
  */
 abstract class AbcEdge(
     protected val storage: IStorage,
+    internal val internalId: InternalID,
 ) : AbcEntity() {
     /**
      * Represents the type information for an edge.
      */
     interface Type : IEntity.Type
 
-    /**
-     * Returns the unique edge identifier.
-     *
-     * @return The edge's identifier.
-     */
-    abstract override val id: EdgeID
+    /** Source node ID, read from `__src__` meta property. */
+    val srcNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
+        (storage.getEdgeProperty(internalId, META_SRC) as StrVal).core
+    }
+
+    /** Destination node ID, read from `__dst__` meta property. */
+    val dstNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
+        (storage.getEdgeProperty(internalId, META_DST) as StrVal).core
+    }
+
+    /** Edge type name, read from `__tag__` meta property. */
+    val eType: String by lazy(LazyThreadSafetyMode.NONE) {
+        (storage.getEdgeProperty(internalId, META_TAG) as StrVal).core
+    }
 
     /**
-     * Returns the source node identifier.
-     *
-     * @return The source node ID.
+     * The graph-layer edge identity in `srcNid-eType-dstNid` format.
      */
-    val srcNid: NodeID get() = id.srcNid
-
-    /**
-     * Returns the destination node identifier.
-     *
-     * @return The destination node ID.
-     */
-    val dstNid: NodeID get() = id.dstNid
-
-    /**
-     * Returns the edge type name.
-     *
-     * @return The edge type.
-     */
-    val eType: String get() = id.eType
+    override val id: String get() = "$srcNid-$eType-$dstNid"
 
     /**
      * Visibility labels assigned to this edge.
@@ -128,73 +58,48 @@ abstract class AbcEdge(
      */
     var labels: Set<Label>
         get() {
-            val labelList = getTypeProp<ListVal>(name = "labels")?.core.orEmpty()
-            return labelList.map { Label(core = it.core.toString()) }.toSet()
+            val raw = storage.getEdgeProperty(internalId, "labels") as? ListVal ?: return emptySet()
+            return raw.core.map { Label(it.core.toString()) }.toSet()
         }
         set(values) {
-            setProp(name = "labels", value = values.map { it.core }.listVal)
+            storage.setEdgeProperties(internalId, mapOf("labels" to values.map { it.core }.listVal))
         }
 
-    /**
-     * Sets a property value for the edge.
-     *
-     * @param name The property name.
-     * @param value The property value.
-     */
-    override fun setProp(
+    override fun get(name: String): IValue? {
+        require(!name.startsWith(META_PREFIX)) { "Cannot access meta property: $name" }
+        return storage.getEdgeProperty(internalId, name)
+    }
+
+    override fun set(
         name: String,
         value: IValue?,
-    ) = storage.setEdgeProperties(id, mapOf(name to value))
+    ) {
+        require(!name.startsWith(META_PREFIX)) { "Cannot set meta property: $name" }
+        storage.setEdgeProperties(internalId, mapOf(name to value))
+    }
 
-    /**
-     * Sets multiple properties for the edge.
-     *
-     * @param props Map of property names to values.
-     */
-    override fun setProps(props: Map<String, IValue?>) = storage.setEdgeProperties(id, props)
+    override fun contains(name: String): Boolean {
+        require(!name.startsWith(META_PREFIX)) { "Cannot query meta property: $name" }
+        return storage.getEdgeProperty(internalId, name) != null
+    }
 
-    /**
-     * Returns a property value from the edge.
-     *
-     * @param name The property name.
-     * @return The property value, or null if absent.
-     */
-    override fun getProp(name: String): IValue? = storage.getEdgeProperty(id, name)
+    override fun asMap(): Map<String, IValue> =
+        storage.getEdgeProperties(internalId).filterKeys { !it.startsWith(META_PREFIX) }
 
-    /**
-     * Returns all properties of the edge.
-     *
-     * @return Map of property names to values.
-     */
-    override fun getAllProps(): Map<String, IValue> = storage.getEdgeProperties(id)
+    override fun update(props: Map<String, IValue?>) {
+        require(props.keys.none { it.startsWith(META_PREFIX) }) { "Cannot set meta properties" }
+        storage.setEdgeProperties(internalId, props)
+    }
 
-    /**
-     * Returns true if the edge contains the specified property.
-     *
-     * @param name The property name.
-     * @return True if the property exists, false otherwise.
-     */
-    override fun containProp(name: String): Boolean = storage.getEdgeProperty(id, name) != null
+    override fun toString(): String = "{$srcNid-$eType-$dstNid, ${this.type}}"
 
-    /**
-     * Returns a string representation of the edge.
-     *
-     * @return String containing edge ID and type.
-     */
-    override fun toString(): String = "{$id, ${this.type}}"
+    override fun hashCode(): Int = internalId.hashCode()
 
-    /**
-     * Returns the hash code based on string representation.
-     *
-     * @return The hash code value.
-     */
-    override fun hashCode(): Int = toString().hashCode()
+    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.internalId == other.internalId else super.equals(other)
 
-    /**
-     * Compares this edge with another object for equality.
-     *
-     * @param other The object to compare with.
-     * @return True if other is an edge with the same ID, false otherwise.
-     */
-    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.id == other.id else super.equals(other)
+    companion object {
+        internal const val META_SRC = "__src__"
+        internal const val META_DST = "__dst__"
+        internal const val META_TAG = "__tag__"
+    }
 }
