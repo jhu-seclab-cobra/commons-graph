@@ -58,7 +58,7 @@ class Neo4jStorageImplTest {
     @Test
     fun `test add edge with non-existent nodes`() {
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge("nonexistent-src", "nonexistent-dst", "test-edge")
+            storage.addEdge(-1, -2, "test-edge")
         }
     }
 
@@ -140,7 +140,7 @@ class Neo4jStorageImplTest {
     fun `test clear storage`() {
         storage.addNode()
 
-        assertTrue(storage.clear())
+        storage.clear()
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
     }

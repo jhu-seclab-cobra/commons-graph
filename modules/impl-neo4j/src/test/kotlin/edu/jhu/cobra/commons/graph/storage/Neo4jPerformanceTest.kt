@@ -38,8 +38,8 @@ class Neo4jPerformanceTest {
         storage: IStorage,
         nodeCount: Int,
         edgesPerNode: Int,
-    ): List<String> {
-        val nodeIds = mutableListOf<String>()
+    ): List<Int> {
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
@@ -139,7 +139,7 @@ class Neo4jPerformanceTest {
         println("\n=== Neo4j Node Operations (median ops/sec, $nodeCount nodes) ===")
 
         val storage = createStorage()
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
 
         val lookupOps = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
@@ -153,7 +153,7 @@ class Neo4jPerformanceTest {
         println("\n=== Neo4j Property Read/Write (median ops/sec, $count ops on $nodeCount nodes) ===")
 
         val storage = createStorage()
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.numVal)))
 
         val readOps = benchmarkOpsPerSec(count) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }

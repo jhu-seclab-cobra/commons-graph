@@ -3,7 +3,10 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.value.*
+import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.*
@@ -24,10 +27,10 @@ class Neo4jStorageImplWhiteBoxTest {
         graphDir.toFile().deleteRecursively()
     }
 
-    // -- node2ElementIdMap cache consistency --
+    // -- node mapping cache consistency --
 
     @Test
-    fun `test addNode populates node2ElementIdMap cache`() {
+    fun `test addNode populates node mapping cache`() {
         val n = storage.addNode()
 
         assertTrue(storage.containsNode(n))
@@ -35,7 +38,7 @@ class Neo4jStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test deleteNode removes from node2ElementIdMap cache`() {
+    fun `test deleteNode removes from node mapping cache`() {
         val n = storage.addNode()
         storage.deleteNode(n)
 
@@ -43,10 +46,10 @@ class Neo4jStorageImplWhiteBoxTest {
         assertEquals(0, storage.nodeIDs.size)
     }
 
-    // -- edge2ElementIdMap cache consistency --
+    // -- edge mapping cache consistency --
 
     @Test
-    fun `test addEdge populates edge2ElementIdMap cache`() {
+    fun `test addEdge populates edge mapping cache`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
@@ -56,7 +59,7 @@ class Neo4jStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test deleteEdge removes from edge2ElementIdMap cache`() {
+    fun `test deleteEdge removes from edge mapping cache`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
@@ -69,7 +72,7 @@ class Neo4jStorageImplWhiteBoxTest {
     // -- deleteNode cascades edge removal from cache --
 
     @Test
-    fun `test deleteNode removes associated edges from edge2ElementIdMap`() {
+    fun `test deleteNode removes associated edges from edge mapping`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val n3 = storage.addNode()
@@ -266,7 +269,7 @@ class Neo4jStorageImplWhiteBoxTest {
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode("n") }
+        assertFailsWith<AccessClosedStorageException> { storage.containsNode(-1) }
         assertFailsWith<AccessClosedStorageException> { storage.addNode() }
         assertFailsWith<AccessClosedStorageException> { storage.metaNames }
         assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
@@ -282,7 +285,7 @@ class Neo4jStorageImplWhiteBoxTest {
         storage.addEdge(n1, n2, "e")
         storage.setMeta("key", "val".strVal)
 
-        assertTrue(storage.clear())
+        storage.clear()
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
@@ -294,7 +297,7 @@ class Neo4jStorageImplWhiteBoxTest {
     fun `test addEdge missing src throws EntityNotExistException`() {
         val dst = storage.addNode()
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge("missing", dst, "e")
+            storage.addEdge(-1, dst, "e")
         }
     }
 
@@ -302,35 +305,35 @@ class Neo4jStorageImplWhiteBoxTest {
     fun `test addEdge missing dst throws EntityNotExistException`() {
         val src = storage.addNode()
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(src, "missing", "e")
+            storage.addEdge(src, -1, "e")
         }
     }
 
     @Test
     fun `test deleteNode nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteNode("missing") }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(-1) }
     }
 
     @Test
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteEdge("nonexistent")
+            storage.deleteEdge(-1)
         }
     }
 
     @Test
     fun `test getNodeProperties nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("missing") }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(-1) }
     }
 
     @Test
     fun `test getIncomingEdges nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("missing") }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(-1) }
     }
 
     @Test
     fun `test getOutgoingEdges nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("missing") }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(-1) }
     }
 
     // -- RelationshipType uses eType --
