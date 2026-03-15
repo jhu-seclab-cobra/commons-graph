@@ -41,7 +41,59 @@ Tests all 8 configurations (2 impls x 4 backends). Scale tiers (smaller than JGr
 
 ## Current Baseline
 
-_No benchmark data collected yet. Run the performance test to populate._
+Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tuned flags.
+
+### Graph Population (median ms, 5K nodes / 15K edges)
+
+| Config | ms |
+|---|---|
+| MapDB[memoryDB] | 150.9 |
+| MapDB[memoryDirectDB] | 167.6 |
+| MapDB[tempFileDB] | 4134.9 |
+| MapDB[tempFile+mmap] | 1858.1 |
+| MapDBConcur[memoryDB] | 154.2 |
+| MapDBConcur[memDirect] | 175.4 |
+| MapDBConcur[tempFile] | 4053.8 |
+| MapDBConcur[tmpFile+mm] | 1463.9 |
+
+### Node Lookup (50K lookups on 5K nodes)
+
+| Config | ops/sec |
+|---|---|
+| MapDB[memoryDB] | 1.14M |
+| MapDB[memoryDirectDB] | 1.70M |
+| MapDB[tempFileDB] | 163.4K |
+| MapDB[tempFile+mmap] | 1.83M |
+| MapDBConcur[memoryDB] | 1.75M |
+| MapDBConcur[memDirect] | 1.81M |
+| MapDBConcur[tempFile] | 161.6K |
+| MapDBConcur[tmpFile+mm] | 1.84M |
+
+### Property Read/Write (20K ops on 5K nodes)
+
+| Config | Read | Write |
+|---|---|---|
+| MapDB[memoryDB] | 1.61M | 94.7K |
+| MapDB[memoryDirectDB] | 1.67M | 87.6K |
+| MapDB[tempFileDB] | 148.6K | 2.8K |
+| MapDB[tempFile+mmap] | 1.66M | 24.4K |
+| MapDBConcur[memoryDB] | 439.4K | 86.9K |
+| MapDBConcur[memDirect] | 396.1K | 82.8K |
+| MapDBConcur[tempFile] | 35.9K | 3.0K |
+| MapDBConcur[tmpFile+mm] | 399.7K | 10.6K |
+
+### Edge Query (10K queries, 2K nodes / 10K edges)
+
+| Config | Outgoing | Incoming |
+|---|---|---|
+| MapDB[memoryDB] | 1.43M | 1.49M |
+| MapDB[memoryDirectDB] | 1.49M | 1.48M |
+| MapDB[tempFileDB] | 144.7K | 146.1K |
+| MapDB[tempFile+mmap] | 1.52M | 1.51M |
+| MapDBConcur[memoryDB] | 1.23M | 1.30M |
+| MapDBConcur[memDirect] | 1.32M | 1.29M |
+| MapDBConcur[tempFile] | 139.3K | 142.3K |
+| MapDBConcur[tmpFile+mm] | 1.33M | 1.32M |
 
 ---
 
@@ -116,14 +168,18 @@ private val outgoingStructure = dbManager.hashMap("outgoing", ...).createOrOpen(
 
 ## Key Insights
 
-1. **Serialization is the dominant cost.** Every MapDB access involves `IValue` -> `ByteArray` -> MapDB internal storage -> `ByteArray` -> `IValue`. This 4-step pipeline makes MapDB inherently slower than in-memory HashMap for per-operation throughput. MapDB's value proposition is persistence and off-heap storage, not speed.
+1. **Serialization is the dominant cost.** MapDB[memoryDB] property read (1.61M) is 35x slower than NativeStorageImpl (55.80M). Every access involves `IValue` -> `ByteArray` -> MapDB internal storage -> `ByteArray` -> `IValue`. MapDB's value proposition is persistence and off-heap storage, not speed.
 
-2. **Copy-on-write amplifies degree-dependent operations.** Adding/removing an edge from a node's adjacency set requires full deserialization + modification + re-serialization of the set. For a node with degree 100, adding one edge processes 100 existing edges. This is the primary bottleneck for graph mutation.
+2. **Write is disproportionately slow.** MapDB[memoryDB] property write (94.7K) is 17x slower than read (1.61M). Write requires serialization + MapDB record update + potential page split. For file-backed, write drops to 2.8K ops/sec (tempFileDB) due to fsync overhead.
 
-3. **`concurrencyDisable()` is critical for single-threaded performance.** MapDB's internal `Store2` acquires a `ReentrantLock` on every record access. In single-threaded scenarios, this is pure overhead with zero benefit.
+3. **tempFileDB without mmap is 10x slower than memory backends.** Node lookup: 163.4K (tempFileDB) vs 1.83M (tempFile+mmap). File I/O through Java NIO channels adds kernel/user space copy overhead that mmap eliminates.
 
-4. **Backend choice impacts I/O-bound operations.** `memoryDB()` is fastest for pure computation. `memoryDirectDB()` avoids GC for stored data. `tempFileDB().fileMmapEnableIfSupported()` is recommended for file persistence (avoids user/kernel space copies via mmap).
+4. **mmap nearly matches in-memory performance.** tempFile+mmap node lookup (1.83M) matches memoryDB (1.14M) and memoryDirectDB (1.70M). Memory-mapped files leverage OS page cache, making hot data access equivalent to RAM access.
 
-5. **MapDB shifts GC pressure, doesn't eliminate it.** While stored data is off-heap, every read creates temporary `ByteArray` + deserialized `IValue` objects in Young Gen. For traversal-intensive workloads, Young Gen pressure from MapDB can exceed Old Gen pressure from in-memory HashMap storage.
+5. **ConcurStorage read penalty is 3.7x for memoryDB.** Property read: 439.4K (Concur) vs 1.61M (non-Concur). The external `ReentrantReadWriteLock` plus MapDB internal concurrency create double-lock overhead. Write is only 1.1x slower (86.9K vs 94.7K), suggesting write is bottlenecked by serialization, not locking.
 
-6. **`EntityPropertyMap` flattened key design trades memory for lookup speed.** Composite keys (`"$entityId:$propName"`) in a single `HTreeMap` avoid per-entity nested map allocation. But string concatenation for key construction adds overhead per access.
+6. **Edge query is symmetric across all backends.** Outgoing ≈ Incoming for all configs (e.g., memoryDB: 1.43M vs 1.49M). Unlike NativeStorageImpl where outgoing (116.33M) is 2.3x faster than incoming (49.94M), MapDB's serialization cost dominates over data structure asymmetry.
+
+7. **Population at 5K/15K takes 150ms — 60x slower than NativeStorage at same scale.** NativeStorageImpl populates 10K/30K in 2.6ms (~1.3ms for 5K/15K). The serialization pipeline makes MapDB impractical for high-frequency graph construction.
+
+8. **`concurrencyDisable()` shows minimal benefit in population.** MapDB[memoryDB] (150.9ms) vs MapDBConcur[memoryDB] (154.2ms) — only 2% difference. The bottleneck is serialization, not lock acquisition. `concurrencyDisable()` may matter more for micro-operations (property read shows 1.61M vs 439.4K, but Concur also adds external RWLock).

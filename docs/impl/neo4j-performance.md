@@ -40,7 +40,35 @@ Benchmark categories:
 
 ## Current Baseline
 
-_No benchmark data collected yet. Run the performance test to populate._
+Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tuned flags.
+
+### Graph Population (median ms)
+
+| Implementation | 1K/3K | 5K/15K | 10K/30K |
+|---|---|---|---|
+| Neo4jStorageImpl | 37,959.5 | 174,599.1 | 174,001.1 |
+| Neo4jConcurStorageImpl | 17,965.9 | 90,629.1 | 173,379.5 |
+
+### Node Lookup (20K lookups on 5K nodes)
+
+| Implementation | ops/sec |
+|---|---|
+| Neo4jStorageImpl | 23.40M |
+| Neo4jConcurStorageImpl | 34.12M |
+
+### Property Read/Write (10K ops on 2K nodes)
+
+| Implementation | Read | Write |
+|---|---|---|
+| Neo4jStorageImpl | 452.5K | 116 |
+| Neo4jConcurStorageImpl | 813.3K | 117 |
+
+### Edge Query (10K queries, 2K nodes / 6K edges)
+
+| Implementation | Outgoing | Incoming |
+|---|---|---|
+| Neo4jStorageImpl | 696.8K | 744.7K |
+| Neo4jConcurStorageImpl | 699.3K | 752.0K |
 
 ---
 
@@ -130,12 +158,18 @@ _None yet._
 
 ## Key Insights
 
-1. **Neo4j transaction overhead dominates small operations.** Every `containsNode`, `getEdgeSrc`, etc. opens and closes a Neo4j transaction. For in-memory graph operations, this overhead is 100-1000x compared to direct HashMap access. This is the fundamental performance ceiling for Neo4j-backed storage.
+1. **Population is catastrophically slow.** Neo4jStorageImpl takes 37,959ms for 1K/3K — over 14,000x slower than NativeStorageImpl (2.6ms for 10K/30K). Each `addNode`/`addEdge` opens a write transaction with Neo4j's WAL (write-ahead log), lock manager, and transaction bookkeeping. This makes Neo4j unsuitable for bulk graph construction.
 
-2. **ID mapping is necessary despite overhead.** Neo4j uses internal `Long` IDs that are not stable across restarts (in some configurations). The bidirectional `Int <-> Long` mapping ensures IStorage contract stability but adds one HashMap lookup per operation.
+2. **Population does not scale linearly.** 5K/15K (174,599ms) is 4.6x the 1K/3K cost (37,959ms) for a 5x data increase. Neo4j transaction overhead likely compounds as the B-tree index grows and write-ahead log entries accumulate.
 
-3. **Neo4j embedded startup is heavyweight.** Database initialization takes 1-3 seconds, making Neo4j unsuitable for short-lived or frequently-created storage instances. The `lazy` initialization pattern defers this cost until first access.
+3. **Node lookup is surprisingly fast.** 23.40M ops/sec (Neo4jStorageImpl) — only 6x slower than NativeStorageImpl (143.54M). `containsNode` checks an in-memory `HashMap<Int, Long>` without opening a Neo4j transaction, so this metric reflects HashMap performance, not Neo4j access.
 
-4. **Concurrent variant adds lock overhead but minimal contention.** `ReentrantReadWriteLock` allows concurrent reads while serializing writes. For read-heavy workloads, throughput should approach non-concurrent variant. The lock acquisition cost (~20-50ns) is negligible compared to Neo4j transaction overhead (~1-10us).
+4. **ConcurStorage is faster than non-Concur for node lookup.** 34.12M vs 23.40M (1.5x). This is unexpected and likely an artifact of JIT warmup order rather than a real advantage.
 
-5. **Metadata is in-memory only.** `metaProperties` HashMap is not persisted to Neo4j. This is intentional — meta is lightweight key-value storage for graph-level configuration, not entity data.
+5. **Property write is 3,900x slower than read.** Write: 116 ops/sec vs Read: 452.5K ops/sec. Each property write opens a write transaction, serializes `IValue` to `ByteArray`, sets the Neo4j property, and commits. The commit includes WAL flush + lock release. Property read is fast because it uses a read transaction with snapshot isolation.
+
+6. **Edge query is symmetric.** Outgoing (696.8K) ≈ Incoming (744.7K). Neo4j's relationship chain threading provides O(1) access for both directions. The ~7% incoming advantage is within noise.
+
+7. **ConcurStorage lock overhead is negligible relative to Neo4j transaction cost.** Edge query: Concur (699.3K) ≈ non-Concur (696.8K). The `ReentrantReadWriteLock` acquisition (~20-50ns) is invisible when each operation already incurs ~1-10us of Neo4j transaction overhead.
+
+8. **Neo4j's value is persistence and query language, not throughput.** Property read (452.5K) is 123x slower than NativeStorageImpl (55.80M). Edge query (696.8K) is 167x slower than NativeStorageImpl (116.33M). Neo4j-backed storage should only be used when Cypher queries, ACID transactions, or disk persistence are required.
