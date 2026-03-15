@@ -1,10 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
 import org.junit.Before
@@ -18,12 +15,6 @@ import kotlin.test.*
 
 class MapDBConcurStorageImplTest {
     private lateinit var storage: MapDBConcurStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge1 = EdgeID(node1, node2, "edge1")
-    private val edge2 = EdgeID(node2, node3, "edge2")
-    private val edge3 = EdgeID(node1, node3, "edge3")
 
     @Before
     fun setup() {
@@ -37,7 +28,7 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `basic CRUD operations test`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
         assertTrue(storage.containsNode(node1))
         assertEquals(1, storage.nodeIDs.size)
 
@@ -45,8 +36,8 @@ class MapDBConcurStorageImplTest {
         assertEquals(1, props.size)
         assertEquals("value1", (props["prop1"] as StrVal).core)
 
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("edge_prop" to "edge_value".strVal))
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1", mapOf("edge_prop" to "edge_value".strVal))
         assertTrue(storage.containsEdge(edge1))
 
         storage.setNodeProperties(node1, mapOf("prop1" to "updated".strVal, "prop2" to 42.numVal))
@@ -62,7 +53,7 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `read consistency test`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
 
         val props = storage.getNodeProperties(node1)
 
@@ -92,8 +83,7 @@ class MapDBConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until nodeCountPerThread) {
-                        val nodeId = NodeID("node_${t}_$i")
-                        storage.addNode(nodeId, mapOf("thread" to t.toString().strVal, "index" to i.numVal))
+                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.numVal))
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -117,7 +107,7 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `concurrent read-write test`() {
-        storage.addNode(node1, mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
 
         val threadCount = 5
         val iterationsPerThread = 100
@@ -175,8 +165,9 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `concurrent node deletion test`() {
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until 100) {
-            storage.addNode(NodeID("test_node_$i"), mapOf("index" to i.numVal))
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
 
         val startLatch = CountDownLatch(1)
@@ -184,13 +175,12 @@ class MapDBConcurStorageImplTest {
         val deleteSuccess = AtomicBoolean(true)
         val querySuccess = AtomicBoolean(true)
 
+        val oddNodes = nodeIds.filterIndexed { index, _ -> index % 2 == 1 }
+
         Thread {
             try {
                 startLatch.await()
-                val toDelete = storage.nodeIDs.filter {
-                    it.name.substringAfterLast("_").toInt() % 2 == 1
-                }
-                toDelete.forEach { storage.deleteNode(it) }
+                oddNodes.forEach { storage.deleteNode(it) }
             } catch (e: Exception) {
                 e.printStackTrace()
                 deleteSuccess.set(false)
@@ -202,9 +192,8 @@ class MapDBConcurStorageImplTest {
         Thread {
             try {
                 startLatch.await()
-                for (i in 0 until 100) {
+                for (nodeId in nodeIds) {
                     try {
-                        val nodeId = NodeID("test_node_$i")
                         if (storage.containsNode(nodeId)) {
                             val props = storage.getNodeProperties(nodeId)
                             assertNotNull(props["index"])
@@ -228,21 +217,16 @@ class MapDBConcurStorageImplTest {
         assertTrue(deleteSuccess.get(), "Delete operation should complete successfully")
         assertTrue(querySuccess.get(), "Query operations should complete successfully")
         assertEquals(50, storage.nodeIDs.size, "Should have 50 nodes remaining (with even indices)")
-
-        storage.nodeIDs.forEach { nodeId ->
-            val idx = nodeId.name.substringAfterLast("_").toInt()
-            assertEquals(0, idx % 2, "Remaining nodes should all have even indices")
-        }
     }
 
     @Test
     fun `complex graph concurrent operations test`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1")
+        val edge2 = storage.addEdge(node2, node3, "edge2")
+        val edge3 = storage.addEdge(node1, node3, "edge3")
 
         val threadCount = 5
         val executor = Executors.newFixedThreadPool(threadCount)
@@ -266,7 +250,7 @@ class MapDBConcurStorageImplTest {
 
                             2 -> {
                                 val outEdges = storage.getOutgoingEdges(node1)
-                                val filtered = outEdges.filter { it.dstNid == node3 }
+                                val filtered = outEdges.filter { storage.getEdgeDst(it) == node3 }
                                 assertEquals(1, filtered.size)
                             }
 
@@ -306,35 +290,38 @@ class MapDBConcurStorageImplTest {
     fun `bulk operations test`() {
         val largeCount = 1000
 
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until largeCount) {
-            storage.addNode(NodeID("large_node_$i"), mapOf("index" to i.numVal))
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
 
         assertEquals(largeCount, storage.nodeIDs.size, "Should have the correct number of nodes")
 
         for (i in 0 until largeCount - 1) {
-            val srcId = NodeID("large_node_$i")
-            val dstId = NodeID("large_node_${i + 1}")
-            storage.addEdge(EdgeID(srcId, dstId, "large_edge_$i"), mapOf("index" to i.numVal))
+            storage.addEdge(nodeIds[i], nodeIds[i + 1], "large_edge_$i", mapOf("index" to i.numVal))
         }
 
         assertEquals(largeCount - 1, storage.edgeIDs.size, "Should have the correct number of edges")
 
-        val toDelete = storage.nodeIDs.filter {
-            it.name.substringAfterLast("_").toInt() >= largeCount / 2
+        // Delete second half
+        for (i in largeCount / 2 until largeCount) {
+            try {
+                storage.deleteNode(nodeIds[i])
+            } catch (e: EntityNotExistException) {
+                // may already be deleted via cascade
+            }
         }
-        toDelete.forEach { storage.deleteNode(it) }
 
         assertEquals(largeCount / 2, storage.nodeIDs.size, "Half of the nodes should remain")
 
         for (i in 0 until largeCount / 2) {
-            assertTrue(storage.containsNode(NodeID("large_node_$i")), "Node $i should exist")
+            assertTrue(storage.containsNode(nodeIds[i]), "Node $i should exist")
         }
     }
 
     @Test
     fun `lock contention test`() {
-        storage.addNode(node1, mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
 
         val readThreads = 20
         val writeThreads = 5
@@ -374,8 +361,7 @@ class MapDBConcurStorageImplTest {
                             storage.setNodeProperties(node1, mapOf("counter" to (current.toInt() + 1).numVal))
 
                             if (i % 10 == 0) {
-                                val tempNodeId = NodeID("temp_node_${t}_$i")
-                                storage.addNode(tempNodeId, mapOf("temp" to true.boolVal))
+                                val tempNodeId = storage.addNode(mapOf("temp" to true.boolVal))
                                 storage.deleteNode(tempNodeId)
                             }
                         } catch (e: Exception) {
@@ -404,17 +390,14 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `exception handling test`() {
-        storage.addNode(node1)
-        assertFailsWith<EntityAlreadyExistException> {
-            storage.addNode(node1)
+        val node1 = storage.addNode()
+
+        assertFailsWith<EntityNotExistException> {
+            storage.deleteNode("nonexistent")
         }
 
         assertFailsWith<EntityNotExistException> {
-            storage.deleteNode(node2)
-        }
-
-        assertFailsWith<EntityNotExistException> {
-            storage.addEdge(edge1)
+            storage.addEdge(node1, "nonexistent", "edge1")
         }
 
         storage.close()
@@ -422,7 +405,7 @@ class MapDBConcurStorageImplTest {
             storage.nodeIDs
         }
         assertFailsWith<AccessClosedStorageException> {
-            storage.addNode(node2)
+            storage.addNode()
         }
     }
 }

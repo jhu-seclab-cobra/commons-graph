@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph.nio
 
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.MapDBStorageImpl
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
@@ -10,7 +8,6 @@ import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.io.path.createParentDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.test.*
 
@@ -47,7 +44,7 @@ class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `test isValidFile returns true after valid export`() {
-        srcStorage.addNode(NodeID("n1"))
+        srcStorage.addNode()
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         assertTrue(MapDbGraphIOImpl.isValidFile(tempFile))
@@ -66,41 +63,39 @@ class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `test export then import preserves nodes with properties`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        srcStorage.addNode(n1, mapOf("name" to "Node1".strVal, "count" to 10.numVal))
-        srcStorage.addNode(n2, mapOf("name" to "Node2".strVal))
+        val n1 = srcStorage.addNode(mapOf("name" to "Node1".strVal, "count" to 10.numVal))
+        val n2 = srcStorage.addNode(mapOf("name" to "Node2".strVal))
 
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsNode(n1))
-        assertTrue(dstStorage.containsNode(n2))
-        assertEquals("Node1", (dstStorage.getNodeProperties(n1)["name"] as StrVal).core)
-        assertEquals(10, (dstStorage.getNodeProperties(n1)["count"] as NumVal).core)
-        assertEquals("Node2", (dstStorage.getNodeProperties(n2)["name"] as StrVal).core)
+        // IDs are re-generated on import, so verify by property values
+        val dstNodes = dstStorage.nodeIDs.toList()
+        assertEquals(2, dstNodes.size)
+        val allProps = dstNodes.map { dstStorage.getNodeProperties(it) }
+        assertTrue(allProps.any { (it["name"] as? StrVal)?.core == "Node1" && (it["count"] as? NumVal)?.core == 10 })
+        assertTrue(allProps.any { (it["name"] as? StrVal)?.core == "Node2" })
 
         dstStorage.close()
     }
 
     @Test
     fun `test export then import preserves edges with properties`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        srcStorage.addNode(n1)
-        srcStorage.addNode(n2)
-        val e1 = EdgeID(n1, n2, "connects")
-        srcStorage.addEdge(e1, mapOf("weight" to 5.numVal))
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        val e1 = srcStorage.addEdge(n1, n2, "connects", mapOf("weight" to 5.numVal))
 
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsEdge(e1))
-        assertEquals(5, (dstStorage.getEdgeProperties(e1)["weight"] as NumVal).core)
+        assertEquals(1, dstStorage.edgeIDs.size)
+        val importedEdge = dstStorage.edgeIDs.first()
+        assertEquals(5, (dstStorage.getEdgeProperties(importedEdge)["weight"] as NumVal).core)
+        assertEquals("connects", dstStorage.getEdgeType(importedEdge))
 
         dstStorage.close()
     }
@@ -110,7 +105,7 @@ class MapDbGraphIOImplWhiteBoxTest {
     @Test
     fun `test export creates parent directories if not exist`() {
         val nestedFile = Files.createTempDirectory("mapdb-nest").resolve("a/b/c/test.mapdb")
-        srcStorage.addNode(NodeID("n"))
+        srcStorage.addNode()
 
         val result = MapDbGraphIOImpl.export(nestedFile, srcStorage)
         assertEquals(nestedFile, result)
@@ -123,7 +118,7 @@ class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `test export throws when file already exists`() {
-        srcStorage.addNode(NodeID("n"))
+        srcStorage.addNode()
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         assertFailsWith<IllegalArgumentException> {
@@ -145,44 +140,39 @@ class MapDbGraphIOImplWhiteBoxTest {
         dstStorage.close()
     }
 
-    // -- Import upsert: existing entities updated, new entities added --
+    // -- Import adds new entities --
 
     @Test
-    fun `test import updates existing node properties via setNodeProperties`() {
-        val n1 = NodeID("n1")
-        srcStorage.addNode(n1, mapOf("version" to "v2".strVal))
+    fun `test import adds nodes with properties`() {
+        val n1 = srcStorage.addNode(mapOf("version" to "v2".strVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
-        dstStorage.addNode(n1, mapOf("version" to "v1".strVal, "extra" to "keep".strVal))
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        val props = dstStorage.getNodeProperties(n1)
+        assertEquals(1, dstStorage.nodeIDs.size)
+        val importedNode = dstStorage.nodeIDs.first()
+        val props = dstStorage.getNodeProperties(importedNode)
         assertEquals("v2", (props["version"] as StrVal).core)
-        assertEquals("keep", (props["extra"] as StrVal).core)
 
         dstStorage.close()
     }
 
     @Test
-    fun `test import updates existing edge properties via setEdgeProperties`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        val e1 = EdgeID(n1, n2, "e")
-        srcStorage.addNode(n1)
-        srcStorage.addNode(n2)
-        srcStorage.addEdge(e1, mapOf("weight" to 10.numVal))
+    fun `test import adds edges with properties`() {
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        val e1 = srcStorage.addEdge(n1, n2, "e", mapOf("weight" to 10.numVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
-        dstStorage.addNode(n1)
-        dstStorage.addNode(n2)
-        dstStorage.addEdge(e1, mapOf("weight" to 5.numVal, "label" to "old".strVal))
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        val props = dstStorage.getEdgeProperties(e1)
+        assertEquals(2, dstStorage.nodeIDs.size)
+        assertEquals(1, dstStorage.edgeIDs.size)
+        val importedEdge = dstStorage.edgeIDs.first()
+        val props = dstStorage.getEdgeProperties(importedEdge)
         assertEquals(10, (props["weight"] as NumVal).core)
-        assertEquals("old", (props["label"] as StrVal).core)
 
         dstStorage.close()
     }
@@ -190,21 +180,17 @@ class MapDbGraphIOImplWhiteBoxTest {
     // -- Import auto-creates missing src/dst nodes for edges --
 
     @Test
-    fun `test import creates missing src and dst nodes for edges`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        srcStorage.addNode(n1)
-        srcStorage.addNode(n2)
-        val e1 = EdgeID(n1, n2, "e")
-        srcStorage.addEdge(e1)
+    fun `test import creates src and dst nodes for edges`() {
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        val e1 = srcStorage.addEdge(n1, n2, "e")
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsNode(n1))
-        assertTrue(dstStorage.containsNode(n2))
-        assertTrue(dstStorage.containsEdge(e1))
+        assertEquals(2, dstStorage.nodeIDs.size)
+        assertEquals(1, dstStorage.edgeIDs.size)
 
         dstStorage.close()
     }
@@ -213,33 +199,24 @@ class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `test export with node predicate filters nodes and edges`() {
-        val n1 = NodeID("keep1")
-        val n2 = NodeID("drop1")
-        val n3 = NodeID("keep2")
-        srcStorage.addNode(n1)
-        srcStorage.addNode(n2)
-        srcStorage.addNode(n3)
-        val e1 = EdgeID(n1, n3, "ok")
-        val e2 = EdgeID(n1, n2, "bad")
-        srcStorage.addEdge(e1)
-        srcStorage.addEdge(e2)
+        val n1 = srcStorage.addNode(mapOf("tag" to "keep".strVal))
+        val n2 = srcStorage.addNode(mapOf("tag" to "drop".strVal))
+        val n3 = srcStorage.addNode(mapOf("tag" to "keep".strVal))
+        val e1 = srcStorage.addEdge(n1, n3, "ok")
+        val e2 = srcStorage.addEdge(n1, n2, "bad")
 
+        // Filter: only export nodes n1 and n3, and edge e1
+        val keepNodeIds = setOf(n1, n3)
+        val keepEdgeIds = setOf(e1)
         MapDbGraphIOImpl.export(tempFile, srcStorage) { entity ->
-            when (entity) {
-                is NodeID -> entity.name.startsWith("keep")
-                is EdgeID -> entity.srcNid.name.startsWith("keep") && entity.dstNid.name.startsWith("keep")
-                else -> true
-            }
+            entity in keepNodeIds || entity in keepEdgeIds
         }
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsNode(n1))
-        assertFalse(dstStorage.containsNode(n2))
-        assertTrue(dstStorage.containsNode(n3))
-        assertTrue(dstStorage.containsEdge(e1))
-        assertFalse(dstStorage.containsEdge(e2))
+        assertEquals(2, dstStorage.nodeIDs.size)
+        assertEquals(1, dstStorage.edgeIDs.size)
 
         dstStorage.close()
     }
@@ -248,22 +225,15 @@ class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `test import with predicate filters imported entities`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        srcStorage.addNode(n1, mapOf("type" to "a".strVal))
-        srcStorage.addNode(n2, mapOf("type" to "b".strVal))
+        val n1 = srcStorage.addNode(mapOf("type" to "a".strVal))
+        val n2 = srcStorage.addNode(mapOf("type" to "b".strVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
-        MapDbGraphIOImpl.import(tempFile, dstStorage) { entity ->
-            when (entity) {
-                is NodeID -> entity.name == "n1"
-                else -> true
-            }
-        }
+        // The predicate receives the old node ID from the file; filter by matching n1
+        MapDbGraphIOImpl.import(tempFile, dstStorage) { entity -> entity == n1 }
 
-        assertTrue(dstStorage.containsNode(n1))
-        assertFalse(dstStorage.containsNode(n2))
+        assertEquals(1, dstStorage.nodeIDs.size)
 
         dstStorage.close()
     }
@@ -283,38 +253,37 @@ class MapDbGraphIOImplWhiteBoxTest {
         dstStorage.close()
     }
 
-    // -- NodeID/EdgeID serialization round-trip via _nid/_eid keys --
+    // -- Serialization round-trip --
 
     @Test
-    fun `test node ID preserved through nid key serialization`() {
-        val specialNode = NodeID("node-with-special_chars.123")
-        srcStorage.addNode(specialNode, mapOf("data" to "test".strVal))
+    fun `test node properties preserved through serialization`() {
+        val specialNode = srcStorage.addNode(mapOf("data" to "test".strVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsNode(specialNode))
-        assertEquals("test", (dstStorage.getNodeProperties(specialNode)["data"] as StrVal).core)
+        assertEquals(1, dstStorage.nodeIDs.size)
+        val importedNode = dstStorage.nodeIDs.first()
+        assertEquals("test", (dstStorage.getNodeProperties(importedNode)["data"] as StrVal).core)
 
         dstStorage.close()
     }
 
     @Test
-    fun `test edge ID preserved through eid ListVal serialization`() {
-        val n1 = NodeID("src")
-        val n2 = NodeID("dst")
-        srcStorage.addNode(n1)
-        srcStorage.addNode(n2)
-        val edge = EdgeID(n1, n2, "type-with-special_chars")
-        srcStorage.addEdge(edge, mapOf("data" to "test".strVal))
+    fun `test edge properties and type preserved through serialization`() {
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        val edge = srcStorage.addEdge(n1, n2, "type-with-special_chars", mapOf("data" to "test".strVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
         MapDbGraphIOImpl.import(tempFile, dstStorage)
 
-        assertTrue(dstStorage.containsEdge(edge))
-        assertEquals("test", (dstStorage.getEdgeProperties(edge)["data"] as StrVal).core)
+        assertEquals(1, dstStorage.edgeIDs.size)
+        val importedEdge = dstStorage.edgeIDs.first()
+        assertEquals("test", (dstStorage.getEdgeProperties(importedEdge)["data"] as StrVal).core)
+        assertEquals("type-with-special_chars", dstStorage.getEdgeType(importedEdge))
 
         dstStorage.close()
     }

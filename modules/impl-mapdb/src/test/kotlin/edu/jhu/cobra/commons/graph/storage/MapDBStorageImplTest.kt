@@ -1,22 +1,12 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class MapDBStorageImplTest {
     private lateinit var storage: MapDBStorageImpl
-
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge1 = EdgeID(node1, node2, "edge1")
-    private val edge2 = EdgeID(node2, node3, "edge2")
-    private val edge3 = EdgeID(node1, node3, "edge3")
 
     @BeforeTest
     fun setup() {
@@ -30,7 +20,7 @@ class MapDBStorageImplTest {
 
     @Test
     fun testPutAndGet() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
         assertTrue(storage.containsNode(node1))
         assertEquals(1, storage.nodeIDs.size)
 
@@ -38,8 +28,8 @@ class MapDBStorageImplTest {
         assertEquals(1, nodeProps.size)
         assertEquals("value1", (nodeProps["prop1"] as StrVal).core)
 
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal))
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1", mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsEdge(edge1))
         assertEquals(1, storage.edgeIDs.size)
@@ -48,16 +38,15 @@ class MapDBStorageImplTest {
         assertEquals(1, edgeProps.size)
         assertEquals("value1", (edgeProps["prop1"] as StrVal).core)
 
-        assertFailsWith<EntityAlreadyExistException> { storage.addNode(node1) }
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(NodeID("nonexistent")) }
-        assertFailsWith<EntityNotExistException> { storage.addEdge(EdgeID(node1, NodeID("nonexistent"), "edge")) }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, "nonexistent", "edge") }
     }
 
     @Test
     fun testUpdateProperties() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1", mapOf("prop1" to "value1".strVal))
 
         storage.setNodeProperties(node1, mapOf("prop1" to "newValue".strVal, "prop2" to 42.numVal))
         val nodeProps = storage.getNodeProperties(node1)
@@ -78,17 +67,17 @@ class MapDBStorageImplTest {
         assertEquals(42, (updatedNodeProps["prop2"] as NumVal).core)
 
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties(NodeID("nonexistent"), mapOf("prop" to "value".strVal))
+            storage.setNodeProperties("nonexistent", mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun testRemoveEntity() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge3)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1")
+        val edge3 = storage.addEdge(node1, node3, "edge3")
 
         storage.deleteEdge(edge1)
         assertFalse(storage.containsEdge(edge1))
@@ -100,14 +89,14 @@ class MapDBStorageImplTest {
         assertFalse(storage.containsEdge(edge3))
         assertTrue(storage.containsNode(node3))
 
-        assertFailsWith<EntityNotExistException> { storage.deleteNode(NodeID("nonexistent")) }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
     }
 
     @Test
     fun testCollectionViews() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1")
 
         val nodeIds = storage.nodeIDs.toList()
         assertEquals(2, nodeIds.size)
@@ -118,9 +107,9 @@ class MapDBStorageImplTest {
         assertEquals(1, edgeIds.size)
         assertTrue(edgeIds.contains(edge1))
 
-        storage.addNode(node3)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val node3 = storage.addNode()
+        val edge2 = storage.addEdge(node2, node3, "edge2")
+        val edge3 = storage.addEdge(node1, node3, "edge3")
 
         val incomingEdges = storage.getIncomingEdges(node3)
         assertEquals(2, incomingEdges.size)
@@ -136,17 +125,17 @@ class MapDBStorageImplTest {
         assertTrue(emptyIncoming.isEmpty())
 
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges(NodeID("nonexistent"))
+            storage.getIncomingEdges("nonexistent")
         }
     }
 
     @Test
     fun testEmptyAndNullValues() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         assertTrue(storage.containsNode(node1))
         assertEquals(0, storage.getNodeProperties(node1).size)
 
-        storage.addNode(node2, mapOf("nullProp" to NullVal))
+        val node2 = storage.addNode(mapOf("nullProp" to NullVal))
         val props = storage.getNodeProperties(node2)
         assertEquals(1, props.size)
         assertTrue(props["nullProp"] is NullVal)
@@ -162,10 +151,10 @@ class MapDBStorageImplTest {
 
     @Test
     fun testNullValueHandling() {
-        storage.addNode(
-            node1,
-            mapOf("nullValue" to NullVal, "normalValue" to "normal".strVal),
-        )
+        val node1 =
+            storage.addNode(
+                mapOf("nullValue" to NullVal, "normalValue" to "normal".strVal),
+            )
 
         val props = storage.getNodeProperties(node1)
         assertEquals(NullVal, props["nullValue"])
@@ -180,19 +169,19 @@ class MapDBStorageImplTest {
 
     @Test
     fun testEdgeCases() {
-        assertFalse(storage.containsNode(node1))
-        assertFalse(storage.containsEdge(edge1))
+        assertFalse(storage.containsNode("nonexistent"))
+        assertFalse(storage.containsEdge("nonexistent"))
 
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(node1) }
-        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties(edge1) }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties("nonexistent") }
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge(edge1) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge("nonexistent-src", "nonexistent-dst", "edge1") }
 
         assertTrue(storage.clear())
 
         storage.close()
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(node1) }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
     }
 
     @Test
@@ -206,17 +195,16 @@ class MapDBStorageImplTest {
                 "map" to mapOf("nested" to "value".strVal).mapVal,
             ).mapVal
 
-        storage.addNode(node1, mapOf("complex" to complexValue))
+        val node1 = storage.addNode(mapOf("complex" to complexValue))
         val props = storage.getNodeProperties(node1)
         assertEquals(complexValue, props["complex"])
 
         val specificProp = storage.getNodeProperties(node1)["complex"]
         assertEquals(complexValue, specificProp)
 
-        storage.addNode(node2)
-        storage.addEdge(edge1)
-        val edge1b = EdgeID(node1, node2, "edge1b")
-        storage.addEdge(edge1b)
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1")
+        val edge1b = storage.addEdge(node1, node2, "edge1b")
 
         val outEdges = storage.getOutgoingEdges(node1)
         assertEquals(2, outEdges.size)
@@ -229,33 +217,29 @@ class MapDBStorageImplTest {
         val nodeCount = 100
         val edgesPerNode = 5
 
+        val nodeIds = mutableListOf<String>()
         for (i in 1..nodeCount) {
-            storage.addNode(
-                NodeID("largeNode$i"),
-                mapOf("index" to i.numVal, "name" to "Node $i".strVal),
-            )
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal, "name" to "Node $i".strVal)))
         }
 
-        for (i in 1..nodeCount) {
-            val srcNode = NodeID("largeNode$i")
+        for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
-                val targetIdx = ((i + j) % nodeCount) + 1
-                val dstNode = NodeID("largeNode$targetIdx")
-                storage.addEdge(EdgeID(srcNode, dstNode, "largeEdge${i}_$targetIdx"))
+                val targetIdx = ((i + j) % nodeCount)
+                storage.addEdge(nodeIds[i], nodeIds[targetIdx], "largeEdge${i + 1}_${targetIdx + 1}")
             }
         }
 
         assertEquals(nodeCount, storage.nodeIDs.size)
         assertEquals(nodeCount * edgesPerNode, storage.edgeIDs.size)
 
-        for (i in listOf(1, 25, 50, 75, 100)) {
-            if (i <= nodeCount) {
-                val nodeId = NodeID("largeNode$i")
+        for (i in listOf(0, 24, 49, 74, 99)) {
+            if (i < nodeCount) {
+                val nodeId = nodeIds[i]
                 assertTrue(storage.containsNode(nodeId))
 
                 val props = storage.getNodeProperties(nodeId)
-                assertEquals(i, (props["index"] as NumVal).core)
-                assertEquals("Node $i", (props["name"] as StrVal).core)
+                assertEquals(i + 1, (props["index"] as NumVal).core)
+                assertEquals("Node ${i + 1}", (props["name"] as StrVal).core)
 
                 val outEdges = storage.getOutgoingEdges(nodeId)
                 assertEquals(edgesPerNode, outEdges.size)
@@ -265,13 +249,13 @@ class MapDBStorageImplTest {
 
     @Test
     fun testInternalStructureConsistency() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
-        storage.addNode(node2, mapOf("prop2" to "value2".strVal))
-        storage.addNode(node3, mapOf("prop3" to "value3".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val node2 = storage.addNode(mapOf("prop2" to "value2".strVal))
+        val node3 = storage.addNode(mapOf("prop3" to "value3".strVal))
 
-        storage.addEdge(edge1, mapOf("edge_prop1" to "edge_value1".strVal))
-        storage.addEdge(edge2, mapOf("edge_prop2" to "edge_value2".strVal))
-        storage.addEdge(edge3, mapOf("edge_prop3" to "edge_value3".strVal))
+        val edge1 = storage.addEdge(node1, node2, "edge1", mapOf("edge_prop1" to "edge_value1".strVal))
+        val edge2 = storage.addEdge(node2, node3, "edge2", mapOf("edge_prop2" to "edge_value2".strVal))
+        val edge3 = storage.addEdge(node1, node3, "edge3", mapOf("edge_prop3" to "edge_value3".strVal))
 
         val outgoing1 = storage.getOutgoingEdges(node1)
         assertEquals(2, outgoing1.size)
