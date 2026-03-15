@@ -929,6 +929,183 @@ class AbcMultipleGraphTest {
 
     // endregion
 
+    // region resolveStorageId null-branch coverage
+
+    @Test
+    fun `test addEdge_srcNotExist_throwsEntityNotExist`() {
+        graph.addNode(NODE_ID_2)
+
+        assertFailsWith<EntityNotExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1) }
+    }
+
+    @Test
+    fun `test addEdge_dstNotExist_throwsEntityNotExist`() {
+        graph.addNode(NODE_ID_1)
+
+        assertFailsWith<EntityNotExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1) }
+    }
+
+    @Test
+    fun `test addEdge_withLabel_srcNotExist_throwsEntityNotExist`() {
+        graph.addNode(NODE_ID_2)
+
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, Label("v1"))
+        }
+    }
+
+    @Test
+    fun `test addEdge_withLabel_dstNotExist_throwsEntityNotExist`() {
+        graph.addNode(NODE_ID_1)
+
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, Label("v1"))
+        }
+    }
+
+    @Test
+    fun `test getEdge_srcNotExist_returnsNull`() {
+        graph.addNode(NODE_ID_2)
+
+        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test getEdge_dstNotExist_returnsNull`() {
+        graph.addNode(NODE_ID_1)
+
+        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test containEdge_srcNotExist_returnsFalse`() {
+        graph.addNode(NODE_ID_2)
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test containEdge_dstNotExist_returnsFalse`() {
+        graph.addNode(NODE_ID_1)
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test delEdge_srcNotExist_noOp`() {
+        graph.addNode(NODE_ID_2)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1)
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test delEdge_dstNotExist_noOp`() {
+        graph.addNode(NODE_ID_1)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1)
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test delEdge_withLabel_srcNotExist_noOp`() {
+        graph.addNode(NODE_ID_2)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, Label("v1"))
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    @Test
+    fun `test delEdge_withLabel_dstNotExist_noOp`() {
+        graph.addNode(NODE_ID_1)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, Label("v1"))
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+    }
+
+    // endregion
+
+    // region delEdge(label) internal branch coverage
+
+    @Test
+    fun `test delEdge_withLabel_labelNotOnEdge_edgeRetained`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        val labelA = Label("a")
+        val labelB = Label("b")
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelA)
+
+        // labelB was never assigned to the edge; removing it must not delete the edge
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelB)
+
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1)!!
+        assertTrue(edge.labels.contains(labelA))
+    }
+
+    @Test
+    fun `test delEdge_withLabel_remainingLabelsNonEmpty_edgeKept`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        val labelA = Label("keepA")
+        val labelB = Label("keepB")
+        val labelC = Label("keepC")
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelA)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelB)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelC)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1, labelA)
+
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1))
+        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TYPE_1)!!
+        assertFalse(edge.labels.contains(labelA))
+        assertTrue(edge.labels.contains(labelB))
+        assertTrue(edge.labels.contains(labelC))
+    }
+
+    // endregion
+
+    // region ensureNodeIdCache non-StrVal skip branch
+
+    @Test
+    fun `test nodeIDs_storageNodeWithoutMetaId_skippedInCache`() {
+        // Add a raw node directly to storage without META_ID — it has no StrVal for META_ID
+        val rawSid = storage.addNode()  // no META_ID property at all
+        graph.addNode(NODE_ID_1)
+
+        val ids = graph.nodeIDs
+
+        // The raw node must not appear; only the properly registered node is visible
+        assertTrue(ids.contains(NODE_ID_1))
+        assertFalse(ids.contains(rawSid.toString()))
+    }
+
+    // endregion
+
+    // region ensureLabelIdCache non-StrVal skip branch
+
+    @Test
+    fun `test allLabels_posetStorageNodeWithoutMetaId_skippedInCache`() {
+        // Add a raw node directly to posetStorage without META_ID
+        posetStorage.addNode()  // no META_ID
+        with(graph) {
+            val label = Label("real")
+            label.parents = emptyMap()
+        }
+
+        with(graph) {
+            val labels = allLabels
+            // The raw node must not surface as a label; real label must be present
+            assertTrue(labels.contains(Label("real")))
+        }
+    }
+
+    // endregion
+
     // region Close
 
     @Test

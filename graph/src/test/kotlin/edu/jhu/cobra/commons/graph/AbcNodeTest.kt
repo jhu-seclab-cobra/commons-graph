@@ -184,6 +184,44 @@ class AbcNodeTest {
 
     // endregion
 
+    // region AbcNode META_PREFIX protection
+
+    @Test
+    fun `test getProp_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testNode["__id__"] }
+    }
+
+    @Test
+    fun `test getProp_metaPrefixOnly_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testNode["__"] }
+    }
+
+    @Test
+    fun `test setProp_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testNode["__secret__"] = "value".strVal }
+    }
+
+    @Test
+    fun `test contains_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { "__id__" in testNode }
+    }
+
+    @Test
+    fun `test update_withMetaPrefixKey_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> {
+            testNode.update(mapOf("valid" to "ok".strVal, "__meta__" to "bad".strVal))
+        }
+    }
+
+    @Test
+    fun `test update_allMetaPrefixKeys_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> {
+            testNode.update(mapOf("__only_meta__" to "bad".strVal))
+        }
+    }
+
+    // endregion
+
     // region AbcNode boundary conditions
 
     @Test

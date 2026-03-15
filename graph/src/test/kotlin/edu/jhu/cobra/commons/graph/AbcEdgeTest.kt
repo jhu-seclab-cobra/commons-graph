@@ -224,6 +224,44 @@ class AbcEdgeTest {
 
     // endregion
 
+    // region AbcEdge META_PREFIX protection
+
+    @Test
+    fun `test getProp_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testEdge["__src__"] }
+    }
+
+    @Test
+    fun `test getProp_metaPrefixOnly_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testEdge["__"] }
+    }
+
+    @Test
+    fun `test setProp_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { testEdge["__secret__"] = "value".strVal }
+    }
+
+    @Test
+    fun `test contains_metaPrefix_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> { "__src__" in testEdge }
+    }
+
+    @Test
+    fun `test update_withMetaPrefixKey_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> {
+            testEdge.update(mapOf("valid" to "ok".strVal, "__meta__" to "bad".strVal))
+        }
+    }
+
+    @Test
+    fun `test update_allMetaPrefixKeys_throwsIllegalArgument`() {
+        assertFailsWith<IllegalArgumentException> {
+            testEdge.update(mapOf("__only_meta__" to "bad".strVal))
+        }
+    }
+
+    // endregion
+
     // region AbcEdge boundary conditions
 
     @Test
