@@ -1,13 +1,12 @@
 package edu.jhu.cobra.commons.graph.storage.nio
 
-import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.nio.file.Path
 
 /**
- * Filter function for selecting entities in a graph based on their ID.
+ * Filter function for selecting entities in storage based on their Int ID.
  */
-typealias EntityFilter = (IEntity.ID) -> Boolean
+typealias EntityFilter = (Int) -> Boolean
 
 interface IStorageExporter {
     /**
