@@ -3,16 +3,16 @@
 ## Design Overview
 
 - **Classes**: `IGraph`, `IPoset`, `AbcMultipleGraph`, `AbcSimpleGraph`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `IPoset`; `AbcSimpleGraph` extends `AbcMultipleGraph`; `AbcMultipleGraph` contains two `IStorage` instances (one-way): one for the main graph, one for the label poset
+- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `IPoset`; `AbcSimpleGraph` extends `AbcMultipleGraph`; `AbcMultipleGraph` contains two `IStorage` instances: one for the main graph, one for the label poset
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
 - **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `AccessClosedStorageException` raised on storage access after close
-- **Dependency roles**: Data holders: `NodeID`, `EdgeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories, graph storage, and poset storage). Helpers: `IStorage` (inputs by constructor injection).
+- **Dependency roles**: Data holders: `NodeID`, `InternalID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories, graph storage, and poset storage). Helpers: `IStorage` (inputs by constructor injection).
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle — those belong to `IStorage` and its implementations.
 
 The graph layer is **storage-tier agnostic**: `AbcMultipleGraph` accepts any `IStorage` via constructor injection — flat (`NativeStorageImpl`, `MapDBStorageImpl`) or layered (`LayeredStorageImpl`). Layered storage composition is transparent to the graph layer; all query routing and freeze transitions are handled within the storage tier. See `docs/core/storage.design.md` for the full storage type hierarchy.
 
-The graph layer **converts domain IDs to storage primitives** at the boundary: `NodeID.name` -> `String` vertex ID, `EdgeID` -> `ArcKey`. The storage layer operates on `String` and `ArcKey` only.
+The graph layer **bridges domain identity to storage IDs**: `NodeID` -> `InternalID` via `nodeIdCache`, edge `(src, dst, type)` -> `InternalID` via adjacency scan + endpoint queries. The storage layer operates on opaque `Int` IDs only.
 
 ---
 
@@ -20,18 +20,16 @@ The graph layer **converts domain IDs to storage primitives** at the boundary: `
 
 ### IGraph
 
-**Responsibility:** Domain-facing contract defining node/edge CRUD and structural traversal. Label-filtered overloads accept `Label` parameters; the label poset hierarchy itself is defined by `IPoset`.
+**Responsibility:** Domain-facing contract defining node/edge CRUD and structural traversal. Edges are identified by their `(src: NodeID, dst: NodeID, type: String)` triple. Label-aware operations are provided by `AbcMultipleGraph` (not on this interface).
 
 **State / Fields:**
 - `nodeIDs: Set<NodeID>` — all node IDs in the graph
-- `edgeIDs: Set<EdgeID>` — all edge IDs in the graph
 
 **Methods:**
 
 ```kotlin
 interface IGraph<N : AbcNode, E : AbcEdge> {
     val nodeIDs: Set<NodeID>
-    val edgeIDs: Set<EdgeID>
 
     // Node CRUD
     fun addNode(withID: NodeID): N
@@ -40,60 +38,44 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun delNode(whoseID: NodeID)
     fun getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>
 
-    // Edge CRUD
-    fun addEdge(withID: EdgeID): E
-    fun addEdge(withID: EdgeID, label: Label): E
-    fun getEdge(whoseID: EdgeID): E?
-    fun containEdge(whoseID: EdgeID): Boolean
-    fun delEdge(whoseID: EdgeID)
-    fun delEdge(whoseID: EdgeID, label: Label)
+    // Edge CRUD (by tuple)
+    fun addEdge(src: NodeID, dst: NodeID, type: String): E
+    fun getEdge(src: NodeID, dst: NodeID, type: String): E?
+    fun containEdge(src: NodeID, dst: NodeID, type: String): Boolean
+    fun delEdge(src: NodeID, dst: NodeID, type: String)
+    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
 
     // Structure queries
-    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
     fun getIncomingEdges(of: NodeID): Sequence<E>
     fun getOutgoingEdges(of: NodeID): Sequence<E>
-    fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
-    fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
     fun getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
     fun getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
-    fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-    fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
     fun getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
     fun getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
-    fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
-    fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>
 }
 ```
-
-**Edge visibility rule:** An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Non-label overloads default to `Label.SUPREMUM`, which sees all edges.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addNode` | Creates a node and registers ID in storage | `withID`: NodeID | `N` — the created node | `EntityAlreadyExistException` if exists |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | — |
 | `delNode` | Removes all associated edges then the node from storage | `whoseID`: NodeID | — | — |
-| `addEdge` | Creates an edge with variant-specific pre-checks | `withID`: EdgeID | `E` — the created edge | `EntityAlreadyExistException` if exists; `EntityNotExistException` if src/dst missing |
-| `addEdge` (label) | Creates edge and assigns label; if edge already exists, adds label to existing edge | `withID`: EdgeID; `label`: Label | `E` — the created or existing edge | `EntityNotExistException` if src/dst missing |
-| `getEdge` | Retrieves an edge by ID | `whoseID`: EdgeID | `E?` | — |
-| `delEdge` | Removes edge from storage | `whoseID`: EdgeID | — | — |
-| `delEdge` (label) | Removes label from edge; if no labels remain, deletes the edge | `whoseID`: EdgeID; `label`: Label | — | — |
+| `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `type`: edge type | `E` — the created edge | `EntityNotExistException` if src/dst missing |
+| `getEdge` | Retrieves an edge by its `(src, dst, type)` tuple | `src`, `dst`: NodeID; `type`: edge type | `E?` | — |
+| `containEdge` | Checks if edge exists by `(src, dst, type)` | `src`, `dst`: NodeID; `type`: edge type | `Boolean` | — |
+| `delEdge` | Removes edge from storage | `src`, `dst`: NodeID; `type`: edge type | — | — |
 | `getAllNodes` / `getAllEdges` | Returns filtered sequence of entities | predicate function | `Sequence<N>` / `Sequence<E>` | — |
 | `getChildren` / `getParents` | Returns adjacent nodes via outgoing/incoming edges | `of`: NodeID; `edgeCond`: optional edge predicate | `Sequence<N>` | — |
-| `getChildren` / `getParents` (label) | Label-filtered versions returning adjacent nodes whose connecting edge is visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | — |
 | `getOutgoingEdges` / `getIncomingEdges` | Returns edges from/to a node | `of`: NodeID | `Sequence<E>` | — |
-| `getOutgoingEdges` / `getIncomingEdges` (label) | Label-filtered versions returning edges visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<E>` | — |
-| `getDescendants` | BFS traversal of all reachable nodes via outgoing edges | `of`: NodeID; `edgeCond`: optional edge predicate | `Sequence<N>` | — |
-| `getAncestors` | BFS traversal of all reachable nodes via incoming edges | `of`: NodeID; `edgeCond`: optional edge predicate | `Sequence<N>` | — |
-| `getDescendants` / `getAncestors` (label) | Label-filtered BFS traversal of reachable nodes | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | — |
+| `getDescendants` / `getAncestors` | BFS traversal of all reachable nodes | `of`: NodeID; `edgeCond`: optional edge predicate | `Sequence<N>` | — |
 
 **Key design decisions:**
 
-- All input parameters take `NodeID`/`EdgeID` — callers always own identity construction.
+- Edge CRUD uses `(src, dst, type)` tuple — no separate `EdgeID` object. This keeps the domain API simple and avoids an additional identity type.
+- `nodeIDs` is `Set<NodeID>` — derived from storage. No `edgeIDs` on the interface; edges are accessed via adjacency or `getAllEdges`.
 - All return types use entity objects `N`/`E` — the entity layer provides typed property access.
-- `nodeIDs`/`edgeIDs` are `Set`, reflecting the ID-first model; uniqueness is guaranteed by ID semantics.
 - Traversal methods accept an optional edge predicate, allowing traversal scoped to edge types or properties.
-- `getAllNodes`/`getAllEdges` accept a node/edge predicate, providing in-sequence filtering without materializing a full collection.
-- Label poset hierarchy is defined by `IPoset` (see `docs/core/label.design.md`); `IGraph` only consumes labels via label-filtered query overloads.
+- Label-filtered methods are on `AbcMultipleGraph` (concrete class), not on `IGraph`.
 
 ---
 
@@ -105,29 +87,43 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 ```
 AbcMultipleGraph
-├── abstract graphStore: IStorage      <- main graph storage, injected by subclass
-├── abstract posetStore: IStorage      <- label hierarchy storage, injected by subclass
-├── override nodeIDs: Set<NodeID>      <- derives from graphStore.vertices
-├── override edgeIDs: Set<EdgeID>      <- derives from graphStore.arcs
-├── newNodeObj(nid): N                 <- subclass entity factory (protected abstract)
-└── newEdgeObj(eid): E                 <- subclass entity factory (protected abstract)
+├── abstract storage: IStorage          <- main graph storage, injected by subclass
+├── abstract posetStorage: IStorage     <- label hierarchy storage, injected by subclass
+├── nodeIdCache: HashMap<NodeID, InternalID>  <- user ID → storage ID
+├── labelIdCache: HashMap<String, InternalID> <- label name → poset storage ID
+├── nodeCache: HashMap<InternalID, SoftReference<N>>
+├── edgeCache: HashMap<InternalID, SoftReference<E>>
+├── newNodeObj(storageId): N            <- subclass entity factory (protected abstract)
+└── newEdgeObj(storageId): E            <- subclass entity factory (protected abstract)
 ```
 
-**Storage delegation:**
-`nodeIDs` derives from `graphStore.vertices` by wrapping each `String` as `NodeID`. `edgeIDs` derives from `graphStore.arcs` by wrapping each `ArcKey` as `EdgeID`. There is no separate in-memory ID cache.
+**ID resolution:**
+- `nodeIdCache` maps `NodeID` -> `InternalID`, populated eagerly on first access by scanning all storage nodes and reading their `__id__` meta property.
+- Edge lookup by `(src, dst, type)`: resolves both `NodeID`s to `InternalID`s, then scans outgoing edges from the source node using `storage.getEdgeSrc`/`getEdgeDst`/`getEdgeType` to find a match.
 
-**ID conversion at boundary:**
-All graph operations convert domain IDs to storage primitives: `NodeID.name` -> `String`, `EdgeID` -> `ArcKey(srcNid.name, dstNid.name, eType)`. Reverse conversion uses `NodeID(string)` and `EdgeID.of(arcKey)`.
+**Edge creation:**
+`addEdge(src, dst, type)` resolves `NodeID`s, calls `storage.addEdge(srcSid, dstSid, type, metaProps)` where `metaProps` includes `__src__`, `__dst__`, `__tag__` for entity-layer access.
 
-**Traversal implementation:**
-Both `getDescendants` and `getAncestors` use BFS (`ArrayDeque` + `removeFirst`). They delegate adjacency lookup to `getOutgoingEdges`/`getIncomingEdges`, which in turn call `graphStore.getOutgoingArcs`/`getIncomingArcs`.
+**Entity caching:**
+`SoftReference`-based caches for nodes and edges. Allows GC to reclaim unused wrapper objects under memory pressure.
 
 **Close behavior:**
-`close()` clears internal wrapper-object caches (`nodeCache`, `edgeCache`). Poset state is in the poset store and requires no explicit persist step.
+`close()` clears all internal caches (`nodeIdCache`, `labelIdCache`, `nodeCache`, `edgeCache`). Does not close the storage instances — storage lifecycle is managed by the caller.
+
+**Label-filtered methods (concrete class, not inherited from IGraph):**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge` | Only checks edge ID uniqueness before delegating to storage | `withID`: EdgeID | `E` | `EntityAlreadyExistException` if same EdgeID exists |
+| `addEdge(src, dst, type, label)` | Creates edge (or reuses existing) and assigns label | `src`, `dst`: NodeID; `type`: String; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
+| `delEdge(src, dst, type, label)` | Removes label from edge; if no labels remain, deletes the edge | `src`, `dst`: NodeID; `type`: String; `label`: Label | — | — |
+| `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<E>` | — |
+| `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<E>` | — |
+| `getChildren(of, label, cond)` | Adjacent nodes via label-filtered outgoing edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<N>` | — |
+| `getParents(of, label, cond)` | Adjacent nodes via label-filtered incoming edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<N>` | — |
+| `getDescendants(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<N>` | — |
+| `getAncestors(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`: Label; `cond`: edge predicate | `Sequence<N>` | — |
+
+**Edge visibility rule:** An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded. Non-label overloads see all edges.
 
 ---
 
@@ -137,7 +133,8 @@ Both `getDescendants` and `getAncestors` use BFS (`ArrayDeque` + `removeFirst`).
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge` | Checks that no edge exists between `(src, dst)` before delegating to storage | `withID`: EdgeID | `E` | `EntityAlreadyExistException` if any edge between src->dst exists |
+| `addEdge(src, dst, type)` | Checks that no edge exists between `(src, dst)` before delegating to storage | `src`, `dst`: NodeID; `type`: String | `E` | `EntityAlreadyExistException` if any edge between src->dst exists |
+| `addEdge(src, dst, type, label)` | Checks direction uniqueness, then delegates to super | same + `label`: Label | `E` | `EntityAlreadyExistException` if direction conflict |
 
 | Variant | Edge policy | Use case |
 |---------|-------------|----------|
@@ -167,27 +164,27 @@ See `docs/core/group.design.md` for `TraitNodeGroup` details.
 **Flat storage (default):**
 
 ```kotlin
-class MyNode(store: IStorage, override val id: NodeID) : AbcNode(store) {
+class MyNode(storage: IStorage, storageId: InternalID) : AbcNode(storage, storageId) {
     override val type = object : AbcNode.Type { override val name = "MyNode" }
 }
-class MyEdge(store: IStorage, override val id: EdgeID) : AbcEdge(store) {
+class MyEdge(storage: IStorage, override val id: InternalID) : AbcEdge(storage) {
     override val type = object : AbcEdge.Type { override val name = "MyEdge" }
 }
 
 val graph = object : AbcMultipleGraph<MyNode, MyEdge>() {
-    override val graphStore = NativeStorageImpl()
-    override val posetStore = NativeStorageImpl()
-    override fun newNodeObj(nid: NodeID) = MyNode(graphStore, nid)
-    override fun newEdgeObj(eid: EdgeID) = MyEdge(graphStore, eid)
+    override val storage = NativeStorageImpl()
+    override val posetStorage = NativeStorageImpl()
+    override fun newNodeObj(storageId: InternalID) = MyNode(storage, storageId)
+    override fun newEdgeObj(storageId: InternalID) = MyEdge(storage, storageId)
 }
 
-val a = graph.addNode(NodeID("a"))
-val b = graph.addNode(NodeID("b"))
-val e = graph.addEdge(EdgeID(a.id, b.id, "knows"))
+val a = graph.addNode("a")
+val b = graph.addNode("b")
+val e = graph.addEdge("a", "b", "knows")
 
-graph.getChildren(a.id).toList()         // [b]
-graph.getDescendants(a.id).toList()      // all reachable from a
-graph.delNode(a.id)                      // removes a and all its edges
+graph.getChildren("a").toList()         // [b]
+graph.getDescendants("a").toList()      // all reachable from a
+graph.delNode("a")                      // removes a and all its edges
 ```
 
 **Layered storage (static analysis pipeline):**
@@ -196,10 +193,10 @@ graph.delNode(a.id)                      // removes a and all its edges
 val layeredStorage = LayeredStorageImpl()
 
 val graph = object : AbcMultipleGraph<MyNode, MyEdge>() {
-    override val graphStore: IStorage = layeredStorage
-    override val posetStore = NativeStorageImpl()
-    override fun newNodeObj(nid: NodeID) = MyNode(graphStore, nid)
-    override fun newEdgeObj(eid: EdgeID) = MyEdge(graphStore, eid)
+    override val storage: IStorage = layeredStorage
+    override val posetStorage = NativeStorageImpl()
+    override fun newNodeObj(storageId: InternalID) = MyNode(storage, storageId)
+    override fun newEdgeObj(storageId: InternalID) = MyEdge(storage, storageId)
 }
 
 // Phase 1: build AST
@@ -224,7 +221,7 @@ analyze(graph)
 | `EntityNotExistException` | Adding an edge whose src/dst node is missing |
 | `AccessClosedStorageException` | Accessing storage after `close()` |
 
-Deletion of a non-existent entity is a no-op at the graph level (delegates to storage which may throw or silently succeed depending on implementation).
+Deletion of a non-existent entity is a no-op at the graph level.
 
 ---
 
@@ -236,7 +233,6 @@ Deletion of a non-existent entity is a no-op at the graph level (delegates to st
 
 ### AbcMultipleGraph
 
-- Edge ID must be unique; multiple edges between same `(src, dst)` pair are allowed as long as EdgeIDs differ
 - Both src and dst nodes must exist before adding an edge
-- Node/edge IDs must be unique across the graph
-- `nodeIDs`/`edgeIDs` derive from storage vertices/arcs; no separate cache synchronization needed
+- `nodeIDs` derives from storage nodes; `nodeIdCache` provides O(1) resolution
+- Edge lookup by `(src, dst, type)` scans adjacency list + endpoint queries
