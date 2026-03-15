@@ -1,6 +1,8 @@
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
+import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -102,5 +104,29 @@ class JgraphtGmlIOImplWhiteBoxTest {
 
         assertSame(dstStorage, result)
         dstStorage.close()
+    }
+
+    // -- Full round-trip with properties --
+
+    @Test
+    fun `test export with nodes and edges creates non-empty file`() {
+        val n1 = srcStorage.addNode(mapOf("name" to "NodeAlpha".strVal))
+        val n2 = srcStorage.addNode(mapOf("name" to "NodeBeta".strVal))
+        srcStorage.addEdge(n1, n2, "depends_on", mapOf("weight" to 1.5.numVal))
+
+        JgraphtGmlIOImpl.export(tempFile, srcStorage)
+
+        assertTrue(Files.exists(tempFile))
+        val content = Files.readString(tempFile)
+        assertTrue(content.contains("graph"))
+        assertTrue(content.contains("node"))
+        assertTrue(content.contains("edge"))
+    }
+
+    @Test
+    fun `test isValidFile returns false for directory`() {
+        val dir = Files.createTempDirectory("gml-dir-test")
+        assertFalse(JgraphtGmlIOImpl.isValidFile(dir))
+        Files.deleteIfExists(dir)
     }
 }
