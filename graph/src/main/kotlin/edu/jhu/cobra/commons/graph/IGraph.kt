@@ -1,13 +1,11 @@
 package edu.jhu.cobra.commons.graph
 
 /**
- * Core graph interface with label-based edge visibility.
+ * Core directed graph interface.
  *
- * Label-parameterized methods filter edges by visibility: an edge is visitable
- * under label `by` if at least one of its labels `l` satisfies `by == l` or
- * `by > l` in the poset hierarchy.
- *
- * Non-label overloads default to [Label.SUPREMUM], which sees all edges.
+ * Edges are identified by their `(src, dst, type)` triple.
+ * Label-aware operations (visibility filtering, label assignment) are provided
+ * by [AbcMultipleGraph], which combines this interface with [IPoset][edu.jhu.cobra.commons.graph.poset.IPoset].
  *
  * @param N The node type.
  * @param E The edge type.
@@ -15,8 +13,6 @@ package edu.jhu.cobra.commons.graph
 @Suppress("TooManyFunctions")
 interface IGraph<N : AbcNode, E : AbcEdge> {
     val nodeIDs: Set<NodeID>
-
-    val edgeIDs: Set<EdgeID>
 
     // region Node CRUD
 
@@ -34,46 +30,40 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
     // region Edge CRUD
 
-    fun addEdge(withID: EdgeID): E
-
     fun addEdge(
-        withID: EdgeID,
-        label: Label,
+        src: NodeID,
+        dst: NodeID,
+        type: String,
     ): E
 
-    fun getEdge(whoseID: EdgeID): E?
+    fun getEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): E?
 
-    fun containEdge(whoseID: EdgeID): Boolean
-
-    fun delEdge(whoseID: EdgeID)
+    fun containEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): Boolean
 
     fun delEdge(
-        whoseID: EdgeID,
-        label: Label,
+        src: NodeID,
+        dst: NodeID,
+        type: String,
     )
+
+    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
 
     // endregion
 
     // region Graph structure queries
 
-    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
-
     fun getIncomingEdges(of: NodeID): Sequence<E>
 
     fun getOutgoingEdges(of: NodeID): Sequence<E>
 
-    fun getOutgoingEdges(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
-    ): Sequence<E>
-
-    fun getIncomingEdges(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
-    ): Sequence<E>
-
     fun getChildren(
         of: NodeID,
         edgeCond: (E) -> Boolean = { true },
@@ -84,18 +74,6 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
         edgeCond: (E) -> Boolean = { true },
     ): Sequence<N>
 
-    fun getChildren(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
-    ): Sequence<N>
-
-    fun getParents(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
-    ): Sequence<N>
-
     fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean = { true },
@@ -104,18 +82,6 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean = { true },
-    ): Sequence<N>
-
-    fun getDescendants(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
-    ): Sequence<N>
-
-    fun getAncestors(
-        of: NodeID,
-        label: Label,
-        cond: (E) -> Boolean = { true },
     ): Sequence<N>
 
     // endregion
