@@ -70,6 +70,9 @@ subprojects {
                 "-XX:G1HeapRegionSize=32m",
                 "-XX:InitiatingHeapOccupancyPercent=45",
             )
+            testLogging {
+                showStandardStreams = true
+            }
         }
     }
 

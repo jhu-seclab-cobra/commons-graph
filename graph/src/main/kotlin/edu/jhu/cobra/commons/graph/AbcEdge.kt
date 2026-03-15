@@ -13,37 +13,40 @@ import edu.jhu.cobra.commons.value.listVal
  *
  * The edge's [id] is the graph-layer identity string in `srcNid-eType-dstNid` format.
  * The [internalId] is the storage-generated opaque key, invisible to external code.
- * Structural info (source, destination, type) is read from meta properties
- * (`__src__`, `__dst__`, `__tag__`), which store user-provided [NodeID]s.
+ * Structural info (source, destination, type) is resolved via [IStorage.getEdgeSrc],
+ * [IStorage.getEdgeDst], [IStorage.getEdgeType] combined with [nodeIdResolver] for
+ * InternalID → NodeID translation.
  * Properties prefixed with `__` are internal metadata and filtered from external access.
  *
  * @property storage The storage system for edge properties.
  * @property internalId The storage-generated opaque key for this edge.
+ * @property nodeIdResolver Resolves storage InternalID to user-provided NodeID.
  * @see AbcEntity
  * @see IEntity
  */
 abstract class AbcEdge(
     protected val storage: IStorage,
     internal val internalId: InternalID,
+    private val nodeIdResolver: (InternalID) -> NodeID,
 ) : AbcEntity() {
     /**
      * Represents the type information for an edge.
      */
     interface Type : IEntity.Type
 
-    /** Source node ID, read from `__src__` meta property. */
+    /** Source node ID, resolved from storage edge structure. */
     val srcNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
-        (storage.getEdgeProperty(internalId, META_SRC) as StrVal).core
+        nodeIdResolver(storage.getEdgeSrc(internalId))
     }
 
-    /** Destination node ID, read from `__dst__` meta property. */
+    /** Destination node ID, resolved from storage edge structure. */
     val dstNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
-        (storage.getEdgeProperty(internalId, META_DST) as StrVal).core
+        nodeIdResolver(storage.getEdgeDst(internalId))
     }
 
-    /** Edge type name, read from `__tag__` meta property. */
+    /** Edge type name, resolved from storage edge structure. */
     val eType: String by lazy(LazyThreadSafetyMode.NONE) {
-        (storage.getEdgeProperty(internalId, META_TAG) as StrVal).core
+        storage.getEdgeType(internalId)
     }
 
     /**
@@ -59,7 +62,7 @@ abstract class AbcEdge(
     var labels: Set<Label>
         get() {
             val raw = storage.getEdgeProperty(internalId, "labels") as? ListVal ?: return emptySet()
-            return raw.core.map { Label(it.core.toString()) }.toSet()
+            return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }
         }
         set(values) {
             storage.setEdgeProperties(internalId, mapOf("labels" to values.map { it.core }.listVal))
