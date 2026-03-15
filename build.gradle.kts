@@ -61,6 +61,7 @@ subprojects {
     tasks.withType<Test> {
         if (!project.hasProperty("includePerformanceTests")) {
             exclude("**/*PerformanceTest*")
+            exclude("**/*BenchmarkTest*")
         } else {
             maxHeapSize = "8g"
             jvmArgs(

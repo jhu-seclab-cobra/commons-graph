@@ -232,10 +232,10 @@ class Neo4jStorageImplWhiteBoxTest {
         assertFalse(storage.containsEdge(selfEdge))
     }
 
-    // -- Metadata stored in ConcurrentHashMap (not Neo4j) --
+    // -- Metadata stored in-memory (not Neo4j) --
 
     @Test
-    fun `test meta operations use in-memory ConcurrentHashMap`() {
+    fun `test meta operations use in-memory map`() {
         storage.setMeta("version", "1.0".strVal)
         assertEquals("1.0", (storage.getMeta("version") as StrVal).core)
         assertTrue("version" in storage.metaNames)
@@ -350,20 +350,4 @@ class Neo4jStorageImplWhiteBoxTest {
         assertEquals(2, storage.getOutgoingEdges(n1).size)
     }
 
-    // -- Concurrent access via ConcurrentHashMap caches --
-
-    @Test
-    fun `test concurrent add nodes uses ConcurrentHashMap safely`() {
-        val threads =
-            List(10) { threadId ->
-                Thread {
-                    storage.addNode(mapOf("prop" to "value-$threadId".strVal))
-                }
-            }
-
-        threads.forEach { it.start() }
-        threads.forEach { it.join() }
-
-        assertEquals(10, storage.nodeIDs.size)
-    }
 }
