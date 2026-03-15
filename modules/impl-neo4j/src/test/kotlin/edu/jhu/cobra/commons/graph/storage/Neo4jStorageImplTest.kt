@@ -1,11 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import kotlin.test.*
@@ -39,8 +36,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test add and query node`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(nodeId, mapOf("prop1" to "value1".strVal))
+        val nodeId = storage.addNode(mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsNode(nodeId))
         assertEquals(1, storage.nodeIDs.size)
@@ -48,22 +44,11 @@ class Neo4jStorageImplTest {
     }
 
     @Test
-    fun `test add duplicate node`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(nodeId)
-
-        assertFailsWith<EntityAlreadyExistException> { storage.addNode(nodeId) }
-    }
-
-    @Test
     fun `test add and query edge`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        storage.addNode(srcId)
-        storage.addNode(dstId)
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(edgeId, mapOf("prop1" to "value1".strVal))
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge", mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsEdge(edgeId))
         assertEquals(1, storage.edgeIDs.size)
@@ -72,22 +57,17 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test add edge with non-existent nodes`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(edgeId)
+            storage.addEdge("nonexistent-src", "nonexistent-dst", "test-edge")
         }
     }
 
     @Test
     fun `test node properties operations`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(
-            nodeId,
-            mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
-        )
+        val nodeId =
+            storage.addNode(
+                mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
+            )
 
         val props = storage.getNodeProperties(nodeId)
         assertEquals(2, props.size)
@@ -100,16 +80,16 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test edge properties operations`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        storage.addNode(srcId)
-        storage.addNode(dstId)
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(
-            edgeId,
-            mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
-        )
+        val edgeId =
+            storage.addEdge(
+                srcId,
+                dstId,
+                "test-edge",
+                mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
+            )
 
         val props = storage.getEdgeProperties(edgeId)
         assertEquals(2, props.size)
@@ -122,8 +102,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test delete node`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(nodeId)
+        val nodeId = storage.addNode()
         assertTrue(storage.containsNode(nodeId))
 
         storage.deleteNode(nodeId)
@@ -133,13 +112,10 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test delete edge`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        storage.addNode(srcId)
-        storage.addNode(dstId)
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(edgeId)
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge")
         assertTrue(storage.containsEdge(edgeId))
 
         storage.deleteEdge(edgeId)
@@ -149,13 +125,10 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test incoming and outgoing edges`() {
-        val srcId = NodeID("src")
-        val dstId = NodeID("dst")
-        storage.addNode(srcId)
-        storage.addNode(dstId)
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = EdgeID(srcId, dstId, "test-edge")
-        storage.addEdge(edgeId)
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge")
 
         assertEquals(1, storage.getOutgoingEdges(srcId).size)
         assertEquals(1, storage.getIncomingEdges(dstId).size)
@@ -165,8 +138,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test clear storage`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(nodeId)
+        storage.addNode()
 
         assertTrue(storage.clear())
         assertEquals(0, storage.nodeIDs.size)
@@ -178,7 +150,7 @@ class Neo4jStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addNode(NodeID("test"))
+            storage.addNode()
         }
         assertFailsWith<AccessClosedStorageException> {
             storage.nodeIDs
@@ -187,8 +159,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test invalid property names`() {
-        val nodeId = NodeID("test-node")
-        storage.addNode(nodeId)
+        val nodeId = storage.addNode()
 
         assertFailsWith<InvalidPropNameException> {
             storage.setNodeProperties(nodeId, mapOf("__meta_id__" to "value".strVal))
@@ -200,8 +171,7 @@ class Neo4jStorageImplTest {
         val threads =
             List(10) { threadId ->
                 Thread {
-                    val nodeId = NodeID("node-$threadId")
-                    storage.addNode(nodeId)
+                    val nodeId = storage.addNode()
                     storage.setNodeProperties(nodeId, mapOf("prop" to "value-$threadId".strVal))
                 }
             }

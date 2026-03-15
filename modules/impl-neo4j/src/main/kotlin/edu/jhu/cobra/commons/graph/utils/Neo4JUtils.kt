@@ -1,10 +1,7 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import org.neo4j.graphdb.PropertyContainer
@@ -25,13 +22,13 @@ val PropertyContainer.keys: Collection<String>
     get() =
         this.propertyKeys.filter { it != META_ID }.distinct()
 
-var Neo4jNode.storageID: NodeID
-    get() = NodeID(getProp<StrVal>(META_ID)!!)
-    set(value) = setProp(META_ID, value.serialize)
+var Neo4jNode.storageID: String
+    get() = getProp<StrVal>(META_ID)!!.core
+    set(value) = setProp(META_ID, StrVal(value))
 
-var Neo4jEdge.storageID: EdgeID
-    get() = EdgeID(getProp<ListVal>(META_ID)!!)
-    set(value) = setProp(META_ID, value.serialize)
+var Neo4jEdge.storageID: String
+    get() = getProp<StrVal>(META_ID)!!.core
+    set(value) = setProp(META_ID, StrVal(value))
 
 operator fun PropertyContainer.set(
     byName: String,
