@@ -1,8 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_DST
-import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_SRC
-import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_TAG
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.BoolVal
@@ -19,10 +16,15 @@ class AbcEdgeTest {
     private var dstStorageId: InternalID = 0
     private lateinit var testEdge: TestEdge
 
+    // Maps InternalID → NodeID for test edges
+    private val nodeIdMap = HashMap<InternalID, NodeID>()
+    private val resolver: (InternalID) -> NodeID = { nodeIdMap[it] ?: error("Unknown ID: $it") }
+
     private class TestEdge(
         storage: IStorage,
         internalId: InternalID,
-    ) : AbcEdge(storage, internalId) {
+        nodeIdResolver: (InternalID) -> NodeID,
+    ) : AbcEdge(storage, internalId, nodeIdResolver) {
         override val type: AbcEdge.Type =
             object : AbcEdge.Type {
                 override val name = "TestEdge"
@@ -34,14 +36,10 @@ class AbcEdgeTest {
         storage = NativeStorageImpl()
         srcStorageId = storage.addNode()
         dstStorageId = storage.addNode()
-        val metaProps =
-            mapOf(
-                META_SRC to "src".strVal,
-                META_DST to "dst".strVal,
-                META_TAG to "relation".strVal,
-            )
-        val eid = storage.addEdge(srcStorageId, dstStorageId, "relation", metaProps)
-        testEdge = TestEdge(storage, eid)
+        nodeIdMap[srcStorageId] = "src"
+        nodeIdMap[dstStorageId] = "dst"
+        val eid = storage.addEdge(srcStorageId, dstStorageId, "relation")
+        testEdge = TestEdge(storage, eid, resolver)
     }
 
     @AfterTest
@@ -53,13 +51,7 @@ class AbcEdgeTest {
 
     @Test
     fun `test edgeID_differentType_differentId`() {
-        val eid2 =
-            storage.addEdge(
-                srcStorageId,
-                dstStorageId,
-                "other",
-                mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
-            )
+        val eid2 = storage.addEdge(srcStorageId, dstStorageId, "other")
         assertNotEquals(testEdge.internalId, eid2)
     }
 
@@ -263,24 +255,18 @@ class AbcEdgeTest {
     @Test
     fun `test equals_sameID_returnsTrue`() {
         val eid = testEdge.internalId
-        val edge1 = TestEdge(storage, eid)
-        val edge2 = TestEdge(storage, eid)
+        val edge1 = TestEdge(storage, eid, resolver)
+        val edge2 = TestEdge(storage, eid, resolver)
 
         assertEquals(edge1, edge2)
     }
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val eid2 =
-            storage.addEdge(
-                srcStorageId,
-                dstStorageId,
-                "other",
-                mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
-            )
+        val eid2 = storage.addEdge(srcStorageId, dstStorageId, "other")
         assertNotEquals(
-            TestEdge(storage, testEdge.internalId),
-            TestEdge(storage, eid2),
+            TestEdge(storage, testEdge.internalId, resolver),
+            TestEdge(storage, eid2, resolver),
         )
     }
 

@@ -32,7 +32,8 @@ object GraphTestUtils {
     class TestEdge(
         storage: IStorage,
         internalId: InternalID,
-    ) : AbcEdge(storage, internalId) {
+        nodeIdResolver: (InternalID) -> NodeID,
+    ) : AbcEdge(storage, internalId, nodeIdResolver) {
         override val type: AbcEdge.Type =
             object : AbcEdge.Type {
                 override val name = "TestEdge"
@@ -49,7 +50,8 @@ object GraphTestUtils {
 
             override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
 
-            override fun newEdgeObj(internalId: InternalID) = TestEdge(storage, internalId)
+            override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
+                TestEdge(storage, internalId, nodeIdResolver)
         }
 
     class TestMultipleGraph(
@@ -61,7 +63,8 @@ object GraphTestUtils {
 
         override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
 
-        override fun newEdgeObj(internalId: InternalID) = TestEdge(storage, internalId)
+        override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
+            TestEdge(storage, internalId, nodeIdResolver)
     }
 
     fun createTestSimpleGraph(
@@ -74,7 +77,8 @@ object GraphTestUtils {
 
             override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
 
-            override fun newEdgeObj(internalId: InternalID) = TestEdge(storage, internalId)
+            override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
+                TestEdge(storage, internalId, nodeIdResolver)
         }
 
     class TestSimpleGraph(
@@ -86,6 +90,7 @@ object GraphTestUtils {
 
         override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
 
-        override fun newEdgeObj(internalId: InternalID) = TestEdge(storage, internalId)
+        override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
+            TestEdge(storage, internalId, nodeIdResolver)
     }
 }

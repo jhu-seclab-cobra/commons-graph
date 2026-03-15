@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.AbcSimpleGraph
 import edu.jhu.cobra.commons.graph.InternalID
+import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 
@@ -29,7 +30,8 @@ abstract class AbcTraitNodeGroupTest {
     protected class TestEdge(
         storage: IStorage,
         internalId: InternalID,
-    ) : AbcEdge(storage, internalId) {
+        nodeIdResolver: (InternalID) -> NodeID,
+    ) : AbcEdge(storage, internalId, nodeIdResolver) {
         enum class Type {
             TEST,
         }
@@ -51,7 +53,8 @@ abstract class AbcTraitNodeGroupTest {
 
         override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
 
-        override fun newEdgeObj(internalId: InternalID) = TestEdge(storage, internalId)
+        override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
+            TestEdge(storage, internalId, nodeIdResolver)
     }
 
     protected lateinit var graph: TestGraph
