@@ -147,6 +147,7 @@ class OptimizationBenchmarkTest {
     // B4/B5: LayeredStorage — CROSS-LAYER QUERY OVERHEAD
     // ========================================================================
 
+    @Suppress("NestedBlockDepth")
     @Test
     fun `benchmark B4 B5 cross-layer query overhead`() {
         val nodesPerLayer = 10_000

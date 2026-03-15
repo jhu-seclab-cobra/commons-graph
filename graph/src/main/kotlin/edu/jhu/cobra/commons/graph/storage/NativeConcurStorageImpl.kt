@@ -15,6 +15,7 @@ import kotlin.concurrent.withLock
  * @constructor Creates a new empty thread-safe storage instance.
  * @see NativeStorageImpl
  */
+@Suppress("TooManyFunctions")
 class NativeConcurStorageImpl : IStorage {
     @Volatile
     private var isClosed: Boolean = false
@@ -30,7 +31,11 @@ class NativeConcurStorageImpl : IStorage {
     private val nodeProperties = HashMap<Int, MutableMap<String, IValue>>()
 
     // Edge endpoint index (edge ID → src, dst, type)
-    private data class EdgeEndpoints(val src: Int, val dst: Int, val type: String)
+    private data class EdgeEndpoints(
+        val src: Int,
+        val dst: Int,
+        val type: String,
+    )
 
     private val edgeEndpoints = HashMap<Int, EdgeEndpoints>()
     private val edgeProperties = HashMap<Int, MutableMap<String, IValue>>()

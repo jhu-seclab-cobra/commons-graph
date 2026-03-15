@@ -8,7 +8,7 @@ jvm = "21"
 cobra-commons-value = "0.1.0"
 mapdb = "3.0.5"
 jgrapht = "1.4.0"
-neo4j = "3.5.35"
+neo4j = "5.26.0"
 
 [libraries]
 neo4j-core = { module = "org.neo4j:neo4j", version.ref = "neo4j" }

@@ -87,11 +87,11 @@ class AbcNodeTest {
 
     @Test
     fun `test nodeID_sameName_equal`() {
-        val nodeId1: NodeID = "node1"
-        val nodeId2: NodeID = "node1"
+        val nid1: NodeID = "node1"
+        val nid2: NodeID = "node1"
 
-        assertEquals(nodeId1, nodeId2)
-        assertEquals(nodeId1.hashCode(), nodeId2.hashCode())
+        assertEquals(nid1, nid2)
+        assertEquals(nid1.hashCode(), nid2.hashCode())
     }
 
     @Test

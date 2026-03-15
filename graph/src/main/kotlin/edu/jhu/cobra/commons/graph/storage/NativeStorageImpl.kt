@@ -14,6 +14,7 @@ import edu.jhu.cobra.commons.value.IValue
  * @constructor Creates a new empty storage instance.
  * @see NativeConcurStorageImpl
  */
+@Suppress("TooManyFunctions")
 class NativeStorageImpl : IStorage {
     private var isClosed: Boolean = false
     private var nodeCounter: Int = 0
@@ -23,7 +24,11 @@ class NativeStorageImpl : IStorage {
     private val nodeProperties = HashMap<Int, MutableMap<String, IValue>>()
 
     // Edge endpoint index (edge ID → src, dst, type)
-    private data class EdgeEndpoints(val src: Int, val dst: Int, val type: String)
+    private data class EdgeEndpoints(
+        val src: Int,
+        val dst: Int,
+        val type: String,
+    )
 
     private val edgeEndpoints = HashMap<Int, EdgeEndpoints>()
     private val edgeProperties = HashMap<Int, MutableMap<String, IValue>>()
@@ -156,6 +161,7 @@ class NativeStorageImpl : IStorage {
         return id
     }
 
+    @Suppress("ThrowsCount")
     internal fun addEdgeWithId(
         src: Int,
         dst: Int,
