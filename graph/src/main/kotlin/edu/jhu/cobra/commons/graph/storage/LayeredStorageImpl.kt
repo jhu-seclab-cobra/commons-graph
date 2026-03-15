@@ -1,11 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.IValue
 
 /**
@@ -17,69 +14,47 @@ import edu.jhu.cobra.commons.value.IValue
  *
  * Query resolution:
  * - Properties: active layer first, then frozen layer (overlay semantics).
- *   Returns lazy merged views instead of copying into new HashMaps.
- * - Adjacency: returns union set views merging both layers without allocation,
- *   with fast paths when one side is empty.
+ * - Adjacency: returns union set views merging both layers without allocation.
  *
  * Deletion is restricted to the active layer. Attempting to delete a frozen-layer
  * entity throws [FrozenLayerModificationException].
  *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
- *   Defaults to [NativeStorageImpl]. Inject a MapDB factory for off-heap frozen storage.
- *
  * @see FrozenLayerModificationException
  */
 class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
     private val frozenLayers = mutableListOf<IStorage>()
-    private var activeLayer: IStorage = NativeStorageImpl()
+    private var activeLayer = NativeStorageImpl()
     private var closed = false
 
-    // At most 1 frozen layer after merge-on-freeze (B5-B)
     private val frozenLayer: IStorage? get() = frozenLayers.firstOrNull()
 
     // ============================================================================
     // LAYERED STORAGE API
     // ============================================================================
 
-    /**
-     * Total number of layers (frozen layers + active layer).
-     *
-     * With merge-on-freeze, this is always 1 (no frozen) or 2 (one frozen + active).
-     */
     val layerCount: Int get() = frozenLayers.size + 1
 
-    /**
-     * Freezes the current active layer by merging all data into a single frozen layer.
-     *
-     * Merges existing frozen layer data and active layer data into a new frozen layer
-     * created by [frozenLayerFactory], closes old layers, and creates a fresh empty
-     * active layer. After freeze, there is always exactly one frozen layer.
-     */
     fun freeze() {
         ensureOpen()
         val merged = frozenLayerFactory()
+        val nodeIdMap = HashMap<Int, Int>()
+        val edgeIdMap = HashMap<Int, Int>()
         for (layer in frozenLayers) {
-            mergeLayerInto(layer, merged)
+            mergeLayerInto(layer, merged, nodeIdMap, edgeIdMap)
             layer.close()
         }
-        mergeLayerInto(activeLayer, merged)
+        mergeLayerInto(activeLayer, merged, nodeIdMap, edgeIdMap)
         activeLayer.close()
         frozenLayers.clear()
         frozenLayers.add(merged)
-        activeLayer = NativeStorageImpl()
+        activeLayer = NativeStorageImpl().apply {
+            setCounterStart(merged.nodeIDs.size, merged.edgeIDs.size)
+        }
     }
 
-    /**
-     * Merges the top [topN] frozen layers into a single layer.
-     *
-     * With merge-on-freeze, there is at most one frozen layer, so this is
-     * effectively a no-op when [topN] is 1.
-     *
-     * @param topN Number of topmost frozen layers to compact.
-     * @throws IllegalArgumentException if [topN] is out of range.
-     */
     fun compact(topN: Int) {
         ensureOpen()
         require(topN in 1..frozenLayers.size) {
@@ -89,8 +64,10 @@ class LayeredStorageImpl(
         val startIdx = frozenLayers.size - topN
         val layersToCompact = frozenLayers.subList(startIdx, frozenLayers.size)
         val compacted = frozenLayerFactory()
+        val nodeIdMap = HashMap<Int, Int>()
+        val edgeIdMap = HashMap<Int, Int>()
         for (layer in layersToCompact) {
-            mergeLayerInto(layer, compacted)
+            mergeLayerInto(layer, compacted, nodeIdMap, edgeIdMap)
             layer.close()
         }
         layersToCompact.clear()
@@ -100,25 +77,25 @@ class LayeredStorageImpl(
     private fun mergeLayerInto(
         source: IStorage,
         target: IStorage,
+        nodeIdMap: HashMap<Int, Int>,
+        edgeIdMap: HashMap<Int, Int>,
     ) {
         for (nodeId in source.nodeIDs) {
-            if (target.containsNode(nodeId)) {
-                val props = source.getNodeProperties(nodeId)
-                if (props.isNotEmpty()) {
-                    target.setNodeProperties(nodeId, props)
-                }
+            if (nodeId in nodeIdMap) {
+                target.setNodeProperties(nodeIdMap[nodeId]!!, source.getNodeProperties(nodeId))
             } else {
-                target.addNode(nodeId, source.getNodeProperties(nodeId))
+                nodeIdMap[nodeId] = target.addNode(source.getNodeProperties(nodeId))
             }
         }
         for (edgeId in source.edgeIDs) {
-            if (target.containsEdge(edgeId)) {
+            val srcId = nodeIdMap[source.getEdgeSrc(edgeId)]!!
+            val dstId = nodeIdMap[source.getEdgeDst(edgeId)]!!
+            val edgeType = source.getEdgeType(edgeId)
+            if (edgeId in edgeIdMap) {
                 val props = source.getEdgeProperties(edgeId)
-                if (props.isNotEmpty()) {
-                    target.setEdgeProperties(edgeId, props)
-                }
+                if (props.isNotEmpty()) target.setEdgeProperties(edgeIdMap[edgeId]!!, props)
             } else {
-                target.addEdge(edgeId, source.getEdgeProperties(edgeId))
+                edgeIdMap[edgeId] = target.addEdge(srcId, dstId, edgeType, source.getEdgeProperties(edgeId))
             }
         }
         for (name in source.metaNames) {
@@ -127,10 +104,10 @@ class LayeredStorageImpl(
     }
 
     // ============================================================================
-    // PROPERTIES AND STATISTICS
+    // NODE OPERATIONS
     // ============================================================================
 
-    override val nodeIDs: Set<NodeID>
+    override val nodeIDs: Set<Int>
         get() {
             ensureOpen()
             val frozen = frozenLayer ?: return activeLayer.nodeIDs
@@ -139,35 +116,18 @@ class LayeredStorageImpl(
             return UnionSet(frozen.nodeIDs, activeIds)
         }
 
-    override val edgeIDs: Set<EdgeID>
-        get() {
-            ensureOpen()
-            val frozen = frozenLayer ?: return activeLayer.edgeIDs
-            val activeIds = activeLayer.edgeIDs
-            if (activeIds.isEmpty()) return frozen.edgeIDs
-            return UnionSet(frozen.edgeIDs, activeIds)
-        }
-
-    // ============================================================================
-    // NODE OPERATIONS
-    // ============================================================================
-
-    override fun containsNode(id: NodeID): Boolean {
+    override fun containsNode(id: Int): Boolean {
         ensureOpen()
         if (activeLayer.containsNode(id)) return true
         return frozenLayer?.containsNode(id) ?: false
     }
 
-    override fun addNode(
-        id: NodeID,
-        properties: Map<String, IValue>,
-    ) {
+    override fun addNode(properties: Map<String, IValue>): Int {
         ensureOpen()
-        if (containsNode(id)) throw EntityAlreadyExistException(id)
-        activeLayer.addNode(id, properties)
+        return activeLayer.addNode(properties)
     }
 
-    override fun getNodeProperties(id: NodeID): Map<String, IValue> {
+    override fun getNodeProperties(id: Int): Map<String, IValue> {
         ensureOpen()
         val frozen = frozenLayer
         val inActive = activeLayer.containsNode(id)
@@ -179,7 +139,7 @@ class LayeredStorageImpl(
     }
 
     override fun getNodeProperty(
-        id: NodeID,
+        id: Int,
         name: String,
     ): IValue? {
         ensureOpen()
@@ -195,17 +155,17 @@ class LayeredStorageImpl(
     }
 
     override fun setNodeProperties(
-        id: NodeID,
+        id: Int,
         properties: Map<String, IValue?>,
     ) {
         ensureOpen()
         val inActive = activeLayer.containsNode(id)
         if (!inActive && frozenLayer?.containsNode(id) != true) throw EntityNotExistException(id)
-        if (!inActive) activeLayer.addNode(id)
+        if (!inActive) ensureNodeInActiveLayer(id)
         activeLayer.setNodeProperties(id, properties)
     }
 
-    override fun deleteNode(id: NodeID) {
+    override fun deleteNode(id: Int) {
         ensureOpen()
         if (!activeLayer.containsNode(id)) {
             if (frozenLayer?.containsNode(id) == true) throw FrozenLayerModificationException(id)
@@ -218,26 +178,52 @@ class LayeredStorageImpl(
     // EDGE OPERATIONS
     // ============================================================================
 
-    override fun containsEdge(id: EdgeID): Boolean {
+    override val edgeIDs: Set<Int>
+        get() {
+            ensureOpen()
+            val frozen = frozenLayer ?: return activeLayer.edgeIDs
+            val activeIds = activeLayer.edgeIDs
+            if (activeIds.isEmpty()) return frozen.edgeIDs
+            return UnionSet(frozen.edgeIDs, activeIds)
+        }
+
+    override fun containsEdge(id: Int): Boolean {
         ensureOpen()
         if (activeLayer.containsEdge(id)) return true
         return frozenLayer?.containsEdge(id) ?: false
     }
 
     override fun addEdge(
-        id: EdgeID,
+        src: Int,
+        dst: Int,
+        type: String,
         properties: Map<String, IValue>,
-    ) {
+    ): Int {
         ensureOpen()
-        if (activeLayer.containsEdge(id) || frozenLayer?.containsEdge(id) == true) {
-            throw EntityAlreadyExistException(id)
-        }
-        ensureNodeInActiveLayer(id.srcNid)
-        ensureNodeInActiveLayer(id.dstNid)
-        activeLayer.addEdge(id, properties)
+        ensureNodeInActiveLayer(src)
+        ensureNodeInActiveLayer(dst)
+        return activeLayer.addEdge(src, dst, type, properties)
     }
 
-    override fun getEdgeProperties(id: EdgeID): Map<String, IValue> {
+    override fun getEdgeSrc(id: Int): Int {
+        ensureOpen()
+        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeSrc(id)
+        return frozenLayer?.getEdgeSrc(id) ?: throw EntityNotExistException(id)
+    }
+
+    override fun getEdgeDst(id: Int): Int {
+        ensureOpen()
+        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeDst(id)
+        return frozenLayer?.getEdgeDst(id) ?: throw EntityNotExistException(id)
+    }
+
+    override fun getEdgeType(id: Int): String {
+        ensureOpen()
+        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeType(id)
+        return frozenLayer?.getEdgeType(id) ?: throw EntityNotExistException(id)
+    }
+
+    override fun getEdgeProperties(id: Int): Map<String, IValue> {
         ensureOpen()
         val frozen = frozenLayer
         val inActive = activeLayer.containsEdge(id)
@@ -249,7 +235,7 @@ class LayeredStorageImpl(
     }
 
     override fun getEdgeProperty(
-        id: EdgeID,
+        id: Int,
         name: String,
     ): IValue? {
         ensureOpen()
@@ -265,21 +251,24 @@ class LayeredStorageImpl(
     }
 
     override fun setEdgeProperties(
-        id: EdgeID,
+        id: Int,
         properties: Map<String, IValue?>,
     ) {
         ensureOpen()
         val inActive = activeLayer.containsEdge(id)
         if (!inActive && frozenLayer?.containsEdge(id) != true) throw EntityNotExistException(id)
         if (!inActive) {
-            ensureNodeInActiveLayer(id.srcNid)
-            ensureNodeInActiveLayer(id.dstNid)
-            activeLayer.addEdge(id)
+            val src = getEdgeSrc(id)
+            val dst = getEdgeDst(id)
+            val type = getEdgeType(id)
+            ensureNodeInActiveLayer(src)
+            ensureNodeInActiveLayer(dst)
+            activeLayer.addEdgeWithId(src, dst, type, emptyMap(), id)
         }
         activeLayer.setEdgeProperties(id, properties)
     }
 
-    override fun deleteEdge(id: EdgeID) {
+    override fun deleteEdge(id: Int) {
         ensureOpen()
         if (!activeLayer.containsEdge(id)) {
             if (frozenLayer?.containsEdge(id) == true) throw FrozenLayerModificationException(id)
@@ -289,10 +278,10 @@ class LayeredStorageImpl(
     }
 
     // ============================================================================
-    // GRAPH STRUCTURE QUERIES
+    // ADJACENCY QUERIES
     // ============================================================================
 
-    override fun getIncomingEdges(id: NodeID): Set<EdgeID> {
+    override fun getIncomingEdges(id: Int): Set<Int> {
         ensureOpen()
         val frozen = frozenLayer
         val inActive = activeLayer.containsNode(id)
@@ -305,7 +294,7 @@ class LayeredStorageImpl(
         return UnionSet(frozenEdges, activeEdges)
     }
 
-    override fun getOutgoingEdges(id: NodeID): Set<EdgeID> {
+    override fun getOutgoingEdges(id: Int): Set<Int> {
         ensureOpen()
         val frozen = frozenLayer
         val inActive = activeLayer.containsNode(id)
@@ -346,15 +335,30 @@ class LayeredStorageImpl(
     }
 
     // ============================================================================
-    // UTILITY OPERATIONS
+    // LIFECYCLE
     // ============================================================================
 
-    override fun clear(): Boolean {
+    override fun clear() {
         ensureOpen()
         for (layer in frozenLayers) layer.close()
         frozenLayers.clear()
         activeLayer.clear()
-        return true
+    }
+
+    override fun transferTo(target: IStorage) {
+        ensureOpen()
+        val idMap = HashMap<Int, Int>()
+        for (nodeId in nodeIDs) {
+            idMap[nodeId] = target.addNode(getNodeProperties(nodeId))
+        }
+        for (edgeId in edgeIDs) {
+            val newSrc = idMap[getEdgeSrc(edgeId)]!!
+            val newDst = idMap[getEdgeDst(edgeId)]!!
+            target.addEdge(newSrc, newDst, getEdgeType(edgeId), getEdgeProperties(edgeId))
+        }
+        for (name in metaNames) {
+            target.setMeta(name, getMeta(name))
+        }
     }
 
     override fun close() {
@@ -366,25 +370,23 @@ class LayeredStorageImpl(
     }
 
     // ============================================================================
-    // GUARDS
+    // INTERNAL
     // ============================================================================
 
     private fun ensureOpen() {
         if (closed) throw AccessClosedStorageException()
     }
 
-    // Ensures a node exists in the active layer; promotes from frozen if needed
-    private fun ensureNodeInActiveLayer(id: NodeID) {
+    private fun ensureNodeInActiveLayer(id: Int) {
         if (activeLayer.containsNode(id)) return
         if (frozenLayer?.containsNode(id) != true) throw EntityNotExistException(id)
-        activeLayer.addNode(id)
+        activeLayer.addNodeWithId(frozenLayer!!.getNodeProperties(id), id)
     }
 
     // ============================================================================
-    // INTERNAL VIEW TYPES
+    // VIEW TYPES
     // ============================================================================
 
-    // Overlays [overlay] on [base] without copying; single-key get() is O(1)
     private class LazyMergedMap(
         private val base: Map<String, IValue>,
         private val overlay: Map<String, IValue>,
@@ -415,7 +417,6 @@ class LayeredStorageImpl(
         override fun isEmpty(): Boolean = base.isEmpty() && overlay.isEmpty()
     }
 
-    // Combines [first] and [second] without copying; deduplicates on iteration
     private class UnionSet<E>(
         private val first: Set<E>,
         private val second: Set<E>,
