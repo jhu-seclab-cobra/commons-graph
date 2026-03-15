@@ -669,4 +669,141 @@ class NativeCsvIOImplTest {
     }
 
     // endregion
+
+    // region Uncovered branch coverage
+
+    @Test
+    fun `test isValidFile returns false when nodes csv exists but edges csv is empty`() {
+        val dir = tempDir.resolve("nodes_only_nonempty")
+        dir.createDirectories()
+        dir.resolve("nodes.csv").writeText("PROPS\nfoo")
+        dir.resolve("edges.csv").createFile()  // exists but empty (size == 0)
+
+        assertFalse(NativeCsvIOImpl.isValidFile(dir))
+    }
+
+    @Test
+    fun `test isValidFile returns false when edges csv exists but nodes csv is empty`() {
+        val dir = tempDir.resolve("edges_only_nonempty")
+        dir.createDirectories()
+        dir.resolve("nodes.csv").createFile()  // exists but empty
+        dir.resolve("edges.csv").writeText("__src__,__dst__,__type__\nfoo")
+
+        assertFalse(NativeCsvIOImpl.isValidFile(dir))
+    }
+
+    @Test
+    fun `test import skips malformed edge lines with fewer than 3 columns`() {
+        // Export a storage with a known edge, then corrupt the edge CSV
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdge(n1, n2, "rel")
+        val exportPath = tempDir.resolve("corrupt_edge")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        // Replace the edge data line with a malformed one (only 2 columns)
+        val edgesFile = exportPath.resolve("edges.csv")
+        val lines = edgesFile.toFile().readLines()
+        // Keep the header, replace data lines with a 2-column malformed line
+        val newContent = lines[0] + "\nonly_one_col\n"
+        edgesFile.toFile().writeText(newContent)
+
+        // Also fix nodes to have proper content so import can find node mappings
+        // Import should skip the malformed edge line without error
+        val target = NativeStorageImpl()
+        // Only nodes will be imported; the malformed edge line is skipped
+        NativeCsvIOImpl.import(exportPath, target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(0, target.edgeIDs.size)  // malformed edge skipped
+        target.close()
+    }
+
+    @Test
+    fun `test import skips node property with empty serialized value`() {
+        // Build a CSV where one node has a blank column for a header key — deserialize returns null, entry is skipped
+        val exportPath = tempDir.resolve("blank_prop")
+        exportPath.toFile().mkdirs()
+
+        // nodes.csv: header has two columns, first row leaves second blank → deserialize("") == null
+        exportPath.resolve("nodes.csv").toFile().writeText("__sid__,name\n0,\n")
+        exportPath.resolve("edges.csv").toFile()
+            .writeText("__src__,__dst__,__type__\n")
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, target)
+
+        assertEquals(1, target.nodeIDs.size)
+        val props = target.getNodeProperties(target.nodeIDs.first())
+        assertNull(props["name"])  // blank column → deserialize returned null → skipped
+        target.close()
+    }
+
+    @Test
+    fun `test import readMeta skips lines with fewer than 2 columns`() {
+        storage.addNode()
+        storage.setMeta("valid", "yes".strVal)
+        val exportPath = tempDir.resolve("bad_meta")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        // Append a malformed line (only 1 column) to meta.csv
+        val metaFile = exportPath.resolve("meta.csv")
+        metaFile.toFile().appendText("malformed_line_no_comma\n")
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, target)
+
+        // The valid meta entry should still be imported; malformed line skipped
+        assertEquals("yes", (target.getMeta("valid") as StrVal).core)
+        target.close()
+    }
+
+    @Test
+    fun `test import readMeta skips entry when value cannot be deserialized`() {
+        storage.addNode()
+        val exportPath = tempDir.resolve("bad_meta_value")
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        // Append a meta line with a value that cannot be deserialized
+        val metaFile = exportPath.resolve("meta.csv")
+        metaFile.toFile().appendText("broken_key,!!!NOT_A_VALID_VALUE!!!\n")
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, target)
+
+        // The broken entry is skipped; no meta should be set for it
+        assertNull(target.getMeta("broken_key"))
+        target.close()
+    }
+
+    @Test
+    fun `test import readNodes skips property when index out of range for that row`() {
+        // Export a storage then truncate the last data row to have fewer columns than the header,
+        // exercising the getOrNull(i) ?: continue branch in readNodes.
+        storage.addNode(mapOf("name" to "Alice".strVal, "age" to 30.numVal))
+        storage.addNode(mapOf("name" to "Bob".strVal, "age" to 25.numVal))
+        val exportPath2 = tempDir.resolve("short_row")
+        NativeCsvIOImpl.export(exportPath2, storage)
+
+        // Truncate the second data row to have fewer columns
+        val nodesFile = exportPath2.resolve("nodes.csv")
+        val lines = nodesFile.toFile().readLines().toMutableList()
+        // lines[0] = header, lines[1] = first node row, lines[2] = second node row
+        // Remove last column from the last row so getOrNull(i) returns null for the missing column
+        if (lines.size >= 3) {
+            val lastRow = lines[lines.size - 1]
+            val truncated = lastRow.substringBeforeLast(",")
+            lines[lines.size - 1] = truncated
+            nodesFile.toFile().writeText(lines.joinToString("\n") + "\n")
+        }
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath2, target)
+
+        // Both nodes imported; one may have a missing property on last column
+        assertEquals(2, target.nodeIDs.size)
+        target.close()
+    }
+
+    // endregion
 }
