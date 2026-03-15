@@ -9,10 +9,10 @@ import kotlin.test.assertTrue
 
 class MapDbIDSerializerTest {
     @Test
-    fun `test serialize and deserialize NodeID`() {
+    fun `test serialize and deserialize Int ID`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val id = "test_node"
+        val id = 42
         map["key"] = id
         assertEquals(id, map["key"])
         db.close()
@@ -22,8 +22,8 @@ class MapDbIDSerializerTest {
     fun `test multiple IDs in same map`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val nodeId = "node1"
-        val edgeId = "edge1"
+        val nodeId = 1
+        val edgeId = 2
 
         map["node"] = nodeId
         map["edge"] = edgeId
@@ -40,8 +40,8 @@ class MapDbIDSerializerTest {
 
         val db = DBMaker.fileDB(dbFile).make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val nodeId = "persistent_node"
-        val edgeId = "persistent_edge"
+        val nodeId = 100
+        val edgeId = 200
 
         map["node"] = nodeId
         map["edge"] = edgeId
@@ -55,41 +55,40 @@ class MapDbIDSerializerTest {
     }
 
     @Test
-    fun `test ID with special characters`() {
+    fun `test ID with zero value`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val id = "special@#\$%^&*()_+chars"
+        val id = 0
         map["key"] = id
         assertEquals(id, map["key"])
         db.close()
     }
 
     @Test
-    fun `test ID with unicode characters`() {
+    fun `test ID with negative value`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val id = "unicode测试字符"
+        val id = -1
         map["key"] = id
         assertEquals(id, map["key"])
         db.close()
     }
 
     @Test
-    fun `test ID with empty string`() {
+    fun `test ID with max int value`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val id = ""
+        val id = Int.MAX_VALUE
         map["key"] = id
         assertEquals(id, map["key"])
         db.close()
     }
 
     @Test
-    fun `test ID with very long string`() {
+    fun `test ID with min int value`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbIDSerializer()).createOrOpen()
-        val longString = "a".repeat(1000)
-        val id = longString
+        val id = Int.MIN_VALUE
         map["key"] = id
         assertEquals(id, map["key"])
         db.close()
@@ -99,8 +98,8 @@ class MapDbIDSerializerTest {
     fun `test ID in hashSet`() {
         val db = DBMaker.memoryDB().make()
         val set = db.hashSet("test", MapDbIDSerializer()).createOrOpen()
-        val id1 = "node1"
-        val id2 = "node2"
+        val id1 = 1
+        val id2 = 2
 
         set.add(id1)
         set.add(id2)
