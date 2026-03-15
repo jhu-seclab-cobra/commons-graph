@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
+import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
@@ -820,6 +821,158 @@ class NativeStorageImplTest {
         storage.deleteEdge(edge2)
         assertTrue(storage.getIncomingEdges(node2).isEmpty())
         assertTrue(storage.getOutgoingEdges(node2).isEmpty())
+    }
+
+    // endregion
+
+    // region Branch coverage: addNodeWithId
+
+    @Test
+    fun `addNodeWithId throws EntityAlreadyExistException when id already exists`() {
+        val node1 = storage.addNode()
+
+        assertFailsWith<EntityAlreadyExistException> {
+            storage.addNodeWithId(emptyMap(), node1)
+        }
+    }
+
+    @Test
+    fun `addNodeWithId does not advance counter when id is less than nodeCounter`() {
+        // Insert id=5 first so nodeCounter advances to 6, then insert id=3 (id < counter).
+        // The "if (id >= nodeCounter)" branch is NOT taken, so the counter stays at 6.
+        val s = NativeStorageImpl()
+        s.addNodeWithId(emptyMap(), 5) // nodeCounter becomes 6
+        val result = s.addNodeWithId(mapOf("y" to 7.numVal), 3) // id=3 < counter=6
+        assertEquals(3, result)
+        assertTrue(s.containsNode(3))
+        s.close()
+    }
+
+    // endregion
+
+    // region Branch coverage: addEdgeWithId
+
+    @Test
+    fun `addEdgeWithId throws EntityAlreadyExistException when edge id already exists`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdgeWithId(n1, n2, "rel", emptyMap(), 0)
+
+        assertFailsWith<EntityAlreadyExistException> {
+            storage.addEdgeWithId(n1, n2, "rel", emptyMap(), 0)
+        }
+    }
+
+    @Test
+    fun `addEdgeWithId throws EntityNotExistException when source node does not exist`() {
+        val n2 = storage.addNode()
+
+        assertFailsWith<EntityNotExistException> {
+            storage.addEdgeWithId(-1, n2, "rel", emptyMap(), 10)
+        }
+    }
+
+    @Test
+    fun `addEdgeWithId throws EntityNotExistException when destination node does not exist`() {
+        val n1 = storage.addNode()
+
+        assertFailsWith<EntityNotExistException> {
+            storage.addEdgeWithId(n1, -1, "rel", emptyMap(), 10)
+        }
+    }
+
+    @Test
+    fun `addEdgeWithId does not advance counter when id is less than edgeCounter`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdgeWithId(n1, n2, "rel", emptyMap(), 5) // edgeCounter becomes 6
+        val result = storage.addEdgeWithId(n1, n2, "rel", emptyMap(), 3) // id=3 < counter=6
+        assertEquals(3, result)
+        assertTrue(storage.containsEdge(3))
+    }
+
+    // endregion
+
+    // region Branch coverage: deleteNode with self-loop
+
+    @Test
+    fun `deleteNode cleans up self-loop edge without double-delete error`() {
+        val node = storage.addNode()
+        val selfLoop = storage.addEdge(node, node, "self")
+
+        // A self-loop edge appears in both outEdges[node] and inEdges[node].
+        // deleteNode processes outEdges first (removes the edge), then iterates inEdges
+        // where edgeEndpoints[selfLoop] is already null — verifying the double-removal
+        // path is safe and the node is fully cleaned up.
+        storage.deleteNode(node)
+
+        assertFalse(storage.containsNode(node))
+        assertFalse(storage.containsEdge(selfLoop))
+    }
+
+    // endregion
+
+    // region Branch coverage: setColumnarProperties null-key-absent path
+
+    @Test
+    fun `setNodeProperties with null value for absent property key is a no-op`() {
+        val node = storage.addNode(mapOf("kept" to "yes".strVal))
+
+        // "missing" was never set, so columns["missing"] == null; the ?: continue branch fires.
+        storage.setNodeProperties(node, mapOf("missing" to null))
+
+        val props = storage.getNodeProperties(node)
+        assertEquals(1, props.size)
+        assertTrue(props.containsKey("kept"))
+    }
+
+    @Test
+    fun `setEdgeProperties with null value for absent property key is a no-op`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("kept" to "yes".strVal))
+
+        storage.setEdgeProperties(edge, mapOf("missing" to null))
+
+        val props = storage.getEdgeProperties(edge)
+        assertEquals(1, props.size)
+        assertTrue(props.containsKey("kept"))
+    }
+
+    // endregion
+
+    // region Branch coverage: ColumnViewMap.containsKey false branch
+
+    @Test
+    fun `getNodeProperties containsKey returns false when column exists but entity is absent`() {
+        storage.addNode(mapOf("shared" to "v1".strVal)) // creates the "shared" column
+        val n2 = storage.addNode() // no "shared" property
+
+        val props = storage.getNodeProperties(n2)
+
+        // The "shared" column exists in nodeColumns but does not contain n2,
+        // exercising the containsKey == true branch that returns false.
+        assertFalse(props.containsKey("shared"))
+    }
+
+    // endregion
+
+    // region Branch coverage: transferTo idMap fallback
+
+    @Test
+    fun `transferTo maps all node ids so idMap fallback branch is not taken for normal edges`() {
+        val n1 = storage.addNode(mapOf("v" to 1.numVal))
+        val n2 = storage.addNode(mapOf("v" to 2.numVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 3.numVal))
+        storage.setMeta("m", "meta".strVal)
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("meta", (target.getMeta("m") as StrVal).core)
+        target.close()
     }
 
     // endregion

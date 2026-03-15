@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
+import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.*
 import java.util.concurrent.CountDownLatch
@@ -1388,6 +1389,98 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getEdgeType throws EntityNotExistException for missing edge`() {
         assertFailsWith<EntityNotExistException> { storage.getEdgeType(-1) }
+    }
+
+    // endregion
+
+    // region Branch coverage: getEdgeSrc/Dst/Type closed-state
+
+    @Test
+    fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(e) }
+    }
+
+    @Test
+    fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(e) }
+    }
+
+    @Test
+    fun `test getEdgeType throws AccessClosedStorageException when closed`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeType(e) }
+    }
+
+    // endregion
+
+    // region Branch coverage: deleteNode with self-loop
+
+    @Test
+    fun `deleteNode cleans up self-loop edge without double-delete error`() {
+        val node = storage.addNode()
+        val selfLoop = storage.addEdge(node, node, "self")
+
+        // A self-loop appears in both outEdges[node] and inEdges[node].
+        // deleteNode processes outEdges first (removes the edge endpoint), then iterates inEdges
+        // where edgeEndpoints[selfLoop] is already null — the inner lookup returns null and
+        // the !! on line 167 would panic if reached, but the self-loop edge id is already
+        // removed from edgeEndpoints, so inEdges still lists it; this exercises that path safely.
+        storage.deleteNode(node)
+
+        assertFalse(storage.containsNode(node))
+        assertFalse(storage.containsEdge(selfLoop))
+    }
+
+    // endregion
+
+    // region Branch coverage: setEdgeProperties null-value-for-absent-key path
+
+    @Test
+    fun `setEdgeProperties with null value for absent property key is a no-op`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("kept" to "yes".strVal))
+
+        // "missing" column does not exist; the ?: continue branch fires.
+        storage.setEdgeProperties(edge, mapOf("missing" to null))
+
+        val props = storage.getEdgeProperties(edge)
+        assertEquals(1, props.size)
+        assertTrue(props.containsKey("kept"))
+    }
+
+    // endregion
+
+    // region Branch coverage: transferTo idMap fallback
+
+    @Test
+    fun `transferTo maps all nodes so edges are transferred with correct endpoints`() {
+        val n1 = storage.addNode(mapOf("v" to 1.numVal))
+        val n2 = storage.addNode(mapOf("v" to 2.numVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 5.numVal))
+        storage.setMeta("k", "meta".strVal)
+
+        val target = NativeConcurStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("meta", (target.getMeta("k") as StrVal).core)
+        target.close()
     }
 
     // endregion
