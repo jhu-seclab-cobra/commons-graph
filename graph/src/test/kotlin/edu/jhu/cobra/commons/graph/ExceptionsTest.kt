@@ -5,16 +5,14 @@ import kotlin.test.*
 class ExceptionsTest {
     @Test
     fun `test EntityNotExistException message`() {
-        val id = NodeID("missing")
-        val ex = EntityNotExistException(id)
+        val ex = EntityNotExistException("missing")
         assertTrue(ex.message!!.contains("missing"))
         assertTrue(ex.message!!.contains("does not exist"))
     }
 
     @Test
     fun `test EntityAlreadyExistException message`() {
-        val id = NodeID("dup")
-        val ex = EntityAlreadyExistException(id)
+        val ex = EntityAlreadyExistException("dup")
         assertTrue(ex.message!!.contains("dup"))
         assertTrue(ex.message!!.contains("already exists"))
     }
@@ -27,22 +25,19 @@ class ExceptionsTest {
 
     @Test
     fun `test FrozenLayerModificationException message`() {
-        val id = NodeID("frozen_node")
-        val ex = FrozenLayerModificationException(id)
+        val ex = FrozenLayerModificationException("frozen_node")
         assertTrue(ex.message!!.contains("frozen_node"))
     }
 
     @Test
-    fun `test EntityNotExistException with EdgeID`() {
-        val eid = EdgeID(NodeID("a"), NodeID("b"), "rel")
-        val ex = EntityNotExistException(eid)
+    fun `test EntityNotExistException with InternalID`() {
+        val ex = EntityNotExistException("some-edge-id")
         assertTrue(ex.message!!.contains("does not exist"))
     }
 
     @Test
-    fun `test EntityAlreadyExistException with EdgeID`() {
-        val eid = EdgeID(NodeID("a"), NodeID("b"), "rel")
-        val ex = EntityAlreadyExistException(eid)
+    fun `test EntityAlreadyExistException with InternalID`() {
+        val ex = EntityAlreadyExistException("some-edge-id")
         assertTrue(ex.message!!.contains("already exists"))
     }
 }
