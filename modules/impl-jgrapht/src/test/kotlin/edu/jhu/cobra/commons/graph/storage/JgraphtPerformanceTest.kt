@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -169,6 +170,47 @@ class JgraphtPerformanceTest {
                     storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
                 }
             println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
+            storage.close()
+        }
+    }
+
+    @Test
+    fun `benchmark memory footprint`() {
+        val nodeCount = 10_000
+        val edgesPerNode = 3
+        val propsPerEntity = 5
+        println(
+            "\n=== JGraphT Memory Footprint ($nodeCount nodes, ${nodeCount * edgesPerNode} edges, $propsPerEntity props/entity) ===",
+        )
+        println(String.format("%-28s %14s", "Implementation", "heap delta MB"))
+        println("-".repeat(44))
+
+        for (name in implNames) {
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val before = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+
+            val storage = createStorage(name)
+            val nodeIds = mutableListOf<Int>()
+            for (i in 0 until nodeCount) {
+                val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
+                nodeIds.add(storage.addNode(props))
+            }
+            for (i in 0 until nodeCount) {
+                for (j in 1..edgesPerNode) {
+                    val dst = (i + j) % nodeCount
+                    val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_${j}_$it".strVal }
+                    storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", props)
+                }
+            }
+
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+            val deltaMB = (after - before) / (1024.0 * 1024.0)
+            println(String.format("%-28s %14.1f", name, deltaMB))
             storage.close()
         }
     }

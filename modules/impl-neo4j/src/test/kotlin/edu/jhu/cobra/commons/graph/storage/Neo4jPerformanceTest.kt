@@ -3,8 +3,11 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.fileSize
+import kotlin.io.path.isRegularFile
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -178,6 +181,59 @@ class Neo4jPerformanceTest {
                 }
             println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
             storage.close()
+        }
+    }
+
+    @Test
+    fun `benchmark memory and disk footprint`() {
+        val nodeCount = 10_000
+        val edgesPerNode = 3
+        val propsPerEntity = 5
+        println(
+            "\n=== Neo4j Memory & Disk Footprint ($nodeCount nodes, ${nodeCount * edgesPerNode} edges, $propsPerEntity props/entity) ===",
+        )
+        println(String.format("%-28s %14s %14s", "Implementation", "heap delta MB", "disk MB"))
+        println("-".repeat(58))
+
+        for (name in implNames) {
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val before = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+
+            val dir = Files.createTempDirectory("neo4j-mem")
+            tempDirs.add(dir)
+            val storage: IStorage =
+                when (name) {
+                    "Neo4jStorageImpl" -> Neo4jStorageImpl(dir)
+                    "Neo4jConcurStorageImpl" -> Neo4jConcurStorageImpl(dir)
+                    else -> throw IllegalArgumentException("Unknown: $name")
+                }
+            storages.add(storage)
+
+            for (i in 0 until nodeCount) {
+                val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
+                storage.addNode(props)
+            }
+            val nodeIds = storage.nodeIDs.toList()
+            for (i in 0 until nodeCount) {
+                for (j in 1..edgesPerNode) {
+                    val dst = (i + j) % nodeCount
+                    val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_${j}_$it".strVal }
+                    storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", props)
+                }
+            }
+
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+            val heapDeltaMB = (after - before) / (1024.0 * 1024.0)
+
+            storage.close()
+            val diskBytes = Files.walk(dir).filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+            val diskMB = diskBytes / (1024.0 * 1024.0)
+            println(String.format("%-28s %14.1f %14.1f", name, heapDeltaMB, diskMB))
         }
     }
 

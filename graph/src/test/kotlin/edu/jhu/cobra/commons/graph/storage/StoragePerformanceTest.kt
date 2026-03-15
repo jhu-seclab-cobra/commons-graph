@@ -400,6 +400,46 @@ class StoragePerformanceTest {
     // ========================================================================
 
     @Test
+    fun `benchmark memory footprint`() {
+        val nodeCount = 10_000
+        val edgesPerNode = 3
+        val propsPerEntity = 5
+        println(
+            "\n=== Memory Footprint ($nodeCount nodes, ${nodeCount * edgesPerNode} edges, $propsPerEntity props/entity) ===",
+        )
+        println(String.format("%-28s %14s", "Implementation", "heap delta MB"))
+        println("-".repeat(44))
+
+        for (name in implNames) {
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val before = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+
+            val storage = createStorage(name)
+            val nodeIds = Array(nodeCount) { i ->
+                val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
+                storage.addNode(props)
+            }
+            for (i in 0 until nodeCount) {
+                for (j in 1..edgesPerNode) {
+                    val dst = (i + j) % nodeCount
+                    val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_${j}_$it".strVal }
+                    storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", props)
+                }
+            }
+
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+            val deltaMB = (after - before) / (1024.0 * 1024.0)
+            println(String.format("%-28s %14.1f", name, deltaMB))
+            storage.close()
+        }
+    }
+
+    @Test
     fun `benchmark layered storage multi-layer query`() {
         val nodesPerLayer = 10_000
         val layerCounts = listOf(1, 3, 5, 10)

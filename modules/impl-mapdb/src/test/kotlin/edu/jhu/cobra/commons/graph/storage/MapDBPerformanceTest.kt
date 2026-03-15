@@ -1,6 +1,12 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
+import java.lang.management.ManagementFactory
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.fileSize
+import kotlin.io.path.isRegularFile
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -23,6 +29,8 @@ class MapDBPerformanceTest {
     fun cleanup() {
         storages.forEach { runCatching { it.close() } }
         storages.clear()
+        tempDirs.forEach { runCatching { it.toFile().deleteRecursively() } }
+        tempDirs.clear()
     }
 
     private data class MapDBConfig(
@@ -187,6 +195,114 @@ class MapDBPerformanceTest {
     // ========================================================================
     // BENCHMARK: CONFIG COMPARISON -- EDGE QUERY
     // ========================================================================
+
+    private val tempDirs = mutableListOf<Path>()
+
+    private fun directMemoryMB(): Double {
+        val pools = ManagementFactory.getPlatformMXBeans(java.lang.management.BufferPoolMXBean::class.java)
+        return pools.filter { it.name == "direct" }.sumOf { it.memoryUsed } / (1024.0 * 1024.0)
+    }
+
+    private fun diskSizeMB(dir: Path): Double =
+        Files.walk(dir).filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum() / (1024.0 * 1024.0)
+
+    private fun populateWithProps(
+        storage: IStorage,
+        nodeCount: Int,
+        edgesPerNode: Int,
+        propsPerEntity: Int,
+    ) {
+        val nodeIds = mutableListOf<Int>()
+        for (i in 0 until nodeCount) {
+            val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
+            nodeIds.add(storage.addNode(props))
+        }
+        for (i in 0 until nodeCount) {
+            for (j in 1..edgesPerNode) {
+                val dst = (i + j) % nodeCount
+                val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_${j}_$it".strVal }
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", props)
+            }
+        }
+    }
+
+    @Test
+    fun `benchmark memory footprint across configs`() {
+        val nodeCount = 10_000
+        val edgesPerNode = 3
+        val propsPerEntity = 5
+        println(
+            "\n=== MapDB Memory Footprint ($nodeCount nodes, ${nodeCount * edgesPerNode} edges, $propsPerEntity props/entity) ===",
+        )
+        println(String.format("%-28s %14s %14s %14s", "Config", "heap MB", "direct MB", "disk MB"))
+        println("-".repeat(72))
+
+        data class MemConfig(
+            val label: String,
+            val factory: (Path) -> IStorage,
+            val hasDisk: Boolean,
+        )
+
+        val memConfigs =
+            listOf(
+                MemConfig("MapDB[memoryDB]", { MapDBStorageImpl { memoryDB() } }, false),
+                MemConfig("MapDB[memoryDirectDB]", { MapDBStorageImpl { memoryDirectDB() } }, false),
+                MemConfig("MapDB[fileDB]", { dir -> MapDBStorageImpl { fileDB(dir.resolve("db").toFile()) } }, true),
+                MemConfig(
+                    "MapDB[fileDB+mmap]",
+                    { dir -> MapDBStorageImpl { fileDB(dir.resolve("db").toFile()).fileMmapEnableIfSupported() } },
+                    true,
+                ),
+                MemConfig("MapDBConcur[memoryDB]", { MapDBConcurStorageImpl { memoryDB() } }, false),
+                MemConfig("MapDBConcur[memDirect]", { MapDBConcurStorageImpl { memoryDirectDB() } }, false),
+                MemConfig(
+                    "MapDBConcur[fileDB]",
+                    { dir -> MapDBConcurStorageImpl { fileDB(dir.resolve("db").toFile()) } },
+                    true,
+                ),
+                MemConfig(
+                    "MapDBConcur[file+mmap]",
+                    { dir ->
+                        MapDBConcurStorageImpl { fileDB(dir.resolve("db").toFile()).fileMmapEnableIfSupported() }
+                    },
+                    true,
+                ),
+            )
+
+        for (cfg in memConfigs) {
+            val dir = Files.createTempDirectory("mapdb-mem")
+            tempDirs.add(dir)
+
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val heapBefore = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+            val directBefore = directMemoryMB()
+
+            val s = tracked(cfg.factory(dir))
+            populateWithProps(s, nodeCount, edgesPerNode, propsPerEntity)
+
+            System.gc()
+            Thread.sleep(200)
+            System.gc()
+            val heapAfter = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+            val directAfter = directMemoryMB()
+            val heapDelta = (heapAfter - heapBefore) / (1024.0 * 1024.0)
+            val directDelta = directAfter - directBefore
+            val diskMB = if (cfg.hasDisk) diskSizeMB(dir) else 0.0
+
+            println(
+                String.format(
+                    "%-28s %14.1f %14.1f %14s",
+                    cfg.label,
+                    heapDelta,
+                    directDelta,
+                    if (cfg.hasDisk) String.format("%.1f", diskMB) else "—",
+                ),
+            )
+            s.close()
+        }
+    }
 
     @Test
     fun `benchmark edge query across configs`() {
