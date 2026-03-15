@@ -41,66 +41,6 @@ class AbcNodeTest {
         otherStorage.close()
     }
 
-    // region NodeID construction
-
-    @Test
-    fun `test nodeID_constructFromString_returnsCorrectName`() {
-        val nodeId: NodeID = "node1"
-
-        assertEquals("node1", nodeId)
-        assertEquals("node1", nodeId.toString())
-    }
-
-    @Test
-    fun `test nodeID_emptyString_accepted`() {
-        val nodeId: NodeID = ""
-
-        assertEquals("", nodeId)
-        assertEquals("", nodeId.toString())
-    }
-
-    @Test
-    fun `test nodeID_specialCharacters_accepted`() {
-        val nodeId: NodeID = "node-123_test"
-
-        assertEquals("node-123_test", nodeId)
-    }
-
-    @Test
-    fun `test nodeID_unicodeCharacters_accepted`() {
-        val nodeId: NodeID = "节点_123"
-
-        assertEquals("节点_123", nodeId)
-    }
-
-    @Test
-    fun `test nodeID_veryLongString_accepted`() {
-        val longString = "a".repeat(1000)
-        val nodeId: NodeID = longString
-
-        assertEquals(1000, nodeId.length)
-    }
-
-    // endregion
-
-    // region NodeID equality
-
-    @Test
-    fun `test nodeID_sameName_equal`() {
-        val nid1: NodeID = "node1"
-        val nid2: NodeID = "node1"
-
-        assertEquals(nid1, nid2)
-        assertEquals(nid1.hashCode(), nid2.hashCode())
-    }
-
-    @Test
-    fun `test nodeID_differentNames_notEqual`() {
-        assertNotEquals("node1", "node2")
-    }
-
-    // endregion
-
     // region AbcNode property operations
 
     @Test

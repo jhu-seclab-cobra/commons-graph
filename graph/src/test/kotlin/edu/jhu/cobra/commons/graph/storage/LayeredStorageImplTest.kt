@@ -513,6 +513,256 @@ class LayeredStorageImplTest {
 
     // endregion
 
+    // region LazyMergedMap view coverage
+
+    @Test
+    fun `test property overlay map size counts deduplicated keys`() {
+        val node1 = storage.addNode(mapOf("a" to "frozen_a".strVal, "b" to "frozen_b".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node1, mapOf("a" to "active_a".strVal, "c" to "active_c".strVal))
+
+        val props = storage.getNodeProperties(node1)
+
+        assertEquals(3, props.size)
+    }
+
+    @Test
+    fun `test property overlay map containsKey checks both layers`() {
+        val node1 = storage.addNode(mapOf("frozen_only" to "v".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node1, mapOf("active_only" to "v".strVal))
+
+        val props = storage.getNodeProperties(node1)
+
+        assertTrue(props.containsKey("frozen_only"))
+        assertTrue(props.containsKey("active_only"))
+        assertFalse(props.containsKey("absent"))
+    }
+
+    @Test
+    fun `test property overlay map get prefers active over frozen`() {
+        val node1 = storage.addNode(mapOf("key" to "frozen".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node1, mapOf("key" to "active".strVal))
+
+        val props = storage.getNodeProperties(node1)
+
+        assertEquals("active", (props["key"] as StrVal).core)
+    }
+
+    @Test
+    fun `test property overlay map entries merges both layers`() {
+        val node1 = storage.addNode(mapOf("a" to "1".strVal, "b" to "2".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node1, mapOf("b" to "3".strVal, "c" to "4".strVal))
+
+        val entries = storage.getNodeProperties(node1).entries
+
+        val keys = entries.map { it.key }.toSet()
+        assertEquals(setOf("a", "b", "c"), keys)
+        assertEquals("3", (entries.first { it.key == "b" }.value as StrVal).core)
+    }
+
+    @Test
+    fun `test property overlay map isEmpty returns false when either layer has data`() {
+        val node1 = storage.addNode(mapOf("a" to "1".strVal))
+        storage.freeze()
+
+        val props = storage.getNodeProperties(node1)
+        assertFalse(props.isEmpty())
+    }
+
+    @Test
+    fun `test edge property overlay map size and iteration`() {
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge = storage.addEdge(node1, node2, "rel", mapOf("x" to "frozen".strVal, "y" to "frozen_y".strVal))
+        storage.freeze()
+        storage.setEdgeProperties(edge, mapOf("x" to "active".strVal, "z" to "active_z".strVal))
+
+        val props = storage.getEdgeProperties(edge)
+
+        assertEquals(3, props.size)
+        val keys = props.entries.map { it.key }.toSet()
+        assertEquals(setOf("x", "y", "z"), keys)
+    }
+
+    // endregion
+
+    // region UnionSet view coverage
+
+    @Test
+    fun `test nodeIDs union set size is correct`() {
+        val n1 = storage.addNode()
+        storage.freeze()
+        val n2 = storage.addNode()
+
+        val ids = storage.nodeIDs
+
+        assertEquals(2, ids.size)
+        assertTrue(ids.contains(n1))
+        assertTrue(ids.contains(n2))
+    }
+
+    @Test
+    fun `test nodeIDs union set iteration yields all nodes`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.freeze()
+        val n3 = storage.addNode()
+
+        val collected = storage.nodeIDs.toList()
+
+        assertEquals(3, collected.size)
+        assertTrue(n1 in collected)
+        assertTrue(n2 in collected)
+        assertTrue(n3 in collected)
+    }
+
+    @Test
+    fun `test edgeIDs union set size and iteration`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "rel1")
+        storage.freeze()
+        val n3 = storage.addNode()
+        val e2 = storage.addEdge(n1, n3, "rel2")
+
+        val ids = storage.edgeIDs
+
+        assertEquals(2, ids.size)
+        assertTrue(ids.contains(e1))
+        assertTrue(ids.contains(e2))
+        assertEquals(2, ids.toList().size)
+    }
+
+    @Test
+    fun `test adjacency union set size and contains`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e1 = storage.addEdge(n1, n2, "rel1")
+        storage.freeze()
+        val n3 = storage.addNode()
+        val e2 = storage.addEdge(n1, n3, "rel2")
+
+        val outgoing = storage.getOutgoingEdges(n1)
+
+        assertEquals(2, outgoing.size)
+        assertTrue(outgoing.contains(e1))
+        assertTrue(outgoing.contains(e2))
+        assertFalse(outgoing.isEmpty())
+    }
+
+    @Test
+    fun `test metaNames union set across layers`() {
+        storage.setMeta("frozenKey", "v1".strVal)
+        storage.freeze()
+        storage.setMeta("activeKey", "v2".strVal)
+
+        val names = storage.metaNames
+
+        assertEquals(2, names.size)
+        assertTrue(names.contains("frozenKey"))
+        assertTrue(names.contains("activeKey"))
+        assertFalse(names.isEmpty())
+        assertEquals(2, names.toList().size)
+    }
+
+    // endregion
+
+    // region Single-property access across layers
+
+    @Test
+    fun `test getNodeProperty returns active layer value over frozen`() {
+        val node = storage.addNode(mapOf("key" to "frozen".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node, mapOf("key" to "active".strVal))
+
+        assertEquals("active", (storage.getNodeProperty(node, "key") as StrVal).core)
+    }
+
+    @Test
+    fun `test getNodeProperty falls through to frozen layer`() {
+        val node = storage.addNode(mapOf("key" to "frozen".strVal))
+        storage.freeze()
+
+        assertEquals("frozen", (storage.getNodeProperty(node, "key") as StrVal).core)
+    }
+
+    @Test
+    fun `test getNodeProperty returns null for absent property`() {
+        val node = storage.addNode()
+        storage.freeze()
+
+        assertNull(storage.getNodeProperty(node, "absent"))
+    }
+
+    @Test
+    fun `test getNodeProperty throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperty(-1, "key") }
+    }
+
+    @Test
+    fun `test getEdgeProperty returns active layer value over frozen`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("key" to "frozen".strVal))
+        storage.freeze()
+        storage.setEdgeProperties(e, mapOf("key" to "active".strVal))
+
+        assertEquals("active", (storage.getEdgeProperty(e, "key") as StrVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperty falls through to frozen layer`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("key" to "frozen".strVal))
+        storage.freeze()
+
+        assertEquals("frozen", (storage.getEdgeProperty(e, "key") as StrVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperty returns null for absent property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+        storage.freeze()
+
+        assertNull(storage.getEdgeProperty(e, "absent"))
+    }
+
+    @Test
+    fun `test getEdgeProperty throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty(-1, "key") }
+    }
+
+    // endregion
+
+    // region TransferTo
+
+    @Test
+    fun `test transferTo copies all data across layers`() {
+        val n1 = storage.addNode(mapOf("name" to "A".strVal))
+        val n2 = storage.addNode(mapOf("name" to "B".strVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        storage.setMeta("version", "1.0".strVal)
+        storage.freeze()
+        val n3 = storage.addNode(mapOf("name" to "C".strVal))
+        storage.addEdge(n1, n3, "rel2")
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(3, target.nodeIDs.size)
+        assertEquals(2, target.edgeIDs.size)
+        assertEquals("1.0", (target.getMeta("version") as StrVal).core)
+        target.close()
+    }
+
+    // endregion
+
     // region Error paths
 
     @Test
