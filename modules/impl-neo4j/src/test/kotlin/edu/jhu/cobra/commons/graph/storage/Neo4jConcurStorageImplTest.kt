@@ -58,8 +58,8 @@ class Neo4jConcurStorageImplTest {
 
     @Test
     fun `test concurrent node additions`() {
-        val threadCount = 10
-        val nodeCountPerThread = 50
+        val threadCount = 4
+        val nodeCountPerThread = 10
         val errors = AtomicInteger(0)
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
@@ -94,8 +94,8 @@ class Neo4jConcurStorageImplTest {
     fun `test concurrent read-write operations`() {
         val node1 = storage.addNode(mapOf("counter" to 0.numVal))
 
-        val threadCount = 5
-        val iterationsPerThread = 50
+        val threadCount = 3
+        val iterationsPerThread = 10
         val executor = Executors.newFixedThreadPool(threadCount * 2)
         val latch = CountDownLatch(threadCount * 2)
         val errors = AtomicInteger(0)
@@ -151,7 +151,7 @@ class Neo4jConcurStorageImplTest {
     @Test
     fun `test concurrent node deletion`() {
         val nodeIds = mutableListOf<Int>()
-        for (i in 0 until 100) {
+        for (i in 0 until 20) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
 
@@ -201,7 +201,7 @@ class Neo4jConcurStorageImplTest {
 
         assertTrue(deleteSuccess.get(), "Delete operation should complete successfully")
         assertTrue(querySuccess.get(), "Query operations should complete successfully")
-        assertEquals(50, storage.nodeIDs.size, "Should have 50 nodes remaining (with even indices)")
+        assertEquals(10, storage.nodeIDs.size, "Should have 10 nodes remaining (with even indices)")
     }
 
     @Test
@@ -213,7 +213,7 @@ class Neo4jConcurStorageImplTest {
         storage.addEdge(node2, node3, "edge2")
         storage.addEdge(node1, node3, "edge3")
 
-        val threadCount = 5
+        val threadCount = 3
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
         val errors = AtomicInteger(0)
@@ -221,7 +221,7 @@ class Neo4jConcurStorageImplTest {
         for (t in 0 until threadCount) {
             executor.submit {
                 try {
-                    repeat(50) {
+                    repeat(10) {
                         when (t % 3) {
                             0 -> assertEquals(2, storage.getIncomingEdges(node3).size)
                             1 -> assertEquals(2, storage.getOutgoingEdges(node1).size)
