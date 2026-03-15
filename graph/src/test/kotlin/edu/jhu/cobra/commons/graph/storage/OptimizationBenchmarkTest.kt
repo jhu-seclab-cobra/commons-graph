@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
@@ -26,16 +24,6 @@ class OptimizationBenchmarkTest {
         closeables.clear()
     }
 
-    private val nodeIdPool = Array(100_001) { NodeID("n$it") }
-
-    private fun nodeId(i: Int): NodeID = nodeIdPool[i]
-
-    private fun edgeId(
-        src: Int,
-        dst: Int,
-        type: String = "e",
-    ): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
-
     private fun buildProperties(
         i: Int,
         propsPerEntity: Int,
@@ -52,21 +40,23 @@ class OptimizationBenchmarkTest {
         return props
     }
 
+    /**
+     * Populates storage and returns the node IDs array.
+     */
     private fun populateStorage(
         storage: IStorage,
         nodeCount: Int,
         edgesPerNode: Int,
         propsPerEntity: Int,
-    ) {
-        for (i in 0 until nodeCount) {
-            storage.addNode(nodeId(i), buildProperties(i, propsPerEntity))
-        }
+    ): Array<Int> {
+        val nodeIds = Array(nodeCount) { i -> storage.addNode(buildProperties(i, propsPerEntity)) }
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                storage.addEdge(edgeId(i, dst, "e$j"), buildProperties(i * edgesPerNode + j, propsPerEntity))
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", buildProperties(i * edgesPerNode + j, propsPerEntity))
             }
         }
+        return nodeIds
     }
 
     private companion object {
@@ -140,12 +130,12 @@ class OptimizationBenchmarkTest {
                     else -> NativeConcurStorageImpl()
                 }
             closeables.add(storage)
-            populateStorage(storage, nodeCount, edgesPerNode, propsPerEntity)
+            val nodeIds = populateStorage(storage, nodeCount, edgesPerNode, propsPerEntity)
 
-            val propsOps = benchmarkOpsPerSec(opCount) { i -> storage.getNodeProperties(nodeId(i % nodeCount)) }
-            val propOps = benchmarkOpsPerSec(opCount) { i -> storage.getNodeProperty(nodeId(i % nodeCount), "prop_0") }
-            val containsOps = benchmarkOpsPerSec(opCount) { i -> storage.containsNode(nodeId(i % nodeCount)) }
-            val edgeOps = benchmarkOpsPerSec(opCount) { i -> storage.getOutgoingEdges(nodeId(i % nodeCount)) }
+            val propsOps = benchmarkOpsPerSec(opCount) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }
+            val propOps = benchmarkOpsPerSec(opCount) { i -> storage.getNodeProperty(nodeIds[i % nodeCount], "prop_0") }
+            val containsOps = benchmarkOpsPerSec(opCount) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
+            val edgeOps = benchmarkOpsPerSec(opCount) { i -> storage.getOutgoingEdges(nodeIds[i % nodeCount]) }
 
             println(String.format("%-22s %14s %14s %14s %14s", name, fmt(propsOps), fmt(propOps), fmt(containsOps), fmt(edgeOps)))
             storage.close()
@@ -172,23 +162,25 @@ class OptimizationBenchmarkTest {
         for (layers in layerCounts) {
             val storage = LayeredStorageImpl()
             closeables.add(storage)
-            var totalNodes = 0
             for (layer in 0 until layers) {
+                val layerNodeIds = mutableListOf<Int>()
                 for (i in 0 until nodesPerLayer) {
-                    val nodeIdx = totalNodes + i
-                    storage.addNode(nodeId(nodeIdx), buildProperties(nodeIdx, propsPerEntity))
-                    if (nodeIdx > 0) {
-                        storage.addEdge(edgeId(nodeIdx, nodeIdx - 1, "e"), buildProperties(nodeIdx, 2))
+                    val nodeId = storage.addNode(buildProperties(layer * nodesPerLayer + i, propsPerEntity))
+                    layerNodeIds.add(nodeId)
+                    if (i > 0) {
+                        storage.addEdge(nodeId, layerNodeIds[i - 1], "e_L$layer", buildProperties(layer * nodesPerLayer + i, 2))
                     }
                 }
-                totalNodes += nodesPerLayer
                 if (layer < layers - 1) storage.freeze()
             }
+            // After freeze, re-query current node IDs from storage
+            val allNodeIds = storage.nodeIDs.toList()
+            val totalNodes = allNodeIds.size
 
-            val containsOps = benchmarkOpsPerSec(queryCount) { i -> storage.containsNode(nodeId(i % totalNodes)) }
-            val propsOps = benchmarkOpsPerSec(queryCount) { i -> storage.getNodeProperties(nodeId(i % totalNodes)) }
-            val propOps = benchmarkOpsPerSec(queryCount) { i -> storage.getNodeProperty(nodeId(i % totalNodes), "prop_0") }
-            val edgeOps = benchmarkOpsPerSec(queryCount) { i -> storage.getOutgoingEdges(nodeId(i % (totalNodes - 1) + 1)) }
+            val containsOps = benchmarkOpsPerSec(queryCount) { i -> storage.containsNode(allNodeIds[i % totalNodes]) }
+            val propsOps = benchmarkOpsPerSec(queryCount) { i -> storage.getNodeProperties(allNodeIds[i % totalNodes]) }
+            val propOps = benchmarkOpsPerSec(queryCount) { i -> storage.getNodeProperty(allNodeIds[i % totalNodes], "prop_0") }
+            val edgeOps = benchmarkOpsPerSec(queryCount) { i -> storage.getOutgoingEdges(allNodeIds[i % (totalNodes - 1) + 1]) }
 
             println(String.format("%-10s %14s %14s %14s %14s", "$layers", fmt(containsOps), fmt(propsOps), fmt(propOps), fmt(edgeOps)))
             storage.close()
@@ -213,33 +205,37 @@ class OptimizationBenchmarkTest {
 
         val native = NativeStorageImpl()
         closeables.add(native)
-        populateStorage(native, nodeCount, edgesPerNode, 2)
+        val nativeNodeIds = populateStorage(native, nodeCount, edgesPerNode, 2)
 
-        val nativeOutOps = benchmarkOpsPerSec(queryCount) { i -> native.getOutgoingEdges(nodeId(i % nodeCount)) }
-        val nativeInOps = benchmarkOpsPerSec(queryCount) { i -> native.getIncomingEdges(nodeId(i % nodeCount)) }
+        val nativeOutOps = benchmarkOpsPerSec(queryCount) { i -> native.getOutgoingEdges(nativeNodeIds[i % nodeCount]) }
+        val nativeInOps = benchmarkOpsPerSec(queryCount) { i -> native.getIncomingEdges(nativeNodeIds[i % nodeCount]) }
         println(String.format("%-22s %14s %14s", "NativeStorageImpl", fmt(nativeOutOps), fmt(nativeInOps)))
 
         val layered = LayeredStorageImpl()
         closeables.add(layered)
-        for (i in 0 until nodeCount) {
-            layered.addNode(nodeId(i), buildProperties(i, 2))
-        }
+        // Phase 1: populate frozen layer with nodes and half the edges
+        val frozenNodeIds = Array(nodeCount) { i -> layered.addNode(buildProperties(i, 2)) }
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode / 2) {
                 val dst = (i + j) % nodeCount
-                layered.addEdge(edgeId(i, dst, "e$j"), buildProperties(i, 2))
+                layered.addEdge(frozenNodeIds[i], frozenNodeIds[dst], "e$j", buildProperties(i, 2))
             }
         }
         layered.freeze()
+        // Phase 2: add new nodes and remaining edges in the active layer
+        val activeNodeIds = Array(nodeCount) { i -> layered.addNode(buildProperties(i + nodeCount, 2)) }
         for (i in 0 until nodeCount) {
             for (j in (edgesPerNode / 2 + 1)..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                layered.addEdge(edgeId(i, dst, "e$j"), buildProperties(i, 2))
+                layered.addEdge(activeNodeIds[i], activeNodeIds[dst], "e$j", buildProperties(i, 2))
             }
         }
+        // Query using all current node IDs (frozen + active)
+        val layeredNodeIds = layered.nodeIDs.toList().toTypedArray()
+        val layeredNodeCount = layeredNodeIds.size
 
-        val layeredOutOps = benchmarkOpsPerSec(queryCount) { i -> layered.getOutgoingEdges(nodeId(i % nodeCount)) }
-        val layeredInOps = benchmarkOpsPerSec(queryCount) { i -> layered.getIncomingEdges(nodeId(i % nodeCount)) }
+        val layeredOutOps = benchmarkOpsPerSec(queryCount) { i -> layered.getOutgoingEdges(layeredNodeIds[i % layeredNodeCount]) }
+        val layeredInOps = benchmarkOpsPerSec(queryCount) { i -> layered.getIncomingEdges(layeredNodeIds[i % layeredNodeCount]) }
         println(String.format("%-22s %14s %14s", "LayeredStorage(2 lyr)", fmt(layeredOutOps), fmt(layeredInOps)))
         println(
             String.format(

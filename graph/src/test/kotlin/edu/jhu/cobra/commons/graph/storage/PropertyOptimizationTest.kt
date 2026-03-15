@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.*
@@ -16,11 +15,6 @@ import kotlin.test.*
 class PropertyOptimizationTest {
     private lateinit var storage: IStorage
     private val storages = mutableListOf<IStorage>()
-
-    private val node1 = StorageTestUtils.node1
-    private val node2 = StorageTestUtils.node2
-    private val node3 = StorageTestUtils.node3
-    private val edge1 = StorageTestUtils.edge1
 
     @AfterTest
     fun cleanup() {
@@ -56,7 +50,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_existingProperty_returnsValue`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1, mapOf("weight" to 1.5.numVal, "name" to "a".strVal))
+            val node1 = s.addNode(mapOf("weight" to 1.5.numVal, "name" to "a".strVal))
 
             assertEquals(1.5.numVal, s.getNodeProperty(node1, "weight"), "Failed for $name")
             assertEquals("a".strVal, s.getNodeProperty(node1, "name"), "Failed for $name")
@@ -67,7 +61,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_absentProperty_returnsNull`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1, mapOf("weight" to 1.5.numVal))
+            val node1 = s.addNode(mapOf("weight" to 1.5.numVal))
 
             assertNull(s.getNodeProperty(node1, "nonexistent"), "Failed for $name")
         }
@@ -79,7 +73,7 @@ class PropertyOptimizationTest {
             val s = createStorage(name)
 
             assertFailsWith<EntityNotExistException>("Failed for $name") {
-                s.getNodeProperty(node1, "weight")
+                s.getNodeProperty(-1, "weight")
             }
         }
     }
@@ -88,7 +82,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_afterPropertyUpdate_returnsNewValue`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1, mapOf("weight" to 1.0.numVal))
+            val node1 = s.addNode(mapOf("weight" to 1.0.numVal))
             s.setNodeProperties(node1, mapOf("weight" to 2.0.numVal))
 
             assertEquals(2.0.numVal, s.getNodeProperty(node1, "weight"), "Failed for $name")
@@ -99,7 +93,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_afterPropertyDelete_returnsNull`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1, mapOf("weight" to 1.0.numVal))
+            val node1 = s.addNode(mapOf("weight" to 1.0.numVal))
             s.setNodeProperties(node1, mapOf("weight" to null))
 
             assertNull(s.getNodeProperty(node1, "weight"), "Failed for $name")
@@ -110,7 +104,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_emptyProperties_returnsNull`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1)
+            val node1 = s.addNode()
 
             assertNull(s.getNodeProperty(node1, "anything"), "Failed for $name")
         }
@@ -124,9 +118,9 @@ class PropertyOptimizationTest {
     fun `test getEdgeProperty_existingProperty_returnsValue`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1)
-            s.addNode(node2)
-            s.addEdge(edge1, mapOf("weight" to 3.0.numVal))
+            val node1 = s.addNode()
+            val node2 = s.addNode()
+            val edge1 = s.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("weight" to 3.0.numVal))
 
             assertEquals(3.0.numVal, s.getEdgeProperty(edge1, "weight"), "Failed for $name")
         }
@@ -136,9 +130,9 @@ class PropertyOptimizationTest {
     fun `test getEdgeProperty_absentProperty_returnsNull`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1)
-            s.addNode(node2)
-            s.addEdge(edge1)
+            val node1 = s.addNode()
+            val node2 = s.addNode()
+            val edge1 = s.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
             assertNull(s.getEdgeProperty(edge1, "nonexistent"), "Failed for $name")
         }
@@ -148,11 +142,11 @@ class PropertyOptimizationTest {
     fun `test getEdgeProperty_nonexistentEdge_throwsEntityNotExist`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1)
-            s.addNode(node2)
+            s.addNode()
+            s.addNode()
 
             assertFailsWith<EntityNotExistException>("Failed for $name") {
-                s.getEdgeProperty(edge1, "weight")
+                s.getEdgeProperty(-1, "weight")
             }
         }
     }
@@ -165,7 +159,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_layeredStorage_activeOverridesFrozen`() {
         val layered = LayeredStorageImpl()
         storages.add(layered)
-        layered.addNode(node1, mapOf("v" to 1.numVal))
+        val node1 = layered.addNode(mapOf("v" to 1.numVal))
         layered.freeze()
         layered.setNodeProperties(node1, mapOf("v" to 2.numVal))
 
@@ -176,7 +170,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_layeredStorage_frozenOnlyProperty_returnsValue`() {
         val layered = LayeredStorageImpl()
         storages.add(layered)
-        layered.addNode(node1, mapOf("frozen" to "yes".strVal, "shared" to 1.numVal))
+        val node1 = layered.addNode(mapOf("frozen" to "yes".strVal, "shared" to 1.numVal))
         layered.freeze()
         layered.setNodeProperties(node1, mapOf("shared" to 2.numVal))
 
@@ -192,7 +186,7 @@ class PropertyOptimizationTest {
     fun `test getNodeProperty_consistentWithGetNodeProperties`() {
         for (name in implNames) {
             val s = createStorage(name)
-            s.addNode(node1, mapOf("a" to 1.numVal, "b" to "x".strVal, "c" to 3.numVal))
+            val node1 = s.addNode(mapOf("a" to 1.numVal, "b" to "x".strVal, "c" to 3.numVal))
 
             val allProps = s.getNodeProperties(node1)
             for ((key, value) in allProps) {
@@ -220,26 +214,26 @@ class PropertyOptimizationTest {
 
         for (name in implNames) {
             val s = createStorage(name)
-            for (i in 0 until nodeCount) {
-                s.addNode(
-                    NodeID("n$i"),
-                    mapOf(
-                        "name" to "node$i".strVal,
-                        "idx" to i.numVal,
-                        "type" to "default".strVal,
-                        "weight" to 1.0.numVal,
-                        "active" to 1.numVal,
-                    ),
-                )
-            }
+            val nodeIds =
+                Array(nodeCount) { i ->
+                    s.addNode(
+                        mapOf(
+                            "name" to "node$i".strVal,
+                            "idx" to i.numVal,
+                            "type" to "default".strVal,
+                            "weight" to 1.0.numVal,
+                            "active" to 1.numVal,
+                        ),
+                    )
+                }
 
             val fullMapOps =
                 benchmarkOpsPerSec(opCount, warmup, measured) { i ->
-                    s.getNodeProperties(NodeID("n${i % nodeCount}"))["weight"]
+                    s.getNodeProperties(nodeIds[i % nodeCount])["weight"]
                 }
             val singleOps =
                 benchmarkOpsPerSec(opCount, warmup, measured) { i ->
-                    s.getNodeProperty(NodeID("n${i % nodeCount}"), "weight")
+                    s.getNodeProperty(nodeIds[i % nodeCount], "weight")
                 }
             val speedup = singleOps / fullMapOps
             println(
@@ -265,7 +259,7 @@ class PropertyOptimizationTest {
         val propsPerNode = 5
         val propNames = (0 until propsPerNode).map { "prop_$it" }
 
-        println("\n=== Memory Usage: Property Storage ($nodeCount nodes × $propsPerNode props) ===")
+        println("\n=== Memory Usage: Property Storage ($nodeCount nodes x $propsPerNode props) ===")
         println(String.format("%-24s %16s %16s %16s", "Implementation", "before (MB)", "after (MB)", "delta (MB)"))
         println("-".repeat(74))
 
@@ -278,7 +272,7 @@ class PropertyOptimizationTest {
             val s = createStorage(name)
             for (i in 0 until nodeCount) {
                 val props = propNames.associateWith { "$it-value-$i".strVal }
-                s.addNode(NodeID("n$i"), props)
+                s.addNode(props)
             }
 
             System.gc()
@@ -311,7 +305,6 @@ class PropertyOptimizationTest {
         val opCount = 100_000
         val warmup = 3
         val measured = 5
-        val totalNodes = nodesPerLayer * layers
 
         println("\n=== Layered Storage: Single Property Read ($layers layers, $nodesPerLayer nodes/layer) ===")
         println(String.format("%-20s %16s %10s", "Method", "ops/sec", ""))
@@ -319,23 +312,26 @@ class PropertyOptimizationTest {
 
         val layered = LayeredStorageImpl()
         storages.add(layered)
+        val allNodeIds = mutableListOf<Int>()
         for (layer in 0 until layers) {
             for (i in 0 until nodesPerLayer) {
-                layered.addNode(
-                    NodeID("n${layer * nodesPerLayer + i}"),
-                    mapOf("layer" to layer.numVal, "idx" to i.numVal, "tag" to "l$layer".strVal),
+                allNodeIds.add(
+                    layered.addNode(
+                        mapOf("layer" to layer.numVal, "idx" to i.numVal, "tag" to "l$layer".strVal),
+                    ),
                 )
             }
             if (layer < layers - 1) layered.freeze()
         }
+        val totalNodes = allNodeIds.size
 
         val fullOps =
             benchmarkOpsPerSec(opCount, warmup, measured) { i ->
-                layered.getNodeProperties(NodeID("n${i % totalNodes}"))["tag"]
+                layered.getNodeProperties(allNodeIds[i % totalNodes])["tag"]
             }
         val singleOps =
             benchmarkOpsPerSec(opCount, warmup, measured) { i ->
-                layered.getNodeProperty(NodeID("n${i % totalNodes}"), "tag")
+                layered.getNodeProperty(allNodeIds[i % totalNodes], "tag")
             }
 
         println(String.format("%-20s %16s", "getNodeProperties", fmt(fullOps)))

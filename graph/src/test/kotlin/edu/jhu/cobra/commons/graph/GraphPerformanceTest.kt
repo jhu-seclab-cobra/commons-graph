@@ -1,6 +1,10 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.storage.*
+import edu.jhu.cobra.commons.graph.poset.Label
+import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
+import edu.jhu.cobra.commons.graph.storage.NativeConcurStorageImpl
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -49,27 +53,25 @@ class GraphPerformanceTest {
 
     private fun createMultipleGraph(storageName: String): AbcMultipleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
         val s = createStorage(storageName)
-        val g = GraphTestUtils.createTestMultipleGraph(s)
+        val ps = NativeStorageImpl()
+        closeables.add(ps)
+        val g = GraphTestUtils.createTestMultipleGraph(s, ps)
         closeables.add(g)
         return g
     }
 
     private fun createSimpleGraph(storageName: String): AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
         val s = createStorage(storageName)
-        val g = GraphTestUtils.createTestSimpleGraph(s)
+        val ps = NativeStorageImpl()
+        closeables.add(ps)
+        val g = GraphTestUtils.createTestSimpleGraph(s, ps)
         closeables.add(g)
         return g
     }
 
-    private val nodeIdPool = Array(100_001) { NodeID("n$it") }
+    private val nodeIdPool = Array(100_001) { "n$it" }
 
     private fun nodeId(i: Int): NodeID = nodeIdPool[i]
-
-    private fun edgeId(
-        src: Int,
-        dst: Int,
-        type: String,
-    ): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
 
     private fun populateMultipleGraph(
         graph: IGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>,
@@ -80,7 +82,7 @@ class GraphPerformanceTest {
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                graph.addEdge(edgeId(i, dst, "e$j"))
+                graph.addEdge(nodeId(i), nodeId(dst), "e$j")
             }
         }
     }
@@ -269,8 +271,7 @@ class GraphPerformanceTest {
             val assignMs =
                 benchmarkMs(warmup = 1, measured = 3) {
                     var idx = 0
-                    for (eid in g.edgeIDs.take(nodeCount * edgesPerNode)) {
-                        val edge = g.getEdge(eid) ?: continue
+                    for (edge in g.getAllEdges().take(nodeCount * edgesPerNode)) {
                         edge.labels = setOf(labels[idx % labelCount])
                         idx++
                     }
@@ -289,6 +290,105 @@ class GraphPerformanceTest {
                     name,
                     fmtMs(assignMs),
                     fmt(filteredOps),
+                ),
+            )
+            g.close()
+        }
+    }
+
+    // ========================================================================
+    // BENCHMARK: COLD QUERY (each node accessed only 1-2 times)
+    // ========================================================================
+
+    @Test
+    fun `benchmark cold query pattern - each node accessed once`() {
+        val nodeCount = 50_000
+        val edgesPerNode = 3
+        println("\n=== Cold Query (each of $nodeCount nodes accessed 1-2 times, ${edgesPerNode}e/n) ===")
+        println(String.format("%-20s %12s %12s %12s", "Storage", "getNode", "getOutEdges", "getChildren"))
+        println("-".repeat(58))
+
+        for (name in storageNames) {
+            val g = createMultipleGraph(name)
+            populateMultipleGraph(g, nodeCount, edgesPerNode)
+
+            val getNodeOps =
+                benchmarkOpsPerSec(nodeCount, warmup = 1) { i ->
+                    g.getNode(nodeId(i))
+                }
+
+            val outEdgeOps =
+                benchmarkOpsPerSec(nodeCount, warmup = 1) { i ->
+                    g.getOutgoingEdges(nodeId(i)).count()
+                }
+
+            val childrenOps =
+                benchmarkOpsPerSec(nodeCount, warmup = 1) { i ->
+                    g.getChildren(nodeId(i)).count()
+                }
+
+            println(
+                String.format(
+                    "%-20s %12s %12s %12s",
+                    name,
+                    fmt(getNodeOps),
+                    fmt(outEdgeOps),
+                    fmt(childrenOps),
+                ),
+            )
+            g.close()
+        }
+    }
+
+    // ========================================================================
+    // BENCHMARK: MIXED ACCESS (most cold, some hot) + MEMORY
+    // ========================================================================
+
+    @Test
+    fun `benchmark mixed access pattern and memory usage`() {
+        val nodeCount = 50_000
+        val edgesPerNode = 3
+        val totalOps = 200_000
+        val hotNodeCount = 100
+        println("\n=== Mixed Access ($hotNodeCount hot nodes + ${nodeCount - hotNodeCount} cold, $totalOps ops, ${edgesPerNode}e/n) ===")
+        println(String.format("%-20s %12s %12s %14s", "Storage", "mixedOps/s", "getChild/s", "heapUsed(MB)"))
+        println("-".repeat(60))
+
+        // 80% of accesses go to hotNodeCount nodes, 20% spread across all
+        val rng = java.util.Random(42)
+        val accessPattern =
+            IntArray(totalOps) { i ->
+                if (rng.nextDouble() < 0.8) rng.nextInt(hotNodeCount) else rng.nextInt(nodeCount)
+            }
+
+        for (name in storageNames) {
+            val g = createMultipleGraph(name)
+            populateMultipleGraph(g, nodeCount, edgesPerNode)
+
+            val mixedGetNodeOps =
+                benchmarkOpsPerSec(totalOps, warmup = 1) { i ->
+                    g.getNode(nodeId(accessPattern[i]))
+                }
+
+            val mixedChildrenOps =
+                benchmarkOpsPerSec(totalOps, warmup = 1) { i ->
+                    g.getChildren(nodeId(accessPattern[i])).count()
+                }
+
+            // Measure heap after full access
+            System.gc()
+            Thread.sleep(100)
+            System.gc()
+            val runtime = Runtime.getRuntime()
+            val usedMB = (runtime.totalMemory() - runtime.freeMemory()) / (1024.0 * 1024.0)
+
+            println(
+                String.format(
+                    "%-20s %12s %12s %14s",
+                    name,
+                    fmt(mixedGetNodeOps),
+                    fmt(mixedChildrenOps),
+                    String.format("%.1f", usedMB),
                 ),
             )
             g.close()
