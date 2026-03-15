@@ -1,9 +1,14 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_DST
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_SRC
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_TAG
+import edu.jhu.cobra.commons.graph.AbcNode.Companion.META_ID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -25,18 +30,15 @@ class Phase1BenchmarkTest {
         closeables.clear()
     }
 
-    private val nodeIdPool = Array(100_001) { NodeID("n$it") }
+    private val nodeIdPool = Array(100_001) { "n$it" }
 
     private fun nodeId(i: Int): NodeID = nodeIdPool[i]
 
-    private fun edgeId(
-        src: Int,
-        dst: Int,
-        type: String = "e",
-    ): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
-
-    private fun createGraph(storage: IStorage): GraphTestUtils.TestMultipleGraph {
-        val g = GraphTestUtils.TestMultipleGraph(storage)
+    private fun createGraph(
+        storage: IStorage,
+        posetStorage: IStorage = NativeStorageImpl(),
+    ): GraphTestUtils.TestMultipleGraph {
+        val g = GraphTestUtils.TestMultipleGraph(storage, posetStorage)
         closeables.add(g)
         return g
     }
@@ -50,7 +52,7 @@ class Phase1BenchmarkTest {
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                graph.addEdge(edgeId(i, dst, "e$j"))
+                graph.addEdge(nodeId(i), nodeId(dst), "e$j")
             }
         }
     }
@@ -122,6 +124,7 @@ class Phase1BenchmarkTest {
         closeables.add(storage)
         val graph = createGraph(storage)
         populateGraph(graph, nodeCount, edgesPerNode)
+        val storageIds = storage.nodeIDs.toList()
 
         val graphContainOps =
             benchmarkOpsPerSec(queryCount) { i ->
@@ -129,7 +132,7 @@ class Phase1BenchmarkTest {
             }
         val storageContainOps =
             benchmarkOpsPerSec(queryCount) { i ->
-                storage.containsNode(nodeId(i % nodeCount))
+                storage.containsNode(storageIds[i % storageIds.size])
             }
 
         println(String.format("%-28s %14s", "graph.containNode (dual)", fmt(graphContainOps)))
@@ -156,6 +159,7 @@ class Phase1BenchmarkTest {
         closeables.add(storage)
         val graph = createGraph(storage)
         populateGraph(graph, nodeCount, edgesPerNode)
+        val storageIds = storage.nodeIDs.toList()
 
         // getNode
         val graphGetNodeOps =
@@ -164,7 +168,7 @@ class Phase1BenchmarkTest {
             }
         val storageGetNodeOps =
             benchmarkOpsPerSec(queryCount) { i ->
-                storage.containsNode(nodeId(i % nodeCount))
+                storage.containsNode(storageIds[i % storageIds.size])
             }
 
         // getOutgoingEdges (graph filters by edgeIDs)
@@ -174,7 +178,7 @@ class Phase1BenchmarkTest {
             }
         val storageOutEdgeOps =
             benchmarkOpsPerSec(queryCount) { i ->
-                storage.getOutgoingEdges(nodeId(i % nodeCount)).size
+                storage.getOutgoingEdges(storageIds[i % storageIds.size]).size
             }
 
         println(
@@ -205,20 +209,32 @@ class Phase1BenchmarkTest {
         val edgesPerNode = 3
         val totalEdges = nodeCount * edgesPerNode
 
-        println("\n=== B8: Memory Overhead — Redundant ID Sets ===")
+        println("\n=== B8: Memory Overhead — Graph Layer ===")
         println("$nodeCount nodes, $totalEdges edges")
         println(String.format("%-28s %14s", "Metric", "MB"))
         println("-".repeat(44))
 
-        // Storage only
+        // Storage with equivalent metadata (matches what graph.addNode/addEdge stores)
         val storageMB =
             measureHeapMB {
                 val s = NativeStorageImpl()
+                val ps = NativeStorageImpl()
                 closeables.add(s)
-                for (i in 0 until nodeCount) s.addNode(nodeId(i))
+                closeables.add(ps)
+                val sNodeIds = Array(nodeCount) { i ->
+                    s.addNode(mapOf(META_ID to nodeId(i).strVal))
+                }
                 for (i in 0 until nodeCount) {
                     for (j in 1..edgesPerNode) {
-                        s.addEdge(edgeId(i, (i + j) % nodeCount, "e$j"))
+                        val dst = (i + j) % nodeCount
+                        s.addEdge(
+                            sNodeIds[i], sNodeIds[dst], "e$j",
+                            mapOf(
+                                META_SRC to nodeId(i).strVal,
+                                META_DST to nodeId(dst).strVal,
+                                META_TAG to "e$j".strVal,
+                            ),
+                        )
                     }
                 }
             }
@@ -226,18 +242,20 @@ class Phase1BenchmarkTest {
         closeables.forEach { runCatching { (it as? IStorage)?.close() } }
         closeables.clear()
 
-        // Storage + graph (with redundant sets)
+        // Storage + graph (same data + graph-layer caches)
         val graphMB =
             measureHeapMB {
                 val s = NativeStorageImpl()
+                val ps = NativeStorageImpl()
                 closeables.add(s)
-                val g = createGraph(s)
+                closeables.add(ps)
+                val g = createGraph(s, ps)
                 populateGraph(g, nodeCount, edgesPerNode)
             }
 
-        println(String.format("%-28s %14s", "storage only", fmtMB(storageMB)))
-        println(String.format("%-28s %14s", "storage + graph (dual sets)", fmtMB(graphMB)))
-        println(String.format("%-28s %14s", "graph overhead (ID sets)", fmtMB(graphMB - storageMB)))
+        println(String.format("%-28s %14s", "storage (with metadata)", fmtMB(storageMB)))
+        println(String.format("%-28s %14s", "storage + graph layer", fmtMB(graphMB)))
+        println(String.format("%-28s %14s", "graph layer overhead", fmtMB(graphMB - storageMB)))
     }
 
     // ========================================================================
@@ -257,17 +275,15 @@ class Phase1BenchmarkTest {
         // IStorage approach: store analysis state as node properties
         val storage = NativeStorageImpl()
         closeables.add(storage)
-        for (i in 0 until nodeCount) {
-            storage.addNode(nodeId(i), mapOf("state" to 0.numVal))
-        }
+        val storageNodeIds = Array(nodeCount) { storage.addNode(mapOf("state" to 0.numVal)) }
 
         val storageReadOps =
             benchmarkOpsPerSec(iterCount) { i ->
-                storage.getNodeProperty(nodeId(i % nodeCount), "state")
+                storage.getNodeProperty(storageNodeIds[i % nodeCount], "state")
             }
         val storageWriteOps =
             benchmarkOpsPerSec(iterCount) { i ->
-                storage.setNodeProperties(nodeId(i % nodeCount), mapOf("state" to i.numVal))
+                storage.setNodeProperties(storageNodeIds[i % nodeCount], mapOf("state" to i.numVal))
             }
 
         // Direct array approach: O(1) indexed access without HashMap overhead
@@ -313,7 +329,7 @@ class Phase1BenchmarkTest {
                 val s = NativeStorageImpl()
                 closeables.add(s)
                 for (i in 0 until nodeCount) {
-                    s.addNode(nodeId(i), mapOf("state" to i.numVal))
+                    s.addNode(mapOf("state" to i.numVal))
                 }
             }
 
