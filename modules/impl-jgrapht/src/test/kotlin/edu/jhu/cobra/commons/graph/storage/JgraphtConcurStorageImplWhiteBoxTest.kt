@@ -108,18 +108,18 @@ class JgraphtConcurStorageImplWhiteBoxTest {
         storage.addEdge(node1, node2, "e12")
         storage.setMeta("key", "val".strVal)
 
-        assertTrue(storage.clear())
+        storage.clear()
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
     }
 
     @Test
-    fun `test clear on closed storage returns false`() {
+    fun `test clear on closed storage throws`() {
         storage.close()
         val fresh = JgraphtConcurStorageImpl()
         fresh.close()
-        assertFalse(fresh.clear())
+        assertFailsWith<AccessClosedStorageException> { fresh.clear() }
     }
 
     // -- Read/write lock atomicity under concurrent access --
@@ -127,7 +127,7 @@ class JgraphtConcurStorageImplWhiteBoxTest {
     @Test
     fun `test concurrent deleteNode does not cause ConcurrentModificationException`() {
         val nodeCount = 100
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) {
             nodeIds.add(storage.addNode())
         }

@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
@@ -152,25 +151,24 @@ class JgraphtStorageImplWhiteBoxTest {
     // -- clear() verifies both jgtGraph and property maps are empty --
 
     @Test
-    fun `test clear empties all internal structures and returns true`() {
+    fun `test clear empties all internal structures`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         storage.addEdge(node1, node2, "e12")
 
-        val result = storage.clear()
+        storage.clear()
 
-        assertTrue(result)
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
     }
 
     @Test
-    fun `test clear on already closed storage returns false`() {
+    fun `test clear on already closed storage throws`() {
         storage.close()
 
         val newStorage = JgraphtStorageImpl()
         newStorage.close()
-        assertFalse(newStorage.clear())
+        assertFailsWith<AccessClosedStorageException> { newStorage.clear() }
     }
 
     // -- close() sets isClosed via clear() --
@@ -273,43 +271,45 @@ class JgraphtStorageImplWhiteBoxTest {
     fun `test addEdge throws when src node missing`() {
         val node2 = storage.addNode()
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge("nonexistent", node2, "e12") }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(-1, node2, "e12") }
     }
 
     @Test
     fun `test addEdge throws when dst node missing`() {
         val node1 = storage.addNode()
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, "nonexistent", "e12") }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, -1, "e12") }
     }
 
     @Test
-    fun `test addEdge duplicate throws EntityAlreadyExistException`() {
+    fun `test addEdge duplicate same type allowed with auto-increment IDs`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
-        storage.addEdge(node1, node2, "e12")
+        val e1 = storage.addEdge(node1, node2, "e12")
+        val e2 = storage.addEdge(node1, node2, "e12")
 
-        assertFailsWith<EntityAlreadyExistException> { storage.addEdge(node1, node2, "e12") }
+        assertNotEquals(e1, e2)
+        assertEquals(2, storage.getOutgoingEdges(node1).size)
     }
 
     @Test
     fun `test deleteNode nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(-1) }
     }
 
     @Test
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteEdge("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.deleteEdge(-1) }
     }
 
     @Test
     fun `test getIncomingEdges nonexistent node throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(-1) }
     }
 
     @Test
     fun `test getOutgoingEdges nonexistent node throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(-1) }
     }
 
     // -- nodeIDs and edgeIDs return snapshot copies --

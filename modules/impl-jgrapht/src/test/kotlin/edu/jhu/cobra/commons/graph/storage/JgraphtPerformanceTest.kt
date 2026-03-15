@@ -37,8 +37,8 @@ class JgraphtPerformanceTest {
         storage: IStorage,
         nodeCount: Int,
         edgesPerNode: Int,
-    ): List<String> {
-        val nodeIds = mutableListOf<String>()
+    ): List<Int> {
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
@@ -144,7 +144,7 @@ class JgraphtPerformanceTest {
         println("-".repeat(44))
         for (name in implNames) {
             val storage = createStorage(name)
-            val nodeIds = mutableListOf<String>()
+            val nodeIds = mutableListOf<Int>()
             for (i in 0 until nodeCount) nodeIds.add(storage.addNode())
             val ops = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", name, fmt(ops)))
@@ -161,7 +161,7 @@ class JgraphtPerformanceTest {
         println("-".repeat(58))
         for (name in implNames) {
             val storage = createStorage(name)
-            val nodeIds = mutableListOf<String>()
+            val nodeIds = mutableListOf<Int>()
             for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.numVal)))
             val readOps = benchmarkOpsPerSec(count) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }
             val writeOps =
