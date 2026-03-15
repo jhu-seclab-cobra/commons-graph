@@ -1261,4 +1261,134 @@ class NativeConcurStorageImplTest {
     }
 
     // endregion
+
+    // region Single-property access and lifecycle
+
+    @Test
+    fun `test getNodeProperty returns existing property`() {
+        val node = storage.addNode(mapOf("name" to "test".strVal, "age" to 25.numVal))
+
+        assertEquals("test", (storage.getNodeProperty(node, "name") as StrVal).core)
+        assertEquals(25, (storage.getNodeProperty(node, "age") as NumVal).core)
+    }
+
+    @Test
+    fun `test getNodeProperty returns null for absent property`() {
+        val node = storage.addNode(mapOf("name" to "test".strVal))
+
+        assertNull(storage.getNodeProperty(node, "nonexistent"))
+    }
+
+    @Test
+    fun `test getNodeProperty throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperty(-1, "name") }
+    }
+
+    @Test
+    fun `test getNodeProperty throws AccessClosedStorageException when closed`() {
+        val node = storage.addNode()
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperty(node, "name") }
+    }
+
+    @Test
+    fun `test getEdgeProperty returns existing property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("weight" to 1.5.numVal))
+
+        assertEquals(1.5, (storage.getEdgeProperty(e, "weight") as NumVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperty returns null for absent property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        assertNull(storage.getEdgeProperty(e, "nonexistent"))
+    }
+
+    @Test
+    fun `test getEdgeProperty throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty(-1, "weight") }
+    }
+
+    @Test
+    fun `test getEdgeProperty throws AccessClosedStorageException when closed`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperty(e, "weight") }
+    }
+
+    @Test
+    fun `test transferTo copies nodes edges and metadata`() {
+        val n1 = storage.addNode(mapOf("name" to "A".strVal))
+        val n2 = storage.addNode(mapOf("name" to "B".strVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        storage.setMeta("version", "1.0".strVal)
+
+        val target = NativeConcurStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("1.0", (target.getMeta("version") as StrVal).core)
+        target.close()
+    }
+
+    @Test
+    fun `test transferTo throws AccessClosedStorageException when closed`() {
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> { storage.transferTo(NativeStorageImpl()) }
+    }
+
+    @Test
+    fun `test getEdgeSrc returns correct source`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        assertEquals(n1, storage.getEdgeSrc(e))
+    }
+
+    @Test
+    fun `test getEdgeDst returns correct destination`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        assertEquals(n2, storage.getEdgeDst(e))
+    }
+
+    @Test
+    fun `test getEdgeType returns correct type`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "myRelation")
+
+        assertEquals("myRelation", storage.getEdgeType(e))
+    }
+
+    @Test
+    fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(-1) }
+    }
+
+    @Test
+    fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(-1) }
+    }
+
+    @Test
+    fun `test getEdgeType throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeType(-1) }
+    }
+
+    // endregion
 }

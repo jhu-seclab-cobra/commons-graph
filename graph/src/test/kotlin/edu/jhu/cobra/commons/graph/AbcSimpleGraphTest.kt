@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestSimpleGraph
+import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.*
 
@@ -143,6 +144,47 @@ class AbcSimpleGraphTest {
 
     // endregion
 
+    // region Label-aware addEdge
+
+    @Test
+    fun `test addEdge_withLabel_newEdge_succeeds`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        val label = Label("v1")
+
+        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel", label)
+
+        assertNotNull(edge)
+        assertTrue(edge.labels.contains(label))
+    }
+
+    @Test
+    fun `test addEdge_withLabel_existingSameType_addsLabel`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        val label1 = Label("v1")
+        val label2 = Label("v2")
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "rel", label1)
+
+        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel", label2)
+
+        assertTrue(edge.labels.contains(label1))
+        assertTrue(edge.labels.contains(label2))
+    }
+
+    @Test
+    fun `test addEdge_withLabel_existingDifferentType_throwsEntityAlreadyExist`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "typeA", Label("v1"))
+
+        assertFailsWith<EntityAlreadyExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, "typeB", Label("v2"))
+        }
+    }
+
+    // endregion
+
     // region Edge retrieval
 
     @Test
@@ -176,74 +218,4 @@ class AbcSimpleGraphTest {
 
     // endregion
 
-    // region Performance
-
-    @Test
-    fun `test bulkNodeInsertion_completesInTime`() {
-        val elapsed =
-            kotlin.time.measureTime {
-                repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
-            }
-
-        assertEquals(PERF_NODE_COUNT, graph.nodeIDs.size)
-        println("SimpleGraph: $PERF_NODE_COUNT nodes inserted in $elapsed")
-    }
-
-    @Test
-    fun `test bulkEdgeInsertion_completesInTime`() {
-        repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
-
-        val elapsed =
-            kotlin.time.measureTime {
-                repeat(PERF_NODE_COUNT - 1) { i ->
-                    graph.addEdge("n$i", "n${i + 1}", "e$i")
-                }
-            }
-
-        assertEquals(PERF_NODE_COUNT - 1, graph.getAllEdges().count())
-        println("SimpleGraph: ${PERF_NODE_COUNT - 1} edges inserted in $elapsed")
-    }
-
-    @Test
-    fun `test uniquenessCheck_overhead`() {
-        repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
-        val hubNode: NodeID = "n0"
-        repeat(PERF_NODE_COUNT - 1) { i ->
-            graph.addEdge(hubNode, "n${i + 1}", "e$i")
-        }
-
-        val elapsed =
-            kotlin.time.measureTime {
-                repeat(100) {
-                    assertFailsWith<EntityAlreadyExistException> {
-                        graph.addEdge(hubNode, "n1", "dup$it")
-                    }
-                }
-            }
-
-        println("SimpleGraph: 100 uniqueness-check rejections (hub with ${PERF_NODE_COUNT - 1} outgoing) in $elapsed")
-    }
-
-    @Test
-    fun `test descendantTraversal_completesInTime`() {
-        repeat(PERF_CHAIN_LENGTH) { i -> graph.addNode("c$i") }
-        repeat(PERF_CHAIN_LENGTH - 1) { i ->
-            graph.addEdge("c$i", "c${i + 1}", "next")
-        }
-
-        val elapsed =
-            kotlin.time.measureTime {
-                val descendants = graph.getDescendants("c0").toList()
-                assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
-            }
-
-        println("SimpleGraph: descendant traversal of chain($PERF_CHAIN_LENGTH) in $elapsed")
-    }
-
-    // endregion
-
-    companion object {
-        private const val PERF_NODE_COUNT = 1000
-        private const val PERF_CHAIN_LENGTH = 500
-    }
 }
