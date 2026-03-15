@@ -350,4 +350,117 @@ class Neo4jStorageImplWhiteBoxTest {
         assertEquals(2, storage.getOutgoingEdges(n1).size)
     }
 
+    // -- getNodeProperty single-key accessor --
+
+    @Test
+    fun `test getNodeProperty returns existing property`() {
+        val n = storage.addNode(mapOf("color" to "blue".strVal))
+
+        val result = storage.getNodeProperty(n, "color")
+
+        assertEquals("blue", (result as StrVal).core)
+    }
+
+    @Test
+    fun `test getNodeProperty returns null for absent property`() {
+        val n = storage.addNode(mapOf("color" to "blue".strVal))
+
+        val result = storage.getNodeProperty(n, "missing")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `test getNodeProperty throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getNodeProperty(-1, "key")
+        }
+    }
+
+    // -- getEdgeProperty single-key accessor --
+
+    @Test
+    fun `test getEdgeProperty returns existing property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel", mapOf("weight" to "heavy".strVal))
+
+        val result = storage.getEdgeProperty(e, "weight")
+
+        assertEquals("heavy", (result as StrVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperty returns null for absent property`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "rel")
+
+        val result = storage.getEdgeProperty(e, "missing")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `test getEdgeProperty throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeProperty(-1, "key")
+        }
+    }
+
+    // -- transferTo --
+
+    @Test
+    fun `test transferTo copies all data`() {
+        val n1 = storage.addNode(mapOf("label" to "A".strVal))
+        val n2 = storage.addNode(mapOf("label" to "B".strVal))
+        storage.addEdge(n1, n2, "CONNECTS", mapOf("since" to "2024".strVal))
+        storage.setMeta("version", "1".strVal)
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("1", target.getMeta("version")?.core)
+    }
+
+    @Test
+    fun `test transferTo throws AccessClosedStorageException when closed`() {
+        storage.close()
+
+        assertFailsWith<AccessClosedStorageException> {
+            storage.transferTo(NativeStorageImpl())
+        }
+    }
+
+    // -- getEdgeSrc, getEdgeDst, getEdgeType --
+
+    @Test
+    fun `test getEdgeSrc returns correct source`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val e = storage.addEdge(src, dst, "rel")
+
+        assertEquals(src, storage.getEdgeSrc(e))
+    }
+
+    @Test
+    fun `test getEdgeDst returns correct destination`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val e = storage.addEdge(src, dst, "rel")
+
+        assertEquals(dst, storage.getEdgeDst(e))
+    }
+
+    @Test
+    fun `test getEdgeType returns correct type`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val e = storage.addEdge(n1, n2, "FOLLOWS")
+
+        assertEquals("FOLLOWS", storage.getEdgeType(e))
+    }
+
 }
