@@ -38,7 +38,10 @@ subprojects {
     // (in settings.gradle.kts) auto-downloads the required JDK if missing.
 
     configure<KotlinJvmProjectExtension> {
-        jvmToolchain(jvmVersion)
+        jvmToolchain {
+            languageVersion.set(JavaLanguageVersion.of(jvmVersion))
+            vendor.set(JvmVendorSpec.ADOPTIUM)
+        }
     }
 
     // ----- Java Library -----

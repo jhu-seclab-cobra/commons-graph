@@ -16,7 +16,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users")
 
-        assertEquals("Test@users#1", node.id.name)
+        assertEquals("Test@users#1", node.id)
         assertTrue(graph.containNode(node.id))
         assertEquals(1, graph.groupedNodesCounter["users"])
     }
@@ -27,8 +27,8 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         val node1 = graph.addGroupNode("users")
         val node2 = graph.addGroupNode("users")
 
-        assertEquals("Test@users#1", node1.id.name)
-        assertEquals("Test@users#2", node2.id.name)
+        assertEquals("Test@users#1", node1.id)
+        assertEquals("Test@users#2", node2.id)
         assertEquals(2, graph.groupedNodesCounter["users"])
     }
 
@@ -37,7 +37,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users", "custom")
 
-        assertEquals("Test@users#custom", node.id.name)
+        assertEquals("Test@users#custom", node.id)
         assertTrue(graph.containNode(node.id))
     }
 
@@ -47,7 +47,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         graph.addGroupNode("users", "custom")
         val node2 = graph.addGroupNode("users")
 
-        assertEquals("Test@users#2", node2.id.name)
+        assertEquals("Test@users#2", node2.id)
         assertEquals(2, graph.groupedNodesCounter["users"])
     }
 
@@ -56,7 +56,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users", null)
 
-        assertEquals("Test@users#1", node.id.name)
+        assertEquals("Test@users#1", node.id)
     }
 
     @Test
@@ -119,8 +119,8 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         val userNode = graph.addGroupNode("users", "item1")
         val productNode = graph.addGroupNode("products", "item1")
 
-        assertEquals("Test@users#item1", userNode.id.name)
-        assertEquals("Test@products#item1", productNode.id.name)
+        assertEquals("Test@users#item1", userNode.id)
+        assertEquals("Test@products#item1", productNode.id)
     }
 
     // endregion
@@ -133,7 +133,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         val node1 = graph.addGroupNode("users")
         val node2 = graph.addGroupNode(node1)
 
-        assertEquals("Test@users#2", node2.id.name)
+        assertEquals("Test@users#2", node2.id)
         assertTrue(graph.containNode(node2.id))
     }
 
@@ -143,7 +143,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         val node1 = graph.addGroupNode("users")
         val node2 = graph.addGroupNode(node1, "custom")
 
-        assertEquals("Test@users#custom", node2.id.name)
+        assertEquals("Test@users#custom", node2.id)
     }
 
     @Test
@@ -152,12 +152,12 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         val node1 = graph.addGroupNode("users", "node1")
         val node2 = graph.addGroupNode(node1, null)
 
-        assertEquals("Test@users#2", node2.id.name)
+        assertEquals("Test@users#2", node2.id)
     }
 
     @Test
     fun `test addGroupNode_invalidNodeFormat_throwsIllegalArgument`() {
-        val invalidNode = graph.addNode(NodeID("invalid-format"))
+        val invalidNode = graph.addNode("invalid-format")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(invalidNode)
         }
@@ -165,7 +165,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test addGroupNode_nodeIDMissingAt_throwsIllegalArgument`() {
-        val node = graph.addNode(NodeID("no-at-symbol"))
+        val node = graph.addNode("no-at-symbol")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(node)
         }
@@ -173,7 +173,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test addGroupNode_nodeIDMissingHash_throwsIllegalArgument`() {
-        val node = graph.addNode(NodeID("Test@group-only"))
+        val node = graph.addNode("Test@group-only")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(node)
         }
@@ -181,7 +181,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test addGroupNode_nodeGroupContainingAt_throwsIllegalArgument`() {
-        val node = graph.addNode(NodeID("Test@user@group#suffix"))
+        val node = graph.addNode("Test@user@group#suffix")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(node)
         }
@@ -189,7 +189,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test addGroupNode_nodeGroupContainingHash_throwsIllegalArgument`() {
-        val node = graph.addNode(NodeID("Test@user#group#suffix"))
+        val node = graph.addNode("Test@user#group#suffix")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(node)
         }
@@ -197,7 +197,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test addGroupNode_sameGroupNodeUnregistered_throwsIllegalArgument`() {
-        val node = graph.addNode(NodeID("Test@users#1"))
+        val node = graph.addNode("Test@users#1")
         assertFailsWith<IllegalArgumentException> {
             graph.addGroupNode(node)
         }
@@ -317,42 +317,42 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test getGroupName_missingAt_returnsNull`() {
-        val node = graph.addNode(NodeID("no-at-symbol"))
+        val node = graph.addNode("no-at-symbol")
 
         assertNull(graph.getGroupName(node))
     }
 
     @Test
     fun `test getGroupName_missingHash_returnsNull`() {
-        val node = graph.addNode(NodeID("Test@group-only"))
+        val node = graph.addNode("Test@group-only")
 
         assertNull(graph.getGroupName(node))
     }
 
     @Test
     fun `test getGroupName_atAtStart_returnsNull`() {
-        val node = graph.addNode(NodeID("@group#suffix"))
+        val node = graph.addNode("@group#suffix")
 
         assertNull(graph.getGroupName(node))
     }
 
     @Test
     fun `test getGroupName_hashBeforeAt_returnsNull`() {
-        val node = graph.addNode(NodeID("Test#group@suffix"))
+        val node = graph.addNode("Test#group@suffix")
 
         assertNull(graph.getGroupName(node))
     }
 
     @Test
     fun `test getGroupName_emptyGroupName_returnsNull`() {
-        val node = graph.addNode(NodeID("Test@#suffix"))
+        val node = graph.addNode("Test@#suffix")
 
         assertNull(graph.getGroupName(node))
     }
 
     @Test
     fun `test getGroupName_hashAtEnd_returnsGroupName`() {
-        val node = graph.addNode(NodeID("Test@group#"))
+        val node = graph.addNode("Test@group#")
 
         assertEquals("group", graph.getGroupName(node))
     }
@@ -375,7 +375,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
     @Test
     fun `test getGroupName_singleCharGroup_returnsGroupName`() {
-        val node = graph.addNode(NodeID("Test@a#suffix"))
+        val node = graph.addNode("Test@a#suffix")
 
         assertEquals("a", graph.getGroupName(node))
     }
@@ -408,7 +408,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
         val node3 = graph.addGroupNode("users")
 
-        assertEquals("Test@users#3", node3.id.name)
+        assertEquals("Test@users#3", node3.id)
         assertEquals(3, graph.groupedNodesCounter["users"])
     }
 
@@ -427,7 +427,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
         val node = graph.addGroupNode("users")
 
-        assertEquals("Test@users#6", node.id.name)
+        assertEquals("Test@users#6", node.id)
         assertEquals(6, graph.groupedNodesCounter["users"])
     }
 
@@ -450,7 +450,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
 
         val node = graph.addGroupNode("users")
 
-        assertEquals("Test@users#101", node.id.name)
+        assertEquals("Test@users#101", node.id)
         assertEquals(101, graph.groupedNodesCounter["users"])
     }
 
@@ -493,7 +493,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users", "custom")
 
-        assertEquals("Test@users#custom", node.id.name)
+        assertEquals("Test@users#custom", node.id)
     }
 
     @Test
@@ -501,14 +501,14 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users")
 
-        assertEquals("Test@users#1", node.id.name)
+        assertEquals("Test@users#1", node.id)
     }
 
     @Test
     fun `test nodeIDFormat_structure_threePartsCorrect`() {
         registerGroup("users")
         val node = graph.addGroupNode("users", "custom")
-        val parts = node.id.name.split("@", "#")
+        val parts = node.id.split("@", "#")
 
         assertEquals(3, parts.size)
         assertEquals("Test", parts[0])
@@ -526,7 +526,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup(longGroupName)
         val node = graph.addGroupNode(longGroupName)
 
-        assertEquals("Test@$longGroupName#1", node.id.name)
+        assertEquals("Test@$longGroupName#1", node.id)
     }
 
     @Test
@@ -535,7 +535,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users", longSuffix)
 
-        assertEquals("Test@users#$longSuffix", node.id.name)
+        assertEquals("Test@users#$longSuffix", node.id)
     }
 
     @Test
@@ -543,7 +543,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("user group")
         val node = graph.addGroupNode("user group")
 
-        assertEquals("Test@user group#1", node.id.name)
+        assertEquals("Test@user group#1", node.id)
     }
 
     @Test
@@ -551,7 +551,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("users")
         val node = graph.addGroupNode("users", "node 1")
 
-        assertEquals("Test@users#node 1", node.id.name)
+        assertEquals("Test@users#node 1", node.id)
     }
 
     @Test
@@ -559,7 +559,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         registerGroup("用户")
         val node = graph.addGroupNode("用户", "节点1")
 
-        assertEquals("Test@用户#节点1", node.id.name)
+        assertEquals("Test@用户#节点1", node.id)
     }
 
     @Test
@@ -569,7 +569,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         graph.addGroupNode("users", "2")
         val node3 = graph.addGroupNode("users")
 
-        assertEquals("Test@users#3", node3.id.name)
+        assertEquals("Test@users#3", node3.id)
     }
 
     @Test
@@ -579,7 +579,7 @@ class TraitNodeGroupTest : AbcTraitNodeGroupTest() {
         graph.delNode(node1.id)
         val node2 = graph.addGroupNode("users", "custom")
 
-        assertEquals("Test@users#custom", node2.id.name)
+        assertEquals("Test@users#custom", node2.id)
     }
 
     // endregion
