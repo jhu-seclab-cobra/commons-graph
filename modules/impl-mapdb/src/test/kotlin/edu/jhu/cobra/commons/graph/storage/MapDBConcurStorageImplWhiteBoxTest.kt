@@ -272,4 +272,113 @@ class MapDBConcurStorageImplWhiteBoxTest {
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
         assertFailsWith<EntityNotExistException> { storage.deleteEdge(-1) }
     }
+
+    // -- getNodeProperty --
+
+    @Test
+    fun `test getNodeProperty returns existing property`() {
+        val nodeId = storage.addNode(mapOf("color" to "red".strVal))
+
+        val result = storage.getNodeProperty(nodeId, "color")
+
+        assertEquals("red", (result as StrVal).core)
+    }
+
+    @Test
+    fun `test getNodeProperty returns null for absent property`() {
+        val nodeId = storage.addNode(mapOf("color" to "red".strVal))
+
+        val result = storage.getNodeProperty(nodeId, "missing")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `test getNodeProperty throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperty(-1, "key") }
+    }
+
+    // -- getEdgeProperty --
+
+    @Test
+    fun `test getEdgeProperty returns existing property`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel", mapOf("weight" to 42.numVal))
+
+        val result = storage.getEdgeProperty(edgeId, "weight")
+
+        assertEquals(42, (result as NumVal).core)
+    }
+
+    @Test
+    fun `test getEdgeProperty returns null for absent property`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel", mapOf("weight" to 42.numVal))
+
+        val result = storage.getEdgeProperty(edgeId, "missing")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `test getEdgeProperty throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty(-1, "key") }
+    }
+
+    // -- transferTo --
+
+    @Test
+    fun `test transferTo copies all data`() {
+        val node1 = storage.addNode(mapOf("x" to 1.numVal))
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "link", mapOf("w" to 2.numVal))
+        storage.setMeta("version", "1".strVal)
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("1", (target.getMeta("version") as StrVal).core)
+        target.close()
+    }
+
+    @Test
+    fun `test transferTo throws AccessClosedStorageException when closed`() {
+        storage.close()
+        val target = NativeStorageImpl()
+        assertFailsWith<AccessClosedStorageException> { storage.transferTo(target) }
+        target.close()
+    }
+
+    // -- getEdgeSrc, getEdgeDst, getEdgeType --
+
+    @Test
+    fun `test getEdgeSrc returns correct source`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+
+        assertEquals(src, storage.getEdgeSrc(edgeId))
+    }
+
+    @Test
+    fun `test getEdgeDst returns correct destination`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+
+        assertEquals(dst, storage.getEdgeDst(edgeId))
+    }
+
+    @Test
+    fun `test getEdgeType returns correct type`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "myType")
+
+        assertEquals("myType", storage.getEdgeType(edgeId))
+    }
 }
