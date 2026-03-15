@@ -41,11 +41,39 @@ Benchmark categories:
 
 ## Current Baseline
 
-_No benchmark data collected yet. Run the performance test to populate._
+Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tuned flags.
+
+### Graph Population (median ms)
+
+| Implementation | 10K/30K | 100K/300K | 1M/3M |
+|---|---|---|---|
+| JgraphtStorageImpl | 18.5 | 251.7 | 2939.6 |
+| JgraphtConcurStorageImpl | 14.2 | 232.5 | 2924.0 |
+
+### Node Lookup (500K lookups on 100K nodes)
+
+| Implementation | ops/sec |
+|---|---|
+| JgraphtStorageImpl | 40.46M |
+| JgraphtConcurStorageImpl | 24.20M |
+
+### Property Read/Write (200K ops on 50K nodes)
+
+| Implementation | Read | Write |
+|---|---|---|
+| JgraphtStorageImpl | 81.13M | 33.38M |
+| JgraphtConcurStorageImpl | 9.57M | 11.00M |
+
+### Edge Query (100K queries, 10K nodes / 50K edges)
+
+| Implementation | Outgoing | Incoming |
+|---|---|---|
+| JgraphtStorageImpl | 8.97M | 8.79M |
+| JgraphtConcurStorageImpl | 8.18M | 7.38M |
 
 ---
 
-## Optimization Candidates
+## Candidates
 
 ### J1: FastLookupGraphSpecificsStrategy
 
@@ -114,12 +142,16 @@ _None yet._
 
 ## Key Insights
 
-1. **JGraphT provides near-native HashMap performance for adjacency queries.** `incomingEdgesOf`/`outgoingEdgesOf` return internal Set references (O(1)), not copies. This makes JGraphT-backed storage competitive with NativeStorageImpl for edge queries.
+1. **JGraphT property read is the fastest of all implementations.** 81.13M ops/sec — faster than NativeStorageImpl (55.80M). JGraphT returns the internal `MutableMap` reference directly, while NativeStorage performs a HashMap lookup + optional copy.
 
-2. **Dual structure (JGraphT graph + property HashMap) requires strict synchronization.** A bug where `containsNode` checks only `nodeProperties` but not `jgtGraph` would be undetectable. All mutations must update both structures atomically.
+2. **JGraphT population is 4x slower than NativeStorage.** 251.7 ms vs 61.4 ms at 100K/300K. JGraphT's `DirectedPseudograph.addEdge()` maintains internal `DirectedEdgeContainer` per vertex (incoming/outgoing sets) with higher allocation overhead.
 
-3. **JGraphT vertex/edge type affects performance.** Using `Int` as both vertex and edge type in `DirectedPseudograph<Int, Int>` avoids object allocation overhead compared to domain objects (`NodeID`/`EdgeID`). JGraphT stores vertices/edges in `LinkedHashMap` internally.
+3. **ConcurStorage property read shows 8.5x slowdown.** 9.57M vs 81.13M. The `ReentrantReadWriteLock` overhead is disproportionately large for JGraphT because the underlying operation (direct HashMap reference return) is extremely fast (~12ns), making the lock acquisition cost (~20-50ns) a significant fraction.
 
-4. **`removeVertex` automatically deletes all edges.** Unlike Neo4j which throws `ConstraintViolationException`, JGraphT's `removeVertex` handles cascade deletion internally. Exploiting this avoids redundant manual edge cleanup.
+4. **Edge query performance is symmetric.** Outgoing 8.97M ≈ Incoming 8.79M. JGraphT's `DirectedEdgeContainer` provides O(1) access for both directions, unlike NativeStorageImpl where incoming queries (49.94M) trail outgoing (116.33M) due to separate adjacency set lookups.
 
-5. **In-memory only — no persistence overhead.** JGraphT-backed storage has no serialization, transaction, or disk I/O cost. The performance ceiling is JVM HashMap and JGraphT internal data structure speed, making it the fastest option for transient graphs.
+5. **JGraphT provides near-native HashMap performance for adjacency queries.** `incomingEdgesOf`/`outgoingEdgesOf` return internal Set references (O(1)), not copies. This makes JGraphT-backed storage competitive with NativeStorageImpl for edge queries.
+
+6. **`removeVertex` automatically deletes all edges.** Unlike Neo4j which throws `ConstraintViolationException`, JGraphT's `removeVertex` handles cascade deletion internally. Exploiting this avoids redundant manual edge cleanup.
+
+7. **In-memory only — no persistence overhead.** JGraphT-backed storage has no serialization, transaction, or disk I/O cost. The performance ceiling is JVM HashMap and JGraphT internal data structure speed, making it the fastest option for transient graphs.
