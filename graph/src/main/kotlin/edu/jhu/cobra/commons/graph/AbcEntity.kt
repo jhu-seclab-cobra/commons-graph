@@ -21,9 +21,9 @@ sealed class AbcEntity : IEntity {
      *
      * @param name The property name.
      * @return The property value as [T], or null if absent or type does not match.
-     * @see IEntity.getProp
+     * @see IEntity.get
      */
-    inline fun <reified T : IValue> getTypeProp(name: String): T? = getProp(name) as? T
+    inline fun <reified T : IValue> getTypeProp(name: String): T? = get(name) as? T
 
     /**
      * Creates a delegate for a non-nullable typed property.
@@ -31,7 +31,6 @@ sealed class AbcEntity : IEntity {
      * @param optName Optional custom property name; uses the property name if null.
      * @param default The default value if the property is absent.
      * @return A [ReadWriteProperty] delegate for property access and modification.
-     * @see IEntity.setProp
      */
     @Suppress("FunctionName")
     protected inline fun <reified T : IValue> EntityProperty(
@@ -41,13 +40,15 @@ sealed class AbcEntity : IEntity {
         override fun getValue(
             thisRef: IEntity,
             property: KProperty<*>,
-        ): T = thisRef.getProp(optName ?: property.name) as? T ?: default
+        ): T = thisRef[optName ?: property.name] as? T ?: default
 
         override fun setValue(
             thisRef: IEntity,
             property: KProperty<*>,
             value: T,
-        ) = thisRef.setProp(optName ?: property.name, value)
+        ) {
+            thisRef[optName ?: property.name] = value
+        }
     }
 
     /**
@@ -55,7 +56,6 @@ sealed class AbcEntity : IEntity {
      *
      * @param optName Optional custom property name; uses the property name if null.
      * @return A [ReadWriteProperty] delegate for property access and modification.
-     * @see IEntity.setProp
      */
     @Suppress("FunctionName")
     protected inline fun <reified T : IValue?> EntityProperty(optName: String? = null) =
@@ -63,14 +63,14 @@ sealed class AbcEntity : IEntity {
             override fun getValue(
                 thisRef: IEntity,
                 property: KProperty<*>,
-            ): T? = thisRef.getProp(optName ?: property.name) as? T
+            ): T? = thisRef[optName ?: property.name] as? T
 
             override fun setValue(
                 thisRef: IEntity,
                 property: KProperty<*>,
                 value: T?,
             ) {
-                value?.let { thisRef.setProp(optName ?: property.name, it) }
+                value?.let { thisRef[optName ?: property.name] = it }
             }
         }
 
@@ -97,7 +97,7 @@ sealed class AbcEntity : IEntity {
             property: KProperty<*>,
         ): T {
             val propName = optName ?: "${propPrefix}_${property.name}"
-            val typeStrVal = thisRef.getProp(propName) as? StrVal
+            val typeStrVal = thisRef[propName] as? StrVal
             return typeStrVal?.core?.let { enumTypeMap[it] } ?: default
         }
 
@@ -107,9 +107,9 @@ sealed class AbcEntity : IEntity {
             value: T,
         ) {
             val propName = optName ?: "${propPrefix}_${property.name}"
-            val prevValue = thisRef.getProp(propName) as? StrVal
+            val prevValue = thisRef[propName] as? StrVal
             if (prevValue?.core == value.name) return
-            thisRef.setProp(name = propName, value = value.name.strVal)
+            thisRef[propName] = value.name.strVal
         }
     }
 }

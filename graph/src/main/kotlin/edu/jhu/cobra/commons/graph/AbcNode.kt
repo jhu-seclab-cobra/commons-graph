@@ -3,70 +3,27 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.strVal
-import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Unique identifier for a node in the graph.
- *
- * Represents an immutable identifier as a string name.
- *
- * @property name The node identifier string.
- * @constructor Creates a [NodeID] from a string.
- * @param name The node identifier string.
- * @see IEntity.ID
+ * User-provided node identifier, stored as the `__id__` meta property.
  */
-data class NodeID(
-    val name: String,
-) : IEntity.ID {
-    /**
-     * Returns the string representation of this identifier.
-     *
-     * @return The identifier as string.
-     */
-    override val asString: String get() = name
-
-    /**
-     * Returns the serialized node identifier as a [StrVal].
-     *
-     * @return The string value representation.
-     */
-    override val serialize: StrVal get() = name.strVal
-
-    override fun toString() = name
-
-    /**
-     * Creates a [NodeID] from a [StrVal].
-     *
-     * @param strVal The string value representing the node identifier.
-     */
-    constructor(strVal: StrVal) : this(strVal.core)
-
-    companion object {
-        private val pool = ConcurrentHashMap<String, NodeID>()
-
-        // Returns a deduplicated NodeID for the given name to reduce allocation and GC pressure.
-        internal fun of(name: String): NodeID = pool.getOrPut(name) { NodeID(name) }
-
-        // Clears the intern pool for testing or state reset.
-        internal fun clearPool() = pool.clear()
-    }
-}
+typealias NodeID = String
 
 /**
  * Abstract base class for graph nodes with storage-backed property management.
  *
- * Provides property access, identity management, and storage integration for nodes.
+ * The node's [id] is the user-provided [NodeID], read from the `__id__` meta property.
+ * The [internalId] is the storage-generated opaque key, invisible to external code.
+ * Properties prefixed with `__` are internal metadata and filtered from external access.
  *
  * @property storage The storage system for node properties.
- * @constructor Creates a node with the given [IStorage].
- * @param storage The storage system for node properties.
+ * @property internalId The storage-generated opaque key for this node.
  * @see AbcEntity
  * @see IEntity
- * @see NodeID
  */
 abstract class AbcNode(
     protected val storage: IStorage,
+    internal val internalId: InternalID,
 ) : AbcEntity() {
     /**
      * Represents the type information for a node.
@@ -74,11 +31,10 @@ abstract class AbcNode(
     interface Type : IEntity.Type
 
     /**
-     * Returns the unique node identifier.
-     *
-     * @return The node's identifier.
+     * The user-provided node ID, read from `__id__` meta property.
      */
-    abstract override val id: NodeID
+    override val id: NodeID
+        get() = (storage.getNodeProperty(internalId, META_ID) as StrVal).core
 
     /**
      * Returns the node type information.
@@ -95,66 +51,40 @@ abstract class AbcNode(
      */
     fun doUseStorage(target: IStorage): Boolean = target == storage
 
-    /**
-     * Sets a property value for the node.
-     *
-     * @param name The property name.
-     * @param value The property value.
-     */
-    override fun setProp(
+    override fun get(name: String): IValue? {
+        require(!name.startsWith(META_PREFIX)) { "Cannot access meta property: $name" }
+        return storage.getNodeProperty(internalId, name)
+    }
+
+    override fun set(
         name: String,
         value: IValue?,
-    ) = storage.setNodeProperties(id, mapOf(name to value))
+    ) {
+        require(!name.startsWith(META_PREFIX)) { "Cannot set meta property: $name" }
+        storage.setNodeProperties(internalId, mapOf(name to value))
+    }
 
-    /**
-     * Sets multiple properties for the node.
-     *
-     * @param props Map of property names to values.
-     */
-    override fun setProps(props: Map<String, IValue?>) = storage.setNodeProperties(id, props)
+    override fun contains(name: String): Boolean {
+        require(!name.startsWith(META_PREFIX)) { "Cannot query meta property: $name" }
+        return storage.getNodeProperty(internalId, name) != null
+    }
 
-    /**
-     * Returns a property value from the node.
-     *
-     * @param name The property name.
-     * @return The property value, or null if absent.
-     */
-    override fun getProp(name: String): IValue? = storage.getNodeProperty(id, name)
+    override fun asMap(): Map<String, IValue> =
+        storage.getNodeProperties(internalId).filterKeys { !it.startsWith(META_PREFIX) }
 
-    /**
-     * Returns all properties of the node.
-     *
-     * @return Map of property names to values.
-     */
-    override fun getAllProps(): Map<String, IValue> = storage.getNodeProperties(id)
+    override fun update(props: Map<String, IValue?>) {
+        require(props.keys.none { it.startsWith(META_PREFIX) }) { "Cannot set meta properties" }
+        storage.setNodeProperties(internalId, props)
+    }
 
-    /**
-     * Returns true if the node contains the specified property.
-     *
-     * @param name The property name.
-     * @return True if the property exists, false otherwise.
-     */
-    override fun containProp(name: String): Boolean = storage.getNodeProperty(id, name) != null
-
-    /**
-     * Returns a string representation of the node.
-     *
-     * @return String containing node ID and type.
-     */
     override fun toString(): String = "{id=$id, type=${this.type}}"
 
-    /**
-     * Returns the hash code based on string representation.
-     *
-     * @return The hash code value.
-     */
     override fun hashCode(): Int = toString().hashCode()
 
-    /**
-     * Compares this node with another object for equality.
-     *
-     * @param other The object to compare with.
-     * @return True if other is a node with the same ID, false otherwise.
-     */
     override fun equals(other: Any?): Boolean = if (other is AbcNode) this.id == other.id else super.equals(other)
+
+    companion object {
+        internal const val META_PREFIX = "__"
+        internal const val META_ID = "__id__"
+    }
 }
