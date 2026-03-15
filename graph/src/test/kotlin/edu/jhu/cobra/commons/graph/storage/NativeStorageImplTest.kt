@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.*
@@ -9,13 +8,6 @@ import kotlin.test.*
 
 class NativeStorageImplTest {
     private lateinit var storage: NativeStorageImpl
-
-    private val node1 = StorageTestUtils.node1
-    private val node2 = StorageTestUtils.node2
-    private val node3 = StorageTestUtils.node3
-    private val edge1 = StorageTestUtils.edge1
-    private val edge2 = StorageTestUtils.edge2
-    private val edge3 = StorageTestUtils.edge3
 
     @BeforeTest
     fun setup() {
@@ -37,9 +29,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test nodeIDs property returns all nodes`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
 
         val nodeIds = storage.nodeIDs
 
@@ -51,12 +43,10 @@ class NativeStorageImplTest {
 
     @Test
     fun `test edgeIDs property returns all edges`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
 
         val edgeIds = storage.edgeIDs
 
@@ -90,12 +80,12 @@ class NativeStorageImplTest {
 
     @Test
     fun `test containsNode returns false for non-existent node`() {
-        assertFalse(storage.containsNode(node1))
+        assertFalse(storage.containsNode(-1))
     }
 
     @Test
     fun `test containsNode returns true for existing node`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         assertTrue(storage.containsNode(node1))
     }
@@ -105,13 +95,13 @@ class NativeStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.containsNode(node1)
+            storage.containsNode(-1)
         }
     }
 
     @Test
     fun `test addNode with empty properties`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.getNodeProperties(node1).isEmpty())
@@ -127,7 +117,7 @@ class NativeStorageImplTest {
                 "active" to true.boolVal,
             )
 
-        storage.addNode(node1, properties)
+        val node1 = storage.addNode(properties)
 
         assertTrue(storage.containsNode(node1))
         val props = storage.getNodeProperties(node1)
@@ -139,20 +129,11 @@ class NativeStorageImplTest {
     }
 
     @Test
-    fun `test addNode throws EntityAlreadyExistException when node exists`() {
-        storage.addNode(node1)
-
-        assertFailsWith<EntityAlreadyExistException> {
-            storage.addNode(node1)
-        }
-    }
-
-    @Test
     fun `test addNode throws AccessClosedStorageException when closed`() {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addNode(node1)
+            storage.addNode()
         }
     }
 
@@ -163,7 +144,7 @@ class NativeStorageImplTest {
                 "prop1" to "value1".strVal,
                 "prop2" to 42.numVal,
             )
-        storage.addNode(node1, properties)
+        val node1 = storage.addNode(properties)
 
         val props = storage.getNodeProperties(node1)
 
@@ -175,13 +156,13 @@ class NativeStorageImplTest {
     @Test
     fun `test getNodeProperties throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getNodeProperties(node1)
+            storage.getNodeProperties(-1)
         }
     }
 
     @Test
     fun `test getNodeProperties throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -191,7 +172,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setNodeProperties updates existing properties`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
 
         storage.setNodeProperties(node1, mapOf("prop1" to "updated".strVal, "prop2" to 42.numVal))
 
@@ -203,7 +184,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setNodeProperties deletes properties with null values`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(node1, mapOf("prop1" to null))
 
@@ -215,7 +196,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setNodeProperties with empty map does not change properties`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(node1, emptyMap())
 
@@ -227,7 +208,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setNodeProperties with mixed null and non-null values`() {
-        storage.addNode(node1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(
             node1,
@@ -248,13 +229,13 @@ class NativeStorageImplTest {
     @Test
     fun `test setNodeProperties throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties(node1, mapOf("prop" to "value".strVal))
+            storage.setNodeProperties(-1, mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun `test setNodeProperties throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -264,7 +245,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test deleteNode removes node`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         storage.deleteNode(node1)
 
@@ -273,11 +254,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test deleteNode does not cascade edge deletion`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge3)
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
 
         storage.deleteEdge(edge1)
         storage.deleteEdge(edge3)
@@ -293,13 +272,13 @@ class NativeStorageImplTest {
     @Test
     fun `test deleteNode throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteNode(node1)
+            storage.deleteNode(-1)
         }
     }
 
     @Test
     fun `test deleteNode throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -313,14 +292,14 @@ class NativeStorageImplTest {
 
     @Test
     fun `test containsEdge returns false for non-existent edge`() {
-        assertFalse(storage.containsEdge(edge1))
+        assertFalse(storage.containsEdge(-1))
     }
 
     @Test
     fun `test containsEdge returns true for existing edge`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
         assertTrue(storage.containsEdge(edge1))
     }
@@ -330,16 +309,16 @@ class NativeStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.containsEdge(edge1)
+            storage.containsEdge(-1)
         }
     }
 
     @Test
     fun `test addEdge with empty properties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
 
-        storage.addEdge(edge1)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
         assertTrue(storage.containsEdge(edge1))
         assertTrue(storage.getEdgeProperties(edge1).isEmpty())
@@ -347,15 +326,15 @@ class NativeStorageImplTest {
 
     @Test
     fun `test addEdge with properties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
         val properties =
             mapOf(
                 "weight" to 1.5.numVal,
                 "label" to "relation".strVal,
             )
 
-        storage.addEdge(edge1, properties)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, properties)
 
         assertTrue(storage.containsEdge(edge1))
         val props = storage.getEdgeProperties(edge1)
@@ -365,51 +344,52 @@ class NativeStorageImplTest {
     }
 
     @Test
-    fun `test addEdge throws EntityAlreadyExistException when edge exists`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+    fun `test addEdge allows multiple edges with same endpoints and type`() {
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val edge2 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
-        assertFailsWith<EntityAlreadyExistException> {
-            storage.addEdge(edge1)
-        }
+        assertNotEquals(edge1, edge2)
+        assertTrue(storage.containsEdge(edge1))
+        assertTrue(storage.containsEdge(edge2))
     }
 
     @Test
     fun `test addEdge throws EntityNotExistException when source node does not exist`() {
-        storage.addNode(node2)
+        val node2 = storage.addNode()
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(edge1)
+            storage.addEdge(-1, node2, StorageTestUtils.EDGE_TYPE_1)
         }
     }
 
     @Test
     fun `test addEdge throws EntityNotExistException when destination node does not exist`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(edge1)
+            storage.addEdge(node1, -1, StorageTestUtils.EDGE_TYPE_1)
         }
     }
 
     @Test
     fun `test addEdge throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addEdge(edge1)
+            storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         }
     }
 
     @Test
     fun `test getEdgeProperties returns all properties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
         val properties = mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal)
-        storage.addEdge(edge1, properties)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, properties)
 
         val props = storage.getEdgeProperties(edge1)
 
@@ -421,15 +401,15 @@ class NativeStorageImplTest {
     @Test
     fun `test getEdgeProperties throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getEdgeProperties(edge1)
+            storage.getEdgeProperties(-1)
         }
     }
 
     @Test
     fun `test getEdgeProperties throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -439,9 +419,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setEdgeProperties updates existing properties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal))
 
         storage.setEdgeProperties(edge1, mapOf("prop1" to "updated".strVal, "prop2" to 42.numVal))
 
@@ -453,9 +433,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setEdgeProperties deletes properties with null values`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setEdgeProperties(edge1, mapOf("prop1" to null))
 
@@ -467,9 +447,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test setEdgeProperties with empty map does not change properties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setEdgeProperties(edge1, emptyMap())
 
@@ -482,15 +462,15 @@ class NativeStorageImplTest {
     @Test
     fun `test setEdgeProperties throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.setEdgeProperties(edge1, mapOf("prop" to "value".strVal))
+            storage.setEdgeProperties(-1, mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun `test setEdgeProperties throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -500,9 +480,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test deleteEdge removes edge`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
         storage.deleteEdge(edge1)
 
@@ -513,9 +493,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test deleteEdge removes edge from graph structure leaving empty sets`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
         storage.deleteEdge(edge1)
 
@@ -529,15 +509,15 @@ class NativeStorageImplTest {
     @Test
     fun `test deleteEdge throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteEdge(edge1)
+            storage.deleteEdge(-1)
         }
     }
 
     @Test
     fun `test deleteEdge throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -551,7 +531,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getIncomingEdges returns empty set for node with no incoming edges`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         val incoming = storage.getIncomingEdges(node1)
 
@@ -560,12 +540,10 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getIncomingEdges returns correct edges for nodes with mixed connections`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1) // node1 -> node2
-        storage.addEdge(edge2) // node2 -> node3
-        storage.addEdge(edge3) // node1 -> node3
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3) // node1 -> node3
 
         val incoming2 = storage.getIncomingEdges(node2)
         assertEquals(1, incoming2.size)
@@ -579,9 +557,8 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getIncomingEdges handles self-loop edge`() {
-        storage.addNode(node1)
-        val selfLoop = EdgeID(node1, node1, "self")
-        storage.addEdge(selfLoop)
+        val node1 = storage.addNode()
+        val selfLoop = storage.addEdge(node1, node1, "self")
 
         val incoming = storage.getIncomingEdges(node1)
 
@@ -591,13 +568,13 @@ class NativeStorageImplTest {
     @Test
     fun `test getIncomingEdges throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges(node1)
+            storage.getIncomingEdges(-1)
         }
     }
 
     @Test
     fun `test getIncomingEdges throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -607,7 +584,7 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getOutgoingEdges returns empty set for node with no outgoing edges`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         val outgoing = storage.getOutgoingEdges(node1)
 
@@ -616,12 +593,10 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getOutgoingEdges returns correct edges for nodes with mixed connections`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1) // node1 -> node2
-        storage.addEdge(edge2) // node2 -> node3
-        storage.addEdge(edge3) // node1 -> node3
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3) // node1 -> node3
 
         val outgoing1 = storage.getOutgoingEdges(node1)
         assertEquals(2, outgoing1.size)
@@ -635,9 +610,8 @@ class NativeStorageImplTest {
 
     @Test
     fun `test getOutgoingEdges handles self-loop edge`() {
-        storage.addNode(node1)
-        val selfLoop = EdgeID(node1, node1, "self")
-        storage.addEdge(selfLoop)
+        val node1 = storage.addNode()
+        val selfLoop = storage.addEdge(node1, node1, "self")
 
         val outgoing = storage.getOutgoingEdges(node1)
 
@@ -647,13 +621,13 @@ class NativeStorageImplTest {
     @Test
     fun `test getOutgoingEdges throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getOutgoingEdges(node1)
+            storage.getOutgoingEdges(-1)
         }
     }
 
     @Test
     fun `test getOutgoingEdges throws AccessClosedStorageException when closed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -663,9 +637,8 @@ class NativeStorageImplTest {
 
     @Test
     fun `test deleteEdge handles self-loop edge`() {
-        storage.addNode(node1)
-        val selfLoop = EdgeID(node1, node1, "self")
-        storage.addEdge(selfLoop)
+        val node1 = storage.addNode()
+        val selfLoop = storage.addEdge(node1, node1, "self")
 
         storage.deleteEdge(selfLoop)
 
@@ -726,24 +699,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test clear removes all data including graph structure`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
-        storage.setMeta("key", "value".strVal)
-
-        val result = storage.clear()
-
-        assertTrue(result)
-        assertTrue(storage.nodeIDs.isEmpty())
-        assertTrue(storage.edgeIDs.isEmpty())
-        assertNull(storage.getMeta("key"))
-    }
-
-    @Test
-    fun `test clear removes all graph structure entries`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         storage.setMeta("key", "value".strVal)
 
         storage.clear()
@@ -751,17 +709,31 @@ class NativeStorageImplTest {
         assertTrue(storage.nodeIDs.isEmpty())
         assertTrue(storage.edgeIDs.isEmpty())
         assertNull(storage.getMeta("key"))
-        storage.addNode(node1)
-        storage.addNode(node2)
-        assertTrue(storage.getOutgoingEdges(node1).isEmpty())
-        assertTrue(storage.getIncomingEdges(node2).isEmpty())
     }
 
     @Test
-    fun `test clear on empty storage returns true`() {
-        val result = storage.clear()
+    fun `test clear removes all graph structure entries`() {
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        storage.setMeta("key", "value".strVal)
 
-        assertTrue(result)
+        storage.clear()
+
+        assertTrue(storage.nodeIDs.isEmpty())
+        assertTrue(storage.edgeIDs.isEmpty())
+        assertNull(storage.getMeta("key"))
+        val newNode1 = storage.addNode()
+        val newNode2 = storage.addNode()
+        assertTrue(storage.getOutgoingEdges(newNode1).isEmpty())
+        assertTrue(storage.getIncomingEdges(newNode2).isEmpty())
+    }
+
+    @Test
+    fun `test clear on empty storage succeeds`() {
+        storage.clear()
+
+        assertTrue(storage.nodeIDs.isEmpty())
     }
 
     @Test
@@ -775,18 +747,20 @@ class NativeStorageImplTest {
 
     @Test
     fun `test close prevents all operations`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.containsNode(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(node2) }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
         assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(node1) }
         assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(node1, mapOf()) }
         assertFailsWith<AccessClosedStorageException> { storage.deleteNode(node1) }
         assertFailsWith<AccessClosedStorageException> { storage.containsEdge(edge1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addEdge(edge1) }
+        assertFailsWith<AccessClosedStorageException> { storage.addEdge(node1, node2, "t") }
         assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(edge1) }
         assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(edge1, mapOf()) }
         assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(edge1) }
@@ -803,12 +777,10 @@ class NativeStorageImplTest {
 
     @Test
     fun `test graph structure consistency after multiple edge deletions`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
 
         storage.deleteEdge(edge1)
         assertTrue(storage.getOutgoingEdges(node1).contains(edge3))
@@ -830,11 +802,9 @@ class NativeStorageImplTest {
 
     @Test
     fun `test graph structure consistency when node has both incoming and outgoing edges`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1) // node1 -> node2
-        storage.addEdge(edge2) // node2 -> node3
+        val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
 
         val incoming2 = storage.getIncomingEdges(node2)
         assertEquals(1, incoming2.size)
@@ -859,13 +829,13 @@ class NativeStorageImplTest {
 
     @Test
     fun `test complex graph operations`() {
-        storage.addNode(node1, mapOf("name" to "Node1".strVal))
-        storage.addNode(node2, mapOf("name" to "Node2".strVal))
-        storage.addNode(node3, mapOf("name" to "Node3".strVal))
+        val node1 = storage.addNode(mapOf("name" to "Node1".strVal))
+        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
+        val node3 = storage.addNode(mapOf("name" to "Node3".strVal))
 
-        storage.addEdge(edge1, mapOf("weight" to 1.0.numVal))
-        storage.addEdge(edge2, mapOf("weight" to 2.0.numVal))
-        storage.addEdge(edge3, mapOf("weight" to 3.0.numVal))
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("weight" to 1.0.numVal))
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2, mapOf("weight" to 2.0.numVal))
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3, mapOf("weight" to 3.0.numVal))
 
         assertEquals(3, storage.nodeIDs.size)
         assertEquals(3, storage.edgeIDs.size)
