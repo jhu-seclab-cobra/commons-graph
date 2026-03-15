@@ -15,6 +15,7 @@ import java.io.Closeable
  * @see NativeStorageImpl
  * @see NativeConcurStorageImpl
  */
+@Suppress("TooManyFunctions")
 interface IStorage : Closeable {
     // ============================================================================
     // NODE OPERATIONS

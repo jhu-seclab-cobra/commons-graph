@@ -83,8 +83,7 @@ abstract class AbcEdge(
         return storage.getEdgeProperty(internalId, name) != null
     }
 
-    override fun asMap(): Map<String, IValue> =
-        storage.getEdgeProperties(internalId).filterKeys { !it.startsWith(META_PREFIX) }
+    override fun asMap(): Map<String, IValue> = storage.getEdgeProperties(internalId).filterKeys { !it.startsWith(META_PREFIX) }
 
     override fun update(props: Map<String, IValue?>) {
         require(props.keys.none { it.startsWith(META_PREFIX) }) { "Cannot set meta properties" }

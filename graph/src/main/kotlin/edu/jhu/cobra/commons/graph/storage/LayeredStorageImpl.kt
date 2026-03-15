@@ -22,6 +22,7 @@ import edu.jhu.cobra.commons.value.IValue
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
  * @see FrozenLayerModificationException
  */
+@Suppress("TooManyFunctions")
 class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
@@ -50,9 +51,10 @@ class LayeredStorageImpl(
         activeLayer.close()
         frozenLayers.clear()
         frozenLayers.add(merged)
-        activeLayer = NativeStorageImpl().apply {
-            setCounterStart(merged.nodeIDs.size, merged.edgeIDs.size)
-        }
+        activeLayer =
+            NativeStorageImpl().apply {
+                setCounterStart(merged.nodeIDs.size, merged.edgeIDs.size)
+            }
     }
 
     fun compact(topN: Int) {

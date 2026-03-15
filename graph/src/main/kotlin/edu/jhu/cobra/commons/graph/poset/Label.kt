@@ -3,6 +3,7 @@ package edu.jhu.cobra.commons.graph.poset
 import edu.jhu.cobra.commons.value.StrVal
 
 typealias LabelID = String
+
 /**
  * Value object representing a label in the partial-order structure (poset).
  *

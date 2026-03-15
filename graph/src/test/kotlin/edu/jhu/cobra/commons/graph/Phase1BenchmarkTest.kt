@@ -221,14 +221,17 @@ class Phase1BenchmarkTest {
                 val ps = NativeStorageImpl()
                 closeables.add(s)
                 closeables.add(ps)
-                val sNodeIds = Array(nodeCount) { i ->
-                    s.addNode(mapOf(META_ID to nodeId(i).strVal))
-                }
+                val sNodeIds =
+                    Array(nodeCount) { i ->
+                        s.addNode(mapOf(META_ID to nodeId(i).strVal))
+                    }
                 for (i in 0 until nodeCount) {
                     for (j in 1..edgesPerNode) {
                         val dst = (i + j) % nodeCount
                         s.addEdge(
-                            sNodeIds[i], sNodeIds[dst], "e$j",
+                            sNodeIds[i],
+                            sNodeIds[dst],
+                            "e$j",
                             mapOf(
                                 META_SRC to nodeId(i).strVal,
                                 META_DST to nodeId(dst).strVal,

@@ -32,8 +32,9 @@ import java.lang.ref.SoftReference
  */
 @Suppress("TooManyFunctions")
 abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
-    IGraph<N, E>, IPoset, Closeable 
-{
+    IGraph<N, E>,
+    IPoset,
+    Closeable {
     abstract val storage: IStorage
     abstract val posetStorage: IStorage
 
@@ -97,7 +98,11 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     }
 
     // Scans outgoing edges from srcSid to find one matching (dstSid, type)
-    private fun findEdge(srcSid: InternalID, dstSid: InternalID, type: String): InternalID? {
+    private fun findEdge(
+        srcSid: InternalID,
+        dstSid: InternalID,
+        type: String,
+    ): InternalID? {
         for (eid in storage.getOutgoingEdges(srcSid)) {
             if (storage.getEdgeDst(eid) == dstSid && storage.getEdgeType(eid) == type) return eid
         }
@@ -255,7 +260,17 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             if (existingEid != null) {
                 cachedEdge(existingEid)
             } else {
-                val eid = storage.addEdge(srcSid, dstSid, type, mapOf(META_SRC to src.strVal, META_DST to dst.strVal, META_TAG to type.strVal))
+                val eid =
+                    storage.addEdge(
+                        srcSid,
+                        dstSid,
+                        type,
+                        mapOf(
+                            META_SRC to src.strVal,
+                            META_DST to dst.strVal,
+                            META_TAG to type.strVal,
+                        ),
+                    )
                 newEdgeObj(eid)
             }
         edge.labels = edge.labels + label
@@ -371,7 +386,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getAncestors(
         of: NodeID,
-        edgeCond: (E) -> Boolean
+        edgeCond: (E) -> Boolean,
     ) = sequence {
         val sid = resolveStorageId(of) ?: return@sequence
         val visited = hashSetOf<InternalID>()

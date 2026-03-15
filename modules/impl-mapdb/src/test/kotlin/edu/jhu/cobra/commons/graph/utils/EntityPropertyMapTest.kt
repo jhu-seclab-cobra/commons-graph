@@ -1,11 +1,11 @@
 package edu.jhu.cobra.commons.graph.utils
 
 import edu.jhu.cobra.commons.value.*
+import org.mapdb.DB
+import org.mapdb.DBMaker
 import java.nio.file.Files
 import kotlin.io.path.createTempDirectory
 import kotlin.test.*
-import org.mapdb.DB
-import org.mapdb.DBMaker
 
 /**
  * Test the functionality of MapDB implementation of EntityPropertyMap

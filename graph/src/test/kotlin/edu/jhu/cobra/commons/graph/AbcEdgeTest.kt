@@ -34,11 +34,12 @@ class AbcEdgeTest {
         storage = NativeStorageImpl()
         srcStorageId = storage.addNode()
         dstStorageId = storage.addNode()
-        val metaProps = mapOf(
-            META_SRC to "src".strVal,
-            META_DST to "dst".strVal,
-            META_TAG to "relation".strVal,
-        )
+        val metaProps =
+            mapOf(
+                META_SRC to "src".strVal,
+                META_DST to "dst".strVal,
+                META_TAG to "relation".strVal,
+            )
         val eid = storage.addEdge(srcStorageId, dstStorageId, "relation", metaProps)
         testEdge = TestEdge(storage, eid)
     }
@@ -52,10 +53,13 @@ class AbcEdgeTest {
 
     @Test
     fun `test edgeID_differentType_differentId`() {
-        val eid2 = storage.addEdge(
-            srcStorageId, dstStorageId, "other",
-            mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
-        )
+        val eid2 =
+            storage.addEdge(
+                srcStorageId,
+                dstStorageId,
+                "other",
+                mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
+            )
         assertNotEquals(testEdge.internalId, eid2)
     }
 
@@ -267,10 +271,13 @@ class AbcEdgeTest {
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val eid2 = storage.addEdge(
-            srcStorageId, dstStorageId, "other",
-            mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
-        )
+        val eid2 =
+            storage.addEdge(
+                srcStorageId,
+                dstStorageId,
+                "other",
+                mapOf(META_SRC to "src".strVal, META_DST to "dst".strVal, META_TAG to "other".strVal),
+            )
         assertNotEquals(
             TestEdge(storage, testEdge.internalId),
             TestEdge(storage, eid2),

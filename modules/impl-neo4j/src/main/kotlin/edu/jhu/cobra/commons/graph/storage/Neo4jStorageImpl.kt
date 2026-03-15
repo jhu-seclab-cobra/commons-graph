@@ -104,11 +104,9 @@ class Neo4jStorageImpl(
         get() =
             if (isClosed) throw AccessClosedStorageException() else intToNeo4jEdge.keys.toSet()
 
-    override fun containsNode(id: Int): Boolean =
-        if (isClosed) throw AccessClosedStorageException() else intToNeo4jNode.containsKey(id)
+    override fun containsNode(id: Int): Boolean = if (isClosed) throw AccessClosedStorageException() else intToNeo4jNode.containsKey(id)
 
-    override fun containsEdge(id: Int): Boolean =
-        if (isClosed) throw AccessClosedStorageException() else intToNeo4jEdge.containsKey(id)
+    override fun containsEdge(id: Int): Boolean = if (isClosed) throw AccessClosedStorageException() else intToNeo4jEdge.containsKey(id)
 
     override fun addNode(properties: Map<String, IValue>): Int =
         writeTx {

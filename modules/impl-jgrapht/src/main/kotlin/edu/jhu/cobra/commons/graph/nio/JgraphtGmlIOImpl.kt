@@ -33,6 +33,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         return file.fileSize() > 0 && "text" in Files.probeContentType(file)
     }
 
+    @Suppress("LongMethod")
     override fun export(
         dstFile: Path,
         from: IStorage,
@@ -76,7 +77,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         return dstFile
     }
 
-    @Suppress("LongMethod")
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     override fun import(
         srcFile: Path,
         into: IStorage,

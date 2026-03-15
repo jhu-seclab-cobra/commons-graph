@@ -7,17 +7,17 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
  * Test utilities for graph tests providing shared test data and helper functions.
  */
 object GraphTestUtils {
-    const val nodeId1: NodeID = "node1"
-    const val nodeId2: NodeID = "node2"
-    const val nodeId3: NodeID = "node3"
-    const val nodeId4: NodeID = "node4"
-    const val nodeId5: NodeID = "node5"
+    const val NODE_ID_1: NodeID = "node1"
+    const val NODE_ID_2: NodeID = "node2"
+    const val NODE_ID_3: NodeID = "node3"
+    const val NODE_ID_4: NodeID = "node4"
+    const val NODE_ID_5: NodeID = "node5"
 
-    const val edgeType1 = "edge1"
-    const val edgeType2 = "edge2"
-    const val edgeType3 = "edge3"
-    const val edgeType4 = "edge4"
-    const val edgeType5 = "edge5"
+    const val EDGE_TYPE_1 = "edge1"
+    const val EDGE_TYPE_2 = "edge2"
+    const val EDGE_TYPE_3 = "edge3"
+    const val EDGE_TYPE_4 = "edge4"
+    const val EDGE_TYPE_5 = "edge5"
 
     class TestNode(
         storage: IStorage,

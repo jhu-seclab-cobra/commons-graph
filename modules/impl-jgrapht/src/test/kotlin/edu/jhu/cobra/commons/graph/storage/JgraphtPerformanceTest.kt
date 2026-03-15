@@ -61,7 +61,7 @@ class JgraphtPerformanceTest {
         setup: () -> Unit = {},
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) {
+        for (_w in 0 until warmup) {
             setup()
             for (i in 0 until ops) op(i)
         }
@@ -83,7 +83,7 @@ class JgraphtPerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (w in 0 until warmup) block()
+        for (_w in 0 until warmup) block()
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
