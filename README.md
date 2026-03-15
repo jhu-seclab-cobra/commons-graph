@@ -209,16 +209,16 @@ Non-concurrent implementations, best config per backend:
 
 | Metric | NativeStorage | JGraphT | MapDB | Neo4j |
 |---|---:|---:|---:|---:|
-| **Population** (10K/30K) | **2.6 ms** | 18.5 ms | ~300 ms | ~38,000 ms |
-| **Node Lookup** (ops/sec) | **143.54M** | 40.46M | 1.83M | 23.40M \* |
-| **Property Read** (ops/sec) | **~46M** | **~46M** | 1.61M | 452.5K |
-| **Property Write** (ops/sec) | **~40M** | ~20M | 94.7K | 116 |
-| **Edge Query Out** (ops/sec) | **116.33M** | 8.97M | 1.52M | 696.8K |
-| **Edge Query In** (ops/sec) | **49.94M** | 8.79M | 1.51M | 744.7K |
+| **Population** (10K/30K) | **3.0 ms** | 18.5 ms | ~300 ms | ~38,000 ms |
+| **Node Lookup** (ops/sec) | **~89M** | 40.46M | 1.83M | 23.40M \* |
+| **Property Read** (ops/sec) | **~50M** | **~46M** | 1.61M | 452.5K |
+| **Property Write** (ops/sec) | **~20M** | ~20M | 94.7K | 116 |
+| **Edge Query Out** (ops/sec) | **~120M** | 8.97M | 1.52M | 696.8K |
+| **Edge Query In** (ops/sec) | **~111M** | 8.79M | 1.51M | 744.7K |
 
 > \* Neo4j node lookup checks an in-memory HashMap, not Neo4j transactions.
 >
-> Property Read/Write numbers are median of 5 independent JVM runs (cross-run validated). Single-run numbers show up to 2.8x JIT variance.
+> NativeStorage numbers are median of 5 independent JVM runs (cross-run validated). Single-run numbers show up to 2.8x JIT variance.
 >
 > MapDB uses `memoryDB` config. `tempFile+mmap` is comparable; `tempFileDB` without mmap is 10x slower.
 
@@ -228,8 +228,8 @@ Measured with 10K nodes / 30K edges (3 edges/node), 5 properties per entity. Hea
 
 | Backend | Heap (MB) | Off-heap (MB) | Disk (MB) | Total (MB) |
 |---|---:|---:|---:|---:|
-| **NativeStorage** | **45.4** | — | — | **45.4** |
-| **LayeredStorage** | 47.3 | — | — | 47.3 |
+| **NativeStorage** | **42.8** | — | — | **42.8** |
+| **LayeredStorage** | 44.7 | — | — | 44.7 |
 | **JGraphT** | 52.8 | — | — | 52.8 |
 | **MapDB (memoryDB)** | 53.6 | — | — | 53.6 |
 | **MapDB (memoryDirectDB)** | 13.7 | 34.0 | — | 47.7 |
@@ -239,7 +239,7 @@ Measured with 10K nodes / 30K edges (3 edges/node), 5 properties per entity. Hea
 
 > \* Neo4j heap delta is unreliable in single-run measurement (GC timing, JIT warmup, embedded DB internals). Reported as average of two runs.
 >
-> NativeStorage scales ~4.5 MB per 1K nodes (with 3K edges, 5 props/entity).
+> NativeStorage scales ~4.3 MB per 1K nodes (with 3K edges, 5 props/entity).
 >
 > MapDB total footprint (~48 MB) is comparable to NativeStorage (~45 MB) — the data must exist somewhere. `memoryDirectDB` and `fileDB` shift it off-heap/to-disk, reducing GC pressure at the cost of 30-80x slower throughput.
 
