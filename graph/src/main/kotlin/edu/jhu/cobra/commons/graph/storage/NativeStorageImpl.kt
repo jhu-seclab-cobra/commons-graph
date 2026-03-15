@@ -10,7 +10,7 @@ import edu.jhu.cobra.commons.value.IValue
  *
  * O(1) average time for all operations. Not thread-safe.
  * Uses split incoming/outgoing adjacency sets for directional edge queries.
- * Node properties use columnar layout: one HashMap per property name.
+ * Node and edge properties use columnar layout: one HashMap per property name.
  *
  * @constructor Creates a new empty storage instance.
  * @see NativeConcurStorageImpl
@@ -31,7 +31,10 @@ class NativeStorageImpl : IStorage {
     private data class EdgeEndpoints(val src: Int, val dst: Int, val type: String)
 
     private val edgeEndpoints = HashMap<Int, EdgeEndpoints>()
-    private val edgeProperties = HashMap<Int, MutableMap<String, IValue>>()
+
+    // Columnar edge property storage: same layout as nodeColumns.
+    // Sparse edges (no properties) consume zero space in the columns.
+    private val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
 
     // Adjacency lists
     private val outEdges = HashMap<Int, MutableSet<Int>>()
@@ -46,6 +49,18 @@ class NativeStorageImpl : IStorage {
 
     private fun ensureOpen() {
         if (isClosed) throw AccessClosedStorageException()
+    }
+
+    private fun removeEntityFromColumns(
+        id: Int,
+        columns: HashMap<String, HashMap<Int, IValue>>,
+    ) {
+        val colIter = columns.values.iterator()
+        while (colIter.hasNext()) {
+            val col = colIter.next()
+            col.remove(id)
+            if (col.isEmpty()) colIter.remove()
+        }
     }
 
     // ============================================================================
@@ -112,15 +127,7 @@ class NativeStorageImpl : IStorage {
     ) {
         ensureOpen()
         if (!hasNode(id)) throw EntityNotExistException(id)
-        for ((key, value) in properties) {
-            if (value != null) {
-                nodeColumns.getOrPut(key) { HashMap() }[id] = value
-            } else {
-                val col = nodeColumns[key] ?: continue
-                col.remove(id)
-                if (col.isEmpty()) nodeColumns.remove(key)
-            }
-        }
+        setColumnarProperties(id, properties, nodeColumns)
     }
 
     override fun deleteNode(id: Int) {
@@ -130,22 +137,17 @@ class NativeStorageImpl : IStorage {
             val edge = edgeEndpoints[eid]!!
             inEdges[edge.dst]?.remove(eid)
             edgeEndpoints.remove(eid)
-            edgeProperties.remove(eid)
+            removeEntityFromColumns(eid, edgeColumns)
         }
         for (eid in inEdges[id]!!) {
             val edge = edgeEndpoints[eid]!!
             outEdges[edge.src]?.remove(eid)
             edgeEndpoints.remove(eid)
-            edgeProperties.remove(eid)
+            removeEntityFromColumns(eid, edgeColumns)
         }
         outEdges.remove(id)
         inEdges.remove(id)
-        val colIter = nodeColumns.values.iterator()
-        while (colIter.hasNext()) {
-            val col = colIter.next()
-            col.remove(id)
-            if (col.isEmpty()) colIter.remove()
-        }
+        removeEntityFromColumns(id, nodeColumns)
         nodeSet.remove(id)
     }
 
@@ -177,7 +179,9 @@ class NativeStorageImpl : IStorage {
         edgeEndpoints[id] = EdgeEndpoints(src, dst, type)
         outEdges[src]!!.add(id)
         inEdges[dst]!!.add(id)
-        edgeProperties[id] = properties.toMutableMap()
+        for ((key, value) in properties) {
+            edgeColumns.getOrPut(key) { HashMap() }[id] = value
+        }
         return id
     }
 
@@ -196,7 +200,9 @@ class NativeStorageImpl : IStorage {
         edgeEndpoints[id] = EdgeEndpoints(src, dst, type)
         outEdges[src]!!.add(id)
         inEdges[dst]!!.add(id)
-        edgeProperties[id] = properties.toMutableMap()
+        for ((key, value) in properties) {
+            edgeColumns.getOrPut(key) { HashMap() }[id] = value
+        }
         if (id >= edgeCounter) edgeCounter = id + 1
         return id
     }
@@ -226,7 +232,8 @@ class NativeStorageImpl : IStorage {
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
         ensureOpen()
-        return edgeProperties[id] ?: throw EntityNotExistException(id)
+        if (!hasEdge(id)) throw EntityNotExistException(id)
+        return ColumnViewMap(id, edgeColumns)
     }
 
     override fun getEdgeProperty(
@@ -234,7 +241,8 @@ class NativeStorageImpl : IStorage {
         name: String,
     ): IValue? {
         ensureOpen()
-        return (edgeProperties[id] ?: throw EntityNotExistException(id))[name]
+        if (!hasEdge(id)) throw EntityNotExistException(id)
+        return edgeColumns[name]?.get(id)
     }
 
     override fun setEdgeProperties(
@@ -242,10 +250,8 @@ class NativeStorageImpl : IStorage {
         properties: Map<String, IValue?>,
     ) {
         ensureOpen()
-        val container = edgeProperties[id] ?: throw EntityNotExistException(id)
-        properties.forEach { (key, value) ->
-            if (value != null) container[key] = value else container.remove(key)
-        }
+        if (!hasEdge(id)) throw EntityNotExistException(id)
+        setColumnarProperties(id, properties, edgeColumns)
     }
 
     override fun deleteEdge(id: Int) {
@@ -253,7 +259,7 @@ class NativeStorageImpl : IStorage {
         val edge = edgeEndpoints.remove(id) ?: throw EntityNotExistException(id)
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
-        edgeProperties.remove(id)
+        removeEntityFromColumns(id, edgeColumns)
     }
 
     // ============================================================================
@@ -310,7 +316,7 @@ class NativeStorageImpl : IStorage {
         outEdges.clear()
         inEdges.clear()
         edgeEndpoints.clear()
-        edgeProperties.clear()
+        edgeColumns.clear()
         nodeSet.clear()
         nodeColumns.clear()
         metaProperties.clear()
@@ -326,7 +332,7 @@ class NativeStorageImpl : IStorage {
             val edge = edgeEndpoints[edgeId]!!
             val newSrc = idMap[edge.src] ?: edge.src
             val newDst = idMap[edge.dst] ?: edge.dst
-            target.addEdge(newSrc, newDst, edge.type, edgeProperties[edgeId]!!)
+            target.addEdge(newSrc, newDst, edge.type, getEdgeProperties(edgeId))
         }
         for (name in metaProperties.keys) {
             target.setMeta(name, metaProperties[name])
@@ -338,40 +344,60 @@ class NativeStorageImpl : IStorage {
         isClosed = true
     }
 
+    // ============================================================================
+    // INTERNAL HELPERS
+    // ============================================================================
+
+    private fun setColumnarProperties(
+        id: Int,
+        properties: Map<String, IValue?>,
+        columns: HashMap<String, HashMap<Int, IValue>>,
+    ) {
+        for ((key, value) in properties) {
+            if (value != null) {
+                columns.getOrPut(key) { HashMap() }[id] = value
+            } else {
+                val col = columns[key] ?: continue
+                col.remove(id)
+                if (col.isEmpty()) columns.remove(key)
+            }
+        }
+    }
+
     /**
-     * Read-only view assembling a single node's properties from columnar storage.
+     * Read-only view assembling a single entity's properties from columnar storage.
      * [get] is O(1); iteration scans all K columns (K = distinct property count).
      */
     private class ColumnViewMap(
-        private val nodeId: Int,
+        private val entityId: Int,
         private val columns: HashMap<String, HashMap<Int, IValue>>,
     ) : AbstractMap<String, IValue>() {
         override val entries: Set<Map.Entry<String, IValue>>
             get() {
                 val result = LinkedHashMap<String, IValue>()
                 for ((colName, col) in columns) {
-                    val v = col[nodeId] ?: continue
+                    val v = col[entityId] ?: continue
                     result[colName] = v
                 }
                 return result.entries
             }
 
-        override fun get(key: String): IValue? = columns[key]?.get(nodeId)
+        override fun get(key: String): IValue? = columns[key]?.get(entityId)
 
-        override fun containsKey(key: String): Boolean = columns[key]?.containsKey(nodeId) == true
+        override fun containsKey(key: String): Boolean = columns[key]?.containsKey(entityId) == true
 
         override val size: Int
             get() {
                 var count = 0
                 for (col in columns.values) {
-                    if (col.containsKey(nodeId)) count++
+                    if (col.containsKey(entityId)) count++
                 }
                 return count
             }
 
         override fun isEmpty(): Boolean {
             for (col in columns.values) {
-                if (col.containsKey(nodeId)) return false
+                if (col.containsKey(entityId)) return false
             }
             return true
         }
