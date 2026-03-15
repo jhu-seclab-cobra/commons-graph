@@ -381,4 +381,226 @@ class MapDBConcurStorageImplWhiteBoxTest {
 
         assertEquals("myType", storage.getEdgeType(edgeId))
     }
+
+    // -- Closed-state checks for remaining operations --
+
+    @Test
+    fun `test getNodeProperty throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode(mapOf("x" to 1.numVal))
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperty(nodeId, "x") }
+    }
+
+    @Test
+    fun `test getEdgeProperty throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperty(edgeId, "k") }
+    }
+
+    @Test
+    fun `test setEdgeProperties throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(edgeId, mapOf("k" to 1.numVal)) }
+    }
+
+    @Test
+    fun `test deleteEdge throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(edgeId) }
+    }
+
+    @Test
+    fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(edgeId) }
+    }
+
+    @Test
+    fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(edgeId) }
+    }
+
+    @Test
+    fun `test getEdgeType throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeType(edgeId) }
+    }
+
+    @Test
+    fun `test getIncomingEdges throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getIncomingEdges(nodeId) }
+    }
+
+    @Test
+    fun `test getOutgoingEdges throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getOutgoingEdges(nodeId) }
+    }
+
+    @Test
+    fun `test getEdgeProperties throws AccessClosedStorageException when closed`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        val edgeId = storage.addEdge(src, dst, "rel")
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(edgeId) }
+    }
+
+    @Test
+    fun `test getNodeProperties throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(nodeId) }
+    }
+
+    @Test
+    fun `test setNodeProperties throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(nodeId, mapOf("k" to 1.numVal)) }
+    }
+
+    @Test
+    fun `test deleteNode throws AccessClosedStorageException when closed`() {
+        val nodeId = storage.addNode()
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.deleteNode(nodeId) }
+    }
+
+    @Test
+    fun `test metaNames throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
+    }
+
+    @Test
+    fun `test getMeta throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.getMeta("key") }
+    }
+
+    @Test
+    fun `test setMeta throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.setMeta("key", 1.numVal) }
+    }
+
+    @Test
+    fun `test edgeIDs throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
+    }
+
+    @Test
+    fun `test containsEdge throws AccessClosedStorageException when closed`() {
+        storage.close()
+        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(0) }
+    }
+
+    // -- Entity-not-exist branches --
+
+    @Test
+    fun `test getNodeProperties throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(999) }
+    }
+
+    @Test
+    fun `test getEdgeProperties throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties(999) }
+    }
+
+    @Test
+    fun `test setEdgeProperties throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.setEdgeProperties(999, mapOf("k" to 1.numVal)) }
+    }
+
+    @Test
+    fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(999) }
+    }
+
+    @Test
+    fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(999) }
+    }
+
+    @Test
+    fun `test getEdgeType throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeType(999) }
+    }
+
+    @Test
+    fun `test getIncomingEdges throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(999) }
+    }
+
+    @Test
+    fun `test getOutgoingEdges throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(999) }
+    }
+
+    @Test
+    fun `test setNodeProperties throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.setNodeProperties(999, mapOf("k" to 1.numVal)) }
+    }
+
+    @Test
+    fun `test deleteNode throws EntityNotExistException for missing node`() {
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(999) }
+    }
+
+    @Test
+    fun `test addEdge throws EntityNotExistException when src missing`() {
+        val dst = storage.addNode()
+        assertFailsWith<EntityNotExistException> { storage.addEdge(999, dst, "rel") }
+    }
+
+    @Test
+    fun `test addEdge throws EntityNotExistException when dst missing`() {
+        val src = storage.addNode()
+        assertFailsWith<EntityNotExistException> { storage.addEdge(src, 999, "rel") }
+    }
+
+    // -- transferTo id remapping: edges connect via remapped node IDs --
+
+    @Test
+    fun `test transferTo remaps node IDs and connects edges correctly`() {
+        val src = storage.addNode(mapOf("a" to 1.numVal))
+        val dst = storage.addNode(mapOf("b" to 2.numVal))
+        storage.addEdge(src, dst, "link", mapOf("w" to 3.numVal))
+        storage.setMeta("meta", "val".strVal)
+
+        val target = NativeStorageImpl()
+        storage.transferTo(target)
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("val".strVal, target.getMeta("meta"))
+        val tEdge = target.edgeIDs.first()
+        assertTrue(target.getEdgeSrc(tEdge) in target.nodeIDs)
+        assertTrue(target.getEdgeDst(tEdge) in target.nodeIDs)
+        target.close()
+    }
 }
