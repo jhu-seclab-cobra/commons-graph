@@ -38,8 +38,8 @@ class MapDBStorageImplTest {
         assertEquals(1, edgeProps.size)
         assertEquals("value1", (edgeProps["prop1"] as StrVal).core)
 
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
-        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, "nonexistent", "edge") }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(-1) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, -1, "edge") }
     }
 
     @Test
@@ -67,7 +67,7 @@ class MapDBStorageImplTest {
         assertEquals(42, (updatedNodeProps["prop2"] as NumVal).core)
 
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties("nonexistent", mapOf("prop" to "value".strVal))
+            storage.setNodeProperties(-1, mapOf("prop" to "value".strVal))
         }
     }
 
@@ -89,7 +89,7 @@ class MapDBStorageImplTest {
         assertFalse(storage.containsEdge(edge3))
         assertTrue(storage.containsNode(node3))
 
-        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(-1) }
     }
 
     @Test
@@ -125,7 +125,7 @@ class MapDBStorageImplTest {
         assertTrue(emptyIncoming.isEmpty())
 
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges("nonexistent")
+            storage.getIncomingEdges(-1)
         }
     }
 
@@ -169,15 +169,15 @@ class MapDBStorageImplTest {
 
     @Test
     fun testEdgeCases() {
-        assertFalse(storage.containsNode("nonexistent"))
-        assertFalse(storage.containsEdge("nonexistent"))
+        assertFalse(storage.containsNode(-1))
+        assertFalse(storage.containsEdge(-1))
 
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
-        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(-1) }
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperties(-1) }
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge("nonexistent-src", "nonexistent-dst", "edge1") }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(-1, -1, "edge1") }
 
-        assertTrue(storage.clear())
+        storage.clear()
 
         storage.close()
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
@@ -217,7 +217,7 @@ class MapDBStorageImplTest {
         val nodeCount = 100
         val edgesPerNode = 5
 
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 1..nodeCount) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal, "name" to "Node $i".strVal)))
         }

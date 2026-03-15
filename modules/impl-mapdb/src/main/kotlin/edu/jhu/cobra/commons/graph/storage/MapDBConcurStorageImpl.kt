@@ -1,18 +1,12 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.EntityPropertyMap
-import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.SetVal
-import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.orEmpty
 import org.mapdb.DB
 import org.mapdb.DBException
 import org.mapdb.DBMaker
-import org.mapdb.Serializer
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -37,109 +31,86 @@ class MapDBConcurStorageImpl(
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
     private val nodeProperties = EntityPropertyMap(dbManager, "nodeProps")
     private val edgeProperties = EntityPropertyMap(dbManager, "edgeProps")
-    private val edgeSrcMap = HashMap<String, String>()
-    private val edgeDstMap = HashMap<String, String>()
-    private val edgeTypeMap = HashMap<String, String>()
-    private val edgeIndex = HashMap<String, String>()
-    private val graphStructure =
-        dbManager
-            .hashMap(
-                "structure",
-                Serializer.STRING,
-                MapDbValSerializer<SetVal>(),
-            ).create()
+    private val edgeSrcMap = HashMap<Int, Int>()
+    private val edgeDstMap = HashMap<Int, Int>()
+    private val edgeTypeMap = HashMap<Int, String>()
+
+    // Adjacency lists
+    private val outEdges = HashMap<Int, MutableSet<Int>>()
+    private val inEdges = HashMap<Int, MutableSet<Int>>()
 
     override fun close() = dbLock.write { if (!dbManager.isClosed()) dbManager.close() }
 
-    override val nodeIDs: Set<String>
+    override val nodeIDs: Set<Int>
         get() =
             dbLock.read {
                 if (dbManager.isClosed()) throw AccessClosedStorageException()
                 nodeProperties.keys.toSet()
             }
 
-    override val edgeIDs: Set<String>
+    override val edgeIDs: Set<Int>
         get() =
             dbLock.read {
                 if (dbManager.isClosed()) throw AccessClosedStorageException()
                 edgeProperties.keys.toSet()
             }
 
-    override fun containsNode(id: String): Boolean =
+    override fun containsNode(id: Int): Boolean =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeProperties.contains(id)
         }
 
-    override fun containsEdge(id: String): Boolean =
+    override fun containsEdge(id: Int): Boolean =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeProperties.contains(id)
         }
 
-    override fun addNode(properties: Map<String, IValue>): String =
+    override fun addNode(properties: Map<String, IValue>): Int =
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            val nodeId = (nodeCounter++).toString()
+            val nodeId = nodeCounter++
             nodeProperties[nodeId] = properties
+            outEdges[nodeId] = HashSet()
+            inEdges[nodeId] = HashSet()
             nodeId
         }
 
-    private fun edgeKey(
-        src: String,
-        dst: String,
-        type: String,
-    ): String = "$src\u0000$type\u0000$dst"
-
-    override fun findEdge(
-        src: String,
-        dst: String,
-        type: String,
-    ): String? =
-        dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
-            edgeIndex[edgeKey(src, dst, type)]
-        }
-
     override fun addEdge(
-        src: String,
-        dst: String,
+        src: Int,
+        dst: Int,
         type: String,
         properties: Map<String, IValue>,
-    ): String =
+    ): Int =
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            val key = edgeKey(src, dst, type)
-            if (key in edgeIndex) throw EntityAlreadyExistException(edgeIndex[key]!!)
             if (!nodeProperties.contains(src)) throw EntityNotExistException(src)
             if (!nodeProperties.contains(dst)) throw EntityNotExistException(dst)
-            val id = "e${edgeCounter++}"
-            edgeIndex[key] = id
+            val id = edgeCounter++
             edgeSrcMap[id] = src
             edgeDstMap[id] = dst
             edgeTypeMap[id] = type
-            val prevSrcEdges = graphStructure[src].orEmpty()
-            graphStructure[src] = prevSrcEdges + StrVal(id)
-            val prevDstEdges = graphStructure[dst].orEmpty()
-            graphStructure[dst] = prevDstEdges + StrVal(id)
+            outEdges[src]!!.add(id)
+            inEdges[dst]!!.add(id)
             edgeProperties[id] = properties
             id
         }
 
-    override fun getNodeProperties(id: String): Map<String, IValue> =
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeProperties[id]?.toMap() ?: throw EntityNotExistException(id)
         }
 
-    override fun getEdgeProperties(id: String): Map<String, IValue> =
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeProperties[id]?.toMap() ?: throw EntityNotExistException(id)
         }
 
     override fun setNodeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = dbLock.write {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
@@ -149,7 +120,7 @@ class MapDBConcurStorageImpl(
     }
 
     override fun setEdgeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = dbLock.write {
         if (dbManager.isClosed()) throw AccessClosedStorageException()
@@ -158,86 +129,74 @@ class MapDBConcurStorageImpl(
         edgeProperties[id] = merged
     }
 
-    override fun deleteNode(id: String) {
+    override fun deleteNode(id: Int) {
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (!nodeProperties.contains(id)) throw EntityNotExistException(id)
 
-            val incomingEdges = getIncomingEdgesWithoutLock(id)
-            val outgoingEdges = getOutgoingEdgesWithoutLock(id)
+            val incoming = getIncomingEdgesWithoutLock(id)
+            val outgoing = getOutgoingEdgesWithoutLock(id)
 
-            incomingEdges.forEach { deleteEdgeWithoutLock(it) }
-            outgoingEdges.forEach { deleteEdgeWithoutLock(it) }
+            incoming.forEach { deleteEdgeWithoutLock(it) }
+            outgoing.forEach { deleteEdgeWithoutLock(it) }
 
             nodeProperties.remove(id)
-            graphStructure.remove(id)
+            outEdges.remove(id)
+            inEdges.remove(id)
         }
     }
 
-    private fun getIncomingEdgesWithoutLock(id: String): Set<String> {
+    private fun getIncomingEdgesWithoutLock(id: Int): Set<Int> {
         if (!nodeProperties.contains(id)) throw EntityNotExistException(id)
-        val allEdgeIds = graphStructure[id] ?: return emptySet()
-        return allEdgeIds
-            .asSequence()
-            .map { (it as StrVal).core }
-            .filter { edgeDstMap[it] == id }
-            .toSet()
+        return HashSet(inEdges[id] ?: emptySet())
     }
 
-    private fun getOutgoingEdgesWithoutLock(id: String): Set<String> {
+    private fun getOutgoingEdgesWithoutLock(id: Int): Set<Int> {
         if (!nodeProperties.contains(id)) throw EntityNotExistException(id)
-        val allEdgeIds = graphStructure[id] ?: return emptySet()
-        return allEdgeIds
-            .asSequence()
-            .map { (it as StrVal).core }
-            .filter { edgeSrcMap[it] == id }
-            .toSet()
+        return HashSet(outEdges[id] ?: emptySet())
     }
 
-    private fun deleteEdgeWithoutLock(id: String) {
+    private fun deleteEdgeWithoutLock(id: Int) {
         val src = edgeSrcMap.remove(id) ?: return
         val dst = edgeDstMap.remove(id) ?: return
-        val type = edgeTypeMap.remove(id) ?: return
-        edgeIndex.remove(edgeKey(src, dst, type))
+        edgeTypeMap.remove(id)
+        outEdges[src]?.remove(id)
+        inEdges[dst]?.remove(id)
         edgeProperties.remove(id)
-        val prevSrcEdges = graphStructure[src].orEmpty()
-        graphStructure[src] = prevSrcEdges.also { it.core -= StrVal(id) }
-        val prevDstEdges = graphStructure[dst].orEmpty()
-        graphStructure[dst] = prevDstEdges.also { it.core -= StrVal(id) }
     }
 
-    override fun deleteEdge(id: String) =
+    override fun deleteEdge(id: Int) =
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (!edgeProperties.contains(id)) throw EntityNotExistException(id)
             deleteEdgeWithoutLock(id)
         }
 
-    override fun getEdgeSrc(id: String): String =
+    override fun getEdgeSrc(id: Int): Int =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeSrcMap[id] ?: throw EntityNotExistException(id)
         }
 
-    override fun getEdgeDst(id: String): String =
+    override fun getEdgeDst(id: Int): Int =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeDstMap[id] ?: throw EntityNotExistException(id)
         }
 
-    override fun getEdgeType(id: String): String =
+    override fun getEdgeType(id: Int): String =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeTypeMap[id] ?: throw EntityNotExistException(id)
         }
 
-    override fun getIncomingEdges(id: String): Set<String> =
+    override fun getIncomingEdges(id: Int): Set<Int> =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             getIncomingEdgesWithoutLock(id)
         }
 
-    override fun getOutgoingEdges(id: String): Set<String> =
+    override fun getOutgoingEdges(id: Int): Set<Int> =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             getOutgoingEdgesWithoutLock(id)
@@ -266,24 +225,44 @@ class MapDBConcurStorageImpl(
         }
 
     @Suppress("SwallowedException")
-    override fun clear(): Boolean =
+    override fun clear() {
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-
             try {
                 nodeCounter = 0
                 edgeCounter = 0
-                graphStructure.clear()
                 edgeProperties.clear()
                 nodeProperties.clear()
-                edgeIndex.clear()
                 edgeSrcMap.clear()
                 edgeDstMap.clear()
                 edgeTypeMap.clear()
+                outEdges.clear()
+                inEdges.clear()
                 metaProperties.clear()
-                graphStructure.isEmpty() && edgeProperties.isEmpty() && nodeProperties.isEmpty()
             } catch (e: DBException.VolumeIOError) {
-                false
+                // swallow
             }
         }
+    }
+
+    override fun transferTo(target: IStorage) {
+        dbLock.read {
+            if (dbManager.isClosed()) throw AccessClosedStorageException()
+            val idMap = HashMap<Int, Int>()
+            for (nodeId in nodeProperties.keys) {
+                idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
+            }
+            for (edgeId in edgeProperties.keys) {
+                val src = edgeSrcMap[edgeId]!!
+                val dst = edgeDstMap[edgeId]!!
+                val type = edgeTypeMap[edgeId]!!
+                val newSrc = idMap[src] ?: src
+                val newDst = idMap[dst] ?: dst
+                target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
+            }
+            for (name in metaProperties.keys) {
+                target.setMeta(name, metaProperties[name])
+            }
+        }
+    }
 }

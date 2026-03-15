@@ -51,8 +51,8 @@ class MapDBPerformanceTest {
         storage: IStorage,
         nodeCount: Int,
         edgesPerNode: Int,
-    ): List<String> {
-        val nodeIds = mutableListOf<String>()
+    ): List<Int> {
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
@@ -150,7 +150,7 @@ class MapDBPerformanceTest {
 
         for (cfg in configs) {
             val s = tracked(cfg.factory())
-            val nodeIds = mutableListOf<String>()
+            val nodeIds = mutableListOf<Int>()
             for (i in 0 until nodeCount) nodeIds.add(s.addNode())
             val ops = benchmarkOpsPerSec(lookups) { i -> s.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", cfg.label, fmt(ops)))
@@ -172,7 +172,7 @@ class MapDBPerformanceTest {
 
         for (cfg in configs) {
             val s = tracked(cfg.factory())
-            val nodeIds = mutableListOf<String>()
+            val nodeIds = mutableListOf<Int>()
             for (i in 0 until nodeCount) nodeIds.add(s.addNode(mapOf("v" to i.numVal)))
             val readOps = benchmarkOpsPerSec(count) { i -> s.getNodeProperties(nodeIds[i % nodeCount]) }
             val writeOps =
