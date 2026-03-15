@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.numVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -27,71 +25,96 @@ class MapDBPerformanceTest {
         storages.clear()
     }
 
-    private data class MapDBConfig(val label: String, val factory: () -> IStorage)
-
-    private val configs = listOf(
-        MapDBConfig("MapDB[memoryDB]") { MapDBStorageImpl { memoryDB() } },
-        MapDBConfig("MapDB[memoryDirectDB]") { MapDBStorageImpl { memoryDirectDB() } },
-        MapDBConfig("MapDB[tempFileDB]") { MapDBStorageImpl { tempFileDB() } },
-        MapDBConfig("MapDB[tempFile+mmap]") { MapDBStorageImpl { tempFileDB().fileMmapEnableIfSupported() } },
-        MapDBConfig("MapDBConcur[memoryDB]") { MapDBConcurStorageImpl { memoryDB() } },
-        MapDBConfig("MapDBConcur[memDirect]") { MapDBConcurStorageImpl { memoryDirectDB() } },
-        MapDBConfig("MapDBConcur[tempFile]") { MapDBConcurStorageImpl { tempFileDB() } },
-        MapDBConfig("MapDBConcur[tmpFile+mm]") { MapDBConcurStorageImpl { tempFileDB().fileMmapEnableIfSupported() } },
+    private data class MapDBConfig(
+        val label: String,
+        val factory: () -> IStorage,
     )
 
-    private fun tracked(s: IStorage): IStorage { storages.add(s); return s }
-    private fun nodeId(i: Int): NodeID = NodeID("n$i")
-    private fun edgeId(src: Int, dst: Int, type: String): EdgeID = EdgeID(nodeId(src), nodeId(dst), type)
+    private val configs =
+        listOf(
+            MapDBConfig("MapDB[memoryDB]") { MapDBStorageImpl { memoryDB() } },
+            MapDBConfig("MapDB[memoryDirectDB]") { MapDBStorageImpl { memoryDirectDB() } },
+            MapDBConfig("MapDB[tempFileDB]") { MapDBStorageImpl { tempFileDB() } },
+            MapDBConfig("MapDB[tempFile+mmap]") { MapDBStorageImpl { tempFileDB().fileMmapEnableIfSupported() } },
+            MapDBConfig("MapDBConcur[memoryDB]") { MapDBConcurStorageImpl { memoryDB() } },
+            MapDBConfig("MapDBConcur[memDirect]") { MapDBConcurStorageImpl { memoryDirectDB() } },
+            MapDBConfig("MapDBConcur[tempFile]") { MapDBConcurStorageImpl { tempFileDB() } },
+            MapDBConfig("MapDBConcur[tmpFile+mm]") { MapDBConcurStorageImpl { tempFileDB().fileMmapEnableIfSupported() } },
+        )
 
-    private fun populateGraph(storage: IStorage, nodeCount: Int, edgesPerNode: Int) {
-        for (i in 0 until nodeCount) storage.addNode(nodeId(i), mapOf("idx" to i.numVal))
+    private fun tracked(s: IStorage): IStorage {
+        storages.add(s)
+        return s
+    }
+
+    private fun populateGraph(
+        storage: IStorage,
+        nodeCount: Int,
+        edgesPerNode: Int,
+    ): List<String> {
+        val nodeIds = mutableListOf<String>()
+        for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                storage.addEdge(edgeId(i, dst, "e$j"), mapOf("w" to j.numVal))
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.numVal))
             }
         }
+        return nodeIds
     }
 
     private inline fun benchmarkOpsPerSec(
-        ops: Int, warmup: Int = 1, measured: Int = 3,
-        setup: () -> Unit = {}, crossinline op: (Int) -> Unit,
+        ops: Int,
+        warmup: Int = 1,
+        measured: Int = 3,
+        setup: () -> Unit = {},
+        crossinline op: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) { setup(); for (i in 0 until ops) op(i) }
+        for (w in 0 until warmup) {
+            setup()
+            for (i in 0 until ops) op(i)
+        }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
-            setup(); System.gc()
+            setup()
+            System.gc()
             val start = System.nanoTime()
             for (i in 0 until ops) op(i)
             val sec = (System.nanoTime() - start) / 1_000_000_000.0
             samples[r] = if (sec > 0) ops / sec else Double.MAX_VALUE
         }
-        samples.sort(); return samples[measured / 2]
+        samples.sort()
+        return samples[measured / 2]
     }
 
     private inline fun benchmarkMs(
-        warmup: Int = 1, measured: Int = 3, crossinline block: () -> Unit,
+        warmup: Int = 1,
+        measured: Int = 3,
+        crossinline block: () -> Unit,
     ): Double {
         for (w in 0 until warmup) block()
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
-            System.gc(); val start = System.nanoTime(); block()
+            System.gc()
+            val start = System.nanoTime()
+            block()
             samples[r] = (System.nanoTime() - start) / 1_000_000.0
         }
-        samples.sort(); return samples[measured / 2]
+        samples.sort()
+        return samples[measured / 2]
     }
 
-    private fun fmt(ops: Double): String = when {
-        ops >= 1_000_000 -> String.format("%.2fM", ops / 1_000_000)
-        ops >= 1_000 -> String.format("%.1fK", ops / 1_000)
-        else -> String.format("%.0f", ops)
-    }
+    private fun fmt(ops: Double): String =
+        when {
+            ops >= 1_000_000 -> String.format("%.2fM", ops / 1_000_000)
+            ops >= 1_000 -> String.format("%.1fK", ops / 1_000)
+            else -> String.format("%.0f", ops)
+        }
 
     private fun fmtMs(ms: Double): String = String.format("%.1f", ms)
 
     // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON — GRAPH POPULATION
+    // BENCHMARK: CONFIG COMPARISON -- GRAPH POPULATION
     // ========================================================================
 
     @Test
@@ -103,17 +126,18 @@ class MapDBPerformanceTest {
         println("-".repeat(44))
 
         for (cfg in configs) {
-            val ms = benchmarkMs(warmup = 1, measured = 3) {
-                val s = tracked(cfg.factory())
-                populateGraph(s, nodeCount, edgesPerNode)
-                s.close()
-            }
+            val ms =
+                benchmarkMs(warmup = 1, measured = 3) {
+                    val s = tracked(cfg.factory())
+                    populateGraph(s, nodeCount, edgesPerNode)
+                    s.close()
+                }
             println(String.format("%-28s %14s", cfg.label, fmtMs(ms)))
         }
     }
 
     // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON — NODE LOOKUP
+    // BENCHMARK: CONFIG COMPARISON -- NODE LOOKUP
     // ========================================================================
 
     @Test
@@ -126,15 +150,16 @@ class MapDBPerformanceTest {
 
         for (cfg in configs) {
             val s = tracked(cfg.factory())
-            for (i in 0 until nodeCount) s.addNode(nodeId(i))
-            val ops = benchmarkOpsPerSec(lookups) { i -> s.containsNode(nodeId(i % nodeCount)) }
+            val nodeIds = mutableListOf<String>()
+            for (i in 0 until nodeCount) nodeIds.add(s.addNode())
+            val ops = benchmarkOpsPerSec(lookups) { i -> s.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", cfg.label, fmt(ops)))
             s.close()
         }
     }
 
     // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON — PROPERTY READ/WRITE
+    // BENCHMARK: CONFIG COMPARISON -- PROPERTY READ/WRITE
     // ========================================================================
 
     @Test
@@ -147,18 +172,20 @@ class MapDBPerformanceTest {
 
         for (cfg in configs) {
             val s = tracked(cfg.factory())
-            for (i in 0 until nodeCount) s.addNode(nodeId(i), mapOf("v" to i.numVal))
-            val readOps = benchmarkOpsPerSec(count) { i -> s.getNodeProperties(nodeId(i % nodeCount)) }
-            val writeOps = benchmarkOpsPerSec(count) { i ->
-                s.setNodeProperties(nodeId(i % nodeCount), mapOf("v" to i.numVal))
-            }
+            val nodeIds = mutableListOf<String>()
+            for (i in 0 until nodeCount) nodeIds.add(s.addNode(mapOf("v" to i.numVal)))
+            val readOps = benchmarkOpsPerSec(count) { i -> s.getNodeProperties(nodeIds[i % nodeCount]) }
+            val writeOps =
+                benchmarkOpsPerSec(count) { i ->
+                    s.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
+                }
             println(String.format("%-28s %14s %14s", cfg.label, fmt(readOps), fmt(writeOps)))
             s.close()
         }
     }
 
     // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON — EDGE QUERY
+    // BENCHMARK: CONFIG COMPARISON -- EDGE QUERY
     // ========================================================================
 
     @Test
@@ -172,9 +199,9 @@ class MapDBPerformanceTest {
 
         for (cfg in configs) {
             val s = tracked(cfg.factory())
-            populateGraph(s, nodeCount, edgesPerNode)
-            val outOps = benchmarkOpsPerSec(queries) { i -> s.getOutgoingEdges(nodeId(i % nodeCount)) }
-            val inOps = benchmarkOpsPerSec(queries) { i -> s.getIncomingEdges(nodeId(i % nodeCount)) }
+            val nodeIds = populateGraph(s, nodeCount, edgesPerNode)
+            val outOps = benchmarkOpsPerSec(queries) { i -> s.getOutgoingEdges(nodeIds[i % nodeCount]) }
+            val inOps = benchmarkOpsPerSec(queries) { i -> s.getIncomingEdges(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s %14s", cfg.label, fmt(outOps), fmt(inOps)))
             s.close()
         }
