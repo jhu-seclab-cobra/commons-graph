@@ -16,7 +16,6 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
      *
      * Maps group names to the next available suffix value.
      * Counter values only increase and never decrease, even when nodes are deleted.
-     * This ensures O(1) node creation performance and avoids expensive existence checks.
      */
     val groupPrefix: String
 
@@ -32,7 +31,7 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         require(suffix.isNotEmpty()) { "Suffix cannot be empty" }
         require(SUFFIX_SPLITTER !in suffix) { "Suffix cannot contain '#' character" }
         val cleanPrefix = groupPrefix.replace("@", "")
-        return NodeID("$cleanPrefix@$group#$suffix")
+        return "$cleanPrefix@$group#$suffix"
     }
 
     /**
@@ -45,7 +44,7 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
      * @return The name of the group to which the node belongs, or null if the format is invalid.
      */
     fun getGroupName(node: AbcNode): String? {
-        val nodeName = node.id.name
+        val nodeName = node.id
         val atIndex = nodeName.indexOf('@')
         val hashIndex = nodeName.indexOf('#')
 
@@ -61,11 +60,7 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     /**
      * Adds a node that is part of a group, optionally with a suffix to distinguish it.
      *
-     * Auto-generated suffixes use a monotonically increasing counter.
-     * The counter never decreases, ensuring O(1) performance even after node deletions.
-     * This may result in gaps in the numeric sequence, which is expected behavior.
-     *
-     * @param group The name of the group to which the node belongs. Defaults to "UNKNOWN".
+     * @param group The name of the group to which the node belongs.
      * @param suffix An optional suffix to uniquely identify the node within the group.
      * @return The newly added grouped node.
      * @throws IllegalArgumentException If the group name or suffix is invalid.
@@ -94,7 +89,7 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         suffix: String? = null,
     ): N {
         val group = getGroupName(node = sameGroupNode)
-        require(group != null) { "Node ID format is invalid: ${sameGroupNode.id.name}" }
+        require(group != null) { "Node ID format is invalid: ${sameGroupNode.id}" }
         return addGroupNode(group, suffix)
     }
 

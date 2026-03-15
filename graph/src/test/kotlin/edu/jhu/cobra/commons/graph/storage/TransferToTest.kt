@@ -4,25 +4,20 @@ import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class TransferToTest {
-    private val node1 = StorageTestUtils.node1
-    private val node2 = StorageTestUtils.node2
-    private val node3 = StorageTestUtils.node3
-    private val edge1 = StorageTestUtils.edge1
-    private val edge2 = StorageTestUtils.edge2
-
     @Test
     fun `test transferTo copies nodes and properties`() {
         val source = NativeStorageImpl()
-        source.addNode(node1, mapOf("name" to "A".strVal))
-        source.addNode(node2, mapOf("name" to "B".strVal))
+        val node1 = source.addNode(mapOf("name" to "A".strVal))
+        val node2 = source.addNode(mapOf("name" to "B".strVal))
 
         val target = NativeStorageImpl()
         source.transferTo(target)
 
-        assertTrue(target.containsNode(node1))
-        assertTrue(target.containsNode(node2))
-        assertEquals("A", (target.getNodeProperties(node1)["name"] as StrVal).core)
-        assertEquals("B", (target.getNodeProperties(node2)["name"] as StrVal).core)
+        assertEquals(2, target.nodeIDs.size)
+        // Node IDs are re-generated in target, so check properties via iteration
+        val targetProps = target.nodeIDs.map { target.getNodeProperties(it) }
+        val names = targetProps.mapNotNull { (it["name"] as? StrVal)?.core }.toSet()
+        assertEquals(setOf("A", "B"), names)
 
         source.close()
         target.close()
@@ -31,24 +26,24 @@ class TransferToTest {
     @Test
     fun `test transferTo copies edges and properties`() {
         val source = NativeStorageImpl()
-        source.addNode(node1)
-        source.addNode(node2)
-        source.addNode(node3)
-        source.addEdge(edge1, mapOf("weight" to 1.5.numVal))
-        source.addEdge(edge2, mapOf("label" to "x".strVal))
+        val node1 = source.addNode()
+        val node2 = source.addNode()
+        val node3 = source.addNode()
+        val edge1 = source.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("weight" to 1.5.numVal))
+        val edge2 = source.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2, mapOf("label" to "x".strVal))
 
         val target = NativeStorageImpl()
         source.transferTo(target)
 
-        assertTrue(target.containsEdge(edge1))
-        assertTrue(target.containsEdge(edge2))
-        assertEquals(1.5, (target.getEdgeProperties(edge1)["weight"] as NumVal).core)
-        assertEquals("x", (target.getEdgeProperties(edge2)["label"] as StrVal).core)
+        assertEquals(3, target.nodeIDs.size)
+        assertEquals(2, target.edgeIDs.size)
 
-        val outgoing = target.getOutgoingEdges(node1)
-        assertTrue(outgoing.contains(edge1))
-        val incoming = target.getIncomingEdges(node2)
-        assertTrue(incoming.contains(edge1))
+        // Verify edge properties were transferred
+        val edgeWeights = target.edgeIDs.map { target.getEdgeProperties(it) }
+        val weights = edgeWeights.mapNotNull { (it["weight"] as? NumVal)?.core }
+        assertTrue(weights.contains(1.5))
+        val labels = edgeWeights.mapNotNull { (it["label"] as? StrVal)?.core }
+        assertTrue(labels.contains("x"))
 
         source.close()
         target.close()
@@ -70,9 +65,9 @@ class TransferToTest {
     @Test
     fun `test transferTo does not modify source`() {
         val source = NativeStorageImpl()
-        source.addNode(node1, mapOf("k" to "v".strVal))
-        source.addNode(node2)
-        source.addEdge(edge1)
+        val node1 = source.addNode(mapOf("k" to "v".strVal))
+        val node2 = source.addNode()
+        val edge1 = source.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
 
         val target = NativeStorageImpl()
         source.transferTo(target)
