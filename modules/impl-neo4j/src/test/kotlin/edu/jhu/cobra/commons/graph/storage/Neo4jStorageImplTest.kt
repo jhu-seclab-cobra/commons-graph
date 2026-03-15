@@ -166,19 +166,4 @@ class Neo4jStorageImplTest {
         }
     }
 
-    @Test
-    fun `test concurrent operations`() {
-        val threads =
-            List(10) { threadId ->
-                Thread {
-                    val nodeId = storage.addNode()
-                    storage.setNodeProperties(nodeId, mapOf("prop" to "value-$threadId".strVal))
-                }
-            }
-
-        threads.forEach { it.start() }
-        threads.forEach { it.join() }
-
-        assertEquals(10, storage.nodeIDs.size)
-    }
 }

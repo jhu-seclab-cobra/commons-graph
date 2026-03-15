@@ -1,3 +1,5 @@
+@file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
+
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
@@ -7,8 +9,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * Performance benchmarks for Neo4j-based IStorage implementation.
+ * Performance benchmarks for Neo4j-based IStorage implementations.
  *
+ * Tests both Neo4jStorageImpl and Neo4jConcurStorageImpl.
  * Neo4j startup is heavyweight, so scale tiers are smaller than in-memory
  * implementations: 1K/3K, 5K/15K, 10K/30K (nodes/edges).
  *
@@ -26,10 +29,17 @@ class Neo4jPerformanceTest {
         tempDirs.clear()
     }
 
-    private fun createStorage(): Neo4jStorageImpl {
+    private val implNames = listOf("Neo4jStorageImpl", "Neo4jConcurStorageImpl")
+
+    private fun createStorage(name: String): IStorage {
         val dir = Files.createTempDirectory("neo4j-perf")
         tempDirs.add(dir)
-        val s = Neo4jStorageImpl(dir)
+        val s =
+            when (name) {
+                "Neo4jStorageImpl" -> Neo4jStorageImpl(dir)
+                "Neo4jConcurStorageImpl" -> Neo4jConcurStorageImpl(dir)
+                else -> throw IllegalArgumentException("Unknown: $name")
+            }
         storages.add(s)
         return s
     }
@@ -61,7 +71,7 @@ class Neo4jPerformanceTest {
         measured: Int = MEASURED,
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) {
+        for (_w in 0 until warmup) {
             for (i in 0 until ops) op(i)
         }
         val samples = DoubleArray(measured)
@@ -81,7 +91,7 @@ class Neo4jPerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (w in 0 until warmup) block()
+        for (_w in 0 until warmup) block()
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
@@ -118,32 +128,36 @@ class Neo4jPerformanceTest {
                 Scale("10K/30K", 10_000, 3),
             )
         println("\n=== Neo4j Graph Population (median ms) ===")
-        println(String.format("%-20s %14s %14s %14s", "Scale", "1K/3K", "5K/15K", "10K/30K"))
-        println("-".repeat(64))
-
-        val results =
-            scales.map { (_, n, epn) ->
-                benchmarkMs(warmup = 1, measured = 3) {
-                    val s = createStorage()
-                    populateGraph(s, n, epn)
-                    s.close()
+        println(String.format("%-28s %14s %14s %14s", "Implementation", "1K/3K", "5K/15K", "10K/30K"))
+        println("-".repeat(72))
+        for (name in implNames) {
+            val results =
+                scales.map { (_, n, epn) ->
+                    benchmarkMs(warmup = 1, measured = 3) {
+                        val s = createStorage(name)
+                        populateGraph(s, n, epn)
+                        s.close()
+                    }
                 }
-            }
-        println(String.format("%-20s %14s %14s %14s", "Neo4jStorageImpl", fmtMs(results[0]), fmtMs(results[1]), fmtMs(results[2])))
+            println(String.format("%-28s %14s %14s %14s", name, fmtMs(results[0]), fmtMs(results[1]), fmtMs(results[2])))
+        }
     }
 
     @Test
     fun `benchmark node operations on large graph`() {
         val nodeCount = 5_000
         val lookups = 20_000
-        println("\n=== Neo4j Node Operations (median ops/sec, $nodeCount nodes) ===")
-
-        val storage = createStorage()
-        val nodeIds = mutableListOf<Int>()
-        for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
-
-        val lookupOps = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
-        println(String.format("  containsNode (%d lookups): %s ops/sec", lookups, fmt(lookupOps)))
+        println("\n=== Neo4j Node Lookup (median ops/sec, $lookups lookups on $nodeCount nodes) ===")
+        println(String.format("%-28s %14s", "Implementation", "ops/sec"))
+        println("-".repeat(44))
+        for (name in implNames) {
+            val storage = createStorage(name)
+            val nodeIds = mutableListOf<Int>()
+            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
+            val ops = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
+            println(String.format("%-28s %14s", name, fmt(ops)))
+            storage.close()
+        }
     }
 
     @Test
@@ -151,19 +165,20 @@ class Neo4jPerformanceTest {
         val nodeCount = 2_000
         val count = 10_000
         println("\n=== Neo4j Property Read/Write (median ops/sec, $count ops on $nodeCount nodes) ===")
-
-        val storage = createStorage()
-        val nodeIds = mutableListOf<Int>()
-        for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.numVal)))
-
-        val readOps = benchmarkOpsPerSec(count) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }
-        println(String.format("  getNodeProperties: %s ops/sec", fmt(readOps)))
-
-        val writeOps =
-            benchmarkOpsPerSec(count) { i ->
-                storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
-            }
-        println(String.format("  setNodeProperties: %s ops/sec", fmt(writeOps)))
+        println(String.format("%-28s %14s %14s", "Implementation", "read", "write"))
+        println("-".repeat(58))
+        for (name in implNames) {
+            val storage = createStorage(name)
+            val nodeIds = mutableListOf<Int>()
+            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.numVal)))
+            val readOps = benchmarkOpsPerSec(count) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }
+            val writeOps =
+                benchmarkOpsPerSec(count) { i ->
+                    storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
+                }
+            println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
+            storage.close()
+        }
     }
 
     @Test
@@ -172,14 +187,15 @@ class Neo4jPerformanceTest {
         val edgesPerNode = 3
         val queries = 10_000
         println("\n=== Neo4j Edge Query (median ops/sec, $queries queries, ${nodeCount}n/${nodeCount * edgesPerNode}e) ===")
-
-        val storage = createStorage()
-        val nodeIds = populateGraph(storage, nodeCount, edgesPerNode)
-
-        val outOps = benchmarkOpsPerSec(queries) { i -> storage.getOutgoingEdges(nodeIds[i % nodeCount]) }
-        println(String.format("  getOutgoingEdges: %s ops/sec", fmt(outOps)))
-
-        val inOps = benchmarkOpsPerSec(queries) { i -> storage.getIncomingEdges(nodeIds[i % nodeCount]) }
-        println(String.format("  getIncomingEdges: %s ops/sec", fmt(inOps)))
+        println(String.format("%-28s %14s %14s", "Implementation", "outgoing", "incoming"))
+        println("-".repeat(58))
+        for (name in implNames) {
+            val storage = createStorage(name)
+            val nodeIds = populateGraph(storage, nodeCount, edgesPerNode)
+            val outOps = benchmarkOpsPerSec(queries) { i -> storage.getOutgoingEdges(nodeIds[i % nodeCount]) }
+            val inOps = benchmarkOpsPerSec(queries) { i -> storage.getIncomingEdges(nodeIds[i % nodeCount]) }
+            println(String.format("%-28s %14s %14s", name, fmt(outOps), fmt(inOps)))
+            storage.close()
+        }
     }
 }
