@@ -1,5 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.poset.Label
+
 /**
  * Abstract simple directed graph where at most one edge exists between any
  * two nodes in a given direction.
@@ -8,9 +10,26 @@ package edu.jhu.cobra.commons.graph
  * @param E The edge type.
  */
 abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGraph<N, E>() {
-    override fun addEdge(withID: EdgeID): E {
-        val existing = storage.getOutgoingEdges(withID.srcNid).any { it.dstNid == withID.dstNid }
-        if (existing) throw EntityAlreadyExistException(withID)
-        return super.addEdge(withID)
+    override fun addEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): E {
+        val existing = getOutgoingEdges(src).any { it.dstNid == dst }
+        if (existing) throw EntityAlreadyExistException("$src->$dst")
+        return super.addEdge(src, dst, type)
+    }
+
+    override fun addEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+        label: Label,
+    ): E {
+        val existing = getOutgoingEdges(src).any { it.dstNid == dst }
+        if (existing && getEdge(src, dst, type) == null) {
+            throw EntityAlreadyExistException("$src->$dst")
+        }
+        return super.addEdge(src, dst, type, label)
     }
 }

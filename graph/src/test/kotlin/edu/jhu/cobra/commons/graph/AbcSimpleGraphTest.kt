@@ -28,32 +28,30 @@ class AbcSimpleGraphTest {
     fun `test addEdge_firstEdgeBetweenNodes_succeeds`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val edgeId = EdgeID(nodeId1, nodeId2, "rel")
 
-        val edge = graph.addEdge(edgeId)
+        val edge = graph.addEdge(nodeId1, nodeId2, "rel")
 
-        assertEquals(edgeId, edge.id)
-        assertTrue(graph.containEdge(edgeId))
+        assertNotNull(edge)
+        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eType))
     }
 
     @Test
     fun `test addEdge_duplicateSameNodePairSameType_throwsEntityAlreadyExist`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val edgeId = EdgeID(nodeId1, nodeId2, "rel")
-        graph.addEdge(edgeId)
+        graph.addEdge(nodeId1, nodeId2, "rel")
 
-        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(edgeId) }
+        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(nodeId1, nodeId2, "rel") }
     }
 
     @Test
     fun `test addEdge_sameNodePairDifferentType_throwsEntityAlreadyExist`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        graph.addEdge(EdgeID(nodeId1, nodeId2, "typeA"))
+        graph.addEdge(nodeId1, nodeId2, "typeA")
 
         assertFailsWith<EntityAlreadyExistException> {
-            graph.addEdge(EdgeID(nodeId1, nodeId2, "typeB"))
+            graph.addEdge(nodeId1, nodeId2, "typeB")
         }
     }
 
@@ -61,15 +59,13 @@ class AbcSimpleGraphTest {
     fun `test addEdge_reverseDirection_allowed`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val fwd = EdgeID(nodeId1, nodeId2, "rel")
-        val rev = EdgeID(nodeId2, nodeId1, "rel")
 
-        graph.addEdge(fwd)
-        val revEdge = graph.addEdge(rev)
+        val fwdEdge = graph.addEdge(nodeId1, nodeId2, "rel")
+        val revEdge = graph.addEdge(nodeId2, nodeId1, "rel")
 
         assertNotNull(revEdge)
-        assertTrue(graph.containEdge(fwd))
-        assertTrue(graph.containEdge(rev))
+        assertTrue(graph.containEdge(fwdEdge.srcNid, fwdEdge.dstNid, fwdEdge.eType))
+        assertTrue(graph.containEdge(revEdge.srcNid, revEdge.dstNid, revEdge.eType))
     }
 
     @Test
@@ -77,44 +73,38 @@ class AbcSimpleGraphTest {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
         graph.addNode(nodeId3)
-        val eid1 = EdgeID(nodeId1, nodeId2, "rel")
-        val eid2 = EdgeID(nodeId1, nodeId3, "rel")
-        val eid3 = EdgeID(nodeId2, nodeId3, "rel")
 
-        graph.addEdge(eid1)
-        graph.addEdge(eid2)
-        graph.addEdge(eid3)
+        val e1 = graph.addEdge(nodeId1, nodeId2, "rel")
+        val e2 = graph.addEdge(nodeId1, nodeId3, "rel")
+        val e3 = graph.addEdge(nodeId2, nodeId3, "rel")
 
-        assertTrue(graph.containEdge(eid1))
-        assertTrue(graph.containEdge(eid2))
-        assertTrue(graph.containEdge(eid3))
+        assertTrue(graph.containEdge(e1.srcNid, e1.dstNid, e1.eType))
+        assertTrue(graph.containEdge(e2.srcNid, e2.dstNid, e2.eType))
+        assertTrue(graph.containEdge(e3.srcNid, e3.dstNid, e3.eType))
     }
 
     @Test
     fun `test addEdge_afterDelete_allowsReAddBetweenSameNodes`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "rel")
-        graph.addEdge(eid)
-        graph.delEdge(eid)
+        val edge = graph.addEdge(nodeId1, nodeId2, "rel")
+        graph.delEdge(edge.srcNid, edge.dstNid, edge.eType)
 
-        val newEid = EdgeID(nodeId1, nodeId2, "newRel")
-        val edge = graph.addEdge(newEid)
+        val newEdge = graph.addEdge(nodeId1, nodeId2, "newRel")
 
-        assertNotNull(edge)
-        assertTrue(graph.containEdge(newEid))
+        assertNotNull(newEdge)
+        assertTrue(graph.containEdge(newEdge.srcNid, newEdge.dstNid, newEdge.eType))
     }
 
     @Test
     fun `test addEdge_emptyType_succeeds`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "")
 
-        val edge = graph.addEdge(eid)
+        val edge = graph.addEdge(nodeId1, nodeId2, "")
 
         assertEquals("", edge.eType)
-        assertTrue(graph.containEdge(eid))
+        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eType))
     }
 
     // endregion
@@ -122,13 +112,13 @@ class AbcSimpleGraphTest {
     // region Storage delegation
 
     @Test
-    fun `test addEdge_storageOnlyEdgeSameDirection_blocksNew`() {
+    fun `test addEdge_existingEdgeSameDirection_blocksNew`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        storage.addEdge(EdgeID(nodeId1, nodeId2, "old"))
+        graph.addEdge(nodeId1, nodeId2, "old")
 
         assertFailsWith<EntityAlreadyExistException> {
-            graph.addEdge(EdgeID(nodeId1, nodeId2, "new"))
+            graph.addEdge(nodeId1, nodeId2, "new")
         }
     }
 
@@ -136,21 +126,19 @@ class AbcSimpleGraphTest {
     fun `test addEdge_writesToStorage`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "rel")
 
-        graph.addEdge(eid)
+        val edge = graph.addEdge(nodeId1, nodeId2, "rel")
 
-        assertTrue(storage.containsEdge(eid))
+        assertTrue(storage.containsEdge(edge.internalId))
     }
 
     @Test
-    fun `test addEdge_preExistingInStorage_throwsEntityAlreadyExist`() {
+    fun `test addEdge_duplicate_throwsEntityAlreadyExist`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "rel")
-        storage.addEdge(eid)
+        graph.addEdge(nodeId1, nodeId2, "rel")
 
-        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(eid) }
+        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(nodeId1, nodeId2, "rel") }
     }
 
     // endregion
@@ -161,13 +149,12 @@ class AbcSimpleGraphTest {
     fun `test getEdge_existing_returnsEdge`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "rel")
-        graph.addEdge(eid)
+        val edge = graph.addEdge(nodeId1, nodeId2, "rel")
 
-        val edge = graph.getEdge(eid)
+        val retrieved = graph.getEdge(edge.srcNid, edge.dstNid, edge.eType)
 
-        assertNotNull(edge)
-        assertEquals(eid, edge.id)
+        assertNotNull(retrieved)
+        assertEquals(edge.id, retrieved.id)
     }
 
     @Test
@@ -175,17 +162,16 @@ class AbcSimpleGraphTest {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
 
-        assertNull(graph.getEdge(EdgeID(nodeId1, nodeId2, "rel")))
+        assertNull(graph.getEdge(nodeId1, nodeId2, "nonexistent"))
     }
 
     @Test
-    fun `test getEdge_inStorage_returnsEdge`() {
+    fun `test getEdge_afterAdd_returnsEdge`() {
         graph.addNode(nodeId1)
         graph.addNode(nodeId2)
-        val eid = EdgeID(nodeId1, nodeId2, "rel")
-        storage.addEdge(eid)
+        val edge = graph.addEdge(nodeId1, nodeId2, "rel")
 
-        assertNotNull(graph.getEdge(eid))
+        assertNotNull(graph.getEdge(edge.srcNid, edge.dstNid, edge.eType))
     }
 
     // endregion
@@ -196,7 +182,7 @@ class AbcSimpleGraphTest {
     fun `test bulkNodeInsertion_completesInTime`() {
         val elapsed =
             kotlin.time.measureTime {
-                repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
+                repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
             }
 
         assertEquals(PERF_NODE_COUNT, graph.nodeIDs.size)
@@ -205,32 +191,32 @@ class AbcSimpleGraphTest {
 
     @Test
     fun `test bulkEdgeInsertion_completesInTime`() {
-        repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
+        repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
 
         val elapsed =
             kotlin.time.measureTime {
                 repeat(PERF_NODE_COUNT - 1) { i ->
-                    graph.addEdge(EdgeID(NodeID("n$i"), NodeID("n${i + 1}"), "e$i"))
+                    graph.addEdge("n$i", "n${i + 1}", "e$i")
                 }
             }
 
-        assertEquals(PERF_NODE_COUNT - 1, graph.edgeIDs.size)
+        assertEquals(PERF_NODE_COUNT - 1, graph.getAllEdges().count())
         println("SimpleGraph: ${PERF_NODE_COUNT - 1} edges inserted in $elapsed")
     }
 
     @Test
     fun `test uniquenessCheck_overhead`() {
-        repeat(PERF_NODE_COUNT) { i -> graph.addNode(NodeID("n$i")) }
-        val hubNode = NodeID("n0")
+        repeat(PERF_NODE_COUNT) { i -> graph.addNode("n$i") }
+        val hubNode: NodeID = "n0"
         repeat(PERF_NODE_COUNT - 1) { i ->
-            graph.addEdge(EdgeID(hubNode, NodeID("n${i + 1}"), "e$i"))
+            graph.addEdge(hubNode, "n${i + 1}", "e$i")
         }
 
         val elapsed =
             kotlin.time.measureTime {
                 repeat(100) {
                     assertFailsWith<EntityAlreadyExistException> {
-                        graph.addEdge(EdgeID(hubNode, NodeID("n1"), "dup$it"))
+                        graph.addEdge(hubNode, "n1", "dup$it")
                     }
                 }
             }
@@ -240,14 +226,14 @@ class AbcSimpleGraphTest {
 
     @Test
     fun `test descendantTraversal_completesInTime`() {
-        repeat(PERF_CHAIN_LENGTH) { i -> graph.addNode(NodeID("c$i")) }
+        repeat(PERF_CHAIN_LENGTH) { i -> graph.addNode("c$i") }
         repeat(PERF_CHAIN_LENGTH - 1) { i ->
-            graph.addEdge(EdgeID(NodeID("c$i"), NodeID("c${i + 1}"), "next"))
+            graph.addEdge("c$i", "c${i + 1}", "next")
         }
 
         val elapsed =
             kotlin.time.measureTime {
-                val descendants = graph.getDescendants(NodeID("c0")).toList()
+                val descendants = graph.getDescendants("c0").toList()
                 assertEquals(PERF_CHAIN_LENGTH - 1, descendants.size)
             }
 

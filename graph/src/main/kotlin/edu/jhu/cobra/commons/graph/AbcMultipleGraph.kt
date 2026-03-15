@@ -1,5 +1,11 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_DST
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_SRC
+import edu.jhu.cobra.commons.graph.AbcEdge.Companion.META_TAG
+import edu.jhu.cobra.commons.graph.AbcNode.Companion.META_ID
+import edu.jhu.cobra.commons.graph.poset.IPoset
+import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.MapVal
@@ -8,67 +14,131 @@ import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
 import edu.jhu.cobra.commons.value.strVal
 import java.io.Closeable
+import java.lang.ref.SoftReference
 
 /**
  * Abstract directed multi-graph allowing multiple edges between the same pair of
  * nodes, with integrated label-based edge visibility.
  *
- * Implements [IPartialOrderSet] with write-through persistence: label hierarchy
- * and change records are stored in [IStorage] metadata and always kept in sync.
+ * Node IDs are user-provided mandatory strings stored as `__id__` meta properties.
+ * Edge structural info (src, dst, type) is stored as `__src__`, `__dst__`, `__tag__`
+ * meta properties. Storage-internal IDs are opaque and invisible to external code.
  *
- * Label-filtered methods use the visibility rule: an edge is visitable under
- * label `by` if at least one of its labels `l` satisfies `by == l` or `by > l`
- * in the poset hierarchy.
- *
- * Node and edge identity is delegated to the underlying [storage].
+ * Uses dual storage: [storage] for graph data (nodes/edges), [posetStorage] for
+ * label hierarchy (labels as nodes with parent/changes properties).
  *
  * @param N The type of nodes in the graph, must extend [AbcNode].
  * @param E The type of edges in the graph, must extend [AbcEdge].
  */
 @Suppress("TooManyFunctions")
 abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
-    IGraph<N, E>,
-    IPartialOrderSet,
-    Closeable {
+    IGraph<N, E>, IPoset, Closeable 
+{
     abstract val storage: IStorage
+    abstract val posetStorage: IStorage
 
-    override val nodeIDs: Set<NodeID> get() = storage.nodeIDs
+    // NodeID → storage-internal ID cache, populated eagerly on first access
+    private val nodeIdCache = HashMap<NodeID, InternalID>()
+    private var nodeIdCacheReady = false
 
-    override val edgeIDs: Set<EdgeID> get() = storage.edgeIDs
+    // Label.core → posetStorage-internal ID cache, populated eagerly on first access
+    private val labelIdCache = HashMap<String, InternalID>()
+    private var labelIdCacheReady = false
 
-    protected abstract fun newNodeObj(nid: NodeID): N
+    // SoftReference caches: allow GC to reclaim unused wrapper objects
+    private val nodeCache = HashMap<InternalID, SoftReference<N>>()
+    private val edgeCache = HashMap<InternalID, SoftReference<E>>()
 
-    protected abstract fun newEdgeObj(eid: EdgeID): E
+    private fun ensureNodeIdCache() {
+        if (nodeIdCacheReady) return
+        for (sid in storage.nodeIDs) {
+            val nid = (storage.getNodeProperty(sid, META_ID) as? StrVal)?.core ?: continue
+            nodeIdCache[nid] = sid
+        }
+        nodeIdCacheReady = true
+    }
 
-    // B3-A: wrapper object cache
-    private val nodeCache = HashMap<NodeID, N>()
-    private val edgeCache = HashMap<EdgeID, E>()
+    private fun ensureLabelIdCache() {
+        if (labelIdCacheReady) return
+        for (sid in posetStorage.nodeIDs) {
+            val lid = (posetStorage.getNodeProperty(sid, META_ID) as? StrVal)?.core ?: continue
+            labelIdCache[lid] = sid
+        }
+        labelIdCacheReady = true
+    }
 
-    private fun cachedNode(nid: NodeID): N = nodeCache.getOrPut(nid) { newNodeObj(nid) }
+    override val nodeIDs: Set<NodeID>
+        get() {
+            ensureNodeIdCache()
+            return nodeIdCache.keys.toSet()
+        }
 
-    private fun cachedEdge(eid: EdgeID): E = edgeCache.getOrPut(eid) { newEdgeObj(eid) }
+    protected abstract fun newNodeObj(internalId: InternalID): N
 
-    // region IPartialOrderSet — write-through to storage metadata
+    protected abstract fun newEdgeObj(internalId: InternalID): E
+
+    private fun resolveStorageId(nodeId: NodeID): InternalID? {
+        ensureNodeIdCache()
+        return nodeIdCache[nodeId]
+    }
+
+    private fun cachedNode(internalId: InternalID): N {
+        nodeCache[internalId]?.get()?.let { return it }
+        val node = newNodeObj(internalId)
+        nodeCache[internalId] = SoftReference(node)
+        return node
+    }
+
+    private fun cachedEdge(eid: InternalID): E {
+        edgeCache[eid]?.get()?.let { return it }
+        val edge = newEdgeObj(eid)
+        edgeCache[eid] = SoftReference(edge)
+        return edge
+    }
+
+    // Scans outgoing edges from srcSid to find one matching (dstSid, type)
+    private fun findEdge(srcSid: InternalID, dstSid: InternalID, type: String): InternalID? {
+        for (eid in storage.getOutgoingEdges(srcSid)) {
+            if (storage.getEdgeDst(eid) == dstSid && storage.getEdgeType(eid) == type) return eid
+        }
+        return null
+    }
+
+    // region IPoset — write-through to posetStorage (labels as nodes)
 
     private val queryCache = mutableMapOf<Pair<Label, Label>, Int?>()
 
+    // Resolves Label.core → posetStorage internal ID
+    private fun resolveLabelStorageId(label: Label): InternalID? {
+        ensureLabelIdCache()
+        return labelIdCache[label.core]
+    }
+
+    // Creates label node if not exists, returns its posetStorage internal ID
+    private fun ensureLabelNode(label: Label): InternalID {
+        resolveLabelStorageId(label)?.let { return it }
+        val sid = posetStorage.addNode(mapOf(META_ID to label.core.strVal))
+        labelIdCache[label.core] = sid
+        return sid
+    }
+
     override val allLabels: Set<Label>
         get() {
-            val names = storage.metaNames
-                .filter { it.startsWith(PARENTS_PREFIX) && it.endsWith(META_SUFFIX) }
-                .map { Label(it.removePrefix(PARENTS_PREFIX).removeSuffix(META_SUFFIX)) }
-                .toSet()
-            return names + Label.INFIMUM + Label.SUPREMUM
+            ensureLabelIdCache()
+            val labels = labelIdCache.keys.mapTo(LinkedHashSet()) { Label(it) }
+            return labels + Label.INFIMUM + Label.SUPREMUM
         }
 
     override var Label.parents: Map<String, Label>
         get() {
-            val meta = storage.getMeta(parentsKey(this)) as? MapVal ?: return emptyMap()
-            return meta.mapValues { (_, v) -> Label((v as StrVal).core) }
+            val sid = resolveLabelStorageId(this) ?: return emptyMap()
+            val raw = posetStorage.getNodeProperty(sid, PROP_PARENTS) as? MapVal ?: return emptyMap()
+            return raw.mapValues { (_, v) -> Label((v as StrVal).core) }
         }
         set(value) {
+            val sid = ensureLabelNode(this)
             val serialized = value.mapValues { (_, v) -> v.core.strVal }.mapVal
-            storage.setMeta(parentsKey(this), serialized)
+            posetStorage.setNodeProperties(sid, mapOf(PROP_PARENTS to serialized))
             queryCache.clear()
         }
 
@@ -87,16 +157,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
                 }
             }
 
-    override var Label.changes: Set<EdgeID>
+    override var Label.changes: Set<InternalID>
         get() {
-            val meta = storage.getMeta(changesKey(this)) as? ListVal ?: return emptySet()
-            return meta.map { EdgeID(it as ListVal) }.toSet()
+            val sid = resolveLabelStorageId(this) ?: return emptySet()
+            val raw = posetStorage.getNodeProperty(sid, PROP_CHANGES) as? ListVal ?: return emptySet()
+            return raw.map { (it as StrVal).core.toInt() }.toSet()
         }
         set(value) {
+            val sid = ensureLabelNode(this)
             if (value.isEmpty()) {
-                storage.setMeta(changesKey(this), null)
+                posetStorage.setNodeProperties(sid, mapOf(PROP_CHANGES to null))
             } else {
-                storage.setMeta(changesKey(this), value.map { it.serialize }.listVal)
+                posetStorage.setNodeProperties(sid, mapOf(PROP_CHANGES to value.map { it.toString().strVal }.listVal))
             }
         }
 
@@ -124,26 +196,29 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     // region Node operations
 
     override fun addNode(withID: NodeID): N {
-        storage.addNode(id = withID)
-        return newNodeObj(withID)
+        if (resolveStorageId(withID) != null) throw EntityAlreadyExistException(withID)
+        val internalId = storage.addNode(mapOf(META_ID to withID.strVal))
+        nodeIdCache[withID] = internalId
+        return cachedNode(internalId)
     }
 
     override fun getNode(whoseID: NodeID): N? {
-        if (!storage.containsNode(whoseID)) return null
-        return cachedNode(whoseID)
+        val internalId = resolveStorageId(whoseID) ?: return null
+        return cachedNode(internalId)
     }
 
-    override fun containNode(whoseID: NodeID): Boolean = storage.containsNode(whoseID)
+    override fun containNode(whoseID: NodeID): Boolean = resolveStorageId(whoseID) != null
 
     override fun delNode(whoseID: NodeID) {
-        if (!storage.containsNode(whoseID)) return
-        val allEdges = storage.getOutgoingEdges(whoseID) + storage.getIncomingEdges(whoseID)
+        val internalId = resolveStorageId(whoseID) ?: return
+        val allEdges = storage.getOutgoingEdges(internalId) + storage.getIncomingEdges(internalId)
         allEdges.forEach { eid ->
             edgeCache.remove(eid)
             storage.deleteEdge(eid)
         }
-        nodeCache.remove(whoseID)
-        storage.deleteNode(id = whoseID)
+        nodeCache.remove(internalId)
+        nodeIdCache.remove(whoseID)
+        storage.deleteNode(internalId)
     }
 
     override fun getAllNodes(doSatfy: (N) -> Boolean): Sequence<N> =
@@ -156,44 +231,88 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     // region Edge operations
 
-    override fun addEdge(withID: EdgeID): E {
-        storage.addEdge(id = withID)
-        return newEdgeObj(withID)
+    override fun addEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): E {
+        val srcSid = resolveStorageId(src) ?: throw EntityNotExistException(src)
+        val dstSid = resolveStorageId(dst) ?: throw EntityNotExistException(dst)
+        val eid = storage.addEdge(srcSid, dstSid, type, mapOf(META_SRC to src.strVal, META_DST to dst.strVal, META_TAG to type.strVal))
+        return newEdgeObj(eid)
     }
 
-    override fun addEdge(
-        withID: EdgeID,
+    open fun addEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
         label: Label,
     ): E {
-        val edge = getEdge(whoseID = withID) ?: addEdge(withID = withID)
+        val srcSid = resolveStorageId(src) ?: throw EntityNotExistException(src)
+        val dstSid = resolveStorageId(dst) ?: throw EntityNotExistException(dst)
+        val existingEid = findEdge(srcSid, dstSid, type)
+        val edge =
+            if (existingEid != null) {
+                cachedEdge(existingEid)
+            } else {
+                val eid = storage.addEdge(srcSid, dstSid, type, mapOf(META_SRC to src.strVal, META_DST to dst.strVal, META_TAG to type.strVal))
+                newEdgeObj(eid)
+            }
         edge.labels = edge.labels + label
-        label.changes += withID
+        label.changes += edge.internalId
         return edge
     }
 
-    override fun getEdge(whoseID: EdgeID): E? {
-        if (!storage.containsEdge(whoseID)) return null
-        return cachedEdge(whoseID)
+    override fun getEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): E? {
+        val srcSid = resolveStorageId(src) ?: return null
+        val dstSid = resolveStorageId(dst) ?: return null
+        val eid = findEdge(srcSid, dstSid, type) ?: return null
+        return cachedEdge(eid)
     }
 
-    override fun containEdge(whoseID: EdgeID): Boolean = storage.containsEdge(whoseID)
-
-    override fun delEdge(whoseID: EdgeID) {
-        if (!storage.containsEdge(whoseID)) return
-        edgeCache.remove(whoseID)
-        storage.deleteEdge(id = whoseID)
+    override fun containEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ): Boolean {
+        val srcSid = resolveStorageId(src) ?: return false
+        val dstSid = resolveStorageId(dst) ?: return false
+        return findEdge(srcSid, dstSid, type) != null
     }
 
     override fun delEdge(
-        whoseID: EdgeID,
+        src: NodeID,
+        dst: NodeID,
+        type: String,
+    ) {
+        val srcSid = resolveStorageId(src) ?: return
+        val dstSid = resolveStorageId(dst) ?: return
+        val eid = findEdge(srcSid, dstSid, type) ?: return
+        edgeCache.remove(eid)
+        storage.deleteEdge(eid)
+    }
+
+    fun delEdge(
+        src: NodeID,
+        dst: NodeID,
+        type: String,
         label: Label,
     ) {
-        val edge = getEdge(whoseID = whoseID) ?: return
+        val srcSid = resolveStorageId(src) ?: return
+        val dstSid = resolveStorageId(dst) ?: return
+        val eid = findEdge(srcSid, dstSid, type) ?: return
+        val edge = cachedEdge(eid)
         val oldLabels = edge.labels
         val newLabels = oldLabels - label
         edge.labels = newLabels
-        if (label in oldLabels) label.changes -= whoseID
-        if (newLabels.isEmpty()) delEdge(whoseID = whoseID)
+        if (label in oldLabels) label.changes = label.changes - setOf(eid)
+        if (newLabels.isNotEmpty()) return
+        edgeCache.remove(eid)
+        storage.deleteEdge(eid)
     }
 
     override fun getAllEdges(doSatfy: (E) -> Boolean): Sequence<E> =
@@ -207,63 +326,65 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     // region Graph structure queries
 
     override fun getOutgoingEdges(of: NodeID): Sequence<E> {
-        if (!storage.containsNode(of)) return emptySequence()
-        return storage.getOutgoingEdges(of).asSequence().map { cachedEdge(it) }
+        val sid = resolveStorageId(of) ?: return emptySequence()
+        return storage.getOutgoingEdges(sid).asSequence().map { cachedEdge(it) }
     }
 
     override fun getIncomingEdges(of: NodeID): Sequence<E> {
-        if (!storage.containsNode(of)) return emptySequence()
-        return storage.getIncomingEdges(of).asSequence().map { cachedEdge(it) }
+        val sid = resolveStorageId(of) ?: return emptySequence()
+        return storage.getIncomingEdges(sid).asSequence().map { cachedEdge(it) }
     }
 
-    override fun getOutgoingEdges(
+    fun getOutgoingEdges(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<E> = getOutgoingEdges(of).filter(cond).filterVisitable(label)
 
-    override fun getIncomingEdges(
+    fun getIncomingEdges(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<E> = getIncomingEdges(of).filter(cond).filterVisitable(label)
 
     override fun getParents(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = getIncomingEdges(of).filter(edgeCond).map { cachedNode(it.srcNid) }
+    ): Sequence<N> = getIncomingEdges(of).filter(edgeCond).mapNotNull { getNode(it.srcNid) }
 
     override fun getChildren(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = getOutgoingEdges(of).filter(edgeCond).map { cachedNode(it.dstNid) }
+    ): Sequence<N> = getOutgoingEdges(of).filter(edgeCond).mapNotNull { getNode(it.dstNid) }
 
-    override fun getChildren(
+    fun getChildren(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<N> = getOutgoingEdges(of, label, cond).mapNotNull { getNode(it.dstNid) }
 
-    override fun getParents(
+    fun getParents(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<N> = getIncomingEdges(of, label, cond).mapNotNull { getNode(it.srcNid) }
 
     override fun getAncestors(
         of: NodeID,
-        edgeCond: (E) -> Boolean,
+        edgeCond: (E) -> Boolean
     ) = sequence {
-        if (!storage.containsNode(of)) return@sequence
-        val visited = hashSetOf<NodeID>()
-        val queue = ArrayDeque<NodeID>().apply { add(of) }
+        val sid = resolveStorageId(of) ?: return@sequence
+        val visited = hashSetOf<InternalID>()
+        val queue = ArrayDeque<InternalID>().apply { add(sid) }
         while (queue.isNotEmpty()) {
-            val currentId = queue.removeFirst()
-            if (!visited.add(currentId)) continue
-            storage.getIncomingEdges(currentId).forEach { edgeID ->
-                if (!edgeCond(cachedEdge(edgeID))) return@forEach
-                yield(cachedNode(edgeID.srcNid))
-                queue.add(edgeID.srcNid)
+            val currentSid = queue.removeFirst()
+            if (!visited.add(currentSid)) continue
+            storage.getIncomingEdges(currentSid).forEach { edgeID ->
+                val edge = cachedEdge(edgeID)
+                if (!edgeCond(edge)) return@forEach
+                val parentSid = resolveStorageId(edge.srcNid) ?: return@forEach
+                yield(cachedNode(parentSid))
+                queue.add(parentSid)
             }
         }
     }
@@ -272,24 +393,26 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         of: NodeID,
         edgeCond: (E) -> Boolean,
     ) = sequence {
-        if (!storage.containsNode(of)) return@sequence
-        val visited = hashSetOf<NodeID>()
-        val queue = ArrayDeque<NodeID>().apply { add(of) }
+        val sid = resolveStorageId(of) ?: return@sequence
+        val visited = hashSetOf<InternalID>()
+        val queue = ArrayDeque<InternalID>().apply { add(sid) }
         while (queue.isNotEmpty()) {
-            val currentId = queue.removeFirst()
-            if (!visited.add(currentId)) continue
-            storage.getOutgoingEdges(currentId).forEach { edgeID ->
-                if (!edgeCond(cachedEdge(edgeID))) return@forEach
-                yield(cachedNode(edgeID.dstNid))
-                queue.add(edgeID.dstNid)
+            val currentSid = queue.removeFirst()
+            if (!visited.add(currentSid)) continue
+            storage.getOutgoingEdges(currentSid).forEach { edgeID ->
+                val edge = cachedEdge(edgeID)
+                if (!edgeCond(edge)) return@forEach
+                val childSid = resolveStorageId(edge.dstNid) ?: return@forEach
+                yield(cachedNode(childSid))
+                queue.add(childSid)
             }
         }
     }
 
-    override fun getDescendants(
+    fun getDescendants(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
@@ -305,10 +428,10 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             }
         }
 
-    override fun getAncestors(
+    fun getAncestors(
         of: NodeID,
         label: Label,
-        cond: (E) -> Boolean,
+        cond: (E) -> Boolean = { true },
     ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
@@ -354,17 +477,16 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     }
 
     override fun close() {
+        nodeIdCache.clear()
+        nodeIdCacheReady = false
+        labelIdCache.clear()
+        labelIdCacheReady = false
         nodeCache.clear()
         edgeCache.clear()
     }
 
     companion object {
-        private const val PARENTS_PREFIX = "__lp_"
-        private const val CHANGES_PREFIX = "__lc_"
-        private const val META_SUFFIX = "__"
-
-        private fun parentsKey(label: Label): String = "$PARENTS_PREFIX${label.core}$META_SUFFIX"
-
-        private fun changesKey(label: Label): String = "$CHANGES_PREFIX${label.core}$META_SUFFIX"
+        private const val PROP_PARENTS = "parents"
+        private const val PROP_CHANGES = "changes"
     }
 }
