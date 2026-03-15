@@ -1,20 +1,12 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import kotlin.test.*
 
 class MapDBStorageImplWhiteBoxTest {
     private lateinit var storage: MapDBStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge12 = EdgeID(node1, node2, "e12")
-    private val edge23 = EdgeID(node2, node3, "e23")
-    private val edge13 = EdgeID(node1, node3, "e13")
 
     @BeforeTest
     fun setup() {
@@ -30,9 +22,9 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test addEdge stores serialized edge in graphStructure for both src and dst nodes`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
 
         val outgoing = storage.getOutgoingEdges(node1)
         val incoming = storage.getIncomingEdges(node2)
@@ -43,11 +35,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test addEdge accumulates multiple edges in graphStructure for same node`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
 
         val outgoing = storage.getOutgoingEdges(node1)
         assertEquals(2, outgoing.size)
@@ -59,9 +51,9 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge removes serialized edge from graphStructure for both endpoints`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
 
         storage.deleteEdge(edge12)
 
@@ -71,11 +63,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge preserves other edges in graphStructure`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
 
         storage.deleteEdge(edge12)
 
@@ -88,12 +80,12 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes graphStructure entry and cascades edge deletion`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
-        storage.addEdge(edge23)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
+        val edge23 = storage.addEdge(node2, node3, "e23")
 
         storage.deleteNode(node1)
 
@@ -109,7 +101,7 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties merges and null removes via filterValues`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
 
         storage.setNodeProperties(node1, mapOf("a" to null, "c" to 3.numVal))
 
@@ -121,9 +113,9 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test setEdgeProperties merges and null removes via filterValues`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12, mapOf("x" to "old".strVal, "y" to "keep".strVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12", mapOf("x" to "old".strVal, "y" to "keep".strVal))
 
         storage.setEdgeProperties(edge12, mapOf("x" to null, "z" to "new".strVal))
 
@@ -137,7 +129,7 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test node properties persist across reads via EntityPropertyMap`() {
-        storage.addNode(node1, mapOf("key" to "value".strVal))
+        val node1 = storage.addNode(mapOf("key" to "value".strVal))
 
         val props1 = storage.getNodeProperties(node1)
         val props2 = storage.getNodeProperties(node1)
@@ -148,11 +140,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test getIncomingEdges filters by dstNid from graphStructure`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
 
         val incoming2 = storage.getIncomingEdges(node2)
         assertEquals(setOf(edge12), incoming2)
@@ -163,11 +155,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test getOutgoingEdges filters by srcNid from graphStructure`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge23)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge23 = storage.addEdge(node2, node3, "e23")
 
         val outgoing1 = storage.getOutgoingEdges(node1)
         assertEquals(setOf(edge12), outgoing1)
@@ -178,7 +170,7 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test getIncomingEdges returns empty when no edges in graphStructure`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         assertTrue(storage.getIncomingEdges(node1).isEmpty())
     }
 
@@ -186,9 +178,8 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test self loop edge stored in graphStructure under single node name`() {
-        storage.addNode(node1)
-        val selfEdge = EdgeID(node1, node1, "self")
-        storage.addEdge(selfEdge)
+        val node1 = storage.addNode()
+        val selfEdge = storage.addEdge(node1, node1, "self")
 
         assertTrue(selfEdge in storage.getOutgoingEdges(node1))
         assertTrue(selfEdge in storage.getIncomingEdges(node1))
@@ -196,9 +187,8 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes self loop edge`() {
-        storage.addNode(node1)
-        val selfEdge = EdgeID(node1, node1, "self")
-        storage.addEdge(selfEdge)
+        val node1 = storage.addNode()
+        val selfEdge = storage.addEdge(node1, node1, "self")
 
         storage.deleteNode(node1)
 
@@ -215,9 +205,9 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test clear returns true after adding and clearing data`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
         storage.setMeta("key", "val".strVal)
 
         assertTrue(storage.clear())
@@ -234,14 +224,14 @@ class MapDBStorageImplWhiteBoxTest {
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(edge12) }
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(edge12) }
-        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(node1, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(edge12, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteNode(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(edge12) }
+        assertFailsWith<AccessClosedStorageException> { storage.containsNode("node1") }
+        assertFailsWith<AccessClosedStorageException> { storage.containsEdge("edge12") }
+        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties("node1") }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties("edge12") }
+        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties("node1", emptyMap()) }
+        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties("edge12", emptyMap()) }
+        assertFailsWith<AccessClosedStorageException> { storage.deleteNode("node1") }
+        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge("edge12") }
         assertFailsWith<AccessClosedStorageException> { storage.metaNames }
         assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
         assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
@@ -281,8 +271,8 @@ class MapDBStorageImplWhiteBoxTest {
     @Test
     fun `test memoryDB config creates working storage`() {
         val memStorage = MapDBStorageImpl { memoryDB() }
-        memStorage.addNode(NodeID("test"))
-        assertTrue(memStorage.containsNode(NodeID("test")))
+        memStorage.addNode()
+        assertEquals(1, memStorage.nodeIDs.size)
         memStorage.close()
     }
 
@@ -290,9 +280,9 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge nonexistent does not throw but removes from graphStructure`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
 
         storage.deleteEdge(edge12)
         assertTrue(storage.getOutgoingEdges(node1).isEmpty())
@@ -300,11 +290,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test getIncomingEdges throws for nonexistent node`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(node1) }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("nonexistent") }
     }
 
     @Test
     fun `test getOutgoingEdges throws for nonexistent node`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(node1) }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("nonexistent") }
     }
 }
