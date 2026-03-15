@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import org.jgrapht.Graph
@@ -14,92 +13,94 @@ import kotlin.concurrent.write
  * Thread-safe implementation of the [IStorage] interface using total in-memory storage backed by the JGraphT library.
  * Please notice that there are performance overheads for the concurrency features.
  * For normal use cases, use [JgraphtStorageImpl] instead (about 20% quicker for basic operations).
- *
- * It leverages the JGraphT library to represent the graph structure and provides efficient graph operations like
- * adding, deleting, and retrieving nodes and edges.
  */
 class JgraphtConcurStorageImpl : IStorage {
     private var isClosed: Boolean = false
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
-    private val edgeIndex: HashMap<String, String> = hashMapOf()
 
     private val storageLock = ReentrantReadWriteLock()
 
-    private val nodeProperties: MutableMap<String, MutableMap<String, IValue>> = linkedMapOf()
-    private val edgeProperties: MutableMap<String, MutableMap<String, IValue>> = linkedMapOf()
-    private val edgeTypeMap: MutableMap<String, String> = hashMapOf()
+    // Bidirectional mapping: external Int ID <-> JGraphT internal String vertex/edge
+    private val intToVertex = HashMap<Int, String>()
+    private val vertexToInt = HashMap<String, Int>()
+    private val intToEdge = HashMap<Int, String>()
+    private val edgeToInt = HashMap<String, Int>()
+
+    private val nodeProperties: MutableMap<Int, MutableMap<String, IValue>> = linkedMapOf()
+    private val edgeProperties: MutableMap<Int, MutableMap<String, IValue>> = linkedMapOf()
+    private val edgeTypeMap: MutableMap<Int, String> = hashMapOf()
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
     private val jgtGraph: Graph<String, String> = DirectedPseudograph(String::class.java)
 
-    private fun edgeKey(src: String, dst: String, type: String): String = "$src\u0000$type\u0000$dst"
-
-    override val nodeIDs: Set<String>
+    override val nodeIDs: Set<Int>
         get() =
             storageLock.read {
                 if (isClosed) throw AccessClosedStorageException()
                 nodeProperties.keys.toSet()
             }
 
-    override val edgeIDs: Set<String>
+    override val edgeIDs: Set<Int>
         get() =
             storageLock.read {
                 if (isClosed) throw AccessClosedStorageException()
                 edgeProperties.keys.toSet()
             }
 
-    override fun containsNode(id: String): Boolean =
+    override fun containsNode(id: Int): Boolean =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             id in nodeProperties
         }
 
-    override fun containsEdge(id: String): Boolean =
+    override fun containsEdge(id: Int): Boolean =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             id in edgeProperties
         }
 
-    override fun addNode(properties: Map<String, IValue>): String =
+    override fun addNode(properties: Map<String, IValue>): Int =
         storageLock.write {
             if (isClosed) throw AccessClosedStorageException()
-            val nodeId = (nodeCounter++).toString()
-            jgtGraph.addVertex(nodeId)
-            nodeProperties[nodeId] = properties.toMutableMap()
-            nodeId
+            val id = nodeCounter++
+            val vertex = "v$id"
+            jgtGraph.addVertex(vertex)
+            intToVertex[id] = vertex
+            vertexToInt[vertex] = id
+            nodeProperties[id] = properties.toMutableMap()
+            id
         }
 
-    override fun findEdge(src: String, dst: String, type: String): String? =
-        storageLock.read { edgeIndex[edgeKey(src, dst, type)] }
-
     override fun addEdge(
-        src: String,
-        dst: String,
+        src: Int,
+        dst: Int,
         type: String,
         properties: Map<String, IValue>,
-    ): String =
+    ): Int =
         storageLock.write {
             if (isClosed) throw AccessClosedStorageException()
-            val key = edgeKey(src, dst, type)
-            if (key in edgeIndex) throw EntityAlreadyExistException(key)
             if (src !in nodeProperties) throw EntityNotExistException(src)
             if (dst !in nodeProperties) throw EntityNotExistException(dst)
-            val id = "e${edgeCounter++}"
-            jgtGraph.addEdge(src, dst, id)
-            edgeIndex[key] = id
+            val id = edgeCounter++
+            val edgeStr = "e$id"
+            val srcVertex = intToVertex[src]!!
+            val dstVertex = intToVertex[dst]!!
+            jgtGraph.addEdge(srcVertex, dstVertex, edgeStr)
+            intToEdge[id] = edgeStr
+            edgeToInt[edgeStr] = id
             edgeTypeMap[id] = type
             edgeProperties[id] = properties.toMutableMap()
             id
         }
 
-    override fun getNodeProperties(id: String): Map<String, IValue> =
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             val props = nodeProperties[id] ?: throw EntityNotExistException(id)
             HashMap(props)
         }
 
-    override fun getEdgeProperties(id: String): Map<String, IValue> =
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             val props = edgeProperties[id] ?: throw EntityNotExistException(id)
@@ -107,7 +108,7 @@ class JgraphtConcurStorageImpl : IStorage {
         }
 
     override fun setNodeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
         if (isClosed) throw AccessClosedStorageException()
@@ -116,7 +117,7 @@ class JgraphtConcurStorageImpl : IStorage {
     }
 
     override fun setEdgeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
         if (isClosed) throw AccessClosedStorageException()
@@ -124,73 +125,79 @@ class JgraphtConcurStorageImpl : IStorage {
         properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
     }
 
-    override fun deleteNode(id: String): Unit =
+    override fun deleteNode(id: Int): Unit =
         storageLock.write {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
-
-            val incomingEdges = jgtGraph.incomingEdgesOf(id).toSet()
-            val outgoingEdges = jgtGraph.outgoingEdgesOf(id).toSet()
-
-            (incomingEdges + outgoingEdges).forEach { edgeID ->
-                val src = jgtGraph.getEdgeSource(edgeID)
-                val dst = jgtGraph.getEdgeTarget(edgeID)
-                val type = edgeTypeMap[edgeID]!!
-                edgeIndex.remove(edgeKey(src, dst, type))
-                jgtGraph.removeEdge(edgeID)
-                edgeProperties.remove(edgeID)
-                edgeTypeMap.remove(edgeID)
+            val vertex = intToVertex[id]!!
+            val incoming = jgtGraph.incomingEdgesOf(vertex).toSet()
+            val outgoing = jgtGraph.outgoingEdgesOf(vertex).toSet()
+            for (edgeStr in incoming + outgoing) {
+                val edgeId = edgeToInt[edgeStr]!!
+                jgtGraph.removeEdge(edgeStr)
+                intToEdge.remove(edgeId)
+                edgeToInt.remove(edgeStr)
+                edgeProperties.remove(edgeId)
+                edgeTypeMap.remove(edgeId)
             }
-
-            jgtGraph.removeVertex(id)
+            jgtGraph.removeVertex(vertex)
+            intToVertex.remove(id)
+            vertexToInt.remove(vertex)
             nodeProperties.remove(id)
         }
 
-    override fun deleteEdge(id: String): Unit =
+    override fun deleteEdge(id: Int): Unit =
         storageLock.write {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
-            val src = jgtGraph.getEdgeSource(id)
-            val dst = jgtGraph.getEdgeTarget(id)
-            val type = edgeTypeMap[id]!!
-            edgeIndex.remove(edgeKey(src, dst, type))
-            jgtGraph.removeEdge(id)
+            val edgeStr = intToEdge[id]!!
+            jgtGraph.removeEdge(edgeStr)
+            intToEdge.remove(id)
+            edgeToInt.remove(edgeStr)
             edgeProperties.remove(id)
             edgeTypeMap.remove(id)
         }
 
-    override fun getEdgeSrc(id: String): String =
+    override fun getEdgeSrc(id: Int): Int =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
-            jgtGraph.getEdgeSource(id)
+            val edgeStr = intToEdge[id]!!
+            vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
         }
 
-    override fun getEdgeDst(id: String): String =
+    override fun getEdgeDst(id: Int): Int =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
-            jgtGraph.getEdgeTarget(id)
+            val edgeStr = intToEdge[id]!!
+            vertexToInt[jgtGraph.getEdgeTarget(edgeStr)]!!
         }
 
-    override fun getEdgeType(id: String): String =
+    override fun getEdgeType(id: Int): String =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             edgeTypeMap[id] ?: throw EntityNotExistException(id)
         }
 
-    override fun getIncomingEdges(id: String): Set<String> =
+    override fun getIncomingEdges(id: Int): Set<Int> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
-            jgtGraph.incomingEdgesOf(id).toSet()
+            val vertex = intToVertex[id]!!
+            val result = HashSet<Int>()
+            for (e in jgtGraph.incomingEdgesOf(vertex)) result.add(edgeToInt[e]!!)
+            result
         }
 
-    override fun getOutgoingEdges(id: String): Set<String> =
+    override fun getOutgoingEdges(id: Int): Set<Int> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
-            jgtGraph.outgoingEdgesOf(id).toSet()
+            val vertex = intToVertex[id]!!
+            val result = HashSet<Int>()
+            for (e in jgtGraph.outgoingEdgesOf(vertex)) result.add(edgeToInt[e]!!)
+            result
         }
 
     override val metaNames: Set<String>
@@ -215,22 +222,62 @@ class JgraphtConcurStorageImpl : IStorage {
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    override fun clear(): Boolean =
+    override fun clear() {
         storageLock.write {
-            if (isClosed) return@write false
-            jgtGraph.removeAllEdges(edgeProperties.keys)
+            if (isClosed) throw AccessClosedStorageException()
+            jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
+            jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
+            intToVertex.clear()
+            vertexToInt.clear()
+            intToEdge.clear()
+            edgeToInt.clear()
             edgeProperties.clear()
             edgeTypeMap.clear()
-            edgeIndex.clear()
-            edgeCounter = 0
-            jgtGraph.removeAllVertices(nodeProperties.keys)
             nodeProperties.clear()
             metaProperties.clear()
-            jgtGraph.edgeSet().isEmpty() &&
-                edgeProperties.isEmpty() &&
-                jgtGraph.vertexSet().isEmpty() &&
-                nodeProperties.isEmpty()
+            nodeCounter = 0
+            edgeCounter = 0
         }
+    }
 
-    override fun close(): Unit = storageLock.write { isClosed = clear() }
+    override fun transferTo(target: IStorage) {
+        storageLock.read {
+            if (isClosed) throw AccessClosedStorageException()
+            val idMap = HashMap<Int, Int>()
+            for (nodeId in nodeProperties.keys) {
+                idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
+            }
+            for (edgeId in edgeProperties.keys) {
+                val edgeStr = intToEdge[edgeId]!!
+                val srcVertex = jgtGraph.getEdgeSource(edgeStr)
+                val dstVertex = jgtGraph.getEdgeTarget(edgeStr)
+                val src = vertexToInt[srcVertex]!!
+                val dst = vertexToInt[dstVertex]!!
+                val type = edgeTypeMap[edgeId]!!
+                val newSrc = idMap[src] ?: src
+                val newDst = idMap[dst] ?: dst
+                target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
+            }
+            for (name in metaProperties.keys) {
+                target.setMeta(name, metaProperties[name])
+            }
+        }
+    }
+
+    override fun close(): Unit =
+        storageLock.write {
+            if (!isClosed) {
+                jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
+                jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
+                intToVertex.clear()
+                vertexToInt.clear()
+                intToEdge.clear()
+                edgeToInt.clear()
+                edgeProperties.clear()
+                edgeTypeMap.clear()
+                nodeProperties.clear()
+                metaProperties.clear()
+            }
+            isClosed = true
+        }
 }

@@ -21,7 +21,7 @@ class JgraphtStorageImplTest {
         storage.close()
     }
 
-    private fun addThreeNodes(): Triple<String, String, String> {
+    private fun addThreeNodes(): Triple<Int, Int, Int> {
         val n1 = storage.addNode(mapOf("prop1" to "value1".strVal))
         val n2 = storage.addNode()
         val n3 = storage.addNode()
@@ -48,8 +48,8 @@ class JgraphtStorageImplTest {
         assertEquals(1, edgeProps.size)
         assertEquals("value1", (edgeProps["prop1"] as StrVal).core)
 
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperties("nonexistent") }
-        assertFailsWith<EntityNotExistException> { storage.addEdge(n1, "nonexistent", "edge") }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperties(-1) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(n1, -1, "edge") }
     }
 
     @Test
@@ -77,7 +77,7 @@ class JgraphtStorageImplTest {
         assertEquals(42, (updatedNodeProps["prop2"] as NumVal).core)
 
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties("nonexistent", mapOf("prop" to "value".strVal))
+            storage.setNodeProperties(-1, mapOf("prop" to "value".strVal))
         }
     }
 
@@ -99,7 +99,7 @@ class JgraphtStorageImplTest {
         assertFalse(storage.containsEdge(e3))
         assertTrue(storage.containsNode(n3))
 
-        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode(-1) }
     }
 
     @Test
@@ -135,7 +135,7 @@ class JgraphtStorageImplTest {
         assertTrue(emptyIncoming.isEmpty())
 
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges("nonexistent")
+            storage.getIncomingEdges(-1)
         }
     }
 
@@ -192,7 +192,7 @@ class JgraphtStorageImplTest {
         val nodeCount = 100
         val edgesPerNode = 5
 
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 1..nodeCount) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal, "name" to "Node $i".strVal)))
         }
@@ -225,14 +225,14 @@ class JgraphtStorageImplTest {
     @Test
     fun `test exception handling`() {
         val n1 = storage.addNode()
-        val n2Id = "nonexistent"
+        val n2Id = -1
 
         assertFailsWith<EntityNotExistException> {
             storage.deleteNode(n2Id)
         }
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(n1, "nonexistent", "edge1")
+            storage.addEdge(n1, -1, "edge1")
         }
 
         storage.close()

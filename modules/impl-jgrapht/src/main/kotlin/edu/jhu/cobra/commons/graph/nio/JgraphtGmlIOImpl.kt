@@ -43,7 +43,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         val nodeList = from.nodeIDs.filter(predicate).toList()
         exporter.setVertexAttributeProvider { index: Int ->
             val nodeID = nodeList[index]
-            val metaProp = mapOf(NODE_ID_ATTR to StrVal(nodeID))
+            val metaProp = mapOf(NODE_ID_ATTR to StrVal(nodeID.toString()))
             val props = metaProp + from.getNodeProperties(nodeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
@@ -52,14 +52,14 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val edgeID = edgeList[index]
             val metaProp =
                 mapOf(
-                    EDGE_SRC_ATTR to StrVal(from.getEdgeSrc(edgeID)),
-                    EDGE_DST_ATTR to StrVal(from.getEdgeDst(edgeID)),
+                    EDGE_SRC_ATTR to StrVal(from.getEdgeSrc(edgeID).toString()),
+                    EDGE_DST_ATTR to StrVal(from.getEdgeDst(edgeID).toString()),
                     EDGE_TYPE_ATTR to StrVal(from.getEdgeType(edgeID)),
                 )
             val props = metaProp + from.getEdgeProperties(edgeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
-        val idOfVx = mutableMapOf<String, Int>()
+        val idOfVx = mutableMapOf<Int, Int>()
         val graph = DirectedPseudograph<Int, Int>(Int::class.java)
         nodeList.forEachIndexed { index, node ->
             graph.addVertex(index)
@@ -103,7 +103,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         importer.importGraph(vGraph, srcFile.toFile())
 
         // Track old node ID → new storage ID mapping for edge resolution
-        val nodeIdMapping = HashMap<String, String>()
+        val nodeIdMapping = HashMap<String, Int>()
         nodesCache.values.forEach { props ->
             val oldNid = (props.remove(NODE_ID_ATTR) as? StrVal)?.core ?: return@forEach
             val storageId = into.addNode(props)
@@ -113,8 +113,8 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val oldSrc = (props.remove(EDGE_SRC_ATTR) as? StrVal)?.core ?: return@forEach
             val oldDst = (props.remove(EDGE_DST_ATTR) as? StrVal)?.core ?: return@forEach
             val type = (props.remove(EDGE_TYPE_ATTR) as? StrVal)?.core ?: return@forEach
-            val src = nodeIdMapping[oldSrc] ?: oldSrc
-            val dst = nodeIdMapping[oldDst] ?: oldDst
+            val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
+            val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
             into.addEdge(src, dst, type, props)
         }
         return into

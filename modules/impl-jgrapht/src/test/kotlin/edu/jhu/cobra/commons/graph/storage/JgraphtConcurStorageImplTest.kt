@@ -125,7 +125,7 @@ class JgraphtConcurStorageImplTest {
 
     @Test
     fun `test concurrent node deletion`() {
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until 100) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
