@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph.utils
 
-import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import edu.jhu.cobra.commons.value.serializer.IValSerializer
 import org.mapdb.DataInput2
@@ -9,7 +9,7 @@ import org.mapdb.Serializer
 import java.io.Serializable
 
 class MapDbIDSerializer :
-    Serializer<String>,
+    Serializer<Int>,
     Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L
@@ -22,19 +22,19 @@ class MapDbIDSerializer :
 
     override fun serialize(
         out: DataOutput2,
-        value: String,
+        value: Int,
     ) {
-        delegator.serialize(out, core.serialize(value = StrVal(value)))
+        delegator.serialize(out, core.serialize(value = NumVal(value)))
     }
 
     override fun deserialize(
         input: DataInput2,
         available: Int,
-    ): String {
+    ): Int {
         val deserialized = core.deserialize(delegator.deserialize(input, available))
         return when (deserialized) {
-            is StrVal -> deserialized.core
-            else -> throw IllegalArgumentException("Cannot deserialize ${deserialized::class} to String")
+            is NumVal -> deserialized.core.toInt()
+            else -> throw IllegalArgumentException("Cannot deserialize ${deserialized::class} to Int")
         }
     }
 }

@@ -7,6 +7,7 @@ import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
 import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.MapVal
+import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.mapVal
 import org.mapdb.DBException
@@ -56,15 +57,15 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             val nodesList = dbManager.indexTreeList("nodes", MapSerializer).create()
             from.nodeIDs.filter(predicate).forEach { nodeID ->
                 val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
-                nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, StrVal(nodeID)) })
+                nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, NumVal(nodeID)) })
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).create()
             from.edgeIDs.filter(predicate).forEach { edgeID ->
                 val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
                 edgesList.add(
                     edgeProperties.also {
-                        it.add(EDGE_SRC_KEY, StrVal(from.getEdgeSrc(edgeID)))
-                        it.add(EDGE_DST_KEY, StrVal(from.getEdgeDst(edgeID)))
+                        it.add(EDGE_SRC_KEY, NumVal(from.getEdgeSrc(edgeID)))
+                        it.add(EDGE_DST_KEY, NumVal(from.getEdgeDst(edgeID)))
                         it.add(EDGE_TYPE_KEY, StrVal(from.getEdgeType(edgeID)))
                     },
                 )
@@ -82,10 +83,10 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exist" }
         val dbManager = DBMaker.fileDB(srcFile.toFile()).fileMmapEnableIfSupported().make()
         dbManager.use {
-            val nodeIdMapping = HashMap<String, String>()
+            val nodeIdMapping = HashMap<Int, Int>()
             val nodesList = dbManager.indexTreeList("nodes", MapSerializer).open()
             nodesList.forEach { props ->
-                val oldNid = (props!!.remove(NODE_ID_KEY) as? StrVal)?.core ?: return@forEach
+                val oldNid = (props!!.remove(NODE_ID_KEY) as? NumVal)?.core?.toInt() ?: return@forEach
                 if (!predicate(oldNid)) return@forEach
                 val propsMap: Map<String, IValue> = props.core.toMap()
                 val storageId = into.addNode(propsMap)
@@ -93,8 +94,8 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             }
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).open()
             edgesList.forEach { props ->
-                val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? StrVal)?.core ?: return@forEach
-                val oldDst = (props.remove(EDGE_DST_KEY) as? StrVal)?.core ?: return@forEach
+                val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? NumVal)?.core?.toInt() ?: return@forEach
+                val oldDst = (props.remove(EDGE_DST_KEY) as? NumVal)?.core?.toInt() ?: return@forEach
                 val type = (props.remove(EDGE_TYPE_KEY) as? StrVal)?.core ?: return@forEach
                 val src = nodeIdMapping[oldSrc] ?: oldSrc
                 val dst = nodeIdMapping[oldDst] ?: oldDst

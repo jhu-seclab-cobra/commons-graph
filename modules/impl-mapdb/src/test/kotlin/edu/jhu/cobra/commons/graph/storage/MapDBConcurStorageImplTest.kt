@@ -165,7 +165,7 @@ class MapDBConcurStorageImplTest {
 
     @Test
     fun `concurrent node deletion test`() {
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until 100) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
@@ -290,7 +290,7 @@ class MapDBConcurStorageImplTest {
     fun `bulk operations test`() {
         val largeCount = 1000
 
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until largeCount) {
             nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
@@ -393,11 +393,11 @@ class MapDBConcurStorageImplTest {
         val node1 = storage.addNode()
 
         assertFailsWith<EntityNotExistException> {
-            storage.deleteNode("nonexistent")
+            storage.deleteNode(-1)
         }
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(node1, "nonexistent", "edge1")
+            storage.addEdge(node1, -1, "edge1")
         }
 
         storage.close()

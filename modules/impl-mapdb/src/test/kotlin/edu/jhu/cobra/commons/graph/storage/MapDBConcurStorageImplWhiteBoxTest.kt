@@ -152,7 +152,7 @@ class MapDBConcurStorageImplWhiteBoxTest {
         storage.addEdge(node1, node2, "e12")
         storage.setMeta("key", "val".strVal)
 
-        assertTrue(storage.clear())
+        storage.clear()
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
@@ -171,7 +171,7 @@ class MapDBConcurStorageImplWhiteBoxTest {
     @Test
     fun `test concurrent deleteNode does not deadlock`() {
         val count = 40
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until count) {
             nodeIds.add(storage.addNode())
         }
@@ -270,6 +270,6 @@ class MapDBConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteEdge("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.deleteEdge(-1) }
     }
 }

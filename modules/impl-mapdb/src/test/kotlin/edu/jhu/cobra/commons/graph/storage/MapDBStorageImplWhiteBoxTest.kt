@@ -199,18 +199,18 @@ class MapDBStorageImplWhiteBoxTest {
     // -- clear() handles DBException.VolumeIOError by returning false --
 
     @Test
-    fun `test clear returns true on fresh storage`() {
-        assertTrue(storage.clear())
+    fun `test clear succeeds on fresh storage`() {
+        storage.clear()
     }
 
     @Test
-    fun `test clear returns true after adding and clearing data`() {
+    fun `test clear succeeds after adding and clearing data`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         storage.addEdge(node1, node2, "e12")
         storage.setMeta("key", "val".strVal)
 
-        assertTrue(storage.clear())
+        storage.clear()
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
@@ -224,14 +224,14 @@ class MapDBStorageImplWhiteBoxTest {
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode("node1") }
-        assertFailsWith<AccessClosedStorageException> { storage.containsEdge("edge12") }
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties("node1") }
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties("edge12") }
-        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties("node1", emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties("edge12", emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteNode("node1") }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge("edge12") }
+        assertFailsWith<AccessClosedStorageException> { storage.containsNode(0) }
+        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(0) }
+        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(0) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(0) }
+        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(0, emptyMap()) }
+        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(0, emptyMap()) }
+        assertFailsWith<AccessClosedStorageException> { storage.deleteNode(0) }
+        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(0) }
         assertFailsWith<AccessClosedStorageException> { storage.metaNames }
         assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
         assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
@@ -290,11 +290,11 @@ class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `test getIncomingEdges throws for nonexistent node`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(-1) }
     }
 
     @Test
     fun `test getOutgoingEdges throws for nonexistent node`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("nonexistent") }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(-1) }
     }
 }
