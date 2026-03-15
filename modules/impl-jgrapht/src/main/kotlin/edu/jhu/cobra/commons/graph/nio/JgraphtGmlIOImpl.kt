@@ -1,13 +1,10 @@
 package edu.jhu.cobra.commons.graph.nio
 
-import edu.jhu.cobra.commons.graph.EdgeID
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
@@ -26,6 +23,11 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
 object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
+    private const val NODE_ID_ATTR = "nid"
+    private const val EDGE_SRC_ATTR = "esrc"
+    private const val EDGE_DST_ATTR = "edst"
+    private const val EDGE_TYPE_ATTR = "etype"
+
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isRegularFile()) return false
         return file.fileSize() > 0 && "text" in Files.probeContentType(file)
@@ -41,24 +43,33 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         val nodeList = from.nodeIDs.filter(predicate).toList()
         exporter.setVertexAttributeProvider { index: Int ->
             val nodeID = nodeList[index]
-            val metaProp = mapOf("nid" to nodeID.serialize)
+            val metaProp = mapOf(NODE_ID_ATTR to StrVal(nodeID))
             val props = metaProp + from.getNodeProperties(nodeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
         val edgeList = from.edgeIDs.filter(predicate).toList()
         exporter.setEdgeAttributeProvider { index: Int ->
             val edgeID = edgeList[index]
-            val metaProp = mapOf("eid" to edgeID.serialize)
+            val metaProp =
+                mapOf(
+                    EDGE_SRC_ATTR to StrVal(from.getEdgeSrc(edgeID)),
+                    EDGE_DST_ATTR to StrVal(from.getEdgeDst(edgeID)),
+                    EDGE_TYPE_ATTR to StrVal(from.getEdgeType(edgeID)),
+                )
             val props = metaProp + from.getEdgeProperties(edgeID)
             props.mapValues { (_, value) -> value.toAttribute }
         }
-        val idOfVx = mutableMapOf<NodeID, Int>()
+        val idOfVx = mutableMapOf<String, Int>()
         val graph = DirectedPseudograph<Int, Int>(Int::class.java)
         nodeList.forEachIndexed { index, node ->
             graph.addVertex(index)
             idOfVx[node] = index
         }
-        edgeList.forEachIndexed { index, edge -> graph.addEdge(idOfVx[edge.srcNid], idOfVx[edge.dstNid], index) }
+        edgeList.forEachIndexed { index, edge ->
+            val src = from.getEdgeSrc(edge)
+            val dst = from.getEdgeDst(edge)
+            graph.addEdge(idOfVx[src], idOfVx[dst], index)
+        }
         exporter.setParameter(GmlExporter.Parameter.EXPORT_VERTEX_LABELS, true)
         exporter.setParameter(GmlExporter.Parameter.EXPORT_EDGE_LABELS, true)
         exporter.exportGraph(graph, dstFile.toFile())
@@ -90,21 +101,21 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         vGraph.vertexSupplier = SupplierUtil.createIntegerSupplier()
         vGraph.edgeSupplier = SupplierUtil.createIntegerSupplier()
         importer.importGraph(vGraph, srcFile.toFile())
+
+        // Track old node ID → new storage ID mapping for edge resolution
+        val nodeIdMapping = HashMap<String, String>()
         nodesCache.values.forEach { props ->
-            val nid = NodeID(props.remove("nid")!! as StrVal)
-            if (!into.containsNode(nid)) {
-                into.addNode(nid, props)
-            } else {
-                into.setNodeProperties(nid, props)
-            }
+            val oldNid = (props.remove(NODE_ID_ATTR) as? StrVal)?.core ?: return@forEach
+            val storageId = into.addNode(props)
+            nodeIdMapping[oldNid] = storageId
         }
         edgeCache.values.forEach { props ->
-            val eid = EdgeID(props.remove("eid")!! as ListVal)
-            if (!into.containsEdge(eid)) {
-                into.addEdge(eid, props)
-            } else {
-                into.setEdgeProperties(eid, props)
-            }
+            val oldSrc = (props.remove(EDGE_SRC_ATTR) as? StrVal)?.core ?: return@forEach
+            val oldDst = (props.remove(EDGE_DST_ATTR) as? StrVal)?.core ?: return@forEach
+            val type = (props.remove(EDGE_TYPE_ATTR) as? StrVal)?.core ?: return@forEach
+            val src = nodeIdMapping[oldSrc] ?: oldSrc
+            val dst = nodeIdMapping[oldDst] ?: oldDst
+            into.addEdge(src, dst, type, props)
         }
         return into
     }

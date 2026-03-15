@@ -1,10 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
 import org.junit.Before
@@ -13,12 +11,6 @@ import kotlin.test.*
 
 class JgraphtStorageImplWhiteBoxTest {
     private lateinit var storage: JgraphtStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge12 = EdgeID(node1, node2, "e12")
-    private val edge23 = EdgeID(node2, node3, "e23")
-    private val edge13 = EdgeID(node1, node3, "e13")
 
     @Before
     fun setup() {
@@ -34,38 +26,33 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test nodeIDs preserves insertion order via linkedMapOf`() {
-        val nodes = listOf(NodeID("c"), NodeID("a"), NodeID("b"))
-        nodes.forEach { storage.addNode(it) }
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
 
         val ids = storage.nodeIDs.toList()
-        assertEquals(nodes, ids)
+        assertEquals(listOf(n1, n2, n3), ids)
     }
 
     @Test
     fun `test edgeIDs preserves insertion order via linkedMapOf`() {
-        val n1 = NodeID("n1")
-        val n2 = NodeID("n2")
-        val n3 = NodeID("n3")
-        storage.addNode(n1)
-        storage.addNode(n2)
-        storage.addNode(n3)
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
 
-        val edges = listOf(
-            EdgeID(n1, n2, "e1"),
-            EdgeID(n2, n3, "e2"),
-            EdgeID(n1, n3, "e3"),
-        )
-        edges.forEach { storage.addEdge(it) }
+        val e1 = storage.addEdge(n1, n2, "e1")
+        val e2 = storage.addEdge(n2, n3, "e2")
+        val e3 = storage.addEdge(n1, n3, "e3")
 
         val ids = storage.edgeIDs.toList()
-        assertEquals(edges, ids)
+        assertEquals(listOf(e1, e2, e3), ids)
     }
 
     // -- nodeProperties and jgtGraph consistency --
 
     @Test
     fun `test addNode syncs jgtGraph and nodeProperties`() {
-        storage.addNode(node1, mapOf("k" to "v".strVal))
+        val node1 = storage.addNode(mapOf("k" to "v".strVal))
 
         assertTrue(storage.containsNode(node1))
         assertEquals(1, storage.nodeIDs.size)
@@ -74,9 +61,9 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test addEdge syncs jgtGraph and edgeProperties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12, mapOf("k" to "v".strVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12", mapOf("k" to "v".strVal))
 
         assertTrue(storage.containsEdge(edge12))
         assertEquals(setOf(edge12), storage.getOutgoingEdges(node1))
@@ -86,12 +73,12 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes associated edges from both jgtGraph and edgeProperties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
-        storage.addEdge(edge23)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
+        val edge23 = storage.addEdge(node2, node3, "e23")
 
         storage.deleteNode(node1)
 
@@ -104,9 +91,9 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteEdge removes from both jgtGraph and edgeProperties`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
 
         storage.deleteEdge(edge12)
 
@@ -119,7 +106,7 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties null removes existing property`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
 
         storage.setNodeProperties(node1, mapOf("a" to null))
 
@@ -130,7 +117,7 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties merges new and updates existing`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal))
 
         storage.setNodeProperties(node1, mapOf("a" to 10.numVal, "b" to 20.numVal))
 
@@ -141,9 +128,9 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test setEdgeProperties null removes existing property`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12, mapOf("x" to "y".strVal, "z" to "w".strVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12", mapOf("x" to "y".strVal, "z" to "w".strVal))
 
         storage.setEdgeProperties(edge12, mapOf("x" to null))
 
@@ -156,7 +143,7 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test getNodeProperties returns reference to internal map`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal))
 
         val props = storage.getNodeProperties(node1)
         assertTrue(props is MutableMap)
@@ -166,9 +153,9 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test clear empties all internal structures and returns true`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
 
         val result = storage.clear()
 
@@ -190,7 +177,9 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test close sets isClosed then all operations throw`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
@@ -210,13 +199,11 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test pseudograph allows multiple edges between same node pair`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
 
-        val e1 = EdgeID(node1, node2, "type_a")
-        val e2 = EdgeID(node1, node2, "type_b")
-        storage.addEdge(e1)
-        storage.addEdge(e2)
+        val e1 = storage.addEdge(node1, node2, "type_a")
+        val e2 = storage.addEdge(node1, node2, "type_b")
 
         assertEquals(2, storage.getOutgoingEdges(node1).size)
         assertEquals(2, storage.getIncomingEdges(node2).size)
@@ -228,9 +215,8 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test self loop edge appears in both incoming and outgoing`() {
-        storage.addNode(node1)
-        val selfEdge = EdgeID(node1, node1, "self")
-        storage.addEdge(selfEdge)
+        val node1 = storage.addNode()
+        val selfEdge = storage.addEdge(node1, node1, "self")
 
         assertTrue(selfEdge in storage.getOutgoingEdges(node1))
         assertTrue(selfEdge in storage.getIncomingEdges(node1))
@@ -240,9 +226,8 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode cascading deletes self loop edge`() {
-        storage.addNode(node1)
-        val selfEdge = EdgeID(node1, node1, "self")
-        storage.addEdge(selfEdge)
+        val node1 = storage.addNode()
+        val selfEdge = storage.addEdge(node1, node1, "self")
 
         storage.deleteNode(node1)
 
@@ -286,62 +271,55 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test addEdge throws when src node missing`() {
-        storage.addNode(node2)
+        val node2 = storage.addNode()
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge(edge12) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge("nonexistent", node2, "e12") }
     }
 
     @Test
     fun `test addEdge throws when dst node missing`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
-        assertFailsWith<EntityNotExistException> { storage.addEdge(edge12) }
-    }
-
-    @Test
-    fun `test addNode duplicate throws EntityAlreadyExistException`() {
-        storage.addNode(node1)
-
-        assertFailsWith<EntityAlreadyExistException> { storage.addNode(node1) }
+        assertFailsWith<EntityNotExistException> { storage.addEdge(node1, "nonexistent", "e12") }
     }
 
     @Test
     fun `test addEdge duplicate throws EntityAlreadyExistException`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
 
-        assertFailsWith<EntityAlreadyExistException> { storage.addEdge(edge12) }
+        assertFailsWith<EntityAlreadyExistException> { storage.addEdge(node1, node2, "e12") }
     }
 
     @Test
     fun `test deleteNode nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteNode(node1) }
+        assertFailsWith<EntityNotExistException> { storage.deleteNode("nonexistent") }
     }
 
     @Test
     fun `test deleteEdge nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteEdge(edge12) }
+        assertFailsWith<EntityNotExistException> { storage.deleteEdge("nonexistent") }
     }
 
     @Test
     fun `test getIncomingEdges nonexistent node throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges(node1) }
+        assertFailsWith<EntityNotExistException> { storage.getIncomingEdges("nonexistent") }
     }
 
     @Test
     fun `test getOutgoingEdges nonexistent node throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges(node1) }
+        assertFailsWith<EntityNotExistException> { storage.getOutgoingEdges("nonexistent") }
     }
 
     // -- nodeIDs and edgeIDs return snapshot copies --
 
     @Test
     fun `test nodeIDs returns copy not live view`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         val snapshot = storage.nodeIDs
 
-        storage.addNode(node2)
+        storage.addNode()
 
         assertEquals(1, snapshot.size)
         assertEquals(2, storage.nodeIDs.size)
@@ -349,13 +327,13 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test edgeIDs returns copy not live view`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
         val snapshot = storage.edgeIDs
 
-        storage.addNode(node3)
-        storage.addEdge(edge23)
+        val node3 = storage.addNode()
+        storage.addEdge(node2, node3, "e23")
 
         assertEquals(1, snapshot.size)
         assertEquals(2, storage.edgeIDs.size)
@@ -365,7 +343,7 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test addNode with default empty properties`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
 
         assertTrue(storage.getNodeProperties(node1).isEmpty())
     }
@@ -374,16 +352,13 @@ class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode removes incoming and outgoing edges but preserves other edges`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
 
-        val e12 = EdgeID(node1, node2, "out")
-        val e32 = EdgeID(node3, node2, "in")
-        val e13 = EdgeID(node1, node3, "other")
-        storage.addEdge(e12)
-        storage.addEdge(e32)
-        storage.addEdge(e13)
+        val e12 = storage.addEdge(node1, node2, "out")
+        val e32 = storage.addEdge(node3, node2, "in")
+        val e13 = storage.addEdge(node1, node3, "other")
 
         storage.deleteNode(node2)
 

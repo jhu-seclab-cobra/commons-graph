@@ -1,9 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.*
 import org.junit.After
 import org.junit.Before
@@ -17,12 +15,6 @@ import kotlin.test.*
 
 class JgraphtConcurStorageImplWhiteBoxTest {
     private lateinit var storage: JgraphtConcurStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge12 = EdgeID(node1, node2, "e12")
-    private val edge23 = EdgeID(node2, node3, "e23")
-    private val edge13 = EdgeID(node1, node3, "e13")
 
     @Before
     fun setup() {
@@ -38,7 +30,7 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test getNodeProperties returns defensive copy via HashMap`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal))
 
         val props1 = storage.getNodeProperties(node1)
         val props2 = storage.getNodeProperties(node1)
@@ -49,9 +41,9 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test getEdgeProperties returns defensive copy via HashMap`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12, mapOf("x" to "y".strVal))
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12", mapOf("x" to "y".strVal))
 
         val props1 = storage.getEdgeProperties(edge12)
         val props2 = storage.getEdgeProperties(edge12)
@@ -62,7 +54,7 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test modifying returned properties does not affect internal state`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal))
 
         val props = storage.getNodeProperties(node1) as MutableMap
         props["a"] = 999.numVal
@@ -77,15 +69,14 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test deleteNode with multiple incoming and outgoing edges`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge12)
-        storage.addEdge(edge13)
-        storage.addEdge(edge23)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge12 = storage.addEdge(node1, node2, "e12")
+        val edge13 = storage.addEdge(node1, node3, "e13")
+        val edge23 = storage.addEdge(node2, node3, "e23")
 
-        val selfEdge = EdgeID(node1, node1, "self")
-        storage.addEdge(selfEdge)
+        val selfEdge = storage.addEdge(node1, node1, "self")
 
         storage.deleteNode(node1)
 
@@ -100,21 +91,21 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test close acquires write lock and sets isClosed`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.containsNode(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode(node2) }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
     }
 
     // -- clear() under write lock --
 
     @Test
     fun `test clear empties all structures under write lock`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
         storage.setMeta("key", "val".strVal)
 
         assertTrue(storage.clear())
@@ -136,11 +127,12 @@ class JgraphtConcurStorageImplWhiteBoxTest {
     @Test
     fun `test concurrent deleteNode does not cause ConcurrentModificationException`() {
         val nodeCount = 100
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until nodeCount) {
-            storage.addNode(NodeID("n$i"))
+            nodeIds.add(storage.addNode())
         }
         for (i in 0 until nodeCount - 1) {
-            storage.addEdge(EdgeID(NodeID("n$i"), NodeID("n${i + 1}"), "e$i"))
+            storage.addEdge(nodeIds[i], nodeIds[i + 1], "e$i")
         }
 
         val executor = Executors.newFixedThreadPool(4)
@@ -152,7 +144,7 @@ class JgraphtConcurStorageImplWhiteBoxTest {
                 try {
                     for (i in (t * 25) until ((t + 1) * 25)) {
                         try {
-                            storage.deleteNode(NodeID("n$i"))
+                            storage.deleteNode(nodeIds[i])
                         } catch (e: EntityNotExistException) {
                             // acceptable: edge cascade may have triggered from another thread
                         }
@@ -177,7 +169,7 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test setNodeProperties null removes under write lock`() {
-        storage.addNode(node1, mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
 
         storage.setNodeProperties(node1, mapOf("a" to null))
 
@@ -209,9 +201,9 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test no deadlock under mixed read-write operations`() {
-        storage.addNode(node1, mapOf("counter" to 0.numVal))
-        storage.addNode(node2)
-        storage.addEdge(edge12)
+        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "e12")
 
         val threadCount = 10
         val opsPerThread = 200
@@ -252,12 +244,10 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test pseudograph supports parallel edges under concurrent impl`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        val e1 = EdgeID(node1, node2, "type_a")
-        val e2 = EdgeID(node1, node2, "type_b")
-        storage.addEdge(e1)
-        storage.addEdge(e2)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        storage.addEdge(node1, node2, "type_a")
+        storage.addEdge(node1, node2, "type_b")
 
         assertEquals(2, storage.getOutgoingEdges(node1).size)
         assertEquals(2, storage.getIncomingEdges(node2).size)
@@ -267,10 +257,10 @@ class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `test nodeIDs returns snapshot not live view`() {
-        storage.addNode(node1)
+        val node1 = storage.addNode()
         val snapshot = storage.nodeIDs
 
-        storage.addNode(node2)
+        storage.addNode()
 
         assertEquals(1, snapshot.size)
         assertEquals(2, storage.nodeIDs.size)

@@ -1,8 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.EdgeID
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.numVal
@@ -22,12 +20,6 @@ import kotlin.test.assertTrue
 
 class JgraphtConcurStorageImplTest {
     private lateinit var storage: JgraphtConcurStorageImpl
-    private val node1 = NodeID("node1")
-    private val node2 = NodeID("node2")
-    private val node3 = NodeID("node3")
-    private val edge1 = EdgeID(node1, node2, "edge1")
-    private val edge2 = EdgeID(node2, node3, "edge2")
-    private val edge3 = EdgeID(node1, node3, "edge3")
 
     @Before
     fun setup() {
@@ -51,8 +43,7 @@ class JgraphtConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until nodeCountPerThread) {
-                        val nodeId = NodeID("node_${t}_$i")
-                        storage.addNode(nodeId, mapOf("thread" to t.toString().strVal, "index" to i.numVal))
+                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.numVal))
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -76,7 +67,7 @@ class JgraphtConcurStorageImplTest {
 
     @Test
     fun `test concurrent read-write operations`() {
-        storage.addNode(node1, mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
 
         val threadCount = 5
         val iterationsPerThread = 100
@@ -134,8 +125,9 @@ class JgraphtConcurStorageImplTest {
 
     @Test
     fun `test concurrent node deletion`() {
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until 100) {
-            storage.addNode(NodeID("test_node_$i"), mapOf("index" to i.numVal))
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
 
         val startLatch = CountDownLatch(1)
@@ -143,13 +135,13 @@ class JgraphtConcurStorageImplTest {
         val deleteSuccess = AtomicBoolean(true)
         val querySuccess = AtomicBoolean(true)
 
+        // Separate odd-indexed nodes for deletion
+        val oddNodes = nodeIds.filterIndexed { index, _ -> index % 2 == 1 }
+
         Thread {
             try {
                 startLatch.await()
-                val toDelete = storage.nodeIDs.filter {
-                    it.name.substringAfterLast("_").toInt() % 2 == 1
-                }
-                toDelete.forEach { storage.deleteNode(it) }
+                oddNodes.forEach { storage.deleteNode(it) }
             } catch (e: Exception) {
                 e.printStackTrace()
                 deleteSuccess.set(false)
@@ -161,9 +153,8 @@ class JgraphtConcurStorageImplTest {
         Thread {
             try {
                 startLatch.await()
-                for (i in 0 until 100) {
+                for (nodeId in nodeIds) {
                     try {
-                        val nodeId = NodeID("test_node_$i")
                         if (storage.containsNode(nodeId)) {
                             val props = storage.getNodeProperties(nodeId)
                             assertNotNull(props["index"])
@@ -191,12 +182,12 @@ class JgraphtConcurStorageImplTest {
 
     @Test
     fun `test concurrent graph traversal`() {
-        storage.addNode(node1)
-        storage.addNode(node2)
-        storage.addNode(node3)
-        storage.addEdge(edge1)
-        storage.addEdge(edge2)
-        storage.addEdge(edge3)
+        val node1 = storage.addNode()
+        val node2 = storage.addNode()
+        val node3 = storage.addNode()
+        val edge1 = storage.addEdge(node1, node2, "edge1")
+        val edge2 = storage.addEdge(node2, node3, "edge2")
+        val edge3 = storage.addEdge(node1, node3, "edge3")
 
         val threadCount = 5
         val executor = Executors.newFixedThreadPool(threadCount)
@@ -220,7 +211,7 @@ class JgraphtConcurStorageImplTest {
 
                             2 -> {
                                 val outEdges = storage.getOutgoingEdges(node1)
-                                val filtered = outEdges.filter { it.dstNid == node3 }
+                                val filtered = outEdges.filter { storage.getEdgeDst(it) == node3 }
                                 assertEquals(1, filtered.size)
                             }
 
@@ -256,7 +247,7 @@ class JgraphtConcurStorageImplTest {
 
     @Test
     fun `test lock contention`() {
-        storage.addNode(node1, mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
 
         val readThreads = 20
         val writeThreads = 5
@@ -296,8 +287,7 @@ class JgraphtConcurStorageImplTest {
                             storage.setNodeProperties(node1, mapOf("counter" to (current.toInt() + 1).numVal))
 
                             if (i % 10 == 0) {
-                                val tempNodeId = NodeID("temp_node_${t}_$i")
-                                storage.addNode(tempNodeId, mapOf("temp" to true.boolVal))
+                                val tempNodeId = storage.addNode(mapOf("temp" to true.boolVal))
                                 storage.deleteNode(tempNodeId)
                             }
                         } catch (e: Exception) {
