@@ -217,6 +217,236 @@ class EntityPropertyMapTest {
         }
     }
 
+    // =============== PropertyMap Inner Collection Coverage ===============
+
+    @Test
+    fun `test property map entries iterator traverses all entries`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal, "c" to "3".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val collected = mutableListOf<String>()
+        val iter = pm.entries.iterator()
+        while (iter.hasNext()) {
+            collected.add(iter.next().key)
+        }
+
+        assertEquals(3, collected.size)
+        assertTrue(collected.containsAll(listOf("a", "b", "c")))
+    }
+
+    @Test
+    fun `test property map entries iterator remove`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal))
+        val pm = entityPropertyMap[1]!! as MutableMap<String, IValue>
+
+        val iter = pm.entries.iterator()
+        while (iter.hasNext()) {
+            val e = iter.next()
+            if (e.key == "a") iter.remove()
+        }
+
+        assertEquals(1, pm.size)
+        assertFalse(pm.containsKey("a"))
+        assertTrue(pm.containsKey("b"))
+    }
+
+    @Test
+    fun `test property map entries iterator throws NoSuchElementException at end`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val iter = pm.entries.iterator()
+        iter.next()
+        assertFailsWith<NoSuchElementException> { iter.next() }
+    }
+
+    @Test
+    fun `test property map entries contains and containsAll`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val entries = pm.entries
+        val matchEntry = entries.first { it.key == "a" }
+        assertTrue(entries.contains(matchEntry))
+        assertTrue(entries.containsAll(listOf(matchEntry)))
+    }
+
+    @Test
+    fun `test property map entries add and addAll`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val entries = pm.entries
+        val newEntry = object : MutableMap.MutableEntry<String, IValue> {
+            override val key = "b"
+            override val value = "2".strVal
+            override fun setValue(newValue: IValue) = "2".strVal
+        }
+        assertTrue(entries.add(newEntry))
+        assertTrue(pm.containsKey("b"))
+    }
+
+    @Test
+    fun `test property map entries removeAll and retainAll`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal, "c" to "3".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val entries = pm.entries
+        val toRemove = entries.filter { it.key == "a" }
+        assertTrue(entries.removeAll(toRemove))
+        assertEquals(2, pm.size)
+        assertFalse(pm.containsKey("a"))
+    }
+
+    @Test
+    fun `test property map entries retainAll keeps only specified`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal, "c" to "3".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val entries = pm.entries
+        val toRetain = entries.filter { it.key == "b" }
+        entries.retainAll(toRetain)
+
+        assertEquals(1, pm.size)
+        assertTrue(pm.containsKey("b"))
+    }
+
+    @Test
+    fun `test property map keys iterator traverses all keys`() {
+        entityPropertyMap.put(1, mapOf("x" to "1".strVal, "y" to "2".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val collected = mutableListOf<String>()
+        val iter = pm.keys.iterator()
+        while (iter.hasNext()) {
+            collected.add(iter.next())
+        }
+
+        assertEquals(2, collected.size)
+        assertTrue(collected.containsAll(listOf("x", "y")))
+    }
+
+    @Test
+    fun `test property map keys contains and containsAll`() {
+        entityPropertyMap.put(1, mapOf("x" to "1".strVal, "y" to "2".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val keys = pm.keys
+        assertTrue(keys.contains("x"))
+        assertTrue(keys.containsAll(listOf("x", "y")))
+        assertFalse(keys.contains("z"))
+    }
+
+    @Test
+    fun `test property map keys add and remove`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val keys = pm.keys
+        keys.add("b")
+        assertTrue(pm.containsKey("b"))
+
+        keys.remove("a")
+        assertFalse(pm.containsKey("a"))
+    }
+
+    @Test
+    fun `test property map keys removeAll and retainAll`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal, "c" to "3".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        pm.keys.removeAll(listOf("a", "c"))
+        assertEquals(1, pm.size)
+        assertTrue(pm.containsKey("b"))
+    }
+
+    @Test
+    fun `test property map keys retainAll keeps specified`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal, "b" to "2".strVal, "c" to "3".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        pm.keys.retainAll(listOf("b"))
+        assertEquals(1, pm.size)
+        assertTrue(pm.containsKey("b"))
+    }
+
+    @Test
+    fun `test property map entry setValue updates property`() {
+        entityPropertyMap.put(1, mapOf("a" to "old".strVal))
+        val pm = entityPropertyMap[1]!!
+
+        val entry = pm.entries.first()
+        entry.setValue("new".strVal)
+
+        assertEquals("new".strVal, pm["a"])
+    }
+
+    // =============== EntityPropertyMap entries coverage ===============
+
+    @Test
+    fun `test entity map entries iterator traverses all entities`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+        entityPropertyMap.put(2, mapOf("b" to "2".strVal))
+
+        val collected = mutableListOf<Int>()
+        val iter = entityPropertyMap.entries.iterator()
+        while (iter.hasNext()) {
+            collected.add(iter.next().key)
+        }
+
+        assertEquals(2, collected.size)
+    }
+
+    @Test
+    fun `test entity map entries iterator remove deletes entity`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+        entityPropertyMap.put(2, mapOf("b" to "2".strVal))
+
+        val iter = entityPropertyMap.entries.iterator()
+        while (iter.hasNext()) {
+            val e = iter.next()
+            if (e.key == 1) iter.remove()
+        }
+
+        assertEquals(1, entityPropertyMap.size)
+        assertFalse(entityPropertyMap.containsKey(1))
+    }
+
+    @Test
+    fun `test entity map entries iterator throws NoSuchElementException at end`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+
+        val iter = entityPropertyMap.entries.iterator()
+        iter.next()
+        assertFailsWith<NoSuchElementException> { iter.next() }
+    }
+
+    @Test
+    fun `test entity map entries setValue updates entity properties`() {
+        entityPropertyMap.put(1, mapOf("a" to "1".strVal))
+
+        val entry = entityPropertyMap.entries.first()
+        entry.setValue(mapOf("b" to "2".strVal))
+
+        val props = entityPropertyMap[1]!!
+        assertTrue(props.containsKey("b"))
+        assertEquals("2".strVal, props["b"])
+    }
+
+    @Test
+    fun `test entity map entries add inserts new entity`() {
+        val entry = object : MutableMap.MutableEntry<Int, Map<String, IValue>> {
+            override val key = 5
+            override val value = mapOf("x" to "v".strVal)
+            override fun setValue(newValue: Map<String, IValue>) = value
+        }
+
+        entityPropertyMap.entries.add(entry)
+
+        assertTrue(entityPropertyMap.containsKey(5))
+        assertEquals("v".strVal, entityPropertyMap[5]!!["x"])
+    }
+
     // =============== Error Handling Tests ===============
 
     @Test
