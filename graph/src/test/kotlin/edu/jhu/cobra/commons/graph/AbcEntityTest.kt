@@ -9,6 +9,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -232,6 +233,48 @@ class AbcEntityTest {
         assertEquals("default", entity.emptyProp.core)
     }
 
+    @Test
+    fun `test entityProperty_nullable_wrongType_returnsNull`() {
+        class TestEntity(
+            storage: NativeStorageImpl,
+            internalId: InternalID,
+        ) : AbcNode(storage, internalId) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
+            var strProp: StrVal? by EntityProperty()
+        }
+        val sid = storage.addNode()
+        val entity = TestEntity(storage, sid)
+        // Store a NumVal under the same key; the as? StrVal cast should return null
+        entity["strProp"] = 42.numVal
+
+        assertNull(entity.strProp)
+    }
+
+    @Test
+    fun `test entityProperty_nullable_setToNull_doesNotWrite`() {
+        class TestEntity(
+            storage: NativeStorageImpl,
+            internalId: InternalID,
+        ) : AbcNode(storage, internalId) {
+            override val type: AbcNode.Type =
+                object : AbcNode.Type {
+                    override val name = "TestEntity"
+                }
+            var optProp: StrVal? by EntityProperty()
+        }
+        val sid = storage.addNode()
+        val entity = TestEntity(storage, sid)
+
+        // Setting null on a never-written property must not throw and leave property absent
+        entity.optProp = null
+
+        assertNull(entity.optProp)
+        assertFalse("optProp" in entity)
+    }
+
     // endregion
 
     // region EntityType delegate
@@ -347,6 +390,16 @@ class AbcEntityTest {
 
         entity["myKind"] = "SINK".strVal
         assertEquals(NodeKind.SINK, entity.kind)
+    }
+
+    @Test
+    fun `test entityType_enumType_unknownStoredValue_returnsDefault`() {
+        val sid = storage.addNode()
+        val entity = EnumTypeCustomNameEntity2(storage, sid)
+        // Store a value that is not a valid enum constant name
+        entity["myKind"] = "UNKNOWN_KIND".strVal
+
+        assertEquals(NodeKind.SOURCE, entity.kind)
     }
 
     // endregion
