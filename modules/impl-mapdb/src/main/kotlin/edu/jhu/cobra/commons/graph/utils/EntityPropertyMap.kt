@@ -9,7 +9,7 @@ import org.mapdb.Serializer
 
 /**
  * A MapDB-backed implementation of [MutableMap] that stores entity properties.
- * This provides a mapping from entity ID strings to their associated property maps.
+ * This provides a mapping from entity Int IDs to their associated property maps.
  *
  * @param dbManager The MapDB database manager
  * @param name The base name for the database stores
@@ -17,7 +17,7 @@ import org.mapdb.Serializer
 internal class EntityPropertyMap(
     dbManager: DB,
     name: String,
-) : AbstractMutableMap<String, Map<String, IValue>>() {
+) : AbstractMutableMap<Int, Map<String, IValue>>() {
     companion object {
         val SERIALIZER_IVALUE = MapDbValSerializer<IValue>()
         val SERIALIZER_SETVAL = MapDbValSerializer<SetVal>()
@@ -37,10 +37,10 @@ internal class EntityPropertyMap(
     /**
      * Inner class that represents a property map for a specific entity.
      *
-     * @param eid The entity ID string
+     * @param eid The entity Int ID
      */
     inner class PropertyMap(
-        private val eid: String,
+        private val eid: Int,
     ) : AbstractMutableMap<String, IValue>() {
         private inner class Entry(
             override val key: String,
@@ -182,7 +182,7 @@ internal class EntityPropertyMap(
     }
 
     override fun put(
-        key: String,
+        key: Int,
         value: Map<String, IValue>,
     ): Map<String, IValue>? {
         val prev = if (identities.containsKey(key)) PropertyMap(key).toMap() else null
@@ -193,44 +193,44 @@ internal class EntityPropertyMap(
         return prev
     }
 
-    override fun containsKey(key: String): Boolean = identities.containsKey(key)
+    override fun containsKey(key: Int): Boolean = identities.containsKey(key)
 
-    fun contains(key: String): Boolean = identities.containsKey(key)
+    fun contains(key: Int): Boolean = identities.containsKey(key)
 
-    override fun get(key: String): PropertyMap? {
+    override fun get(key: Int): PropertyMap? {
         if (!identities.containsKey(key)) return null
         return PropertyMap(key)
     }
 
-    override fun remove(key: String): Map<String, IValue>? {
+    override fun remove(key: Int): Map<String, IValue>? {
         val prev = if (identities.containsKey(key)) PropertyMap(key).toMap() else null
         PropertyMap(key).clear()
         identities.remove(key)
         return prev
     }
 
-    override val entries: MutableSet<MutableMap.MutableEntry<String, Map<String, IValue>>>
+    override val entries: MutableSet<MutableMap.MutableEntry<Int, Map<String, IValue>>>
         get() =
-            object : AbstractMutableSet<MutableMap.MutableEntry<String, Map<String, IValue>>>() {
+            object : AbstractMutableSet<MutableMap.MutableEntry<Int, Map<String, IValue>>>() {
                 override val size: Int get() = identities.size.toInt()
 
-                override fun add(element: MutableMap.MutableEntry<String, Map<String, IValue>>): Boolean {
+                override fun add(element: MutableMap.MutableEntry<Int, Map<String, IValue>>): Boolean {
                     put(element.key, element.value)
                     return true
                 }
 
                 override fun iterator() =
-                    object : MutableIterator<MutableMap.MutableEntry<String, Map<String, IValue>>> {
+                    object : MutableIterator<MutableMap.MutableEntry<Int, Map<String, IValue>>> {
                         private val keysIterator = identities.keys.iterator()
-                        private var currentKey: String? = null
+                        private var currentKey: Int? = null
 
                         override fun hasNext(): Boolean = keysIterator.hasNext()
 
-                        override fun next(): MutableMap.MutableEntry<String, Map<String, IValue>> {
+                        override fun next(): MutableMap.MutableEntry<Int, Map<String, IValue>> {
                             if (!hasNext()) throw NoSuchElementException("No more elements")
                             currentKey = keysIterator.next()
-                            return object : MutableMap.MutableEntry<String, Map<String, IValue>> {
-                                override val key: String = currentKey!!
+                            return object : MutableMap.MutableEntry<Int, Map<String, IValue>> {
+                                override val key: Int = currentKey!!
                                 override val value: Map<String, IValue> get() = PropertyMap(key)
 
                                 override fun setValue(newValue: Map<String, IValue>): Map<String, IValue> {

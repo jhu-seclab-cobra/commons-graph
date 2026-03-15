@@ -1,14 +1,11 @@
 package edu.jhu.cobra.commons.graph.utils
 
 import edu.jhu.cobra.commons.value.*
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.mapdb.DB
-import org.mapdb.DBMaker
 import java.nio.file.Files
 import kotlin.io.path.createTempDirectory
 import kotlin.test.*
+import org.mapdb.DB
+import org.mapdb.DBMaker
 
 /**
  * Test the functionality of MapDB implementation of EntityPropertyMap
@@ -17,13 +14,13 @@ class EntityPropertyMapTest {
     private lateinit var dbManager: DB
     private lateinit var entityPropertyMap: EntityPropertyMap
 
-    @Before
+    @BeforeTest
     fun setUp() {
         dbManager = DBMaker.memoryDB().make()
         entityPropertyMap = EntityPropertyMap(dbManager, "test-entity-props")
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         dbManager.close()
     }
@@ -32,7 +29,7 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test basic put and get operations`() {
-        val entity = "entity1"
+        val entity = 1
         val props =
             mapOf(
                 "name" to "Entity 1".strVal,
@@ -46,7 +43,7 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test property update and override`() {
-        val entity = "entity1"
+        val entity = 1
         val initialProps = mapOf("name" to "Initial".strVal)
         val updatedProps =
             mapOf(
@@ -61,7 +58,7 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test entity removal`() {
-        val entity = "entity1"
+        val entity = 1
         val props = mapOf("name" to "Entity 1".strVal)
 
         entityPropertyMap.put(entity, props)
@@ -74,31 +71,28 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test property map operations`() {
-        val entity = "entity1"
+        val entity = 1
         val initialProps =
             mapOf(
                 "key1" to "value1".strVal,
                 "key2" to "value2".strVal,
             )
         entityPropertyMap.put(entity, initialProps)
-        val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
+        val propertyMap = entityPropertyMap[entity]!!
 
-        // Test property addition
         propertyMap["key3"] = "value3".strVal
         assertEquals("value3".strVal, propertyMap["key3"], "Should add new property")
 
-        // Test property update
         propertyMap["key1"] = "updated".strVal
         assertEquals("updated".strVal, propertyMap["key1"], "Should update existing property")
 
-        // Test property removal
         propertyMap.remove("key2")
         assertFalse(propertyMap.containsKey("key2"), "Should remove property")
     }
 
     @Test
     fun `test property map collection views`() {
-        val entity = "entity1"
+        val entity = 1
         val props =
             mapOf(
                 "key1" to "value1".strVal,
@@ -106,19 +100,16 @@ class EntityPropertyMapTest {
                 "key3" to "value3".strVal,
             )
         entityPropertyMap.put(entity, props)
-        val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
+        val propertyMap = entityPropertyMap[entity]!!
 
-        // Test entries view
         val entries = propertyMap.entries
         assertEquals(3, entries.size, "Should have correct number of entries")
         assertTrue(entries.any { it.key == "key1" && it.value == "value1".strVal })
 
-        // Test keys view
         val keys = propertyMap.keys
         assertEquals(3, keys.size, "Should have correct number of keys")
         assertTrue(keys.containsAll(listOf("key1", "key2", "key3")))
 
-        // Test values view
         val values = propertyMap.values
         assertEquals(3, values.size, "Should have correct number of values")
         assertTrue(values.containsAll(listOf("value1".strVal, "value2".strVal, "value3".strVal)))
@@ -128,11 +119,11 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test edge cases for property names and values`() {
-        val entity = "entity1"
+        val entity = 1
         val edgeCases =
             mapOf(
                 "" to "Empty key".strVal,
-                "!@#$%^&*()" to "Special chars".strVal,
+                "!@#\$%^&*()" to "Special chars".strVal,
                 "你好世界" to "Unicode chars".strVal,
                 "a:b" to "Colon in key".strVal,
                 "key with spaces" to "Spaces in key".strVal,
@@ -148,7 +139,7 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test null and empty value handling`() {
-        val entity = "entity1"
+        val entity = 1
         val props =
             mapOf(
                 "nullValue" to NullVal,
@@ -167,24 +158,20 @@ class EntityPropertyMapTest {
         val entityCount = 1000
         val propsPerEntity = 50
 
-        // Create and add large number of entities
         for (i in 1..entityCount) {
-            val entity = "entity$i"
             val props =
                 (1..propsPerEntity).associate {
                     "prop$it" to "value$it for entity$i".strVal
                 }
-            entityPropertyMap.put(entity, props)
+            entityPropertyMap.put(i, props)
         }
 
         assertEquals(entityCount, entityPropertyMap.size, "Should handle large number of entities")
 
-        // Verify random entities
         listOf(1, 250, 500, 750, 1000).forEach { i ->
-            val entity = "entity$i"
-            val props = entityPropertyMap[entity]
-            assertNotNull(props, "Should retrieve entity$i")
-            assertEquals(propsPerEntity, props.size, "entity$i should have correct number of properties")
+            val props = entityPropertyMap[i]
+            assertNotNull(props, "Should retrieve entity $i")
+            assertEquals(propsPerEntity, props.size, "entity $i should have correct number of properties")
         }
     }
 
@@ -194,9 +181,9 @@ class EntityPropertyMapTest {
     fun `test bulk operations`() {
         val entities =
             mapOf(
-                "entity1" to mapOf("name" to "Entity 1".strVal),
-                "entity2" to mapOf("name" to "Entity 2".strVal),
-                "entity3" to mapOf("name" to "Entity 3".strVal),
+                1 to mapOf("name" to "Entity 1".strVal),
+                2 to mapOf("name" to "Entity 2".strVal),
+                3 to mapOf("name" to "Entity 3".strVal),
             )
 
         entityPropertyMap.putAll(entities)
@@ -210,22 +197,19 @@ class EntityPropertyMapTest {
     fun `test collection view operations`() {
         val entities =
             mapOf(
-                "entity1" to mapOf("name" to "Entity 1".strVal),
-                "entity2" to mapOf("name" to "Entity 2".strVal),
+                1 to mapOf("name" to "Entity 1".strVal),
+                2 to mapOf("name" to "Entity 2".strVal),
             )
         entityPropertyMap.putAll(entities)
 
-        // Test keys view
         val keys = entityPropertyMap.keys
         assertEquals(2, keys.size, "Should have correct number of keys")
         assertTrue(keys.containsAll(entities.keys))
 
-        // Test values view
         val values = entityPropertyMap.values
         assertEquals(2, values.size, "Should have correct number of values")
         assertTrue(values.containsAll(entities.values))
 
-        // Test entries view
         val entries = entityPropertyMap.entries
         assertEquals(2, entries.size, "Should have correct number of entries")
         entities.forEach { (entity, props) ->
@@ -237,14 +221,14 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test error handling for non-existent entities`() {
-        val nonExistentEntity = "nonexistent"
+        val nonExistentEntity = -1
         assertNull(entityPropertyMap[nonExistentEntity], "Should return null for non-existent entity")
         assertNull(entityPropertyMap.remove(nonExistentEntity), "Should return null when removing non-existent entity")
     }
 
     @Test
     fun `test error handling for closed database`() {
-        val entity = "entity1"
+        val entity = 1
         entityPropertyMap.put(entity, mapOf("key" to "value".strVal))
         dbManager.close()
 
@@ -259,7 +243,7 @@ class EntityPropertyMapTest {
     @Test
     fun `test unsupported operations`() {
         assertFailsWith<UnsupportedOperationException> {
-            entityPropertyMap.keys.add("newEntity")
+            entityPropertyMap.keys.add(99)
         }
         assertFailsWith<UnsupportedOperationException> {
             entityPropertyMap.values.add(mapOf("key" to "value".strVal))
@@ -270,7 +254,7 @@ class EntityPropertyMapTest {
 
     @Test
     fun `test concurrent modification handling`() {
-        val entity = "entity1"
+        val entity = 1
         val initialProps =
             mapOf(
                 "key1" to "value1".strVal,
@@ -280,7 +264,6 @@ class EntityPropertyMapTest {
         entityPropertyMap.put(entity, initialProps)
         val propertyMap = entityPropertyMap[entity] as MutableMap<String, IValue>
 
-        // Test iterator safety
         val iterator = propertyMap.entries.iterator()
         var count = 0
         while (iterator.hasNext()) {
@@ -304,7 +287,7 @@ class EntityPropertyMapTest {
         run {
             val db = DBMaker.fileDB(dbFile).make()
             val map = EntityPropertyMap(db, "persist-test")
-            val entity = "persist-entity"
+            val entity = 1
             val props =
                 mapOf(
                     "name" to "Persistent".strVal,
@@ -319,7 +302,7 @@ class EntityPropertyMapTest {
         run {
             val db = DBMaker.fileDB(dbFile).make()
             val map = EntityPropertyMap(db, "persist-test")
-            val entity = "persist-entity"
+            val entity = 1
             val props = map[entity]
             assertNotNull(props)
             assertEquals("Persistent".strVal, props["name"])
@@ -344,9 +327,8 @@ class EntityPropertyMapTest {
             val db = DBMaker.fileDB(dbFile).make()
             val map = EntityPropertyMap(db, "large-test")
             for (i in 1..entityCount) {
-                val entity = "entity$i"
                 val props = (1..propsPerEntity).associate { "prop$it" to "val${i}_$it".strVal }
-                map.put(entity, props)
+                map.put(i, props)
             }
             db.close()
         }
@@ -355,8 +337,7 @@ class EntityPropertyMapTest {
             val db = DBMaker.fileDB(dbFile).make()
             val map = EntityPropertyMap(db, "large-test")
             for (i in listOf(1, entityCount / 2, entityCount)) {
-                val entity = "entity$i"
-                val props = map[entity]
+                val props = map[i]
                 assertNotNull(props)
                 assertEquals(propsPerEntity, props.size)
                 assertEquals("val${i}_1".strVal, props["prop1"])
