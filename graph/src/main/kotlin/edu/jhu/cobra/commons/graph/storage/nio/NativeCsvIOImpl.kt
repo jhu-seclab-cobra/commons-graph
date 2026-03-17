@@ -278,13 +278,13 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         CsvWriter(path = dstFile).use { writer ->
             from.nodeIDs.filter(predicate).forEach { nodeId ->
                 // Include __sid__ so import can reconstruct edge src/dst mappings
-                val props = from.getNodeProperties(nodeId) + (EXPORT_SID_KEY to nodeId.toString().strVal)
+                val props = from.getNodeProperties(nodeId) + (EXPORT_SID_KEY to nodeId.strVal)
                 writer.writeNode(props)
             }
             from.edgeIDs.filter(predicate).forEach { edgeId ->
                 writer.writeEdge(
-                    from.getEdgeSrc(edgeId).toString(),
-                    from.getEdgeDst(edgeId).toString(),
+                    from.getEdgeSrc(edgeId),
+                    from.getEdgeDst(edgeId),
                     from.getEdgeType(edgeId),
                     from.getEdgeProperties(edgeId),
                 )
@@ -302,21 +302,22 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
-        // Track exported storage ID → new storage ID mapping for edge src/dst resolution
-        val oldToNewId = HashMap<String, Int>()
+        // Track exported storage node ID → new storage node ID mapping
+        val oldToNewId = HashMap<String, String>()
         CsvReader(path = srcFile).use { reader ->
             reader.readNodes().forEach { props ->
-                val oldSid = (props[EXPORT_SID_KEY] as? StrVal)?.core
+                val oldNid = (props[EXPORT_SID_KEY] as? StrVal)?.core
                 val cleanProps = props - EXPORT_SID_KEY
-                val newId = into.addNode(cleanProps)
-                if (oldSid != null) {
-                    oldToNewId[oldSid] = newId
+                val newNid = into.addNode(oldNid ?: "", cleanProps)
+                if (oldNid != null) {
+                    oldToNewId[oldNid] = newNid
                 }
             }
             reader.readEdges().forEach { record ->
                 val srcId = oldToNewId[record.src] ?: error("Unknown node ID: ${record.src}")
                 val dstId = oldToNewId[record.dst] ?: error("Unknown node ID: ${record.dst}")
-                into.addEdge(srcId, dstId, record.type, record.properties)
+                val edgeId = "${record.src}-${record.type}-${record.dst}"
+                into.addEdge(srcId, dstId, edgeId, record.type, record.properties)
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
