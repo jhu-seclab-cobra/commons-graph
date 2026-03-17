@@ -30,7 +30,6 @@ class NativeStorageImpl : IStorage {
     // Columnar node property storage: one HashMap per property name (column).
     // Reduces per-node object count from O(N) MutableMap instances to O(K) columns
     // where K = number of distinct property names, typically K << N.
-    private val nodeSet = HashSet<Int>()
     private val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
 
     // Edge endpoint index (edge ID → src, dst, type)
@@ -49,7 +48,7 @@ class NativeStorageImpl : IStorage {
     // Metadata
     private val metaProperties = HashMap<String, IValue>()
 
-    private fun hasNode(id: Int): Boolean = id in nodeSet
+    private fun hasNode(id: Int): Boolean = id in nodeIntToString
 
     private fun hasEdge(id: Int): Boolean = id in edgeEndpoints
 
@@ -90,7 +89,6 @@ class NativeStorageImpl : IStorage {
         val internalId = nodeCounter++
         nodeStringToInt[nodeId] = internalId
         nodeIntToString[internalId] = nodeId
-        nodeSet.add(internalId)
         for ((key, value) in properties) {
             nodeColumns.getOrPut(key) { HashMap() }[internalId] = value
         }
@@ -105,7 +103,6 @@ class NativeStorageImpl : IStorage {
     ): Int {
         ensureOpen()
         if (hasNode(id)) throw EntityAlreadyExistException(id)
-        nodeSet.add(id)
         for ((key, value) in properties) {
             nodeColumns.getOrPut(key) { HashMap() }[id] = value
         }
@@ -154,7 +151,6 @@ class NativeStorageImpl : IStorage {
         outEdges.remove(internalId)
         inEdges.remove(internalId)
         removeEntityFromColumns(internalId, nodeColumns)
-        nodeSet.remove(internalId)
     }
 
     private fun deleteIncidentEdge(eid: Int) {
@@ -238,7 +234,7 @@ class NativeStorageImpl : IStorage {
     }
 
     // ============================================================================
-    // INTERNAL METHODS USING INT IDS (backward compatibility layer)
+    // INTERNAL METHODS USING INT IDS
     // ============================================================================
 
     internal fun getStringToIntNodeMapping(): Map<String, Int> = nodeStringToInt
@@ -249,7 +245,7 @@ class NativeStorageImpl : IStorage {
 
     internal fun getIntToStringEdgeMapping(): Map<Int, String> = edgeIntToString
 
-    internal fun getInternalNodeIDs(): Set<Int> = nodeSet
+    internal fun getInternalNodeIDs(): Set<Int> = nodeIntToString.keys
 
     internal fun getInternalEdgeIDs(): Set<Int> = edgeEndpoints.keys
 
@@ -331,15 +327,15 @@ class NativeStorageImpl : IStorage {
     override fun getEdgeSrc(id: String): String {
         ensureOpen()
         val internalId = edgeStringToInt[id] ?: throw EntityNotExistException(id)
-        val srcInternal = (edgeEndpoints[internalId] ?: throw EntityNotExistException(id)).src
-        return nodeIntToString[srcInternal] ?: throw EntityNotExistException(id)
+        val endpoint = edgeEndpoints[internalId] ?: throw EntityNotExistException(id)
+        return nodeIntToString[endpoint.src] ?: throw EntityNotExistException(id)
     }
 
     override fun getEdgeDst(id: String): String {
         ensureOpen()
         val internalId = edgeStringToInt[id] ?: throw EntityNotExistException(id)
-        val dstInternal = (edgeEndpoints[internalId] ?: throw EntityNotExistException(id)).dst
-        return nodeIntToString[dstInternal] ?: throw EntityNotExistException(id)
+        val endpoint = edgeEndpoints[internalId] ?: throw EntityNotExistException(id)
+        return nodeIntToString[endpoint.dst] ?: throw EntityNotExistException(id)
     }
 
     override fun getEdgeType(id: String): String {
@@ -443,7 +439,6 @@ class NativeStorageImpl : IStorage {
         inEdges.clear()
         edgeEndpoints.clear()
         edgeColumns.clear()
-        nodeSet.clear()
         nodeColumns.clear()
         metaProperties.clear()
     }
