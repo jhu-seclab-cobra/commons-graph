@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
 
@@ -12,18 +13,17 @@ typealias NodeID = String
 /**
  * Abstract base class for graph nodes with storage-backed property management.
  *
- * The node's [id] is the user-provided [NodeID], read from the `__id__` meta property.
- * The [internalId] is the storage-generated opaque key, invisible to external code.
- * Properties prefixed with `__` are internal metadata and filtered from external access.
+ * The node's [id] is the user-provided [NodeID]. Properties prefixed with `__`
+ * are internal metadata and filtered from external access.
  *
  * @property storage The storage system for node properties.
- * @property internalId The storage-generated opaque key for this node.
+ * @property nodeId The user-provided node identifier.
  * @see AbcEntity
  * @see IEntity
  */
 abstract class AbcNode(
     protected val storage: IStorage,
-    internal val internalId: InternalID,
+    protected val nodeId: NodeID,
 ) : AbcEntity() {
     /**
      * Represents the type information for a node.
@@ -31,10 +31,10 @@ abstract class AbcNode(
     interface Type : IEntity.Type
 
     /**
-     * The user-provided node ID, read from `__id__` meta property.
+     * The user-provided node ID.
      */
     override val id: NodeID
-        get() = (storage.getNodeProperty(internalId, META_ID) as StrVal).core
+        get() = nodeId
 
     /**
      * Returns the node type information.
@@ -53,7 +53,7 @@ abstract class AbcNode(
 
     override fun get(name: String): IValue? {
         require(!name.startsWith(META_PREFIX)) { "Cannot access meta property: $name" }
-        return storage.getNodeProperty(internalId, name)
+        return storage.getNodeProperty(nodeId, name)
     }
 
     override fun set(
@@ -61,19 +61,21 @@ abstract class AbcNode(
         value: IValue?,
     ) {
         require(!name.startsWith(META_PREFIX)) { "Cannot set meta property: $name" }
-        storage.setNodeProperties(internalId, mapOf(name to value))
+        storage.setNodeProperties(nodeId, mapOf(name to value))
     }
 
     override fun contains(name: String): Boolean {
         require(!name.startsWith(META_PREFIX)) { "Cannot query meta property: $name" }
-        return storage.getNodeProperty(internalId, name) != null
+        return storage.getNodeProperty(nodeId, name) != null
     }
 
-    override fun asMap(): Map<String, IValue> = storage.getNodeProperties(internalId).filterKeys { !it.startsWith(META_PREFIX) }
+    override fun asMap(): Map<String, IValue> {
+        return storage.getNodeProperties(nodeId).filterKeys { !it.startsWith(META_PREFIX) }
+    }
 
     override fun update(props: Map<String, IValue?>) {
         require(props.keys.none { it.startsWith(META_PREFIX) }) { "Cannot set meta properties" }
-        storage.setNodeProperties(internalId, props)
+        storage.setNodeProperties(nodeId, props)
     }
 
     override fun toString(): String = "{id=$id, type=${this.type}}"

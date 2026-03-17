@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph.poset
 
-import edu.jhu.cobra.commons.graph.InternalID
-
 /**
  * Contract for a label partial-order set (poset) controlling edge visibility.
  *
@@ -24,7 +22,7 @@ interface IPoset {
     val Label.ancestors: Sequence<Label>
 
     /** Edge IDs whose label set was modified involving this label. */
-    var Label.changes: Set<InternalID>
+    var Label.changes: Set<String>
 
     /**
      * Compares this label with another in the poset hierarchy.

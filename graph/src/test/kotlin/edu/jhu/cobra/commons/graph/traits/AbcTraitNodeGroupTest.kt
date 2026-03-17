@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph.traits
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.AbcSimpleGraph
-import edu.jhu.cobra.commons.graph.InternalID
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
@@ -14,8 +13,8 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 abstract class AbcTraitNodeGroupTest {
     protected class TestNode(
         storage: IStorage,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+        nodeId: NodeID,
+    ) : AbcNode(storage, nodeId) {
         enum class Type {
             TEST,
         }
@@ -29,9 +28,8 @@ abstract class AbcTraitNodeGroupTest {
 
     protected class TestEdge(
         storage: IStorage,
-        internalId: InternalID,
-        nodeIdResolver: (InternalID) -> NodeID,
-    ) : AbcEdge(storage, internalId, nodeIdResolver) {
+        edgeId: String,
+    ) : AbcEdge(storage, edgeId) {
         enum class Type {
             TEST,
         }
@@ -51,10 +49,10 @@ abstract class AbcTraitNodeGroupTest {
         override val groupPrefix: String = "Test"
         override val groupedNodesCounter: MutableMap<String, Int> = mutableMapOf()
 
-        override fun newNodeObj(internalId: InternalID) = TestNode(storage, internalId)
+        override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
 
-        override fun newEdgeObj(internalId: InternalID, nodeIdResolver: (InternalID) -> NodeID) =
-            TestEdge(storage, internalId, nodeIdResolver)
+        override fun newEdgeObj(edgeId: String) =
+            TestEdge(storage, edgeId)
     }
 
     protected lateinit var graph: TestGraph
