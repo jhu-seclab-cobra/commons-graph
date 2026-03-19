@@ -3,7 +3,7 @@ package edu.jhu.cobra.commons.graph
 /**
  * Core directed graph interface.
  *
- * Edges are identified by their `(src, dst, type)` triple.
+ * Edges are identified by their `(src, dst, tag)` triple.
  * Label-aware operations (visibility filtering, label assignment) are provided
  * by [AbcMultipleGraph], which combines this interface with [IPoset][edu.jhu.cobra.commons.graph.poset.IPoset].
  *
@@ -33,25 +33,25 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun addEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): E
 
     fun getEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): E?
 
     fun containEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): Boolean
 
     fun delEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     )
 
     fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>

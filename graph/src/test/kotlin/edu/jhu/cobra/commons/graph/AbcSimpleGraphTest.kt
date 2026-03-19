@@ -33,11 +33,11 @@ class AbcSimpleGraphTest {
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
         assertNotNull(edge)
-        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eType))
+        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
     }
 
     @Test
-    fun `test addEdge_duplicateSameNodePairSameType_throwsEntityAlreadyExist`() {
+    fun `test addEdge_duplicateSameNodePairSameTag_throwsEntityAlreadyExist`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
@@ -65,8 +65,8 @@ class AbcSimpleGraphTest {
         val revEdge = graph.addEdge(NODE_ID_2, NODE_ID_1, "rel")
 
         assertNotNull(revEdge)
-        assertTrue(graph.containEdge(fwdEdge.srcNid, fwdEdge.dstNid, fwdEdge.eType))
-        assertTrue(graph.containEdge(revEdge.srcNid, revEdge.dstNid, revEdge.eType))
+        assertTrue(graph.containEdge(fwdEdge.srcNid, fwdEdge.dstNid, fwdEdge.eTag))
+        assertTrue(graph.containEdge(revEdge.srcNid, revEdge.dstNid, revEdge.eTag))
     }
 
     @Test
@@ -79,9 +79,9 @@ class AbcSimpleGraphTest {
         val e2 = graph.addEdge(NODE_ID_1, NODE_ID_3, "rel")
         val e3 = graph.addEdge(NODE_ID_2, NODE_ID_3, "rel")
 
-        assertTrue(graph.containEdge(e1.srcNid, e1.dstNid, e1.eType))
-        assertTrue(graph.containEdge(e2.srcNid, e2.dstNid, e2.eType))
-        assertTrue(graph.containEdge(e3.srcNid, e3.dstNid, e3.eType))
+        assertTrue(graph.containEdge(e1.srcNid, e1.dstNid, e1.eTag))
+        assertTrue(graph.containEdge(e2.srcNid, e2.dstNid, e2.eTag))
+        assertTrue(graph.containEdge(e3.srcNid, e3.dstNid, e3.eTag))
     }
 
     @Test
@@ -89,12 +89,12 @@ class AbcSimpleGraphTest {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-        graph.delEdge(edge.srcNid, edge.dstNid, edge.eType)
+        graph.delEdge(edge.srcNid, edge.dstNid, edge.eTag)
 
         val newEdge = graph.addEdge(NODE_ID_1, NODE_ID_2, "newRel")
 
         assertNotNull(newEdge)
-        assertTrue(graph.containEdge(newEdge.srcNid, newEdge.dstNid, newEdge.eType))
+        assertTrue(graph.containEdge(newEdge.srcNid, newEdge.dstNid, newEdge.eTag))
     }
 
     @Test
@@ -104,8 +104,8 @@ class AbcSimpleGraphTest {
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "")
 
-        assertEquals("", edge.eType)
-        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eType))
+        assertEquals("", edge.eTag)
+        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
     }
 
     // endregion
@@ -130,7 +130,7 @@ class AbcSimpleGraphTest {
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        assertTrue(storage.containsEdge(edge.internalId))
+        assertTrue(storage.containsEdge(edge.edgeId))
     }
 
     @Test
@@ -159,7 +159,7 @@ class AbcSimpleGraphTest {
     }
 
     @Test
-    fun `test addEdge_withLabel_existingSameType_addsLabel`() {
+    fun `test addEdge_withLabel_existingSameTag_addsLabel`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label1 = Label("v1")
@@ -193,7 +193,7 @@ class AbcSimpleGraphTest {
         graph.addNode(NODE_ID_2)
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        val retrieved = graph.getEdge(edge.srcNid, edge.dstNid, edge.eType)
+        val retrieved = graph.getEdge(edge.srcNid, edge.dstNid, edge.eTag)
 
         assertNotNull(retrieved)
         assertEquals(edge.id, retrieved.id)
@@ -213,9 +213,8 @@ class AbcSimpleGraphTest {
         graph.addNode(NODE_ID_2)
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        assertNotNull(graph.getEdge(edge.srcNid, edge.dstNid, edge.eType))
+        assertNotNull(graph.getEdge(edge.srcNid, edge.dstNid, edge.eTag))
     }
 
     // endregion
-
 }
