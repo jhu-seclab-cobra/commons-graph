@@ -4,10 +4,8 @@ import edu.jhu.cobra.commons.graph.poset.IPoset
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.ListVal
-import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.listVal
-import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
 import java.io.Closeable
 import java.lang.ref.SoftReference
@@ -31,10 +29,6 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     abstract val storage: IStorage
     abstract val posetStorage: IStorage
 
-    // Edge index: (src, dst, type) → edgeId for O(1) findEdge
-    private val edgeIndex = HashMap<Triple<NodeID, NodeID, String>, String>()
-    private var edgeIndexReady = false
-
     // Label ID cache: Label.core ↔ storage label nodeId
     private val labelIdCache = HashMap<String, NodeID>()
     private var labelIdCacheReady = false
@@ -46,43 +40,33 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override val nodeIDs: Set<NodeID>
         get() = storage.nodeIDs
 
-    protected abstract fun newNodeObj(nodeId: NodeID): N
+    protected abstract fun newNodeObj(): N
 
-    protected abstract fun newEdgeObj(edgeId: String): E
+    protected abstract fun newEdgeObj(): E
 
     private fun cachedNode(nodeId: NodeID): N {
         nodeCache[nodeId]?.get()?.let { return it }
-        val node = newNodeObj(nodeId)
+        val node = newNodeObj()
+        node.bind(storage, nodeId)
         nodeCache[nodeId] = SoftReference(node)
         return node
     }
 
     private fun cachedEdge(edgeId: String): E {
         edgeCache[edgeId]?.get()?.let { return it }
-        val edge = newEdgeObj(edgeId)
+        val edge = newEdgeObj()
+        edge.bind(storage, edgeId)
         edgeCache[edgeId] = SoftReference(edge)
         return edge
     }
 
-    private fun ensureEdgeIndex() {
-        if (edgeIndexReady) return
-        for (edgeId in storage.edgeIDs) {
-            val src = storage.getEdgeSrc(edgeId)
-            val dst = storage.getEdgeDst(edgeId)
-            val type = storage.getEdgeType(edgeId)
-            edgeIndex[Triple(src, dst, type)] = edgeId
-        }
-        edgeIndexReady = true
-    }
-
-    // O(1) edge lookup via index
     private fun findEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): String? {
-        ensureEdgeIndex()
-        return edgeIndex[Triple(src, dst, type)]
+        val edgeId = "$src-$tag-$dst"
+        return if (storage.containsEdge(edgeId)) edgeId else null
     }
 
     // region IPoset — write-through to posetStorage (labels as nodes)
@@ -128,7 +112,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             val result = LinkedHashMap<String, Label>()
             for (edgeId in posetStorage.getOutgoingEdges(nodeId)) {
                 val parentNodeId = posetStorage.getEdgeDst(edgeId)
-                val name = posetStorage.getEdgeType(edgeId)
+                val name = posetStorage.getEdgeTag(edgeId)
                 val parentLabel = Label(parentNodeId)
                 result[name] = parentLabel
             }
@@ -171,14 +155,17 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         get() {
             val nodeId = resolveLabelStorageId(this) ?: return emptySet()
             val raw = posetStorage.getNodeProperty(nodeId, PROP_CHANGES) as? ListVal ?: return emptySet()
-            return raw.map { (it as StrVal).core }.toSet()
+            return raw.core.mapTo(HashSet(raw.core.size)) { (it as StrVal).core }
         }
         set(value) {
             val nodeId = ensureLabelNode(this)
             if (value.isEmpty()) {
                 posetStorage.setNodeProperties(nodeId, mapOf(PROP_CHANGES to null))
             } else {
-                posetStorage.setNodeProperties(nodeId, mapOf(PROP_CHANGES to value.map { it.strVal }.listVal))
+                posetStorage.setNodeProperties(
+                    nodeId,
+                    mapOf(PROP_CHANGES to value.mapTo(ArrayList(value.size)) { it.strVal }.listVal),
+                )
             }
         }
 
@@ -222,10 +209,6 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         if (!storage.containsNode(whoseID)) return
         val allEdges = (storage.getIncomingEdges(whoseID) + storage.getOutgoingEdges(whoseID)).toList()
         for (edgeId in allEdges) {
-            val src = storage.getEdgeSrc(edgeId)
-            val dst = storage.getEdgeDst(edgeId)
-            val type = storage.getEdgeType(edgeId)
-            edgeIndex.remove(Triple(src, dst, type))
             edgeCache.remove(edgeId)
             storage.deleteEdge(edgeId)
         }
@@ -246,33 +229,30 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun addEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): E {
         if (!storage.containsNode(src)) throw EntityNotExistException(src)
         if (!storage.containsNode(dst)) throw EntityNotExistException(dst)
-        val edgeId = "$src-$type-$dst"
-        storage.addEdge(src, dst, edgeId, type, emptyMap())
-        edgeIndex[Triple(src, dst, type)] = edgeId
-        return newEdgeObj(edgeId)
+        val edgeId = "$src-$tag-$dst"
+        storage.addEdge(src, dst, edgeId, tag, emptyMap())
+        return cachedEdge(edgeId)
     }
 
     open fun addEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
         label: Label,
     ): E {
         if (!storage.containsNode(src)) throw EntityNotExistException(src)
         if (!storage.containsNode(dst)) throw EntityNotExistException(dst)
-        val existingEdgeId = findEdge(src, dst, type)
+        val edgeId = "$src-$tag-$dst"
         val edge =
-            if (existingEdgeId != null) {
-                cachedEdge(existingEdgeId)
+            if (storage.containsEdge(edgeId)) {
+                cachedEdge(edgeId)
             } else {
-                val edgeId = "$src-$type-$dst"
-                storage.addEdge(src, dst, edgeId, type, emptyMap())
-                edgeIndex[Triple(src, dst, type)] = edgeId
-                newEdgeObj(edgeId)
+                storage.addEdge(src, dst, edgeId, tag, emptyMap())
+                cachedEdge(edgeId)
             }
         edge.labels = edge.labels + label
         label.changes += edge.edgeId
@@ -282,33 +262,32 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): E? {
         if (!storage.containsNode(src)) return null
         if (!storage.containsNode(dst)) return null
-        val edgeId = findEdge(src, dst, type) ?: return null
+        val edgeId = findEdge(src, dst, tag) ?: return null
         return cachedEdge(edgeId)
     }
 
     override fun containEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): Boolean {
         if (!storage.containsNode(src)) return false
         if (!storage.containsNode(dst)) return false
-        return findEdge(src, dst, type) != null
+        return findEdge(src, dst, tag) != null
     }
 
     override fun delEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ) {
         if (!storage.containsNode(src)) return
         if (!storage.containsNode(dst)) return
-        val edgeId = findEdge(src, dst, type) ?: return
-        edgeIndex.remove(Triple(src, dst, type))
+        val edgeId = findEdge(src, dst, tag) ?: return
         edgeCache.remove(edgeId)
         storage.deleteEdge(edgeId)
     }
@@ -316,19 +295,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     fun delEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
         label: Label,
     ) {
         if (!storage.containsNode(src)) return
         if (!storage.containsNode(dst)) return
-        val edgeId = findEdge(src, dst, type) ?: return
+        val edgeId = findEdge(src, dst, tag) ?: return
         val edge = cachedEdge(edgeId)
         val oldLabels = edge.labels
         val newLabels = oldLabels - label
         edge.labels = newLabels
         if (label in oldLabels) label.changes = label.changes - setOf(edgeId)
         if (newLabels.isNotEmpty()) return
-        edgeIndex.remove(Triple(src, dst, type))
         edgeCache.remove(edgeId)
         storage.deleteEdge(edgeId)
     }
@@ -483,11 +461,12 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
                     }
                 }.toSet()
         val allNotCovered =
-            allVisitable.filter { cur ->
-                !allVisitable.any { other ->
-                    other != cur && other.compareTo(cur)?.let { it > 0 } ?: false
-                }
-            }.toSet()
+            allVisitable
+                .filter { cur ->
+                    !allVisitable.any { other ->
+                        other != cur && other.compareTo(cur)?.let { it > 0 } ?: false
+                    }
+                }.toSet()
         return edgesWithLabels
             .filter { (_, labels) ->
                 labels.any { it in allNotCovered }
@@ -496,8 +475,6 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     }
 
     override fun close() {
-        edgeIndex.clear()
-        edgeIndexReady = false
         labelIdCache.clear()
         labelIdCacheReady = false
         queryCache.clear()

@@ -13,23 +13,23 @@ abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGraph<N, E>
     override fun addEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
     ): E {
         val existing = getOutgoingEdges(src).any { it.dstNid == dst }
         if (existing) throw EntityAlreadyExistException("$src->$dst")
-        return super.addEdge(src, dst, type)
+        return super.addEdge(src, dst, tag)
     }
 
     override fun addEdge(
         src: NodeID,
         dst: NodeID,
-        type: String,
+        tag: String,
         label: Label,
     ): E {
         val existing = getOutgoingEdges(src).any { it.dstNid == dst }
-        if (existing && getEdge(src, dst, type) == null) {
+        if (existing && getEdge(src, dst, tag) == null) {
             throw EntityAlreadyExistException("$src->$dst")
         }
-        return super.addEdge(src, dst, type, label)
+        return super.addEdge(src, dst, tag, label)
     }
 }
