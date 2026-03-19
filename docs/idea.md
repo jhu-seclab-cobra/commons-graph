@@ -11,7 +11,7 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 **Data Flow**
 - **Inputs:** Domain operations using `NodeID` (user-provided string) and `(src, dst, type)` edge tuples, entity property reads and updates, traversal and neighborhood queries, label hierarchy mutations, layer transition signals (freeze/compact).
 - **Outputs:** Domain-consistent node/edge views, deterministic query results, label-filtered traversal results, backend-independent error semantics.
-- **Connections:** Upstream services -> Graph domain API (`IGraph` + `IPoset`) -> Graph store contract (`IStorage` with opaque `Int` IDs) -> Backend implementations / Layered storage composers.
+- **Connections:** Upstream services -> Graph domain API (`IGraph` + `IPoset`) -> Graph store contract (`IStorage` with caller-provided `String` IDs) -> Backend implementations / Layered storage composers.
 
 **Scope Boundaries**
 - **Owned:** Graph domain vocabulary, entity identity model, graph/store contracts, layered storage composition, node grouping trait, label partial-order framework, metadata contract, import/export contract concepts.
@@ -29,14 +29,13 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
             |                                   |
             v                                   v
 [AbcMultipleGraph: domain coordinator]
+  ├── Edge index: (src, dst, type) → edgeId
   ├── Node/edge wrapper caching
-  ├── edge lookup by (src, dst, type) via adjacency queries
-  └── label visibility filtering
+  └── Label visibility filtering
             |                                   |
             v                                   v
 [IStorage: graph store]             [IStorage: poset store]
-  (String node/edge IDs)                (String IDs)
-  (InternalID as impl detail)          (InternalID as impl detail)
+  (caller-provided String IDs)          (caller-provided String IDs)
             |                                   |
             +--> Flat store (single-layer)       +--> Flat store (label DAG)
             |       ├── [Native in-memory]
@@ -51,24 +50,24 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 **Core Concepts**
 
 - **Three-layer architecture**
-    The system separates into three layers: a domain layer (`IGraph`, `IPoset`) that speaks in user-facing types (`NodeID`, `(src, dst, type)` edge tuples, `Label`), a store layer (`IStorage`) that speaks in semantic `String` IDs (`NodeID` for nodes, user-specified `String` for edges), and an entity layer (`AbcNode`, `AbcEdge`) that wraps storage-backed property access. The domain layer owns identity semantics, edge lookup by `(src, dst, type)`, and traversal algorithms; the store layer owns ID management, data structure management, adjacency indices, and persistence; the entity layer owns typed property access and meta-property conventions. **InternalID is now a storage implementation detail, not exposed to domain or entity layers.** This separation allows each layer to evolve independently and eliminates ambiguous ID layers.
+    The system separates into three layers: a domain layer (`IGraph`, `IPoset`) that speaks in user-facing types (`NodeID`, `(src, dst, type)` edge tuples, `Label`), a store layer (`IStorage`) that speaks in caller-provided `String` IDs, and an entity layer (`AbcNode`, `AbcEdge`) that wraps storage-backed property access. The domain layer owns edge uniqueness semantics and graph-level policy. The store layer owns data structure management, adjacency indices, persistence, and may internally use integer indices for compactness — this is a pure implementation detail. The entity layer owns typed property access and meta-property conventions.
 
-- **Store contract as String-keyed directed property graph**
-    `IStorage` is a generic directed property graph engine where nodes and edges are identified by semantic `String` IDs. Callers pass `nodeId: String` to `addNode()` and `edgeId: String` to `addEdge(src, dst, edgeId, type)`. Internally, storage implementations may use integer IDs (`InternalID`) for compactness and indexing — this is a pure implementation detail. Edges carry structural metadata (source, destination, type) accessible via `getEdgeSrc`/`getEdgeDst`/`getEdgeType`, which return `String` (NodeID for src/dst). The store manages per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), and metadata. It does not know about `Label` or domain concepts. The same `IStorage` implementation can back both the main program-analysis graph and the label partial-order DAG. This design eliminates ID translation overhead at the domain/entity layer while preserving storage flexibility.
+- **Store contract as caller-ID directed property graph**
+    `IStorage` is a generic directed property graph engine where nodes and edges are identified by caller-provided `String` IDs. Callers pass IDs to `addNode(nodeId)` and `addEdge(src, dst, edgeId, type)` — the store does not generate IDs. Edges carry structural metadata (source, destination, type) accessible via `getEdgeSrc`/`getEdgeDst`/`getEdgeType`, which return `String` (node IDs for src/dst) and `String` (for type). The store manages per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), and metadata. It does not know about `NodeID`, `Label`, or domain concepts. The same `IStorage` implementation can back both the main program-analysis graph and the label partial-order DAG. Caller-controlled IDs allow layered storage to perform freeze merges and shadow entry creation through the standard `IStorage` interface, without requiring internal methods that break encapsulation.
 
 - **Dual store architecture**
     `AbcMultipleGraph` holds two `IStorage` instances: `storage` for the main graph (nodes and edges), `posetStorage` for the label partial-order set (labels as nodes, parent relationships as edges). Both stores are injected by the subclass, persisted independently, and use the same `IStorage` contract. This eliminates the need for metadata-based lattice serialization and provides native adjacency indexing for label hierarchy traversal.
 
 - **Domain identity model (NodeID and EdgeID)**
-    `NodeID` is a `typealias` for `String` — the user-provided node name. Nodes are created with `IStorage.addNode(nodeId: String, properties)`, where the caller supplies the semantic ID. The graph layer does not maintain separate caches; all node IDs are String and passed directly to storage.
+    `NodeID` is a `typealias` for `String` — the user-provided node name. When a node is created via `graph.addNode(nodeId)`, the graph layer calls `storage.addNode(nodeId)` directly — the `NodeID` is the storage key. No bidirectional cache or ID translation is needed at the graph boundary.
 
-    Edges have a caller-provided semantic `String` ID (generated as `"$srcNodeId-$type-$dstNodeId"` by the graph layer). The graph layer resolves edge queries by `(src, dst, type)` tuples through storage adjacency queries and endpoint inspection. Edge structural info (source, destination, type) is retrieved via `storage.getEdgeSrc(edgeId)`, `storage.getEdgeDst(edgeId)`, and `storage.getEdgeType(edgeId)`, all returning String or domain types directly.
+    Edges are created via `graph.addEdge(src, dst, type)`, which generates a deterministic `edgeId` string (e.g., `"$src-$type-$dst"`) and calls `storage.addEdge(src, dst, edgeId, type)`. The graph layer maintains an `edgeIndex: HashMap<Triple<String, String, String>, String>` for O(1) edge lookup by `(src, dst, type)` tuples.
 
 - **Entity as lightweight operation view**
-    `AbcNode` and `AbcEdge` are lightweight property access wrappers backed by storage. `AbcNode` is constructed with `(storage, nodeId: String)` — no InternalID needed. `AbcEdge` is constructed with `(storage, edgeId: String)` — and lazily reads `srcNid`/`dstNid`/`eType` directly from storage without intermediate translation. Properties prefixed with `__` are internal metadata, filtered from external access. **No resolver functions or additional ID mappings are required.**
+    `AbcNode` and `AbcEdge` are lightweight property access wrappers backed by storage. `AbcNode` is constructed with `(storage, nodeId: String)` and uses the `nodeId` directly for all storage operations. `AbcEdge` is constructed with `(storage, edgeId: String)` — it reads `srcNid`/`dstNid` by calling `storage.getEdgeSrc(edgeId)` and `storage.getEdgeDst(edgeId)` which return `String` node IDs directly. No resolver function is needed. Properties prefixed with `__` are internal metadata, filtered from external access.
 
 - **Layered storage as composition**
-    Layered storage composes one frozen `IStorage` instance plus one mutable active layer into a unified `IStorage` view. The domain layer sees a single store; internally, reads cascade through layers (active -> frozen), writes target only the active layer, and freeze transitions migrate active data to read-only frozen storage via merge. Deletion is restricted to the active layer. Query resolution follows a simple two-phase cascade without deletion tracking.
+    Layered storage composes one frozen `IStorage` instance plus one mutable active layer into a unified `IStorage` view. The domain layer sees a single store; internally, reads cascade through layers (active -> frozen), writes target only the active layer, and freeze transitions migrate active data to read-only frozen storage via merge. Deletion is restricted to the active layer. Query resolution follows a simple two-phase cascade without deletion tracking. Because `IStorage` uses caller-controlled `String` IDs, layered storage can perform all operations (freeze merges, shadow entry creation) through the standard interface — no internal methods or counter manipulation is needed.
 
 - **Phase-based freezing**
     Static analysis proceeds in phases (AST construction -> CFG -> DFG -> analysis). Each phase completes a set of graph mutations that become read-only in subsequent phases. Layered storage exploits this by freezing completed phases into read-only storage while keeping the active phase's data in fast heap memory. The merge-on-freeze strategy ensures at most one frozen layer exists, keeping query depth at O(1).
@@ -89,29 +88,29 @@ This module is the stable graph domain boundary in COBRA, translating domain-lev
 
 **Data Contracts**
 - **With upstream modules:** Inputs must be valid `NodeID` strings, edge `(src, dst, type)` tuples, and property names; outputs are graph/entity views or explicit domain exceptions.
-- **With store implementations:** Stores must preserve node/edge semantics, enforce existence constraints, and expose deterministic adjacency/property behavior. Stores operate on opaque `Int` IDs — no domain type awareness.
-- **With layered store composers:** Flat store instances serve as building blocks; composers manage layer lifecycle, freeze transitions, and query routing.
+- **With store implementations:** Stores must preserve node/edge semantics, enforce existence constraints, and expose deterministic adjacency/property behavior. Stores operate on caller-provided `String` IDs — no domain type awareness. Storage implementations may internally use integer indices for compactness, but this is an implementation detail not exposed to callers.
+- **With layered store composers:** Flat store instances serve as building blocks; composers manage layer lifecycle, freeze transitions, and query routing. Composers depend only on `IStorage` interface — caller-controlled IDs enable all layer operations without internal method access.
 - **With trait modules:** Trait behaviors must reuse `IGraph`/`IStorage` invariants and must not redefine entity identity semantics.
 
 **Internal Processing Flow**
 1. **Request normalization**: Domain service provides valid `NodeID` and edge `(src, dst, type)` tuple, invokes graph operations.
 2. **Graph-level contract checks**: Graph layer enforces graph policy (existence, uniqueness, variant rules).
-3. **ID generation for edges**: For edge operations, graph layer generates semantic edge ID as `"$srcNodeId-$type-$dstNodeId"`.
-4. **Store dispatch**: Graph delegates to `IStorage` using String IDs directly (no intermediate translation). For edge queries, scans adjacency lists using `storage.getOutgoingEdges(src)` and filters by `(dst, type)` tuple.
+3. **Direct store dispatch**: Graph layer passes `NodeID` strings and generated `edgeId` strings directly to `IStorage`. No ID translation is needed — `String` IDs flow through unchanged.
+4. **Store-internal optimization**: Storage implementations may internally map `String` IDs to integer indices for compactness and cache-friendly access. This mapping is a pure implementation detail, invisible to callers.
 5. **Layer routing** (layered store only): Writes go to active layer; reads cascade active -> frozen layer; deletes restricted to active layer.
-6. **Entity/property materialization**: Returned store data is wrapped as typed entity views via cached wrapper objects (`SoftReference`-based caches); property operations are resolved by store directly using String IDs.
-7. **Poset dispatch** (label operations): Label hierarchy queries are dispatched to the dedicated `posetStorage` instance using label names as String node IDs.
-8. **Storage endpoint resolution**: When AbcEdge accesses `srcNid`/`dstNid`, it calls `storage.getEdgeSrc(edgeId)`/`storage.getEdgeDst(edgeId)`, which return `String` (NodeID) directly — no resolver functions or reverse lookups needed.
-9. **Freeze transition** (layered store only): On `freeze`, all layers are merged into a single new frozen store via `mergeLayerInto`, with String ID preservation (no remapping needed). Active layer is replaced with empty heap store.
+6. **Entity/property materialization**: Returned store data is wrapped as typed entity views via cached wrapper objects (`SoftReference`-based caches); property operations use `String` IDs for store access.
+7. **Poset dispatch** (label operations): Label hierarchy queries are dispatched to the dedicated `posetStorage` instance using label strings as IDs.
+8. **Storage endpoint resolution**: When `AbcEdge` accesses `srcNid`/`dstNid`, it calls `storage.getEdgeSrc(edgeId)` / `storage.getEdgeDst(edgeId)` which return `String` node IDs directly.
+9. **Freeze transition** (layered store only): On `freeze`, all layers are merged into a single new frozen store. Active layer is replaced with a fresh empty store. String IDs are preserved across merges — no ID remapping is needed.
 10. **Result/exception propagation**: Success returns typed domain outputs; contract violations raise explicit domain exceptions.
 
 ## 4. Scenarios
 
-- **Typical:** A service creates two nodes by `NodeID`, creates an edge by `(src, dst, type)`, sets edge properties, and queries children/parents. Later, storage backend switches from native memory to MapDB without changing service-level graph calls.
+- **Typical:** A service creates two nodes by `NodeID`, creates an edge by `(src, dst, type)`, sets edge properties, and queries children/parents. The graph layer passes `NodeID` strings directly to storage. Later, storage backend switches from native memory to MapDB without changing service-level graph calls.
 
 - **Boundary:** A request attempts to create an edge whose source node is missing. The graph/store contract rejects it with `EntityNotExistException` instead of creating implicit nodes.
 
-- **Interaction (layered):** A static analysis tool builds an AST graph, freezes it, then builds CFG edges on top of the frozen AST. The AST data is merged into a frozen layer, while CFG construction writes to a fresh in-heap active layer. Property reads for AST nodes transparently cascade to the frozen layer.
+- **Interaction (layered):** A static analysis tool builds an AST graph, freezes it, then builds CFG edges on top of the frozen AST. The AST data is merged into a frozen layer, while CFG construction writes to a fresh active layer. Property reads for AST nodes transparently cascade to the frozen layer.
 
 - **Interaction (active-only deletion):** During CFG construction, the tool creates temporary dummy entry/exit nodes in the active layer, then deletes them before freezing. Deletion succeeds because the nodes are in the active layer. Attempting to delete a frozen AST node throws `FrozenLayerModificationException`.
 
