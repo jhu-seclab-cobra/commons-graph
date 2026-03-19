@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
@@ -17,21 +18,24 @@ class AbcEntityTest {
     private lateinit var storage: NativeStorageImpl
     private lateinit var testNode: TestNode
 
-    private class TestNode(
-        storage: NativeStorageImpl,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+    private class TestNode : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "TestNode"
             }
     }
 
+    private fun createNode(nodeId: String): TestNode {
+        val node = TestNode()
+        node.bind(storage, nodeId)
+        return node
+    }
+
     @BeforeTest
     fun setup() {
         storage = NativeStorageImpl()
-        val storageId = storage.addNode(mapOf(AbcNode.META_ID to "entity_test".strVal))
-        testNode = TestNode(storage, storageId)
+        val storageId = storage.addNode(StorageTestUtils.genNodeId())
+        testNode = createNode(storageId)
     }
 
     @AfterTest
@@ -99,36 +103,30 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_defaultValue_returnsDefault`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         assertEquals("default", entity.name.core)
     }
 
     @Test
     fun `test entityProperty_setAndGet_returnsNewValue`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         entity.name = "newValue".strVal
 
@@ -137,18 +135,15 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_customName_usesCustomStorageKey`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var customProp: StrVal by EntityProperty("customName", default = "default".strVal)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         entity.customProp = "value".strVal
 
@@ -157,36 +152,30 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullable_returnsNullInitially`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         assertNull(entity.description)
     }
 
     @Test
     fun `test entityProperty_nullableSetAndGet_returnsValue`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         entity.description = "test".strVal
 
@@ -195,18 +184,15 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullableSetToNull_doesNotRemoveProperty`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
         entity.description = "test".strVal
 
         entity.description = null
@@ -217,37 +203,30 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_emptyName_returnsDefault`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var emptyProp: StrVal by EntityProperty("", default = "default".strVal)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         assertEquals("default", entity.emptyProp.core)
     }
 
     @Test
     fun `test entityProperty_nullable_wrongType_returnsNull`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var strProp: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
-        // Store a NumVal under the same key; the as? StrVal cast should return null
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
         entity["strProp"] = 42.numVal
 
         assertNull(entity.strProp)
@@ -255,20 +234,16 @@ class AbcEntityTest {
 
     @Test
     fun `test entityProperty_nullable_setToNull_doesNotWrite`() {
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var optProp: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
-        // Setting null on a never-written property must not throw and leave property absent
         entity.optProp = null
 
         assertNull(entity.optProp)
@@ -286,18 +261,15 @@ class AbcEntityTest {
                 override val name = "PERSON"
             }
 
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         assertEquals("PERSON", entity.nodeType.name)
     }
@@ -309,18 +281,15 @@ class AbcEntityTest {
                 override val name = "PERSON"
             }
 
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var customType: IEntity.Type by EntityType("customTypeName", default = personType)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         entity.customType = personType
 
@@ -335,18 +304,15 @@ class AbcEntityTest {
                 override val name = "PERSON"
             }
 
-        class TestEntity(
-            storage: NativeStorageImpl,
-            internalId: InternalID,
-        ) : AbcNode(storage, internalId) {
+        class TestEntity : AbcNode() {
             override val type: AbcNode.Type =
                 object : AbcNode.Type {
                     override val name = "TestEntity"
                 }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
-        val sid = storage.addNode()
-        val entity = TestEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = TestEntity().also { it.bind(storage, sid) }
 
         entity["testentity_nodeType"] = "COMPANY".strVal
 
@@ -355,8 +321,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_setAndGet_roundTrips`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = EnumTypeEntity().also { it.bind(storage, sid) }
 
         assertEquals(NodeKind.SOURCE, entity.kind)
         entity.kind = NodeKind.SINK
@@ -365,8 +331,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_setValue_sameValue_noOp`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = EnumTypeEntity().also { it.bind(storage, sid) }
 
         entity.kind = NodeKind.SINK
         entity.kind = NodeKind.SINK
@@ -375,8 +341,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_customName_usesCustomStorageKey`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = EnumTypeCustomNameEntity().also { it.bind(storage, sid) }
 
         entity.kind = NodeKind.SINK
         val propValue = entity["myKindProp"] as? StrVal
@@ -385,8 +351,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_getValue_fromStorage`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity2(storage, sid)
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid) }
 
         entity["myKind"] = "SINK".strVal
         assertEquals(NodeKind.SINK, entity.kind)
@@ -394,9 +360,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_unknownStoredValue_returnsDefault`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity2(storage, sid)
-        // Store a value that is not a valid enum constant name
+        val sid = storage.addNode(StorageTestUtils.genNodeId())
+        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid) }
         entity["myKind"] = "UNKNOWN_KIND".strVal
 
         assertEquals(NodeKind.SOURCE, entity.kind)
@@ -409,10 +374,7 @@ class AbcEntityTest {
         SINK,
     }
 
-    private class EnumTypeEntity(
-        storage: NativeStorageImpl,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+    private class EnumTypeEntity : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "EnumTypeEntity"
@@ -420,10 +382,7 @@ class AbcEntityTest {
         var kind: NodeKind by EntityType(default = NodeKind.SOURCE)
     }
 
-    private class EnumTypeCustomNameEntity(
-        storage: NativeStorageImpl,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+    private class EnumTypeCustomNameEntity : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "EnumTypeCustomNameEntity"
@@ -431,10 +390,7 @@ class AbcEntityTest {
         var kind: NodeKind by EntityType("myKindProp", default = NodeKind.SOURCE)
     }
 
-    private class EnumTypeCustomNameEntity2(
-        storage: NativeStorageImpl,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+    private class EnumTypeCustomNameEntity2 : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "EnumTypeCustomNameEntity2"

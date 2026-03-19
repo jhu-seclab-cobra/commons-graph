@@ -1,9 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcNode.Companion.META_PREFIX
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -12,38 +10,54 @@ import edu.jhu.cobra.commons.value.listVal
 /**
  * Abstract base class for graph edges with storage-backed property management.
  *
- * The edge's [id] is the storage edge identifier. Structural info (source, destination, type)
- * is resolved via [IStorage.getEdgeSrc], [IStorage.getEdgeDst], [IStorage.getEdgeType].
- * Properties prefixed with `__` are internal metadata and filtered from external access.
+ * The edge's [id] is the storage edge identifier. Structural info (source, destination, tag)
+ * is resolved via [IStorage.getEdgeSrc], [IStorage.getEdgeDst], [IStorage.getEdgeTag].
+ * All properties stored in storage are user properties — structural metadata lives in the
+ * storage layer's own data structures, not in the property namespace.
  *
- * @property storage The storage system for edge properties.
- * @property edgeId The storage edge identifier.
+ * Subclasses use a no-arg constructor. The graph layer calls [bind] after
+ * creation to inject storage and edge identity — these are not constructor
+ * parameters, keeping subclass constructors free of infrastructure concerns.
+ *
  * @see AbcEntity
  * @see IEntity
  */
-abstract class AbcEdge(
-    protected val storage: IStorage,
-    val edgeId: String,
-) : AbcEntity() {
+abstract class AbcEdge : AbcEntity() {
     /**
      * Represents the type information for an edge.
      */
     interface Type : IEntity.Type
 
-    /** Source node ID, resolved from storage edge structure. */
-    val srcNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
-        storage.getEdgeSrc(edgeId)
+    /** Backing storage, injected by the graph layer via [bind]. */
+    protected lateinit var storage: IStorage
+        private set
+
+    /** The edge identifier, injected by the graph layer via [bind]. */
+    lateinit var edgeId: String
+        internal set
+
+    /**
+     * Initializes this edge with the given storage and edge ID.
+     * Called by the graph layer after construction — must not be called by user code.
+     */
+    internal fun bind(
+        storage: IStorage,
+        edgeId: String,
+    ) {
+        this.storage = storage
+        this.edgeId = edgeId
     }
+
+    private val structure by lazy(LazyThreadSafetyMode.NONE) { storage.getEdgeStructure(edgeId) }
+
+    /** Source node ID, resolved from storage edge structure. */
+    val srcNid: NodeID get() = structure.src
 
     /** Destination node ID, resolved from storage edge structure. */
-    val dstNid: NodeID by lazy(LazyThreadSafetyMode.NONE) {
-        storage.getEdgeDst(edgeId)
-    }
+    val dstNid: NodeID get() = structure.dst
 
-    /** Edge type name, resolved from storage edge structure. */
-    val eType: String by lazy(LazyThreadSafetyMode.NONE) {
-        storage.getEdgeType(edgeId)
-    }
+    /** Edge tag name, resolved from storage edge structure. */
+    val eTag: String get() = structure.tag
 
     /**
      * The edge's storage identifier.
@@ -64,42 +78,26 @@ abstract class AbcEdge(
             storage.setEdgeProperties(edgeId, mapOf("labels" to values.map { it.core }.listVal))
         }
 
-    override fun get(name: String): IValue? {
-        require(!name.startsWith(META_PREFIX)) { "Cannot access meta property: $name" }
-        return storage.getEdgeProperty(edgeId, name)
-    }
+    override fun get(name: String): IValue? = storage.getEdgeProperty(edgeId, name)
 
     override fun set(
         name: String,
         value: IValue?,
     ) {
-        require(!name.startsWith(META_PREFIX)) { "Cannot set meta property: $name" }
         storage.setEdgeProperties(edgeId, mapOf(name to value))
     }
 
-    override fun contains(name: String): Boolean {
-        require(!name.startsWith(META_PREFIX)) { "Cannot query meta property: $name" }
-        return storage.getEdgeProperty(edgeId, name) != null
-    }
+    override fun contains(name: String): Boolean = storage.getEdgeProperty(edgeId, name) != null
 
-    override fun asMap(): Map<String, IValue> {
-        return storage.getEdgeProperties(edgeId).filterKeys { !it.startsWith(META_PREFIX) }
-    }
+    override fun asMap(): Map<String, IValue> = storage.getEdgeProperties(edgeId)
 
     override fun update(props: Map<String, IValue?>) {
-        require(props.keys.none { it.startsWith(META_PREFIX) }) { "Cannot set meta properties" }
         storage.setEdgeProperties(edgeId, props)
     }
 
-    override fun toString(): String = "{$srcNid-$eType-$dstNid, ${this.type}}"
+    override fun toString(): String = "{$srcNid-$eTag-$dstNid, ${this.type}}"
 
     override fun hashCode(): Int = edgeId.hashCode()
 
     override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.edgeId == other.edgeId else super.equals(other)
-
-    companion object {
-        internal const val META_SRC = "__src__"
-        internal const val META_DST = "__dst__"
-        internal const val META_TAG = "__tag__"
-    }
 }

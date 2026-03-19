@@ -47,7 +47,10 @@ interface IStorage : Closeable {
      * @throws EntityAlreadyExistException If nodeId already exists.
      * @throws AccessClosedStorageException If storage is closed.
      */
-    fun addNode(nodeId: String, properties: Map<String, IValue> = emptyMap()): String
+    fun addNode(
+        nodeId: String,
+        properties: Map<String, IValue> = emptyMap(),
+    ): String
 
     /**
      * Returns all properties of a node.
@@ -124,7 +127,7 @@ interface IStorage : Closeable {
      * @param src The source node ID.
      * @param dst The destination node ID.
      * @param edgeId The semantic edge ID provided by the caller.
-     * @param type The edge type name.
+     * @param tag The edge tag name.
      * @param properties Initial property map.
      * @return The same edgeId.
      * @throws EntityNotExistException If source or destination node does not exist.
@@ -135,39 +138,68 @@ interface IStorage : Closeable {
         src: String,
         dst: String,
         edgeId: String,
-        type: String,
+        tag: String,
         properties: Map<String, IValue> = emptyMap(),
     ): String
 
     /**
+     * Structural info of an edge: source node, destination node, and type.
+     *
+     * @property src The source node ID.
+     * @property dst The destination node ID.
+     * @property tag The edge tag name.
+     */
+    data class EdgeStructure(
+        val src: String,
+        val dst: String,
+        val tag: String,
+    )
+
+    /**
+     * Returns the structural info (source, destination, type) of an edge in a single lookup.
+     *
+     * @param id The edge ID.
+     * @return The edge structure containing src, dst, and type.
+     * @throws AccessClosedStorageException If storage is closed.
+     * @throws EntityNotExistException If edge does not exist.
+     */
+    fun getEdgeStructure(id: String): EdgeStructure
+
+    /**
      * Returns the source node ID of an edge.
+     *
+     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
      *
      * @param id The edge ID.
      * @return The source node ID (String).
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeSrc(id: String): String
+    fun getEdgeSrc(id: String): String = getEdgeStructure(id).src
 
     /**
      * Returns the destination node ID of an edge.
+     *
+     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
      *
      * @param id The edge ID.
      * @return The destination node ID (String).
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeDst(id: String): String
+    fun getEdgeDst(id: String): String = getEdgeStructure(id).dst
 
     /**
-     * Returns the type of an edge.
+     * Returns the tag of an edge.
+     *
+     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
      *
      * @param id The edge ID.
-     * @return The edge type name.
+     * @return The edge tag name.
      * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeType(id: String): String
+    fun getEdgeTag(id: String): String = getEdgeStructure(id).tag
 
     /**
      * Returns all properties of an edge.
