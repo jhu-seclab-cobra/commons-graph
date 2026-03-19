@@ -353,7 +353,7 @@ class MapDBConcurStorageImplWhiteBoxTest {
         target.close()
     }
 
-    // -- getEdgeSrc, getEdgeDst, getEdgeType --
+    // -- getEdgeSrc, getEdgeDst, getEdgeTag --
 
     @Test
     fun `test getEdgeSrc returns correct source`() {
@@ -374,12 +374,12 @@ class MapDBConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType returns correct type`() {
+    fun `test getEdgeTag returns correct tag`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "myType")
 
-        assertEquals("myType", storage.getEdgeType(edgeId))
+        assertEquals("myType", storage.getEdgeTag(edgeId))
     }
 
     // -- Closed-state checks for remaining operations --
@@ -437,12 +437,12 @@ class MapDBConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType throws AccessClosedStorageException when closed`() {
+    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "rel")
         storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeType(edgeId) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(edgeId) }
     }
 
     @Test
@@ -547,8 +547,8 @@ class MapDBConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeType(999) }
+    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeTag(999) }
     }
 
     @Test

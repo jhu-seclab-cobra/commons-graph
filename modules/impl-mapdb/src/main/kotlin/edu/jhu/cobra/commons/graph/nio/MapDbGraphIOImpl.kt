@@ -27,7 +27,7 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_KEY = "_nid"
     private const val EDGE_SRC_KEY = "_esrc"
     private const val EDGE_DST_KEY = "_edst"
-    private const val EDGE_TYPE_KEY = "_etype"
+    private const val EDGE_TAG_KEY = "_etag"
 
     private val MapSerializer = MapDbValSerializer<MapVal>()
 
@@ -66,7 +66,7 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
                     edgeProperties.also {
                         it.add(EDGE_SRC_KEY, NumVal(from.getEdgeSrc(edgeID)))
                         it.add(EDGE_DST_KEY, NumVal(from.getEdgeDst(edgeID)))
-                        it.add(EDGE_TYPE_KEY, StrVal(from.getEdgeType(edgeID)))
+                        it.add(EDGE_TAG_KEY, StrVal(from.getEdgeTag(edgeID)))
                     },
                 )
             }
@@ -96,12 +96,12 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             edgesList.forEach { props ->
                 val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? NumVal)?.core?.toInt() ?: return@forEach
                 val oldDst = (props.remove(EDGE_DST_KEY) as? NumVal)?.core?.toInt() ?: return@forEach
-                val type = (props.remove(EDGE_TYPE_KEY) as? StrVal)?.core ?: return@forEach
+                val tag = (props.remove(EDGE_TAG_KEY) as? StrVal)?.core ?: return@forEach
                 val src = nodeIdMapping[oldSrc] ?: oldSrc
                 val dst = nodeIdMapping[oldDst] ?: oldDst
                 if (!predicate(src)) return@forEach
                 val propsMap: Map<String, IValue> = props.core.toMap()
-                into.addEdge(src, dst, type, propsMap)
+                into.addEdge(src, dst, tag, propsMap)
             }
         }
         return into

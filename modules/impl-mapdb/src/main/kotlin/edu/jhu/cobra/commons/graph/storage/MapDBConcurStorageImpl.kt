@@ -33,7 +33,7 @@ class MapDBConcurStorageImpl(
     private val edgeProperties = EntityPropertyMap(dbManager, "edgeProps")
     private val edgeSrcMap = HashMap<Int, Int>()
     private val edgeDstMap = HashMap<Int, Int>()
-    private val edgeTypeMap = HashMap<Int, String>()
+    private val edgeTagMap = HashMap<Int, String>()
 
     // Adjacency lists
     private val outEdges = HashMap<Int, MutableSet<Int>>()
@@ -80,7 +80,7 @@ class MapDBConcurStorageImpl(
     override fun addEdge(
         src: Int,
         dst: Int,
-        type: String,
+        tag: String,
         properties: Map<String, IValue>,
     ): Int =
         dbLock.write {
@@ -90,7 +90,7 @@ class MapDBConcurStorageImpl(
             val id = edgeCounter++
             edgeSrcMap[id] = src
             edgeDstMap[id] = dst
-            edgeTypeMap[id] = type
+            edgeTagMap[id] = tag
             outEdges[src]!!.add(id)
             inEdges[dst]!!.add(id)
             edgeProperties[id] = properties
@@ -159,7 +159,7 @@ class MapDBConcurStorageImpl(
     private fun deleteEdgeWithoutLock(id: Int) {
         val src = edgeSrcMap.remove(id) ?: return
         val dst = edgeDstMap.remove(id) ?: return
-        edgeTypeMap.remove(id)
+        edgeTagMap.remove(id)
         outEdges[src]?.remove(id)
         inEdges[dst]?.remove(id)
         edgeProperties.remove(id)
@@ -184,10 +184,10 @@ class MapDBConcurStorageImpl(
             edgeDstMap[id] ?: throw EntityNotExistException(id)
         }
 
-    override fun getEdgeType(id: Int): String =
+    override fun getEdgeTag(id: Int): String =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            edgeTypeMap[id] ?: throw EntityNotExistException(id)
+            edgeTagMap[id] ?: throw EntityNotExistException(id)
         }
 
     override fun getIncomingEdges(id: Int): Set<Int> =
@@ -235,7 +235,7 @@ class MapDBConcurStorageImpl(
                 nodeProperties.clear()
                 edgeSrcMap.clear()
                 edgeDstMap.clear()
-                edgeTypeMap.clear()
+                edgeTagMap.clear()
                 outEdges.clear()
                 inEdges.clear()
                 metaProperties.clear()
@@ -255,10 +255,10 @@ class MapDBConcurStorageImpl(
             for (edgeId in edgeProperties.keys) {
                 val src = edgeSrcMap[edgeId]!!
                 val dst = edgeDstMap[edgeId]!!
-                val type = edgeTypeMap[edgeId]!!
+                val tag = edgeTagMap[edgeId]!!
                 val newSrc = idMap[src] ?: src
                 val newDst = idMap[dst] ?: dst
-                target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
+                target.addEdge(newSrc, newDst, tag, edgeProperties[edgeId]!!)
             }
             for (name in metaProperties.keys) {
                 target.setMeta(name, metaProperties[name])
