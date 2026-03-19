@@ -450,11 +450,11 @@ class JgraphtStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType returns correct type`() {
+    fun `test getEdgeTag returns correct type`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "myType")
-        assertEquals("myType", storage.getEdgeType(e))
+        assertEquals("myType", storage.getEdgeTag(e))
     }
 
     // -- deleteNode also removes incoming edges (not only outgoing) --
@@ -494,7 +494,7 @@ class JgraphtStorageImplWhiteBoxTest {
         assertEquals(20, (props["b"] as NumVal).core)
     }
 
-    // -- getEdgeSrc/getEdgeDst/getEdgeType throw for missing edge --
+    // -- getEdgeSrc/getEdgeDst/getEdgeTag throw for missing edge --
 
     @Test
     fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
@@ -507,8 +507,8 @@ class JgraphtStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeType(-1) }
+    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeTag(-1) }
     }
 
     // -- Close-state branches for operations not yet tested --
@@ -559,12 +559,12 @@ class JgraphtStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType throws AccessClosedStorageException when closed`() {
+    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
         storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeType(e) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(e) }
     }
 
     // -- transferTo id remapping fallback: when src/dst not found in idMap, original ID is used --
@@ -596,7 +596,7 @@ class JgraphtStorageImplWhiteBoxTest {
         storage.transferTo(target)
 
         val tEdge = target.edgeIDs.first()
-        assertEquals("typed", target.getEdgeType(tEdge))
+        assertEquals("typed", target.getEdgeTag(tEdge))
         assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as NumVal).core)
         target.close()
     }
