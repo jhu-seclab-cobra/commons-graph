@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.*
 import java.util.concurrent.CountDownLatch
@@ -16,6 +15,7 @@ class NativeConcurStorageImplTest {
 
     @BeforeTest
     fun setup() {
+        StorageTestUtils.resetCounters()
         storage = NativeConcurStorageImpl()
     }
 
@@ -34,9 +34,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test nodeIDs property returns all nodes`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val node3 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val node3 = storage.addNode(StorageTestUtils.genNodeId())
 
         val nodeIds = storage.nodeIDs
 
@@ -49,9 +49,9 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test edgeIDs property returns all edges`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2)
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3)
 
         val edgeIds = storage.edgeIDs
 
@@ -85,12 +85,12 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test containsNode returns false for non-existent node`() {
-        assertFalse(storage.containsNode(-1))
+        assertFalse(storage.containsNode("nonexistent"))
     }
 
     @Test
     fun `test containsNode returns true for existing node`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         assertTrue(storage.containsNode(node1))
     }
@@ -100,13 +100,13 @@ class NativeConcurStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.containsNode(-1)
+            storage.containsNode("nonexistent")
         }
     }
 
     @Test
     fun `test addNode with empty properties`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         assertTrue(storage.containsNode(node1))
         assertTrue(storage.getNodeProperties(node1).isEmpty())
@@ -122,7 +122,7 @@ class NativeConcurStorageImplTest {
                 "active" to true.boolVal,
             )
 
-        val node1 = storage.addNode(properties)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), properties)
 
         assertTrue(storage.containsNode(node1))
         val props = storage.getNodeProperties(node1)
@@ -138,7 +138,7 @@ class NativeConcurStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addNode()
+            storage.addNode(StorageTestUtils.genNodeId())
         }
     }
 
@@ -149,7 +149,7 @@ class NativeConcurStorageImplTest {
                 "prop1" to "value1".strVal,
                 "prop2" to 42.numVal,
             )
-        val node1 = storage.addNode(properties)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), properties)
 
         val props = storage.getNodeProperties(node1)
 
@@ -161,13 +161,13 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getNodeProperties throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getNodeProperties(-1)
+            storage.getNodeProperties("nonexistent")
         }
     }
 
     @Test
     fun `test getNodeProperties throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -177,7 +177,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setNodeProperties updates existing properties`() {
-        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("prop1" to "value1".strVal))
 
         storage.setNodeProperties(node1, mapOf("prop1" to "updated".strVal, "prop2" to 42.numVal))
 
@@ -189,7 +189,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setNodeProperties deletes properties with null values`() {
-        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(node1, mapOf("prop1" to null))
 
@@ -201,7 +201,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setNodeProperties with empty map does not change properties`() {
-        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(node1, emptyMap())
 
@@ -213,7 +213,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setNodeProperties with mixed null and non-null values`() {
-        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
 
         storage.setNodeProperties(
             node1,
@@ -234,13 +234,13 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test setNodeProperties throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.setNodeProperties(-1, mapOf("prop" to "value".strVal))
+            storage.setNodeProperties("nonexistent", mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun `test setNodeProperties throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -250,7 +250,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test deleteNode removes node`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         storage.deleteNode(node1)
 
@@ -260,8 +260,8 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test deleteNode does not cascade edge deletion`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3)
 
         storage.deleteEdge(edge1)
         storage.deleteEdge(edge3)
@@ -277,13 +277,13 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test deleteNode throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteNode(-1)
+            storage.deleteNode("nonexistent")
         }
     }
 
     @Test
     fun `test deleteNode throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -297,14 +297,14 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test containsEdge returns false for non-existent edge`() {
-        assertFalse(storage.containsEdge(-1))
+        assertFalse(storage.containsEdge("nonexistent"))
     }
 
     @Test
     fun `test containsEdge returns true for existing edge`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         assertTrue(storage.containsEdge(edge1))
     }
@@ -314,16 +314,16 @@ class NativeConcurStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.containsEdge(-1)
+            storage.containsEdge("nonexistent")
         }
     }
 
     @Test
     fun `test addEdge with empty properties`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
 
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         assertTrue(storage.containsEdge(edge1))
         assertTrue(storage.getEdgeProperties(edge1).isEmpty())
@@ -331,15 +331,15 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test addEdge with properties`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
         val properties =
             mapOf(
                 "weight" to 1.5.numVal,
                 "label" to "relation".strVal,
             )
 
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, properties)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1, properties)
 
         assertTrue(storage.containsEdge(edge1))
         val props = storage.getEdgeProperties(edge1)
@@ -349,11 +349,11 @@ class NativeConcurStorageImplTest {
     }
 
     @Test
-    fun `test addEdge allows multiple edges with same endpoints and type`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
-        val edge2 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+    fun `test addEdge allows multiple edges with same endpoints and tag`() {
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
+        val edge2 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         assertNotEquals(edge1, edge2)
         assertTrue(storage.containsEdge(edge1))
@@ -362,39 +362,39 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test addEdge throws EntityNotExistException when source node does not exist`() {
-        val node2 = storage.addNode()
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(-1, node2, StorageTestUtils.EDGE_TYPE_1)
+            storage.addEdge("nonexistent", node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         }
     }
 
     @Test
     fun `test addEdge throws EntityNotExistException when destination node does not exist`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge(node1, -1, StorageTestUtils.EDGE_TYPE_1)
+            storage.addEdge(node1, "nonexistent", StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         }
     }
 
     @Test
     fun `test addEdge throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+            storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         }
     }
 
     @Test
     fun `test getEdgeProperties returns all properties`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
         val properties = mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, properties)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1, properties)
 
         val props = storage.getEdgeProperties(edge1)
 
@@ -406,15 +406,15 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getEdgeProperties throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getEdgeProperties(-1)
+            storage.getEdgeProperties("nonexistent")
         }
     }
 
     @Test
     fun `test getEdgeProperties throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -424,9 +424,18 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setEdgeProperties updates existing properties`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 =
+            storage.addEdge(
+                node1,
+                node2,
+                StorageTestUtils.genEdgeId(),
+                StorageTestUtils.EDGE_TAG_1,
+                mapOf(
+                    "prop1" to "value1".strVal,
+                ),
+            )
 
         storage.setEdgeProperties(edge1, mapOf("prop1" to "updated".strVal, "prop2" to 42.numVal))
 
@@ -438,9 +447,19 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setEdgeProperties deletes properties with null values`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 =
+            storage.addEdge(
+                node1,
+                node2,
+                StorageTestUtils.genEdgeId(),
+                StorageTestUtils.EDGE_TAG_1,
+                mapOf(
+                    "prop1" to "value1".strVal,
+                    "prop2" to 42.numVal,
+                ),
+            )
 
         storage.setEdgeProperties(edge1, mapOf("prop1" to null))
 
@@ -452,9 +471,19 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test setEdgeProperties with empty map does not change properties`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("prop1" to "value1".strVal, "prop2" to 42.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 =
+            storage.addEdge(
+                node1,
+                node2,
+                StorageTestUtils.genEdgeId(),
+                StorageTestUtils.EDGE_TAG_1,
+                mapOf(
+                    "prop1" to "value1".strVal,
+                    "prop2" to 42.numVal,
+                ),
+            )
 
         storage.setEdgeProperties(edge1, emptyMap())
 
@@ -467,15 +496,15 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test setEdgeProperties throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.setEdgeProperties(-1, mapOf("prop" to "value".strVal))
+            storage.setEdgeProperties("nonexistent", mapOf("prop" to "value".strVal))
         }
     }
 
     @Test
     fun `test setEdgeProperties throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -485,9 +514,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test deleteEdge removes edge`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         storage.deleteEdge(edge1)
 
@@ -498,9 +527,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test deleteEdge removes edge from graph structure leaving empty sets`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         storage.deleteEdge(edge1)
 
@@ -514,15 +543,15 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test deleteEdge throws EntityNotExistException when edge does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.deleteEdge(-1)
+            storage.deleteEdge("nonexistent")
         }
     }
 
     @Test
     fun `test deleteEdge throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -536,7 +565,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getIncomingEdges returns empty set for node with no incoming edges`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         val incoming = storage.getIncomingEdges(node1)
 
@@ -546,9 +575,9 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getIncomingEdges returns correct edges for nodes with mixed connections`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3) // node1 -> node3
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2) // node2 -> node3
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3) // node1 -> node3
 
         val incoming2 = storage.getIncomingEdges(node2)
         assertEquals(1, incoming2.size)
@@ -562,8 +591,8 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getIncomingEdges handles self-loop edge`() {
-        val node1 = storage.addNode()
-        val selfLoop = storage.addEdge(node1, node1, "self")
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val selfLoop = storage.addEdge(node1, node1, StorageTestUtils.genEdgeId(), "self")
 
         val incoming = storage.getIncomingEdges(node1)
 
@@ -573,13 +602,13 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getIncomingEdges throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getIncomingEdges(-1)
+            storage.getIncomingEdges("nonexistent")
         }
     }
 
     @Test
     fun `test getIncomingEdges throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -589,7 +618,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getOutgoingEdges returns empty set for node with no outgoing edges`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
 
         val outgoing = storage.getOutgoingEdges(node1)
 
@@ -599,9 +628,9 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getOutgoingEdges returns correct edges for nodes with mixed connections`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3) // node1 -> node3
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2) // node2 -> node3
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3) // node1 -> node3
 
         val outgoing1 = storage.getOutgoingEdges(node1)
         assertEquals(2, outgoing1.size)
@@ -615,8 +644,8 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getOutgoingEdges handles self-loop edge`() {
-        val node1 = storage.addNode()
-        val selfLoop = storage.addEdge(node1, node1, "self")
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val selfLoop = storage.addEdge(node1, node1, StorageTestUtils.genEdgeId(), "self")
 
         val outgoing = storage.getOutgoingEdges(node1)
 
@@ -626,13 +655,13 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test getOutgoingEdges throws EntityNotExistException when node does not exist`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getOutgoingEdges(-1)
+            storage.getOutgoingEdges("nonexistent")
         }
     }
 
     @Test
     fun `test getOutgoingEdges throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
@@ -642,8 +671,8 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test deleteEdge handles self-loop edge`() {
-        val node1 = storage.addNode()
-        val selfLoop = storage.addEdge(node1, node1, "self")
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val selfLoop = storage.addEdge(node1, node1, StorageTestUtils.genEdgeId(), "self")
 
         storage.deleteEdge(selfLoop)
 
@@ -726,9 +755,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test clear removes all data`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.setMeta("key", "value".strVal)
 
         storage.clear()
@@ -740,9 +769,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test clear removes all graph structure entries`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.setMeta("key", "value".strVal)
 
         storage.clear()
@@ -750,8 +779,8 @@ class NativeConcurStorageImplTest {
         assertTrue(storage.nodeIDs.isEmpty())
         assertTrue(storage.edgeIDs.isEmpty())
         assertNull(storage.getMeta("key"))
-        val newNode1 = storage.addNode()
-        val newNode2 = storage.addNode()
+        val newNode1 = storage.addNode(StorageTestUtils.genNodeId())
+        val newNode2 = storage.addNode(StorageTestUtils.genNodeId())
         assertTrue(storage.getOutgoingEdges(newNode1).isEmpty())
         assertTrue(storage.getIncomingEdges(newNode2).isEmpty())
     }
@@ -772,7 +801,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test close is idempotent`() {
-        storage.addNode()
+        storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
         storage.close()
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
@@ -780,20 +809,20 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test close prevents all operations`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = storage.addNode(StorageTestUtils.genNodeId())
+        val node2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.containsNode(node1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
+        assertFailsWith<AccessClosedStorageException> { storage.addNode(StorageTestUtils.genNodeId()) }
         assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(node1) }
         assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(node1, mapOf()) }
         assertFailsWith<AccessClosedStorageException> { storage.deleteNode(node1) }
         assertFailsWith<AccessClosedStorageException> { storage.containsEdge(edge1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addEdge(node1, node2, "t") }
+        assertFailsWith<AccessClosedStorageException> { storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), "t") }
         assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(edge1) }
         assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(edge1, mapOf()) }
         assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(edge1) }
@@ -811,9 +840,9 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test graph structure consistency after multiple edge deletions`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2)
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3)
 
         storage.deleteEdge(edge1)
         assertTrue(storage.getOutgoingEdges(node1).contains(edge3))
@@ -836,8 +865,8 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test graph structure consistency when node has both incoming and outgoing edges`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1) // node1 -> node2
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2) // node2 -> node3
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1) // node1 -> node2
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2) // node2 -> node3
 
         val incoming2 = storage.getIncomingEdges(node2)
         assertEquals(1, incoming2.size)
@@ -862,13 +891,13 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test complex graph operations`() {
-        val node1 = storage.addNode(mapOf("name" to "Node1".strVal))
-        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
-        val node3 = storage.addNode(mapOf("name" to "Node3".strVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "Node1".strVal))
+        val node2 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "Node2".strVal))
+        val node3 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "Node3".strVal))
 
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("weight" to 1.0.numVal))
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2, mapOf("weight" to 2.0.numVal))
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3, mapOf("weight" to 3.0.numVal))
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1, mapOf("weight" to 1.0.numVal))
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2, mapOf("weight" to 2.0.numVal))
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3, mapOf("weight" to 3.0.numVal))
 
         assertEquals(3, storage.nodeIDs.size)
         assertEquals(3, storage.edgeIDs.size)
@@ -913,7 +942,7 @@ class NativeConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until nodesPerThread) {
-                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.numVal))
+                        storage.addNode(StorageTestUtils.genNodeId(), mapOf("thread" to t.toString().strVal, "index" to i.numVal))
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -932,7 +961,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test concurrent read-write operations`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("counter" to 0.numVal))
         val threadCount = 5
         val iterationsPerThread = 100
         val executor = Executors.newFixedThreadPool(threadCount * 2)
@@ -982,9 +1011,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test concurrent node deletion and query`() {
-        val nodeIds = mutableListOf<Int>()
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until 100) {
-            nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
+            nodeIds.add(storage.addNode(StorageTestUtils.genNodeId(), mapOf("index" to i.numVal)))
         }
         val startLatch = CountDownLatch(1)
         val finishLatch = CountDownLatch(2)
@@ -1043,9 +1072,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test concurrent edge operations`() {
-        val nodeIds = mutableListOf<Int>()
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until 50) {
-            nodeIds.add(storage.addNode())
+            nodeIds.add(storage.addNode(StorageTestUtils.genNodeId()))
         }
         val threadCount = 5
         val edgesPerThread = 20
@@ -1059,7 +1088,15 @@ class NativeConcurStorageImplTest {
                     for (i in 0 until edgesPerThread) {
                         val srcIdx = (t * edgesPerThread + i) % 50
                         val dstIdx = (srcIdx + 1) % 50
-                        storage.addEdge(nodeIds[srcIdx], nodeIds[dstIdx], "edge_${t}_$i", mapOf("thread" to t.toString().strVal))
+                        storage.addEdge(
+                            nodeIds[srcIdx],
+                            nodeIds[dstIdx],
+                            StorageTestUtils.genEdgeId(),
+                            "edge_${t}_$i",
+                            mapOf(
+                                "thread" to t.toString().strVal,
+                            ),
+                        )
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -1079,9 +1116,9 @@ class NativeConcurStorageImplTest {
     @Test
     fun `test concurrent graph traversal`() {
         val (node1, node2, node3) = StorageTestUtils.addTestNodes(storage)
-        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
-        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2)
-        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.EDGE_TYPE_3)
+        val edge1 = storage.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
+        val edge2 = storage.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2)
+        val edge3 = storage.addEdge(node1, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_3)
         val threadCount = 10
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
@@ -1126,7 +1163,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test read-write lock behavior`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("counter" to 0.numVal))
         val readThreads = 20
         val writeThreads = 5
         val readOps = 1000
@@ -1218,9 +1255,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test concurrent clear and operations`() {
-        val nodeIds = mutableListOf<Int>()
+        val nodeIds = mutableListOf<String>()
         for (i in 0 until 50) {
-            nodeIds.add(storage.addNode())
+            nodeIds.add(storage.addNode(StorageTestUtils.genNodeId()))
         }
         val executor = Executors.newFixedThreadPool(2)
         val latch = CountDownLatch(2)
@@ -1267,7 +1304,7 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getNodeProperty returns existing property`() {
-        val node = storage.addNode(mapOf("name" to "test".strVal, "age" to 25.numVal))
+        val node = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "test".strVal, "age" to 25.numVal))
 
         assertEquals("test", (storage.getNodeProperty(node, "name") as StrVal).core)
         assertEquals(25, (storage.getNodeProperty(node, "age") as NumVal).core)
@@ -1275,19 +1312,19 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getNodeProperty returns null for absent property`() {
-        val node = storage.addNode(mapOf("name" to "test".strVal))
+        val node = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "test".strVal))
 
         assertNull(storage.getNodeProperty(node, "nonexistent"))
     }
 
     @Test
     fun `test getNodeProperty throws EntityNotExistException for missing node`() {
-        assertFailsWith<EntityNotExistException> { storage.getNodeProperty(-1, "name") }
+        assertFailsWith<EntityNotExistException> { storage.getNodeProperty("nonexistent", "name") }
     }
 
     @Test
     fun `test getNodeProperty throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
+        val node = storage.addNode(StorageTestUtils.genNodeId())
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.getNodeProperty(node, "name") }
@@ -1295,32 +1332,32 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getEdgeProperty returns existing property`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("weight" to 1.5.numVal))
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel", mapOf("weight" to 1.5.numVal))
 
         assertEquals(1.5, (storage.getEdgeProperty(e, "weight") as NumVal).core)
     }
 
     @Test
     fun `test getEdgeProperty returns null for absent property`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
 
         assertNull(storage.getEdgeProperty(e, "nonexistent"))
     }
 
     @Test
     fun `test getEdgeProperty throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty(-1, "weight") }
+        assertFailsWith<EntityNotExistException> { storage.getEdgeProperty("nonexistent", "weight") }
     }
 
     @Test
     fun `test getEdgeProperty throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperty(e, "weight") }
@@ -1328,9 +1365,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test transferTo copies nodes edges and metadata`() {
-        val n1 = storage.addNode(mapOf("name" to "A".strVal))
-        val n2 = storage.addNode(mapOf("name" to "B".strVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        val n1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "A".strVal))
+        val n2 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "B".strVal))
+        storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel", mapOf("w" to 1.numVal))
         storage.setMeta("version", "1.0".strVal)
 
         val target = NativeConcurStorageImpl()
@@ -1351,44 +1388,44 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getEdgeSrc returns correct source`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
 
         assertEquals(n1, storage.getEdgeSrc(e))
     }
 
     @Test
     fun `test getEdgeDst returns correct destination`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
 
         assertEquals(n2, storage.getEdgeDst(e))
     }
 
     @Test
-    fun `test getEdgeType returns correct type`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "myRelation")
+    fun `test getEdgeTag returns correct tag`() {
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "myRelation")
 
-        assertEquals("myRelation", storage.getEdgeType(e))
+        assertEquals("myRelation", storage.getEdgeTag(e))
     }
 
     @Test
     fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(-1) }
+        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc("nonexistent") }
     }
 
     @Test
     fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(-1) }
+        assertFailsWith<EntityNotExistException> { storage.getEdgeDst("nonexistent") }
     }
 
     @Test
-    fun `test getEdgeType throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeType(-1) }
+    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeTag("nonexistent") }
     }
 
     // endregion
@@ -1397,9 +1434,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(e) }
@@ -1407,22 +1444,22 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(e) }
     }
 
     @Test
-    fun `test getEdgeType throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
+    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val e = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel")
         storage.close()
 
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeType(e) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(e) }
     }
 
     // endregion
@@ -1431,8 +1468,8 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `deleteNode cleans up self-loop edge without double-delete error`() {
-        val node = storage.addNode()
-        val selfLoop = storage.addEdge(node, node, "self")
+        val node = storage.addNode(StorageTestUtils.genNodeId())
+        val selfLoop = storage.addEdge(node, node, StorageTestUtils.genEdgeId(), "self")
 
         // A self-loop appears in both outEdges[node] and inEdges[node].
         // deleteNode processes outEdges first (removes the edge endpoint), then iterates inEdges
@@ -1451,9 +1488,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `setEdgeProperties with null value for absent property key is a no-op`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edge = storage.addEdge(n1, n2, "rel", mapOf("kept" to "yes".strVal))
+        val n1 = storage.addNode(StorageTestUtils.genNodeId())
+        val n2 = storage.addNode(StorageTestUtils.genNodeId())
+        val edge = storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel", mapOf("kept" to "yes".strVal))
 
         // "missing" column does not exist; the ?: continue branch fires.
         storage.setEdgeProperties(edge, mapOf("missing" to null))
@@ -1469,9 +1506,9 @@ class NativeConcurStorageImplTest {
 
     @Test
     fun `transferTo maps all nodes so edges are transferred with correct endpoints`() {
-        val n1 = storage.addNode(mapOf("v" to 1.numVal))
-        val n2 = storage.addNode(mapOf("v" to 2.numVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 5.numVal))
+        val n1 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("v" to 1.numVal))
+        val n2 = storage.addNode(StorageTestUtils.genNodeId(), mapOf("v" to 2.numVal))
+        storage.addEdge(n1, n2, StorageTestUtils.genEdgeId(), "rel", mapOf("w" to 5.numVal))
         storage.setMeta("k", "meta".strVal)
 
         val target = NativeConcurStorageImpl()
