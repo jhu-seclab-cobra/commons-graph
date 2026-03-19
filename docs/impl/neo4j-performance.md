@@ -7,15 +7,15 @@ Paired design: `storage.design.md`, `neo4j.md`
 ## Architecture
 
 Neo4j module provides two `IStorage` implementations using Neo4j 5.x embedded mode:
-- **`Neo4jStorageImpl`** — non-concurrent, plain `HashMap` + `Int` counters
+- **`Neo4jStorageImpl`** — non-concurrent, String ID to Neo4j element ID mapping
 - **`Neo4jConcurStorageImpl`** — thread-safe, `ReentrantReadWriteLock` over same structures
 
-Both maintain bidirectional ID mapping (`HashMap<Int, Long>` / `HashMap<Long, Int>`) between `IStorage` Int IDs and Neo4j internal Long IDs. Edge structural info (src, dst, type) is queried through Neo4j native `Relationship` methods within transactions.
+Both maintain bidirectional ID mapping between `IStorage` String IDs and Neo4j element IDs. Edge structural info (src, dst, tag) is queried through Neo4j native `Relationship` methods within transactions.
 
 Key overhead sources:
 1. **Transaction per operation** — Neo4j 5.x requires `Transaction` for all data access, even reads
 2. **Serialization** — all `IValue` properties serialized to `ByteArray` via `DftByteArraySerializerImpl`
-3. **ID mapping** — bidirectional HashMap lookup on every operation
+3. **ID mapping** — String-to-Neo4j-element-ID mapping lookup on every operation
 
 ---
 
@@ -76,7 +76,7 @@ Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tu
 
 ### N1: Transaction Batching for transferTo
 
-**Problem**: `transferTo` calls `getNodeProperties`, `getEdgeSrc`, `getEdgeDst`, `getEdgeType`, `getEdgeProperties` individually — each opens a separate `readTx`. For a graph with N nodes and E edges, this creates 2N + 4E transactions.
+**Problem**: `transferTo` calls `getNodeProperties`, `getEdgeStructure`, `getEdgeProperties` individually — each opens a separate `readTx`. For a graph with N nodes and E edges, this creates 2N + 2E transactions.
 
 **Proposed change**: Collect all data within a single `readTx`, then write to target outside the transaction.
 

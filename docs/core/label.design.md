@@ -2,13 +2,13 @@
 
 ## Design Overview
 
-- **Classes**: `Label`, `IPoset`, `AbcMultipleGraph` (label integration), `AbcEdge` (label storage)
+- **Classes**: `Label`, `LabelID`, `IPoset`, `AbcMultipleGraph` (label integration), `AbcEdge` (label storage)
 - **Relationships**: `IPoset` defines the poset contract; `AbcMultipleGraph` implements `IPoset` using a dedicated `IStorage` for the label DAG; `AbcEdge.labels` is a public property storing label assignments
 - **Abstract**: `IPoset` (implemented by `AbcMultipleGraph`)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
 - **Dependency roles**: Data holders: `Label`. Orchestrator: `AbcMultipleGraph` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence).
 
-The label system provides **label-based edge visibility** integrated into `IGraph`, `IPoset`, and `AbcMultipleGraph`. The poset structure over `Label` values is defined by `IPoset`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are declared on `AbcMultipleGraph` (concrete class). `AbcMultipleGraph` implements both interfaces with a **dedicated poset `IStorage`** -- labels are stored as nodes with `__id__` meta properties and parent relationships are stored as node properties, providing native adjacency indexing for hierarchy traversal. Label-filtered methods filter edges by visibility: an edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy. Among all visitable labels, those covered by a higher visitable label are excluded. Non-label overloads see all edges.
+The label system provides **label-based edge visibility** integrated into `IGraph`, `IPoset`, and `AbcMultipleGraph`. The poset structure over `Label` values is defined by `IPoset`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are declared on `AbcMultipleGraph` (concrete class). `AbcMultipleGraph` implements both interfaces with a **dedicated poset `IStorage`** — labels are stored as nodes (using `Label.core` as the node ID) and parent relationships are stored as edges (`child → parent`, edge tag = relationship name), providing native adjacency indexing for hierarchy traversal. Label-filtered methods filter edges by visibility: an edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy. Among all visitable labels, those covered by a higher visitable label are excluded. Non-label overloads see all edges.
 
 ---
 
@@ -16,21 +16,24 @@ The label system provides **label-based edge visibility** integrated into `IGrap
 
 ### Label
 
-**Responsibility:** Plain value object representing a label in the partial-order structure.
+**Responsibility:** Inline value object representing a label in the partial-order structure.
 
 **State / Fields:**
 
 ```kotlin
-data class Label(val core: String) {
+typealias LabelID = String
+
+@JvmInline
+value class Label(val core: LabelID) {
     constructor(strVal: StrVal) : this(strVal.core)
     companion object {
-        val INFIMUM  = Label("infimum")   // Greatest Lower Bound -- below all labels
-        val SUPREMUM = Label("supremum")  // Least Upper Bound   -- above all labels
+        val INFIMUM: Label   // Greatest Lower Bound — below all labels
+        val SUPREMUM: Label  // Least Upper Bound — above all labels
     }
 }
 ```
 
-A `Label`'s ordering is not intrinsic -- it is defined by the poset structure. `INFIMUM` and `SUPREMUM` are special sentinel bounds and should not be assigned to edges.
+A `Label`'s ordering is not intrinsic — it is defined by the poset structure. `INFIMUM` and `SUPREMUM` are special sentinel bounds and should not be assigned to edges.
 
 ---
 
@@ -46,7 +49,7 @@ interface IPoset {
 
     var Label.parents: Map<String, Label>
     val Label.ancestors: Sequence<Label>
-    var Label.changes: Set<InternalID>
+    var Label.changes: Set<String>
 
     fun Label.compareTo(other: Label): Int?
 }
@@ -54,13 +57,13 @@ interface IPoset {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `allLabels` | All labels registered in the poset, including `INFIMUM` and `SUPREMUM` | -- | `Set<Label>` | -- |
-| `Label.parents` (get/set) | Reads/writes typed parent relationships for a label | -- | `Map<String, Label>` | -- |
-| `Label.ancestors` | All ancestor labels traversing upwards through parent hierarchy via BFS | -- | `Sequence<Label>` | -- |
-| `Label.changes` (get/set) | Reads/writes the set of edge `InternalID`s whose label set was modified involving this label | -- | `Set<InternalID>` | -- |
-| `Label.compareTo(other)` | Compares two labels in the poset | `other`: Label | `Int?` -- 0 if equal, positive if this > other, negative if this < other, null if incomparable | -- |
+| `allLabels` | All labels registered in the poset, including `INFIMUM` and `SUPREMUM` | — | `Set<Label>` | — |
+| `Label.parents` (get/set) | Reads/writes typed parent relationships for a label | — | `Map<String, Label>` | — |
+| `Label.ancestors` | All ancestor labels traversing upwards through parent hierarchy via BFS | — | `Sequence<Label>` | — |
+| `Label.changes` (get/set) | Reads/writes the set of edge ID strings whose label set was modified involving this label | — | `Set<String>` | — |
+| `Label.compareTo(other)` | Compares two labels in the poset | `other`: Label | `Int?` — 0 if equal, positive if this > other, negative if this < other, null if incomparable | — |
 
-All properties except `allLabels` are **member extensions** -- they are only accessible within a scope that provides an `IPoset` receiver.
+All properties except `allLabels` are **member extensions** — they are only accessible within a scope that provides an `IPoset` receiver.
 
 ---
 
@@ -72,7 +75,7 @@ All properties except `allLabels` are **member extensions** -- they are only acc
 var labels: Set<Label>
 ```
 
-`labels` is a public property on `AbcEdge`. Getting reads from a `ListVal` property named `"labels"` on the edge via the graph store. Setting overwrites it and is not automatically tracked in `Label.changes` -- callers (e.g., `AbcMultipleGraph.addEdge(src, dst, type, label)`) are responsible for updating change records.
+`labels` is a public property on `AbcEdge`. Getting reads from a `ListVal` property named `"labels"` on the edge via the graph store. Setting overwrites it and is not automatically tracked in `Label.changes` — callers (e.g., `AbcMultipleGraph.addEdge(src, dst, tag, label)`) are responsible for updating change records.
 
 ---
 
@@ -81,8 +84,8 @@ var labels: Set<Label>
 These methods are declared on `AbcMultipleGraph` as concrete methods (not inherited from `IGraph`):
 
 ```kotlin
-fun addEdge(src: NodeID, dst: NodeID, type: String, label: Label): E
-fun delEdge(src: NodeID, dst: NodeID, type: String, label: Label)
+fun addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E
+fun delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)
 
 fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
 fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>
@@ -94,11 +97,11 @@ fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Seq
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge(src, dst, type, label)` | Creates edge (or reuses existing) and assigns label; records edge in `label.changes` | `src`, `dst`: NodeID; `type`: String; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
-| `delEdge(src, dst, type, label)` | Removes label from edge; removes edge from `label.changes`; if no labels remain, deletes the edge; no-op if edge does not exist | `src`, `dst`: NodeID; `type`: String; `label`: Label | -- | -- |
-| `getOutgoingEdges` / `getIncomingEdges` (with label) | Same as non-label overloads but only returns edges visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<E>` | -- |
-| `getChildren` / `getParents` (with label) | Returns adjacent nodes via label-filtered outgoing/incoming edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | -- |
-| `getDescendants` / `getAncestors` (with label) | BFS traversal of all reachable nodes via label-filtered edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | -- |
+| `addEdge(src, dst, tag, label)` | Creates edge (or reuses existing) and assigns label; records edge in `label.changes` | `src`, `dst`: NodeID; `tag`: String; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
+| `delEdge(src, dst, tag, label)` | Removes label from edge; removes edge from `label.changes`; if no labels remain, deletes the edge; no-op if edge does not exist | `src`, `dst`: NodeID; `tag`: String; `label`: Label | — | — |
+| `getOutgoingEdges` / `getIncomingEdges` (with label) | Same as non-label overloads but only returns edges visible under the given label | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<E>` | — |
+| `getChildren` / `getParents` (with label) | Returns adjacent nodes via label-filtered outgoing/incoming edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | — |
+| `getDescendants` / `getAncestors` (with label) | BFS traversal of all reachable nodes via label-filtered edges | `of`: NodeID; `label`: Label; `cond`: optional edge predicate | `Sequence<N>` | — |
 
 **Edge visibility rule:** An edge is **visitable** under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded. `Label.SUPREMUM` sees all edges.
 
@@ -108,25 +111,25 @@ fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Seq
 
 **Responsibility:** Implements `IPoset` using a dedicated `posetStorage: IStorage` instance.
 
-The poset store maps label names to storage nodes with `__id__` meta properties:
+The poset store uses `Label.core` as the node ID directly (no meta properties needed):
 
 | Poset concept | IStorage mapping |
 |---------------|-------------------|
-| Label `L` | Node with `__id__` = `L.core` |
-| `L.parents = mapOf("sub" to P)` | Node property `"parents"` as `MapVal` |
-| `L.changes` | Node property `"changes"` as `ListVal` |
+| Label `L` | Node with ID = `L.core` |
+| `L.parents = mapOf("sub" to P)` | Edge from `L.core` to `P.core`, tag = `"sub"` |
+| `L.changes` | Node property `"changes"` as `ListVal` of `StrVal` |
 
-`allLabels` is derived from `posetStorage` nodes (reading `__id__` properties) plus `INFIMUM` and `SUPREMUM`.
+`allLabels` is derived from `posetStorage.nodeIDs` (reading node IDs directly as label names) plus `INFIMUM` and `SUPREMUM`.
 
-`labelIdCache: HashMap<String, InternalID>` maps label names to poset storage internal IDs, populated eagerly on first access.
+`labelIdCache: HashMap<String, NodeID>` maps label names to poset storage node IDs, populated eagerly on first access. Since `Label.core` is used directly as the node ID, the cache maps label name → node ID (same value).
 
-`Label.parents` getter/setter reads/writes a `MapVal` node property on the poset store.
+`Label.parents` getter reads outgoing edges from the label node — each edge's destination is a parent label, the edge tag is the relationship name. Setter removes all existing parent edges and creates new ones.
 
-`Label.ancestors` performs BFS over parent relationships, yielding ancestor labels transitively.
+`Label.ancestors` performs BFS over parent edges using `posetStorage.getOutgoingEdges` + `posetStorage.getEdgeDst`, yielding ancestor labels transitively.
 
 `Label.compareTo(other)` performs bidirectional reachability queries via `ancestors` traversal. Results are cached in a runtime `MutableMap<Pair<Label, Label>, Int?>`. The cache is cleared whenever `Label.parents` is set.
 
-`Label.changes` getter/setter reads/writes a `ListVal` node property containing `InternalID` values (edge IDs from the graph store).
+`Label.changes` getter/setter reads/writes a `ListVal` node property containing `StrVal` edge ID strings.
 
 `close()` clears internal caches only. Poset state is persisted in the poset store and requires no explicit persist step.
 
@@ -135,18 +138,18 @@ The poset store maps label names to storage nodes with `__id__` meta properties:
 ### Example Usage
 
 ```kotlin
-class MyNode(storage: IStorage, storageId: InternalID) : AbcNode(storage, storageId) {
+class MyNode : AbcNode() {
     override val type = object : AbcNode.Type { override val name = "item" }
 }
-class MyEdge(storage: IStorage, override val id: InternalID) : AbcEdge(storage) {
+class MyEdge : AbcEdge() {
     override val type = object : AbcEdge.Type { override val name = "link" }
 }
 
 class MyGraph : AbcMultipleGraph<MyNode, MyEdge>() {
     override val storage = NativeStorageImpl()
     override val posetStorage = NativeStorageImpl()
-    override fun newNodeObj(storageId: InternalID) = MyNode(storage, storageId)
-    override fun newEdgeObj(storageId: InternalID) = MyEdge(storage, storageId)
+    override fun newNodeObj() = MyNode()
+    override fun newEdgeObj() = MyEdge()
 }
 
 val graph = MyGraph()
@@ -192,7 +195,7 @@ graph.close()
 |-----------|------------|
 | `EntityNotExistException` | `addEdge` with missing src/dst node (from `IGraph`) |
 
-`delEdge(src, dst, type, label)` on a non-existent edge is a no-op.
+`delEdge(src, dst, tag, label)` on a non-existent edge is a no-op.
 
 ---
 
@@ -200,10 +203,10 @@ graph.close()
 
 ### Label
 
-- `Label.INFIMUM` is below all labels; `Label.SUPREMUM` is above all labels -- these are structural bounds and should not be assigned to edges
+- `Label.INFIMUM` is below all labels; `Label.SUPREMUM` is above all labels — these are structural bounds and should not be assigned to edges
 
 ### AbcMultipleGraph (label-filtered operations)
 
-- `addEdge(src, dst, type, label)` requires both src and dst nodes to exist
-- `delEdge(src, dst, type, label)` removes only the specified label; the edge is deleted only when no labels remain
-- `delEdge(src, dst, type, label)` on a non-existent edge is a no-op
+- `addEdge(src, dst, tag, label)` requires both src and dst nodes to exist
+- `delEdge(src, dst, tag, label)` removes only the specified label; the edge is deleted only when no labels remain
+- `delEdge(src, dst, tag, label)` on a non-existent edge is a no-op
