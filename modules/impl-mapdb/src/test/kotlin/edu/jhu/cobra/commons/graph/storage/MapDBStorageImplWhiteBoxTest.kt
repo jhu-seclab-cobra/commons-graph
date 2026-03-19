@@ -381,10 +381,10 @@ class MapDBStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType returns correct type`() {
+    fun `test getEdgeTag returns correct tag`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "myType")
-        assertEquals("myType", storage.getEdgeType(e))
+        assertEquals("myType", storage.getEdgeTag(e))
     }
 }
