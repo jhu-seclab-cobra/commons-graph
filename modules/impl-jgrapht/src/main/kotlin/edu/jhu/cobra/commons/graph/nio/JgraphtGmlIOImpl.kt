@@ -26,7 +26,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_ATTR = "nid"
     private const val EDGE_SRC_ATTR = "esrc"
     private const val EDGE_DST_ATTR = "edst"
-    private const val EDGE_TYPE_ATTR = "etype"
+    private const val EDGE_TAG_ATTR = "etype"
 
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isRegularFile()) return false
@@ -55,7 +55,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
                 mapOf(
                     EDGE_SRC_ATTR to StrVal(from.getEdgeSrc(edgeID).toString()),
                     EDGE_DST_ATTR to StrVal(from.getEdgeDst(edgeID).toString()),
-                    EDGE_TYPE_ATTR to StrVal(from.getEdgeType(edgeID)),
+                    EDGE_TYPE_ATTR to StrVal(from.getEdgeTag(edgeID)),
                 )
             val props = metaProp + from.getEdgeProperties(edgeID)
             props.mapValues { (_, value) -> value.toAttribute }

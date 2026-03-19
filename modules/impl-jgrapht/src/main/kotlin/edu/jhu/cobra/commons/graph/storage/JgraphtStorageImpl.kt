@@ -26,7 +26,7 @@ class JgraphtStorageImpl : IStorage {
 
     private val nodeProperties: MutableMap<Int, MutableMap<String, IValue>> = linkedMapOf()
     private val edgeProperties: MutableMap<Int, MutableMap<String, IValue>> = linkedMapOf()
-    private val edgeTypeMap: MutableMap<Int, String> = hashMapOf()
+    private val edgeTagMap: MutableMap<Int, String> = hashMapOf()
     private val jgtGraph: Graph<String, String> = DirectedPseudograph(String::class.java)
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
 
@@ -70,7 +70,7 @@ class JgraphtStorageImpl : IStorage {
     override fun addEdge(
         src: Int,
         dst: Int,
-        type: String,
+        tag: String,
         properties: Map<String, IValue>,
     ): Int {
         ensureOpen()
@@ -83,7 +83,7 @@ class JgraphtStorageImpl : IStorage {
         jgtGraph.addEdge(srcVertex, dstVertex, edgeStr)
         intToEdge[id] = edgeStr
         edgeToInt[edgeStr] = id
-        edgeTypeMap[id] = type
+        edgeTagMap[id] = tag
         edgeProperties[id] = properties.toMutableMap()
         return id
     }
@@ -128,7 +128,7 @@ class JgraphtStorageImpl : IStorage {
             intToEdge.remove(edgeId)
             edgeToInt.remove(edgeStr)
             edgeProperties.remove(edgeId)
-            edgeTypeMap.remove(edgeId)
+            edgeTagMap.remove(edgeId)
         }
         jgtGraph.removeVertex(vertex)
         intToVertex.remove(id)
@@ -144,7 +144,7 @@ class JgraphtStorageImpl : IStorage {
         intToEdge.remove(id)
         edgeToInt.remove(edgeStr)
         edgeProperties.remove(id)
-        edgeTypeMap.remove(id)
+        edgeTagMap.remove(id)
     }
 
     override fun getEdgeSrc(id: Int): Int {
@@ -163,9 +163,9 @@ class JgraphtStorageImpl : IStorage {
         return vertexToInt[dstVertex]!!
     }
 
-    override fun getEdgeType(id: Int): String {
+    override fun getEdgeTag(id: Int): String {
         ensureOpen()
-        return edgeTypeMap[id] ?: throw EntityNotExistException(id)
+        return edgeTagMap[id] ?: throw EntityNotExistException(id)
     }
 
     override fun getIncomingEdges(id: Int): Set<Int> {
@@ -214,7 +214,7 @@ class JgraphtStorageImpl : IStorage {
         intToEdge.clear()
         edgeToInt.clear()
         edgeProperties.clear()
-        edgeTypeMap.clear()
+        edgeTagMap.clear()
         nodeProperties.clear()
         metaProperties.clear()
         nodeCounter = 0
@@ -230,7 +230,7 @@ class JgraphtStorageImpl : IStorage {
         for (edgeId in edgeProperties.keys) {
             val src = getEdgeSrc(edgeId)
             val dst = getEdgeDst(edgeId)
-            val type = edgeTypeMap[edgeId]!!
+            val type = edgeTagMap[edgeId]!!
             val newSrc = idMap[src] ?: src
             val newDst = idMap[dst] ?: dst
             target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
