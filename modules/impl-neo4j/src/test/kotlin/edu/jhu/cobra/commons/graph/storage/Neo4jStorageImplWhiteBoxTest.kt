@@ -434,7 +434,7 @@ class Neo4jStorageImplWhiteBoxTest {
         }
     }
 
-    // -- getEdgeSrc, getEdgeDst, getEdgeType --
+    // -- getEdgeSrc, getEdgeDst, getEdgeTag --
 
     @Test
     fun `test getEdgeSrc returns correct source`() {
@@ -455,12 +455,12 @@ class Neo4jStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeType returns correct type`() {
+    fun `test getEdgeTag returns correct type`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "FOLLOWS")
 
-        assertEquals("FOLLOWS", storage.getEdgeType(e))
+        assertEquals("FOLLOWS", storage.getEdgeTag(e))
     }
 
 }
