@@ -6,9 +6,10 @@ import kotlin.test.*
 class TransferToTest {
     @Test
     fun `test transferTo copies nodes and properties`() {
+        StorageTestUtils.resetCounters()
         val source = NativeStorageImpl()
-        val node1 = source.addNode(mapOf("name" to "A".strVal))
-        val node2 = source.addNode(mapOf("name" to "B".strVal))
+        val node1 = source.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "A".strVal))
+        val node2 = source.addNode(StorageTestUtils.genNodeId(), mapOf("name" to "B".strVal))
 
         val target = NativeStorageImpl()
         source.transferTo(target)
@@ -25,12 +26,13 @@ class TransferToTest {
 
     @Test
     fun `test transferTo copies edges and properties`() {
+        StorageTestUtils.resetCounters()
         val source = NativeStorageImpl()
-        val node1 = source.addNode()
-        val node2 = source.addNode()
-        val node3 = source.addNode()
-        val edge1 = source.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1, mapOf("weight" to 1.5.numVal))
-        val edge2 = source.addEdge(node2, node3, StorageTestUtils.EDGE_TYPE_2, mapOf("label" to "x".strVal))
+        val node1 = source.addNode(StorageTestUtils.genNodeId())
+        val node2 = source.addNode(StorageTestUtils.genNodeId())
+        val node3 = source.addNode(StorageTestUtils.genNodeId())
+        val edge1 = source.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1, mapOf("weight" to 1.5.numVal))
+        val edge2 = source.addEdge(node2, node3, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_2, mapOf("label" to "x".strVal))
 
         val target = NativeStorageImpl()
         source.transferTo(target)
@@ -64,10 +66,11 @@ class TransferToTest {
 
     @Test
     fun `test transferTo does not modify source`() {
+        StorageTestUtils.resetCounters()
         val source = NativeStorageImpl()
-        val node1 = source.addNode(mapOf("k" to "v".strVal))
-        val node2 = source.addNode()
-        val edge1 = source.addEdge(node1, node2, StorageTestUtils.EDGE_TYPE_1)
+        val node1 = source.addNode(StorageTestUtils.genNodeId(), mapOf("k" to "v".strVal))
+        val node2 = source.addNode(StorageTestUtils.genNodeId())
+        val edge1 = source.addEdge(node1, node2, StorageTestUtils.genEdgeId(), StorageTestUtils.EDGE_TAG_1)
 
         val target = NativeStorageImpl()
         source.transferTo(target)

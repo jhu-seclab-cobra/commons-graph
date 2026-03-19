@@ -16,7 +16,7 @@ import kotlin.test.Test
  * Each measurement uses warmup iterations (JIT stabilization) followed by
  * multiple measured iterations, reporting median values.
  *
- * Run with: ./gradlew :graph:test --tests "*.StoragePerformanceTest"
+ * Run with: ./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
  */
 class StoragePerformanceTest {
     private val storages = mutableListOf<IStorage>()
@@ -27,12 +27,12 @@ class StoragePerformanceTest {
         storages.clear()
     }
 
-    private val implNames =
-        listOf(
-            "NativeStorageImpl",
-            "NativeConcurStorageImpl",
-            "LayeredStorageImpl",
-        )
+    private val implNames: List<String> =
+        run {
+            val all = listOf("NativeStorageImpl", "NativeConcurStorageImpl", "LayeredStorageImpl")
+            val filter = System.getProperty("benchmark.impl", "")
+            if (filter.isBlank()) all else all.filter { it.contains(filter, ignoreCase = true) }
+        }
 
     private fun createStorage(name: String): IStorage {
         val storage =
@@ -54,12 +54,15 @@ class StoragePerformanceTest {
         storage: IStorage,
         nodeCount: Int,
         edgesPerNode: Int,
-    ): Array<Int> {
-        val nodeIds = Array(nodeCount) { i -> storage.addNode(mapOf("idx" to i.numVal)) }
+    ): Array<String> {
+        val nodeIds =
+            Array(nodeCount) { i ->
+                storage.addNode("n$i", mapOf("idx" to i.numVal))
+            }
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.numVal))
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e-$i-$j", "e$j", mapOf("w" to j.numVal))
             }
         }
         return nodeIds
@@ -186,7 +189,7 @@ class StoragePerformanceTest {
                             ref[0]?.let { runCatching { it.close() } }
                             ref[0] = createStorage(name)
                         },
-                        operation = { i -> ref[0]!!.addNode(mapOf("idx" to i.numVal)) },
+                        operation = { i -> ref[0]!!.addNode("n$i", mapOf("idx" to i.numVal)) },
                     ).also { ref[0]?.let { s -> runCatching { s.close() } } }
                 }
             println(
@@ -217,7 +220,7 @@ class StoragePerformanceTest {
             val results =
                 edgeCounts.map { edgeCount ->
                     val ref = arrayOfNulls<IStorage>(1)
-                    var nodeIds = emptyArray<Int>()
+                    var nodeIds = emptyArray<String>()
                     benchmarkOpsPerSec(
                         edgeCount,
                         warmup = 1,
@@ -225,12 +228,12 @@ class StoragePerformanceTest {
                         setup = {
                             ref[0]?.let { runCatching { it.close() } }
                             ref[0] = createStorage(name)
-                            nodeIds = Array(nodeCount) { ref[0]!!.addNode() }
+                            nodeIds = Array(nodeCount) { ref[0]!!.addNode("n$it") }
                         },
                         operation = { i ->
                             val src = i % nodeCount
                             val dst = (i + 1) % nodeCount
-                            ref[0]!!.addEdge(nodeIds[src], nodeIds[dst], "e$i", mapOf("w" to i.numVal))
+                            ref[0]!!.addEdge(nodeIds[src], nodeIds[dst], "e$i", "e$i", mapOf("w" to i.numVal))
                         },
                     ).also { ref[0]?.let { s -> runCatching { s.close() } } }
                 }
@@ -260,7 +263,7 @@ class StoragePerformanceTest {
 
         for (name in implNames) {
             val storage = createStorage(name)
-            val nodeIds = Array(nodeCount) { storage.addNode() }
+            val nodeIds = Array(nodeCount) { storage.addNode("n$it") }
             val ops =
                 benchmarkOpsPerSec(lookupCount) { i ->
                     storage.containsNode(nodeIds[i % nodeCount])
@@ -286,7 +289,7 @@ class StoragePerformanceTest {
             val storage = createStorage(name)
             val nodeIds =
                 Array(nodeCount) { i ->
-                    storage.addNode(mapOf("name" to "node$i".strVal, "idx" to i.numVal))
+                    storage.addNode("n$i", mapOf("name" to "node$i".strVal, "idx" to i.numVal))
                 }
             val readOps =
                 benchmarkOpsPerSec(opCount) { i ->
@@ -345,7 +348,7 @@ class StoragePerformanceTest {
 
         for (name in implNames) {
             val ref = arrayOfNulls<IStorage>(1)
-            var nodeIds = emptyArray<Int>()
+            var nodeIds = emptyArray<String>()
             val ops =
                 benchmarkOpsPerSec(
                     deleteCount,
@@ -379,12 +382,10 @@ class StoragePerformanceTest {
             val ms =
                 benchmarkMs(warmup = 1, measured = 3) {
                     val storage = createStorage(name)
-                    val baseNode = storage.addNode()
-                    val nodeIds = mutableListOf(baseNode)
+                    val baseNode = storage.addNode("base")
                     for (i in 1..iterations) {
-                        val newNode = storage.addNode(mapOf("v" to i.numVal))
-                        nodeIds.add(newNode)
-                        storage.addEdge(newNode, baseNode, "e$i")
+                        val newNode = storage.addNode("n$i", mapOf("v" to i.numVal))
+                        storage.addEdge(newNode, baseNode, "e$i", "e$i")
                         storage.getNodeProperties(newNode)
                         storage.containsNode(newNode)
                         storage.getOutgoingEdges(newNode)
@@ -396,7 +397,7 @@ class StoragePerformanceTest {
     }
 
     // ========================================================================
-    // BENCHMARK: LAYERED STORAGE — MULTI-LAYER QUERY
+    // BENCHMARK: MEMORY FOOTPRINT
     // ========================================================================
 
     @Test
@@ -417,15 +418,16 @@ class StoragePerformanceTest {
             val before = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
 
             val storage = createStorage(name)
-            val nodeIds = Array(nodeCount) { i ->
-                val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
-                storage.addNode(props)
-            }
+            val nodeIds =
+                Array(nodeCount) { i ->
+                    val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
+                    storage.addNode("n$i", props)
+                }
             for (i in 0 until nodeCount) {
                 for (j in 1..edgesPerNode) {
                     val dst = (i + j) % nodeCount
                     val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_${j}_$it".strVal }
-                    storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", props)
+                    storage.addEdge(nodeIds[i], nodeIds[dst], "e-$i-$j", "e$j", props)
                 }
             }
 
@@ -439,6 +441,10 @@ class StoragePerformanceTest {
         }
     }
 
+    // ========================================================================
+    // BENCHMARK: LAYERED STORAGE — MULTI-LAYER QUERY
+    // ========================================================================
+
     @Test
     fun `benchmark layered storage multi-layer query`() {
         val nodesPerLayer = 10_000
@@ -451,10 +457,11 @@ class StoragePerformanceTest {
         for (layers in layerCounts) {
             val storage = LayeredStorageImpl()
             storages.add(storage)
-            val allNodeIds = mutableListOf<Int>()
+            val allNodeIds = mutableListOf<String>()
             for (layer in 0 until layers) {
                 for (i in 0 until nodesPerLayer) {
-                    allNodeIds.add(storage.addNode(mapOf("layer" to layer.numVal, "idx" to i.numVal)))
+                    val nodeId = "L${layer}_n$i"
+                    allNodeIds.add(storage.addNode(nodeId, mapOf("layer" to layer.numVal, "idx" to i.numVal)))
                 }
                 if (layer < layers - 1) storage.freeze()
             }

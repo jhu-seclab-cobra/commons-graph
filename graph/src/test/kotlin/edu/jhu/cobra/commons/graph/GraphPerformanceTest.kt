@@ -30,12 +30,12 @@ class GraphPerformanceTest {
 
     // -- Storage factories for graph backends ---------------------------------
 
-    private val storageNames =
-        listOf(
-            "NativeStorage",
-            "NativeConcurStorage",
-            "LayeredStorage",
-        )
+    private val storageNames: List<String> =
+        run {
+            val all = listOf("NativeStorage", "NativeConcurStorage", "LayeredStorage")
+            val filter = System.getProperty("benchmark.impl", "")
+            if (filter.isBlank()) all else all.filter { it.contains(filter, ignoreCase = true) }
+        }
 
     private fun createStorage(name: String): IStorage {
         val storage =

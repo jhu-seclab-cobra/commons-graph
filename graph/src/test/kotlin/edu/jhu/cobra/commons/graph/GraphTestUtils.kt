@@ -13,26 +13,20 @@ object GraphTestUtils {
     const val NODE_ID_4: NodeID = "node4"
     const val NODE_ID_5: NodeID = "node5"
 
-    const val EDGE_TYPE_1 = "edge1"
-    const val EDGE_TYPE_2 = "edge2"
-    const val EDGE_TYPE_3 = "edge3"
-    const val EDGE_TYPE_4 = "edge4"
-    const val EDGE_TYPE_5 = "edge5"
+    const val EDGE_TAG_1 = "edge1"
+    const val EDGE_TAG_2 = "edge2"
+    const val EDGE_TAG_3 = "edge3"
+    const val EDGE_TAG_4 = "edge4"
+    const val EDGE_TAG_5 = "edge5"
 
-    class TestNode(
-        storage: IStorage,
-        nodeId: NodeID,
-    ) : AbcNode(storage, nodeId) {
+    class TestNode : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "TestNode"
             }
     }
 
-    class TestEdge(
-        storage: IStorage,
-        edgeId: String,
-    ) : AbcEdge(storage, edgeId) {
+    class TestEdge : AbcEdge() {
         override val type: AbcEdge.Type =
             object : AbcEdge.Type {
                 override val name = "TestEdge"
@@ -47,10 +41,9 @@ object GraphTestUtils {
             override val storage: IStorage = storage
             override val posetStorage: IStorage = posetStorage
 
-            override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
+            override fun newNodeObj() = TestNode()
 
-            override fun newEdgeObj(edgeId: String) =
-                TestEdge(storage, edgeId)
+            override fun newEdgeObj() = TestEdge()
         }
 
     class TestMultipleGraph(
@@ -60,10 +53,9 @@ object GraphTestUtils {
         override val storage: IStorage = storage
         override val posetStorage: IStorage = posetStorage
 
-        override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
+        override fun newNodeObj() = TestNode()
 
-        override fun newEdgeObj(edgeId: String) =
-            TestEdge(storage, edgeId)
+        override fun newEdgeObj() = TestEdge()
     }
 
     fun createTestSimpleGraph(
@@ -74,10 +66,9 @@ object GraphTestUtils {
             override val storage: IStorage = storage
             override val posetStorage: IStorage = posetStorage
 
-            override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
+            override fun newNodeObj() = TestNode()
 
-            override fun newEdgeObj(edgeId: String) =
-                TestEdge(storage, edgeId)
+            override fun newEdgeObj() = TestEdge()
         }
 
     class TestSimpleGraph(
@@ -87,9 +78,8 @@ object GraphTestUtils {
         override val storage: IStorage = storage
         override val posetStorage: IStorage = posetStorage
 
-        override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
+        override fun newNodeObj() = TestNode()
 
-        override fun newEdgeObj(edgeId: String) =
-            TestEdge(storage, edgeId)
+        override fun newEdgeObj() = TestEdge()
     }
 }

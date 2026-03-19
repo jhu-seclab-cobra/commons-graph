@@ -3,18 +3,13 @@ package edu.jhu.cobra.commons.graph.traits
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.AbcSimpleGraph
-import edu.jhu.cobra.commons.graph.NodeID
-import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 
 /**
  * Base class for TraitNodeGroup tests providing shared test infrastructure.
  */
 abstract class AbcTraitNodeGroupTest {
-    protected class TestNode(
-        storage: IStorage,
-        nodeId: NodeID,
-    ) : AbcNode(storage, nodeId) {
+    protected class TestNode : AbcNode() {
         enum class Type {
             TEST,
         }
@@ -26,10 +21,7 @@ abstract class AbcTraitNodeGroupTest {
                 }
     }
 
-    protected class TestEdge(
-        storage: IStorage,
-        edgeId: String,
-    ) : AbcEdge(storage, edgeId) {
+    protected class TestEdge : AbcEdge() {
         enum class Type {
             TEST,
         }
@@ -49,10 +41,9 @@ abstract class AbcTraitNodeGroupTest {
         override val groupPrefix: String = "Test"
         override val groupedNodesCounter: MutableMap<String, Int> = mutableMapOf()
 
-        override fun newNodeObj(nodeId: NodeID) = TestNode(storage, nodeId)
+        override fun newNodeObj() = TestNode()
 
-        override fun newEdgeObj(edgeId: String) =
-            TestEdge(storage, edgeId)
+        override fun newEdgeObj() = TestEdge()
     }
 
     protected lateinit var graph: TestGraph
