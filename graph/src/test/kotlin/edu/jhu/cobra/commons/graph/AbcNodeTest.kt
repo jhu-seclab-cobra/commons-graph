@@ -1,7 +1,5 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcNode.Companion.META_ID
-import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.NumVal
@@ -15,24 +13,30 @@ class AbcNodeTest {
     private lateinit var storage: NativeStorageImpl
     private lateinit var otherStorage: NativeStorageImpl
     private lateinit var testNode: TestNode
-    private var testStorageId: InternalID = 0
+    private var testNodeId: String = ""
 
-    private class TestNode(
-        storage: IStorage,
-        internalId: InternalID,
-    ) : AbcNode(storage, internalId) {
+    private class TestNode : AbcNode() {
         override val type: AbcNode.Type =
             object : AbcNode.Type {
                 override val name = "TestNode"
             }
     }
 
+    private fun createTestNode(
+        storage: NativeStorageImpl,
+        nodeId: String,
+    ): TestNode {
+        val node = TestNode()
+        node.bind(storage, nodeId)
+        return node
+    }
+
     @BeforeTest
     fun setup() {
         storage = NativeStorageImpl()
         otherStorage = NativeStorageImpl()
-        testStorageId = storage.addNode(mapOf(META_ID to "testNode".strVal))
-        testNode = TestNode(storage, testStorageId)
+        testNodeId = storage.addNode("testNode")
+        testNode = createTestNode(storage, testNodeId)
     }
 
     @AfterTest
@@ -184,44 +188,6 @@ class AbcNodeTest {
 
     // endregion
 
-    // region AbcNode META_PREFIX protection
-
-    @Test
-    fun `test getProp_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testNode["__id__"] }
-    }
-
-    @Test
-    fun `test getProp_metaPrefixOnly_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testNode["__"] }
-    }
-
-    @Test
-    fun `test setProp_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testNode["__secret__"] = "value".strVal }
-    }
-
-    @Test
-    fun `test contains_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { "__id__" in testNode }
-    }
-
-    @Test
-    fun `test update_withMetaPrefixKey_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> {
-            testNode.update(mapOf("valid" to "ok".strVal, "__meta__" to "bad".strVal))
-        }
-    }
-
-    @Test
-    fun `test update_allMetaPrefixKeys_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> {
-            testNode.update(mapOf("__only_meta__" to "bad".strVal))
-        }
-    }
-
-    // endregion
-
     // region AbcNode boundary conditions
 
     @Test
@@ -247,7 +213,7 @@ class AbcNodeTest {
     fun `test propertiesStoredInStorage`() {
         testNode["name"] = "test".strVal
 
-        val props = storage.getNodeProperties(testStorageId)
+        val props = storage.getNodeProperties(testNodeId)
 
         assertTrue(props.containsKey("name"))
         assertEquals("test", (props["name"] as StrVal).core)
@@ -279,21 +245,21 @@ class AbcNodeTest {
 
     @Test
     fun `test equals_sameID_returnsTrue`() {
-        val node1 = TestNode(storage, testStorageId)
-        val node2 = TestNode(storage, testStorageId)
+        val node1 = createTestNode(storage, testNodeId)
+        val node2 = createTestNode(storage, testNodeId)
 
         assertEquals(node1, node2)
     }
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val sid2 = storage.addNode(mapOf(META_ID to "other".strVal))
-        assertNotEquals(TestNode(storage, testStorageId), TestNode(storage, sid2))
+        val sid2 = storage.addNode("other")
+        assertNotEquals(createTestNode(storage, testNodeId), createTestNode(storage, sid2))
     }
 
     @Test
     fun `test equals_nonNodeObject_returnsFalse`() {
-        assertNotEquals<Any>(TestNode(storage, testStorageId), "not a node")
+        assertNotEquals<Any>(createTestNode(storage, testNodeId), "not a node")
     }
 
     @Test

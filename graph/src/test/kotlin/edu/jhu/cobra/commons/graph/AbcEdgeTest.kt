@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -12,34 +13,33 @@ import kotlin.test.*
 
 class AbcEdgeTest {
     private lateinit var storage: NativeStorageImpl
-    private var srcStorageId: InternalID = 0
-    private var dstStorageId: InternalID = 0
+    private var srcNodeId: String = ""
+    private var dstNodeId: String = ""
     private lateinit var testEdge: TestEdge
 
-    // Maps InternalID → NodeID for test edges
-    private val nodeIdMap = HashMap<InternalID, NodeID>()
-    private val resolver: (InternalID) -> NodeID = { nodeIdMap[it] ?: error("Unknown ID: $it") }
-
-    private class TestEdge(
-        storage: IStorage,
-        internalId: InternalID,
-        nodeIdResolver: (InternalID) -> NodeID,
-    ) : AbcEdge(storage, internalId, nodeIdResolver) {
+    private class TestEdge : AbcEdge() {
         override val type: AbcEdge.Type =
             object : AbcEdge.Type {
                 override val name = "TestEdge"
             }
     }
 
+    private fun createTestEdge(
+        storage: IStorage,
+        edgeId: String,
+    ): TestEdge {
+        val edge = TestEdge()
+        edge.bind(storage, edgeId)
+        return edge
+    }
+
     @BeforeTest
     fun setup() {
         storage = NativeStorageImpl()
-        srcStorageId = storage.addNode()
-        dstStorageId = storage.addNode()
-        nodeIdMap[srcStorageId] = "src"
-        nodeIdMap[dstStorageId] = "dst"
-        val eid = storage.addEdge(srcStorageId, dstStorageId, "relation")
-        testEdge = TestEdge(storage, eid, resolver)
+        srcNodeId = storage.addNode("src")
+        dstNodeId = storage.addNode("dst")
+        val eid = storage.addEdge(srcNodeId, dstNodeId, "src-relation-dst", "relation")
+        testEdge = createTestEdge(storage, eid)
     }
 
     @AfterTest
@@ -47,12 +47,12 @@ class AbcEdgeTest {
         storage.close()
     }
 
-    // region InternalID via storage
+    // region Edge identity
 
     @Test
     fun `test edgeID_differentType_differentId`() {
-        val eid2 = storage.addEdge(srcStorageId, dstStorageId, "other")
-        assertNotEquals(testEdge.internalId, eid2)
+        val eid2 = storage.addEdge(srcNodeId, dstNodeId, StorageTestUtils.genEdgeId(), "other")
+        assertNotEquals(testEdge.edgeId, eid2)
     }
 
     // endregion
@@ -208,8 +208,8 @@ class AbcEdgeTest {
     }
 
     @Test
-    fun `test eType_returnsEdgeType`() {
-        assertEquals("relation", testEdge.eType)
+    fun `test eTag_returnsEdgeTag`() {
+        assertEquals("relation", testEdge.eTag)
     }
 
     @Test
@@ -220,44 +220,6 @@ class AbcEdgeTest {
     @Test
     fun `test type_returnsCorrectType`() {
         assertEquals("TestEdge", testEdge.type.name)
-    }
-
-    // endregion
-
-    // region AbcEdge META_PREFIX protection
-
-    @Test
-    fun `test getProp_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testEdge["__src__"] }
-    }
-
-    @Test
-    fun `test getProp_metaPrefixOnly_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testEdge["__"] }
-    }
-
-    @Test
-    fun `test setProp_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { testEdge["__secret__"] = "value".strVal }
-    }
-
-    @Test
-    fun `test contains_metaPrefix_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> { "__src__" in testEdge }
-    }
-
-    @Test
-    fun `test update_withMetaPrefixKey_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> {
-            testEdge.update(mapOf("valid" to "ok".strVal, "__meta__" to "bad".strVal))
-        }
-    }
-
-    @Test
-    fun `test update_allMetaPrefixKeys_throwsIllegalArgument`() {
-        assertFailsWith<IllegalArgumentException> {
-            testEdge.update(mapOf("__only_meta__" to "bad".strVal))
-        }
     }
 
     // endregion
@@ -280,7 +242,7 @@ class AbcEdgeTest {
     fun `test propertiesStoredInStorage`() {
         testEdge["weight"] = 1.5.numVal
 
-        val props = storage.getEdgeProperties(testEdge.internalId)
+        val props = storage.getEdgeProperties(testEdge.edgeId)
 
         assertTrue(props.containsKey("weight"))
         assertEquals(1.5, (props["weight"] as NumVal).core)
@@ -292,19 +254,19 @@ class AbcEdgeTest {
 
     @Test
     fun `test equals_sameID_returnsTrue`() {
-        val eid = testEdge.internalId
-        val edge1 = TestEdge(storage, eid, resolver)
-        val edge2 = TestEdge(storage, eid, resolver)
+        val eid = testEdge.edgeId
+        val edge1 = createTestEdge(storage, eid)
+        val edge2 = createTestEdge(storage, eid)
 
         assertEquals(edge1, edge2)
     }
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val eid2 = storage.addEdge(srcStorageId, dstStorageId, "other")
+        val eid2 = storage.addEdge(srcNodeId, dstNodeId, StorageTestUtils.genEdgeId(), "other")
         assertNotEquals(
-            TestEdge(storage, testEdge.internalId, resolver),
-            TestEdge(storage, eid2, resolver),
+            createTestEdge(storage, testEdge.edgeId),
+            createTestEdge(storage, eid2),
         )
     }
 
