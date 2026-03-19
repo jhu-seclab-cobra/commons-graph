@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
@@ -52,10 +51,7 @@ class LayeredStorageImpl(
         activeLayer.close()
         frozenLayers.clear()
         frozenLayers.add(merged)
-        activeLayer =
-            NativeStorageImpl().apply {
-                setCounterStart(merged.nodeIDs.size, merged.edgeIDs.size)
-            }
+        activeLayer = NativeStorageImpl()
     }
 
     fun compact(topN: Int) {
@@ -92,14 +88,14 @@ class LayeredStorageImpl(
             }
         }
         for (edgeId in source.edgeIDs) {
-            val srcId = nodeIdMap[source.getEdgeSrc(edgeId)]!!
-            val dstId = nodeIdMap[source.getEdgeDst(edgeId)]!!
-            val edgeType = source.getEdgeType(edgeId)
+            val (eSrc, eDst, edgeTag) = source.getEdgeStructure(edgeId)
+            val srcId = nodeIdMap[eSrc]!!
+            val dstId = nodeIdMap[eDst]!!
             if (edgeId in edgeIdMap) {
                 val props = source.getEdgeProperties(edgeId)
                 if (props.isNotEmpty()) target.setEdgeProperties(edgeIdMap[edgeId]!!, props)
             } else {
-                val newEdgeId = target.addEdge(srcId, dstId, edgeId, edgeType, source.getEdgeProperties(edgeId))
+                val newEdgeId = target.addEdge(srcId, dstId, edgeId, edgeTag, source.getEdgeProperties(edgeId))
                 edgeIdMap[edgeId] = newEdgeId
             }
         }
@@ -127,7 +123,10 @@ class LayeredStorageImpl(
         return frozenLayer?.containsNode(id) ?: false
     }
 
-    override fun addNode(nodeId: String, properties: Map<String, IValue>): String {
+    override fun addNode(
+        nodeId: String,
+        properties: Map<String, IValue>,
+    ): String {
         ensureOpen()
         return activeLayer.addNode(nodeId, properties)
     }
@@ -202,31 +201,19 @@ class LayeredStorageImpl(
         src: String,
         dst: String,
         edgeId: String,
-        type: String,
+        tag: String,
         properties: Map<String, IValue>,
     ): String {
         ensureOpen()
         ensureNodeInActiveLayer(src)
         ensureNodeInActiveLayer(dst)
-        return activeLayer.addEdge(src, dst, edgeId, type, properties)
+        return activeLayer.addEdge(src, dst, edgeId, tag, properties)
     }
 
-    override fun getEdgeSrc(id: String): String {
+    override fun getEdgeStructure(id: String): IStorage.EdgeStructure {
         ensureOpen()
-        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeSrc(id)
-        return frozenLayer?.getEdgeSrc(id) ?: throw EntityNotExistException(id)
-    }
-
-    override fun getEdgeDst(id: String): String {
-        ensureOpen()
-        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeDst(id)
-        return frozenLayer?.getEdgeDst(id) ?: throw EntityNotExistException(id)
-    }
-
-    override fun getEdgeType(id: String): String {
-        ensureOpen()
-        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeType(id)
-        return frozenLayer?.getEdgeType(id) ?: throw EntityNotExistException(id)
+        if (activeLayer.containsEdge(id)) return activeLayer.getEdgeStructure(id)
+        return frozenLayer?.getEdgeStructure(id) ?: throw EntityNotExistException(id)
     }
 
     override fun getEdgeProperties(id: String): Map<String, IValue> {
@@ -264,12 +251,10 @@ class LayeredStorageImpl(
         val inActive = activeLayer.containsEdge(id)
         if (!inActive && frozenLayer?.containsEdge(id) != true) throw EntityNotExistException(id)
         if (!inActive) {
-            val src = getEdgeSrc(id)
-            val dst = getEdgeDst(id)
-            val type = getEdgeType(id)
+            val (src, dst, tag) = getEdgeStructure(id)
             ensureNodeInActiveLayer(src)
             ensureNodeInActiveLayer(dst)
-            activeLayer.addEdge(src, dst, id, type, emptyMap())
+            activeLayer.addEdge(src, dst, id, tag, emptyMap())
         }
         activeLayer.setEdgeProperties(id, properties)
     }
@@ -357,9 +342,8 @@ class LayeredStorageImpl(
             target.addNode(nodeId, getNodeProperties(nodeId))
         }
         for (edgeId in edgeIDs) {
-            val srcId = getEdgeSrc(edgeId)
-            val dstId = getEdgeDst(edgeId)
-            target.addEdge(srcId, dstId, edgeId, getEdgeType(edgeId), getEdgeProperties(edgeId))
+            val (srcId, dstId, edgeTag) = getEdgeStructure(edgeId)
+            target.addEdge(srcId, dstId, edgeId, edgeTag, getEdgeProperties(edgeId))
         }
         for (name in metaNames) {
             target.setMeta(name, getMeta(name))
