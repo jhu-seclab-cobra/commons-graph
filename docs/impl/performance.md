@@ -178,19 +178,19 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 
 ### I1: Label.parents encoded as posetStorage edges instead of MapVal property
 
-**File**: `AbcMultipleGraph.kt:138-160`
+**File**: `AbcMultipleGraph.kt`
 
-**Change**: Replaced `MapVal` node property encoding with native posetStorage edges (`child → parent`, type = parent name). `ancestors` BFS now uses `posetStorage.getOutgoingEdges` + `getEdgeDst` + `labelSidCache` reverse lookup instead of deserializing `MapVal` at each step.
+**Change**: Label parent relationships use native posetStorage edges (`child → parent`, tag = relationship name) instead of serialized `MapVal` node properties. `ancestors` BFS traverses via `posetStorage.getOutgoingEdges` + `getEdgeDst`.
 
-**Result**: Eliminates MapVal serialization/deserialization per BFS step. Ancestors traversal now uses the same O(1) adjacency path as graph-level BFS. Added bidirectional label cache (`labelSidCache: HashMap<InternalID, Label>`) for O(1) reverse resolution.
+**Result**: Eliminates MapVal serialization/deserialization per BFS step. Ancestors traversal uses the same O(1) adjacency path as graph-level BFS.
 
-### I2: Label.changes uses NumVal instead of StrVal
+### I2: Label.changes uses direct StrVal
 
-**File**: `AbcMultipleGraph.kt:184-197`
+**File**: `AbcMultipleGraph.kt`
 
-**Change**: InternalID (Int) is now serialized as `NumVal` directly instead of `Int → String → StrVal`. Read path uses `(it as NumVal).core.toInt()` instead of `(it as StrVal).core.toInt()`.
+**Change**: `Label.changes` stores edge ID strings as `StrVal` in a `ListVal` property. Read path uses `(it as StrVal).core` directly.
 
-**Result**: Eliminates String allocation + parseInt per element on every read/write of `Label.changes`.
+**Result**: Eliminates unnecessary type conversion per element on every read/write of `Label.changes`.
 
 ### I3: filterVisitable reads edge labels only once
 
@@ -200,29 +200,29 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 
 **Result**: Halves storage reads and HashSet allocations in `filterVisitable` hot path.
 
-### I4: Eliminated redundant META_SRC/META_DST/META_TAG edge properties
+### I4: No meta properties in edge property namespace
 
-**File**: `AbcMultipleGraph.kt` addEdge, `AbcEdge.kt` srcNid/dstNid/eType
+**File**: `AbcEdge.kt`
 
-**Change**: Removed the 3 redundant `StrVal` meta properties (`__src__`, `__dst__`, `__tag__`) that were stored per edge. `AbcEdge.srcNid`/`dstNid` now resolve via `storage.getEdgeSrc()`/`getEdgeDst()` + `nodeSidCache` reverse HashMap lookup. `eType` resolves via `storage.getEdgeType()`. Added `nodeIdResolver: (InternalID) -> NodeID` parameter to `AbcEdge` constructor.
+**Change**: Edge structural info (src, dst, tag) is stored in the storage layer's own `EdgeStructure` data structure, not as properties. `AbcEdge.srcNid`/`dstNid`/`eTag` resolve via `storage.getEdgeStructure(edgeId)` lazily.
 
-**Result**: Eliminates 3 IValue allocations + 3 map entries per edge. At 150K edges (50K nodes × 3), saves ~450K map entries. Memory reduced: NativeStorage 143.8 MB, ConcurStorage 219.5 MB, LayeredStorage 297.5 MB. Cold getNode gap reduced from 3.2x to 1.9x.
+**Result**: Eliminates 3 IValue allocations + 3 map entries per edge. At 150K edges (50K nodes × 3), saves ~450K map entries. Cold getNode gap reduced from 3.2x to 1.9x.
 
-### I5: O(1) edge lookup via edge index
+### I5: O(1) edge lookup via deterministic edge IDs
 
-**File**: `AbcMultipleGraph.kt:111-127`
+**File**: `AbcMultipleGraph.kt`
 
-**Change**: Added `edgeIndex: HashMap<Triple<InternalID, InternalID, String>, InternalID>` lazily populated on first `findEdge` call. Reduces `findEdge(src, dst, type)` from O(degree) linear scan to O(1) HashMap lookup. Index is maintained during addEdge/delEdge/delNode.
+**Change**: Edge IDs follow the deterministic format `"$src-$tag-$dst"`. `findEdge(src, dst, tag)` constructs the edgeId and checks `storage.containsEdge(edgeId)`.
 
-**Result**: `getEdge`, `containEdge`, `delEdge`, and `addEdge(with label)` are now O(1) regardless of node degree. Critical for dense graphs where nodes have degree 50+.
+**Result**: `getEdge`, `containEdge`, `delEdge`, and `addEdge(with label)` are O(1) regardless of node degree.
 
-### I6: getDescendants/getAncestors bypass NodeID resolution
+### I6: getDescendants/getAncestors use storage adjacency directly
 
-**File**: `AbcMultipleGraph.kt:416-444`
+**File**: `AbcMultipleGraph.kt`
 
-**Change**: BFS traversals now use `storage.getEdgeDst(edgeID)` / `storage.getEdgeSrc(edgeID)` to get InternalID directly, instead of reading `edge.dstNid` (which triggered a lazy property read) + `resolveStorageId()` (which did a HashMap lookup).
+**Change**: BFS traversals use `storage.getEdgeDst(edgeId)` / `storage.getEdgeSrc(edgeId)` to get node IDs directly, avoiding entity wrapper creation on intermediate traversal steps.
 
-**Result**: Eliminates one property read + one HashMap lookup per BFS edge traversal.
+**Result**: Eliminates unnecessary object creation per BFS edge traversal.
 
 ### I7: AbcEdge.labels uses direct StrVal cast
 
