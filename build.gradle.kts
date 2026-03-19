@@ -70,6 +70,8 @@ subprojects {
                 "-XX:G1HeapRegionSize=32m",
                 "-XX:InitiatingHeapOccupancyPercent=45",
             )
+            // Pass benchmark.impl system property for per-implementation isolation
+            systemProperty("benchmark.impl", project.findProperty("benchmark.impl") ?: "")
             testLogging {
                 showStandardStreams = true
             }
