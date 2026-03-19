@@ -2,10 +2,8 @@ package edu.jhu.cobra.commons.graph.storage.nio
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
-import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
-import edu.jhu.cobra.commons.value.strVal
 import java.io.BufferedWriter
 import java.io.Closeable
 import java.io.File
@@ -22,8 +20,8 @@ import kotlin.io.path.notExists
 /**
  * Exports and imports nodes and edges from storage to a CSV directory.
  *
- * Node CSV format: all properties (plus __sid__ for storage ID mapping) as columns.
- * Edge CSV format: src, dst, type columns + property columns.
+ * Node CSV format: __nid__ structural column + property columns.
+ * Edge CSV format: __eid__, __src__, __dst__, __type__ structural columns + property columns.
  */
 object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private const val CSV_DELIMITER = ","
@@ -42,10 +40,11 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private val unescapeRegex = unescapeMap.keys.joinToString("|") { Regex.escape(it) }.toRegex()
 
     private const val META_FILE = "meta.csv"
-    private const val EXPORT_SID_KEY = "__sid__"
+    private const val NODE_ID_COL = "__nid__"
+    private const val EDGE_ID_COL = "__eid__"
     private const val EDGE_SRC_COL = "__src__"
     private const val EDGE_DST_COL = "__dst__"
-    private const val EDGE_TYPE_COL = "__type__"
+    private const val EDGE_TAG_COL = "__tag__"
 
     private fun escape(value: String): String = value.replace(escapeRegex) { r -> escapeMap[r.value] ?: r.value }
 
@@ -75,31 +74,36 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             require(!metaFile.exists() || metaFile.fileSize() <= 0) { "File $metaFile already exists" }
             if (path.notExists()) path.createDirectories()
             nodeWriter = nodeFile.createFile().bufferedWriter()
-            nodeWriter.appendLine("PROPS")
+            nodeWriter.appendLine(NODE_ID_COL)
             edgeWriter = edgeFile.createFile().bufferedWriter()
-            edgeWriter.appendLine("$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TYPE_COL")
+            edgeWriter.appendLine("$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL")
             metaWriter = metaFile.createFile().bufferedWriter()
             metaWriter.appendLine("name${CSV_DELIMITER}value")
         }
 
-        fun writeNode(props: Map<String, IValue>) {
+        fun writeNode(
+            nodeId: String,
+            props: Map<String, IValue>,
+        ) {
             require(!isClosed) { "The file is closed" }
             isNodeHeaderChanged = nodeHeaders.addAll(props.keys) || isNodeHeaderChanged
+            val structural = sequenceOf(escape(nodeId))
             val values = nodeHeaders.asSequence().map(props::get)
             val serialized = values.map { it?.let { v -> DftCharBufferSerializerImpl.serialize(v).toString() } ?: "" }
             val escaped = serialized.map { escape(it) }
-            nodeWriter.appendLine(escaped.joinToString(CSV_DELIMITER))
+            nodeWriter.appendLine((structural + escaped).joinToString(CSV_DELIMITER))
         }
 
         fun writeEdge(
+            edgeId: String,
             src: String,
             dst: String,
-            type: String,
+            tag: String,
             props: Map<String, IValue>,
         ) {
             require(!isClosed) { "The file is closed" }
             isEdgeHeaderChanged = edgeHeaders.addAll(props.keys) || isEdgeHeaderChanged
-            val structural = sequenceOf(escape(src), escape(dst), escape(type))
+            val structural = sequenceOf(escape(edgeId), escape(src), escape(dst), escape(tag))
             val values = edgeHeaders.asSequence().map(props::get)
             val serialized = values.map { it?.let { v -> DftCharBufferSerializerImpl.serialize(v).toString() } ?: "" }
             val escaped = serialized.map { escape(it) }
@@ -152,9 +156,12 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             nodeWriter.close()
             edgeWriter.close()
             metaWriter.close()
-            if (isNodeHeaderChanged) updateHeader(nodeFile.toFile(), nodeHeaders, "")
+            if (isNodeHeaderChanged) {
+                updateHeader(nodeFile.toFile(), nodeHeaders, NODE_ID_COL)
+            }
             if (isEdgeHeaderChanged) {
-                val edgeFixedPrefix = "$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TYPE_COL"
+                val edgeFixedPrefix =
+                    "$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL"
                 updateHeader(edgeFile.toFile(), edgeHeaders, edgeFixedPrefix)
             }
             isClosed = true
@@ -181,23 +188,27 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             return runCatching { DftCharBufferSerializerImpl.deserialize(charBuffer) }.getOrNull()
         }
 
-        fun readNodes(): Iterator<Map<String, IValue>> =
+        fun readNodes(): Iterator<NodeRecord> =
             iterator {
                 val nodeReader = nodeFile.bufferedReader()
                 try {
                     val rawHeaderString = nodeReader.readLine() ?: ""
                     val rawHeader = rawHeaderString.split(CSV_DELIMITER_REGEX)
-                    val nodeHeader = rawHeader.map { unescape(it) }
+                    val fullHeader = rawHeader.map { unescape(it) }
+                    // First column is __nid__ (structural)
+                    val propHeaders = fullHeader.drop(1)
                     for (line in nodeReader.lineSequence()) {
                         val parts = line.split(CSV_DELIMITER_REGEX)
+                        if (parts.isEmpty()) continue
                         val unescaped = parts.map { unescape(it) }
+                        val nodeId = unescaped[0]
                         val props = HashMap<String, IValue>()
-                        for (i in nodeHeader.indices) {
-                            val raw = unescaped.getOrNull(i) ?: continue
+                        for (i in propHeaders.indices) {
+                            val raw = unescaped.getOrNull(i + 1) ?: continue
                             val value = deserialize(raw) ?: continue
-                            props[nodeHeader[i]] = value
+                            props[propHeaders[i]] = value
                         }
-                        yield(props)
+                        yield(NodeRecord(nodeId, props))
                     }
                 } finally {
                     nodeReader.close()
@@ -210,23 +221,24 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 try {
                     val rawHeader = edgeReader.readLine().split(CSV_DELIMITER_REGEX)
                     val edgeHeader = rawHeader.map { unescape(it) }
-                    // First 3 columns are src, dst, type
-                    val propHeaders = edgeHeader.drop(3)
+                    // First 4 columns are eid, src, dst, tag
+                    val propHeaders = edgeHeader.drop(4)
                     for (line in edgeReader.lineSequence()) {
                         require(!isClosed) { "The edge file is closed" }
                         val parts = line.split(CSV_DELIMITER_REGEX)
-                        if (parts.size < 3) continue
+                        if (parts.size < 4) continue
                         val unescaped = parts.map { unescape(it) }
-                        val src = unescaped[0]
-                        val dst = unescaped[1]
-                        val type = unescaped[2]
+                        val edgeId = unescaped[0]
+                        val src = unescaped[1]
+                        val dst = unescaped[2]
+                        val tag = unescaped[3]
                         val props = HashMap<String, IValue>()
                         for (i in propHeaders.indices) {
-                            val raw = unescaped.getOrNull(i + 3) ?: continue
+                            val raw = unescaped.getOrNull(i + 4) ?: continue
                             val value = deserialize(raw) ?: continue
                             props[propHeaders[i]] = value
                         }
-                        yield(EdgeRecord(src, dst, type, props))
+                        yield(EdgeRecord(edgeId, src, dst, tag, props))
                     }
                 } finally {
                     edgeReader.close()
@@ -257,10 +269,16 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         }
     }
 
+    internal data class NodeRecord(
+        val nodeId: String,
+        val properties: Map<String, IValue>,
+    )
+
     internal data class EdgeRecord(
+        val edgeId: String,
         val src: String,
         val dst: String,
-        val type: String,
+        val tag: String,
         val properties: Map<String, IValue>,
     )
 
@@ -277,17 +295,11 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): Path {
         CsvWriter(path = dstFile).use { writer ->
             from.nodeIDs.filter(predicate).forEach { nodeId ->
-                // Include __sid__ so import can reconstruct edge src/dst mappings
-                val props = from.getNodeProperties(nodeId) + (EXPORT_SID_KEY to nodeId.strVal)
-                writer.writeNode(props)
+                writer.writeNode(nodeId, from.getNodeProperties(nodeId))
             }
             from.edgeIDs.filter(predicate).forEach { edgeId ->
-                writer.writeEdge(
-                    from.getEdgeSrc(edgeId),
-                    from.getEdgeDst(edgeId),
-                    from.getEdgeType(edgeId),
-                    from.getEdgeProperties(edgeId),
-                )
+                val (src, dst, tag) = from.getEdgeStructure(edgeId)
+                writer.writeEdge(edgeId, src, dst, tag, from.getEdgeProperties(edgeId))
             }
             for (name in from.metaNames) {
                 val value = from.getMeta(name) ?: continue
@@ -302,22 +314,12 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
-        // Track exported storage node ID → new storage node ID mapping
-        val oldToNewId = HashMap<String, String>()
         CsvReader(path = srcFile).use { reader ->
-            reader.readNodes().forEach { props ->
-                val oldNid = (props[EXPORT_SID_KEY] as? StrVal)?.core
-                val cleanProps = props - EXPORT_SID_KEY
-                val newNid = into.addNode(oldNid ?: "", cleanProps)
-                if (oldNid != null) {
-                    oldToNewId[oldNid] = newNid
-                }
+            reader.readNodes().forEach { (nodeId, props) ->
+                into.addNode(nodeId, props)
             }
             reader.readEdges().forEach { record ->
-                val srcId = oldToNewId[record.src] ?: error("Unknown node ID: ${record.src}")
-                val dstId = oldToNewId[record.dst] ?: error("Unknown node ID: ${record.dst}")
-                val edgeId = "${record.src}-${record.type}-${record.dst}"
-                into.addEdge(srcId, dstId, edgeId, record.type, record.properties)
+                into.addEdge(record.src, record.dst, record.edgeId, record.tag, record.properties)
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
