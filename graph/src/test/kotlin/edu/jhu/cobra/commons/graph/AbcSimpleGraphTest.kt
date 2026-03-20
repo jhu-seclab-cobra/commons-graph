@@ -130,7 +130,7 @@ class AbcSimpleGraphTest {
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        assertTrue(storage.containsEdge(edge.edgeId))
+        assertTrue(storage.containsEdge(edge.storageId))
     }
 
     @Test
