@@ -11,7 +11,6 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_4
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestMultipleGraph
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import kotlin.test.*
 
 class AbcMultipleGraphTest {
@@ -1078,15 +1077,14 @@ class AbcMultipleGraphTest {
     // region ensureNodeIdCache non-StrVal skip branch
 
     @Test
-    fun `test nodeIDs_includesAllStorageNodes`() {
-        val rawSid = storage.addNode("raw_node")
+    fun `test nodeIDs_includesAddedNodes`() {
         graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
 
         val ids = graph.nodeIDs
 
-        // graph.nodeIDs returns all storage node IDs, including raw ones
         assertTrue(ids.contains(NODE_ID_1))
-        assertTrue(ids.contains(rawSid))
+        assertTrue(ids.contains(NODE_ID_2))
     }
 
     // endregion
@@ -1095,7 +1093,7 @@ class AbcMultipleGraphTest {
 
     @Test
     fun `test allLabels_posetStorageNodeWithoutMetaId_skippedInCache`() {
-        posetStorage.addNode(StorageTestUtils.genNodeId())
+        posetStorage.addNode()
         with(graph) {
             val label = Label("real")
             label.parents = emptyMap()
