@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
@@ -25,16 +24,16 @@ class AbcEntityTest {
             }
     }
 
-    private fun createNode(nodeId: String): TestNode {
+    private fun createNode(storageId: Int): TestNode {
         val node = TestNode()
-        node.bind(storage, nodeId)
+        node.bind(storage, storageId, "test")
         return node
     }
 
     @BeforeTest
     fun setup() {
         storage = NativeStorageImpl()
-        val storageId = storage.addNode(StorageTestUtils.genNodeId())
+        val storageId = storage.addNode()
         testNode = createNode(storageId)
     }
 
@@ -110,8 +109,8 @@ class AbcEntityTest {
                 }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         assertEquals("default", entity.name.core)
     }
@@ -125,8 +124,8 @@ class AbcEntityTest {
                 }
             var name: StrVal by EntityProperty(default = "default".strVal)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity.name = "newValue".strVal
 
@@ -142,8 +141,8 @@ class AbcEntityTest {
                 }
             var customProp: StrVal by EntityProperty("customName", default = "default".strVal)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity.customProp = "value".strVal
 
@@ -159,8 +158,8 @@ class AbcEntityTest {
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         assertNull(entity.description)
     }
@@ -174,8 +173,8 @@ class AbcEntityTest {
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity.description = "test".strVal
 
@@ -191,8 +190,8 @@ class AbcEntityTest {
                 }
             var description: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
         entity.description = "test".strVal
 
         entity.description = null
@@ -210,8 +209,8 @@ class AbcEntityTest {
                 }
             var emptyProp: StrVal by EntityProperty("", default = "default".strVal)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         assertEquals("default", entity.emptyProp.core)
     }
@@ -225,8 +224,8 @@ class AbcEntityTest {
                 }
             var strProp: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
         entity["strProp"] = 42.numVal
 
         assertNull(entity.strProp)
@@ -241,8 +240,8 @@ class AbcEntityTest {
                 }
             var optProp: StrVal? by EntityProperty()
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity.optProp = null
 
@@ -268,8 +267,8 @@ class AbcEntityTest {
                 }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         assertEquals("PERSON", entity.nodeType.name)
     }
@@ -288,8 +287,8 @@ class AbcEntityTest {
                 }
             var customType: IEntity.Type by EntityType("customTypeName", default = personType)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity.customType = personType
 
@@ -311,8 +310,8 @@ class AbcEntityTest {
                 }
             var nodeType: IEntity.Type by EntityType(default = personType)
         }
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = TestEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = TestEntity().also { it.bind(storage, sid, "test") }
 
         entity["testentity_nodeType"] = "COMPANY".strVal
 
@@ -321,8 +320,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_setAndGet_roundTrips`() {
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = EnumTypeEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = EnumTypeEntity().also { it.bind(storage, sid, "test") }
 
         assertEquals(NodeKind.SOURCE, entity.kind)
         entity.kind = NodeKind.SINK
@@ -331,8 +330,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_setValue_sameValue_noOp`() {
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = EnumTypeEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = EnumTypeEntity().also { it.bind(storage, sid, "test") }
 
         entity.kind = NodeKind.SINK
         entity.kind = NodeKind.SINK
@@ -341,8 +340,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_customName_usesCustomStorageKey`() {
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = EnumTypeCustomNameEntity().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = EnumTypeCustomNameEntity().also { it.bind(storage, sid, "test") }
 
         entity.kind = NodeKind.SINK
         val propValue = entity["myKindProp"] as? StrVal
@@ -351,8 +350,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_getValue_fromStorage`() {
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid, "test") }
 
         entity["myKind"] = "SINK".strVal
         assertEquals(NodeKind.SINK, entity.kind)
@@ -360,8 +359,8 @@ class AbcEntityTest {
 
     @Test
     fun `test entityType_enumType_unknownStoredValue_returnsDefault`() {
-        val sid = storage.addNode(StorageTestUtils.genNodeId())
-        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid) }
+        val sid = storage.addNode()
+        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid, "test") }
         entity["myKind"] = "UNKNOWN_KIND".strVal
 
         assertEquals(NodeKind.SOURCE, entity.kind)

@@ -10,10 +10,10 @@ import edu.jhu.cobra.commons.value.listVal
 /**
  * Abstract base class for graph edges with storage-backed property management.
  *
- * The edge's [id] is the storage edge identifier. Structural info (source, destination, tag)
- * is resolved via [IStorage.getEdgeSrc], [IStorage.getEdgeDst], [IStorage.getEdgeTag].
- * All properties stored in storage are user properties — structural metadata lives in the
- * storage layer's own data structures, not in the property namespace.
+ * The edge's [id] is the deterministic string "$src-$tag-$dst". Storage operations
+ * use the internal [storageId] (auto-generated Int). Structural info (source,
+ * destination, tag) is injected at bind time by the graph layer — no lazy
+ * storage lookup needed.
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
  * creation to inject storage and edge identity — these are not constructor
@@ -32,35 +32,47 @@ abstract class AbcEdge : AbcEntity() {
     protected lateinit var storage: IStorage
         private set
 
-    /** The edge identifier, injected by the graph layer via [bind]. */
+    /** The storage-internal Int ID, injected by the graph layer via [bind]. */
+    var storageId: Int = -1
+        internal set
+
+    /** Deterministic edge ID string "$src-$tag-$dst", set at bind time. */
     lateinit var edgeId: String
         internal set
 
+    /** Source node ID, injected at bind time. */
+    lateinit var srcNid: NodeID
+        internal set
+
+    /** Destination node ID, injected at bind time. */
+    lateinit var dstNid: NodeID
+        internal set
+
+    /** Edge tag name, injected at bind time. */
+    lateinit var eTag: String
+        internal set
+
     /**
-     * Initializes this edge with the given storage and edge ID.
+     * Initializes this edge with the given storage and structural info.
      * Called by the graph layer after construction — must not be called by user code.
      */
     internal fun bind(
         storage: IStorage,
-        edgeId: String,
+        storageId: Int,
+        srcNid: NodeID,
+        dstNid: NodeID,
+        tag: String,
     ) {
         this.storage = storage
-        this.edgeId = edgeId
+        this.storageId = storageId
+        this.srcNid = srcNid
+        this.dstNid = dstNid
+        this.eTag = tag
+        this.edgeId = "$srcNid-$tag-$dstNid"
     }
 
-    private val structure by lazy(LazyThreadSafetyMode.NONE) { storage.getEdgeStructure(edgeId) }
-
-    /** Source node ID, resolved from storage edge structure. */
-    val srcNid: NodeID get() = structure.src
-
-    /** Destination node ID, resolved from storage edge structure. */
-    val dstNid: NodeID get() = structure.dst
-
-    /** Edge tag name, resolved from storage edge structure. */
-    val eTag: String get() = structure.tag
-
     /**
-     * The edge's storage identifier.
+     * The deterministic edge identifier string.
      */
     override val id: String get() = edgeId
 
@@ -71,33 +83,33 @@ abstract class AbcEdge : AbcEntity() {
      */
     var labels: Set<Label>
         get() {
-            val raw = storage.getEdgeProperty(edgeId, "labels") as? ListVal ?: return emptySet()
+            val raw = storage.getEdgeProperty(storageId, "labels") as? ListVal ?: return emptySet()
             return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }
         }
         set(values) {
-            storage.setEdgeProperties(edgeId, mapOf("labels" to values.map { it.core }.listVal))
+            storage.setEdgeProperties(storageId, mapOf("labels" to values.map { it.core }.listVal))
         }
 
-    override fun get(name: String): IValue? = storage.getEdgeProperty(edgeId, name)
+    override fun get(name: String): IValue? = storage.getEdgeProperty(storageId, name)
 
     override fun set(
         name: String,
         value: IValue?,
     ) {
-        storage.setEdgeProperties(edgeId, mapOf(name to value))
+        storage.setEdgeProperties(storageId, mapOf(name to value))
     }
 
-    override fun contains(name: String): Boolean = storage.getEdgeProperty(edgeId, name) != null
+    override fun contains(name: String): Boolean = storage.getEdgeProperty(storageId, name) != null
 
-    override fun asMap(): Map<String, IValue> = storage.getEdgeProperties(edgeId)
+    override fun asMap(): Map<String, IValue> = storage.getEdgeProperties(storageId)
 
     override fun update(props: Map<String, IValue?>) {
-        storage.setEdgeProperties(edgeId, props)
+        storage.setEdgeProperties(storageId, props)
     }
 
     override fun toString(): String = "{$srcNid-$eTag-$dstNid, ${this.type}}"
 
-    override fun hashCode(): Int = edgeId.hashCode()
+    override fun hashCode(): Int = storageId
 
     override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.edgeId == other.edgeId else super.equals(other)
 }
