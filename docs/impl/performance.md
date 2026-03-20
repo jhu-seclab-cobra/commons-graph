@@ -22,10 +22,11 @@ Run with (isolated per implementation):
 
 JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`
 
-> **Note**: IStorage uses `String`-based semantic IDs. Node IDs are caller-provided, edge IDs are generated
-> by the graph layer. All HashMap lookups use String keys throughout the storage layer.
+> **Note**: IStorage uses auto-generated `Int` IDs. The graph layer (`AbcMultipleGraph`) maintains
+> `NodeID↔Int` bidirectional mapping. All HashMap lookups use Int keys in the storage layer,
+> providing identity-function hashCode for optimal performance.
 >
-> **Node property storage**: NativeStorageImpl uses columnar layout — one `HashMap<String, IValue>` per property name.
+> **Node property storage**: NativeStorageImpl uses columnar layout — one `HashMap<Int, IValue>` per property name.
 > This reduces per-node object count from O(N) maps to O(K) columns (K = distinct property names, typically K << N).
 
 ### Storage-Level Benchmarks
@@ -36,7 +37,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|---|
 | NativeStorageImpl | 9.3 | 88.2 | 1090.2 |
 | NativeConcurStorageImpl | 10.6 | 88.4 | 1178.3 |
-| LayeredStorageImpl | 10.4 | 90.2 | 1220.3 |
+| LayeredStorageImpl | 2.6 | 38.1 | 598.3 |
 
 #### Node Lookup (500K lookups on 100K nodes)
 
@@ -44,7 +45,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|
 | NativeStorageImpl | 128.09M |
 | NativeConcurStorageImpl | 66.54M |
-| LayeredStorageImpl | 120.11M |
+| LayeredStorageImpl | 91.58M |
 
 #### Property Read/Write (200K ops on 50K nodes)
 
@@ -52,7 +53,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|
 | NativeStorageImpl | 51.46M | 22.99M |
 | NativeConcurStorageImpl | 34.30M | 15.59M |
-| LayeredStorageImpl | 44.62M | 23.70M |
+| LayeredStorageImpl | 43.94M | 15.46M |
 
 > LayeredStorage property read approaches NativeStorage: single-layer ColumnViewMap provides O(1) per-key lookups
 > without materializing the full property map.
@@ -63,7 +64,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|
 | NativeStorageImpl | 101.66M | 106.27M |
 | NativeConcurStorageImpl | 71.44M | 84.67M |
-| LayeredStorageImpl | 65.00M | 65.40M |
+| LayeredStorageImpl | 83.91M | 79.09M |
 
 #### Node Delete (2K deletes from 10K nodes / 30K edges)
 
@@ -79,7 +80,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|
 | NativeStorageImpl | 20.2 |
 | NativeConcurStorageImpl | 27.9 |
-| LayeredStorageImpl | 20.8 |
+| LayeredStorageImpl | 12.8 |
 
 ### Graph-Level Benchmarks
 
@@ -89,7 +90,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|
 | NativeStorage | 7.6 | 112.8 |
 | NativeConcurStorage | 8.8 | 115.0 |
-| LayeredStorage | 6.9 | 114.1 |
+| LayeredStorage | 7.3 | 123.2 |
 
 #### AbcSimpleGraph Population (median ms, 100K/300K)
 
@@ -97,7 +98,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|
 | NativeStorage | 125.8 |
 | NativeConcurStorage | 153.6 |
-| LayeredStorage | 149.3 |
+| LayeredStorage | 164.9 |
 
 #### Graph-Level Queries (100K queries, 10K nodes / 50K edges)
 
@@ -105,7 +106,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|---|---|
 | NativeStorage | 95.27M | 7.59M | 3.36M | 310.6K |
 | NativeConcurStorage | 48.22M | 8.12M | 3.48M | 332.4K |
-| LayeredStorage | 55.47M | 6.71M | 2.68M | 284.9K |
+| LayeredStorage | 41.07M | 4.65M | 4.30M | 342.9K |
 
 #### Cold Query (each of 50K nodes accessed 1-2 times)
 
@@ -113,7 +114,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|---|
 | NativeStorage | 42.04M | 2.97M | 1.69M |
 | NativeConcurStorage | 32.26M | 3.60M | 2.58M |
-| LayeredStorage | 47.44M | 4.83M | 2.32M |
+| LayeredStorage | 42.72M | 4.45M | 3.60M |
 
 > Cold query numbers still show JIT variance (±20%). The getNode numbers for NativeStorage and LayeredStorage
 > are within noise — both delegate to the same NativeStorageImpl code path.
@@ -124,7 +125,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|---|
 | NativeStorage | 29.79M | 2.29M | 97.0 |
 | NativeConcurStorage | 26.30M | 2.84M | 103.5 |
-| LayeredStorage | 26.62M | 2.31M | 97.2 |
+| LayeredStorage | 24.24M | 2.71M | 133.7 |
 
 #### Lattice Operations (5K nodes, 15K edges, 5 labels)
 
@@ -132,7 +133,7 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 |---|---|---|
 | NativeStorage | 6.8 | 1.05M |
 | NativeConcurStorage | 9.1 | 1.16M |
-| LayeredStorage | 6.9 | 1.04M |
+| LayeredStorage | 7.7 | 1.19M |
 
 ---
 
@@ -287,6 +288,38 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 **Change**: Replaced per-node `HashMap<Int, MutableMap<String, IValue>>` (row-oriented) with `HashMap<String, HashMap<Int, IValue>>` (columnar). Each column stores one property name's values across all nodes. `getNodeProperties` returns a zero-copy `ColumnViewMap` that assembles properties lazily from columns.
 
 **Result**: Reduces per-node object count from O(N) MutableMap instances to O(K) columns (K = distinct property names). Memory: 42.8 MB (down from 45.4 MB, -6%). Incoming edge query: 98.15M (up from 49.94M, +97% — reduced GC pressure from fewer objects). Node delete: 2.96M (up from 1.97M, +50% — column iteration cheaper than scanning per-node map + edge cleanup). LayeredStorage property read: 69.96M (up from 12.83M, +446% — ColumnViewMap avoids materializing full map on layer cascade).
+
+### I18: MappedEdgeSet.contains() O(1) via reverse map
+
+**File**: `LayeredStorageImpl.kt`
+
+**Change**: `MappedEdgeSet.contains(element)` previously iterated all local IDs checking `localToGlobal[it] == element` (O(n)). Now accepts `globalToLocal` reverse map and uses `globalToLocal[element]?.let { it in localIds }` for O(1) lookup.
+
+**Result**: Edge query outgoing: 83.91M (up from 65.00M, **+29%**). Edge query incoming: 79.09M (up from 65.40M, **+21%**). The O(n) `contains()` was called by `UnionSet.iterator()` deduplication and downstream `Set.contains()` checks.
+
+### I19: Frozen edge structure translation cache
+
+**File**: `LayeredStorageImpl.kt`
+
+**Change**: Added `frozenEdgeStructureCache: HashMap<Int, EdgeStructure>` to cache translated frozen edge structures (frozen-local → global node ID translation). `getEdgeStructure()` checks this cache before delegating to the frozen layer. Cache cleared on `freeze()` and `clear()`.
+
+**Result**: Eliminates repeated `EdgeStructure` allocation + 2x `frozenNodeLocalToGlobal` lookups per frozen edge access. Benefits `cachedEdge()` in AbcMultipleGraph which calls `getEdgeStructure()` on every edge cache miss.
+
+### I20: ActiveColumnViewMap entries caching
+
+**File**: `LayeredStorageImpl.kt`
+
+**Change**: Added `cachedEntries` field to `ActiveColumnViewMap`, matching NativeStorageImpl's I14 pattern. First `.entries` access materializes the `LinkedHashMap` and caches it; subsequent accesses return the cached result.
+
+**Result**: Eliminates repeated allocation for callers that access `.entries` multiple times (e.g., `transferTo`, `freeze` property merge).
+
+### I21: Eliminate double HashMap lookups in LayeredStorageImpl adjacency queries
+
+**File**: `LayeredStorageImpl.kt`
+
+**Change**: `getIncomingEdges`/`getOutgoingEdges` replaced `isActiveNode(id)` + `isFrozenNode(id)` + `frozenNodeGlobalToLocal[id]!!` (3 HashMap lookups) with `activeInEdges[id]` + `frozenNodeGlobalToLocal[id]` (2 lookups). Same pattern applied to property read/write methods: inlined `isActiveNode`/`isActiveEdge` checks.
+
+**Result**: Saves one HashMap lookup per adjacency/property query. Combined with I18/I19, LayeredStorage edge query approaches NativeStorage: 83.91M/79.09M vs 107.91M/105.38M (78%/75% of NativeStorage).
 
 ---
 
