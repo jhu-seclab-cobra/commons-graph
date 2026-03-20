@@ -3,24 +3,43 @@ package edu.jhu.cobra.commons.graph.storage.nio
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
-import edu.jhu.cobra.commons.value.*
+import edu.jhu.cobra.commons.value.BoolVal
+import edu.jhu.cobra.commons.value.IValue
+import edu.jhu.cobra.commons.value.MapVal
+import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.boolVal
+import edu.jhu.cobra.commons.value.listVal
+import edu.jhu.cobra.commons.value.mapVal
+import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.*
-import kotlin.test.*
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createFile
+import kotlin.io.path.exists
+import kotlin.io.path.fileSize
+import kotlin.io.path.isDirectory
+import kotlin.io.path.writeText
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class NativeCsvIOImplTest {
     private lateinit var tempDir: Path
     private lateinit var storage: NativeStorageImpl
-    private var nodeCounter = 0
-    private var edgeCounter = 0
 
     @BeforeTest
     fun setup() {
         tempDir = Files.createTempDirectory("csv-io-test")
         storage = NativeStorageImpl()
-        nodeCounter = 0
-        edgeCounter = 0
     }
 
     @AfterTest
@@ -32,22 +51,22 @@ class NativeCsvIOImplTest {
     }
 
     // Helpers to add standard test data and return IDs
-    private fun addThreeNodes(s: IStorage = storage): Triple<String, String, String> {
-        val n1 = s.addNode("node_${nodeCounter++}")
-        val n2 = s.addNode("node_${nodeCounter++}")
-        val n3 = s.addNode("node_${nodeCounter++}")
+    private fun addThreeNodes(s: IStorage = storage): Triple<Int, Int, Int> {
+        val n1 = s.addNode()
+        val n2 = s.addNode()
+        val n3 = s.addNode()
         return Triple(n1, n2, n3)
     }
 
-    private fun addNode(s: IStorage = storage): String = s.addNode("node_${nodeCounter++}")
+    private fun addNode(s: IStorage = storage): Int = s.addNode()
 
     private fun addEdge(
         s: IStorage,
-        src: String,
-        dst: String,
+        src: Int,
+        dst: Int,
         tag: String,
         props: Map<String, IValue> = emptyMap(),
-    ): String = s.addEdge(src, dst, "edge_${edgeCounter++}", tag, props)
+    ): Int = s.addEdge(src, dst, tag, props)
 
     // region isValidFile
 
@@ -176,8 +195,8 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export creates nodes csv file`() {
-        storage.addNode("n0", mapOf("name" to "Node1".strVal))
-        storage.addNode("n1", mapOf("name" to "Node2".strVal))
+        storage.addNode(mapOf("name" to "Node1".strVal))
+        storage.addNode(mapOf("name" to "Node2".strVal))
         val exportPath = tempDir.resolve("export1")
 
         NativeCsvIOImpl.export(exportPath, storage)
@@ -225,10 +244,10 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with predicate filters nodes`() {
-        val node1 = storage.addNode("n0", mapOf("name" to "Node1".strVal))
-        val node2 = storage.addNode("n1", mapOf("name" to "Node2".strVal))
-        val node3 = storage.addNode("n2", mapOf("name" to "Node3".strVal))
-        val other = storage.addNode("n3", mapOf("name" to "Other".strVal))
+        val node1 = storage.addNode(mapOf("name" to "Node1".strVal))
+        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
+        val node3 = storage.addNode(mapOf("name" to "Node3".strVal))
+        val other = storage.addNode(mapOf("name" to "Other".strVal))
         val exportPath = tempDir.resolve("filtered_export")
 
         // Filter: keep only node1, node2, node3 (not "other")
@@ -263,9 +282,9 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with predicate filters both nodes and edges`() {
-        val node1 = storage.addNode("n0", mapOf("type" to "A".strVal))
-        val node2 = storage.addNode("n1", mapOf("type" to "B".strVal))
-        val node3 = storage.addNode("n2", mapOf("type" to "A".strVal))
+        val node1 = storage.addNode(mapOf("type" to "A".strVal))
+        val node2 = storage.addNode(mapOf("type" to "B".strVal))
+        val node3 = storage.addNode(mapOf("type" to "A".strVal))
         val edge1 = addEdge(storage, node1, node2, StorageTestUtils.EDGE_TAG_1)
         val edge2 = addEdge(storage, node2, node3, StorageTestUtils.EDGE_TAG_2)
         val edge3 = addEdge(storage, node1, node3, StorageTestUtils.EDGE_TAG_3)
@@ -290,8 +309,8 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test import from valid export`() {
-        val node1 = storage.addNode("n0", mapOf("name" to "Node1".strVal, "age" to 25.numVal))
-        val node2 = storage.addNode("n1", mapOf("name" to "Node2".strVal))
+        val node1 = storage.addNode(mapOf("name" to "Node1".strVal, "age" to 25.numVal))
+        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
         addEdge(storage, node1, node2, StorageTestUtils.EDGE_TAG_1, mapOf("weight" to 1.5.numVal))
         val exportPath = tempDir.resolve("import_source")
         NativeCsvIOImpl.export(exportPath, storage)
@@ -315,9 +334,9 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test import with predicate filters nodes`() {
-        storage.addNode("n0", mapOf("name" to "Node1".strVal))
-        storage.addNode("n1", mapOf("name" to "Node2".strVal))
-        storage.addNode("n2", mapOf("name" to "Node3".strVal))
+        storage.addNode(mapOf("name" to "Node1".strVal))
+        storage.addNode(mapOf("name" to "Node2".strVal))
+        storage.addNode(mapOf("name" to "Node3".strVal))
         val exportPath = tempDir.resolve("import_filtered")
         NativeCsvIOImpl.export(exportPath, storage)
 
@@ -345,11 +364,11 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test import into non-empty storage`() {
-        storage.addNode("n0", mapOf("name" to "Node1".strVal))
+        storage.addNode(mapOf("name" to "Node1".strVal))
         val exportPath = tempDir.resolve("import_into_existing")
         NativeCsvIOImpl.export(exportPath, storage)
         val existingStorage = NativeStorageImpl()
-        existingStorage.addNode("n1", mapOf("name" to "Node2".strVal))
+        existingStorage.addNode(mapOf("name" to "Node2".strVal))
 
         NativeCsvIOImpl.import(exportPath, existingStorage)
 
@@ -364,7 +383,6 @@ class NativeCsvIOImplTest {
     @Test
     fun `test export with special characters in property values`() {
         storage.addNode(
-            "n0",
             mapOf(
                 "name" to "Node,with,commas".strVal,
                 "newline" to "Line1\nLine2".strVal,
@@ -389,7 +407,6 @@ class NativeCsvIOImplTest {
     @Test
     fun `test export with empty property values`() {
         storage.addNode(
-            "n0",
             mapOf(
                 "prop1" to "value1".strVal,
                 "prop2" to "".strVal,
@@ -413,7 +430,6 @@ class NativeCsvIOImplTest {
     @Test
     fun `test export with backslash in property values`() {
         storage.addNode(
-            "n0",
             mapOf("path" to "C:\\Users\\test\\file".strVal),
         )
         val exportPath = tempDir.resolve("backslash_chars")
@@ -431,7 +447,6 @@ class NativeCsvIOImplTest {
     @Test
     fun `test export with carriage return in property values`() {
         storage.addNode(
-            "n0",
             mapOf("text" to "line1\r\nline2\rline3".strVal),
         )
         val exportPath = tempDir.resolve("cr_chars")
@@ -448,9 +463,9 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with sparse node properties`() {
-        storage.addNode("n0", mapOf("name" to "A".strVal, "age" to 1.numVal))
-        storage.addNode("n1", mapOf("name" to "B".strVal))
-        storage.addNode("n2", mapOf("age" to 3.numVal))
+        storage.addNode(mapOf("name" to "A".strVal, "age" to 1.numVal))
+        storage.addNode(mapOf("name" to "B".strVal))
+        storage.addNode(mapOf("age" to 3.numVal))
         val exportPath = tempDir.resolve("sparse_props")
         NativeCsvIOImpl.export(exportPath, storage)
 
@@ -504,12 +519,12 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test export with large number of nodes and edges`() {
-        val nodeIds = mutableListOf<String>()
+        val nodeIds = mutableListOf<Int>()
         for (i in 0 until 100) {
-            nodeIds.add(storage.addNode("node_$i", mapOf("index" to i.numVal)))
+            nodeIds.add(storage.addNode(mapOf("index" to i.numVal)))
         }
         for (i in 0 until 99) {
-            storage.addEdge(nodeIds[i], nodeIds[i + 1], "edge_$i", "rel", mapOf("index" to i.numVal))
+            storage.addEdge(nodeIds[i], nodeIds[i + 1], "rel", mapOf("index" to i.numVal))
         }
         val exportPath = tempDir.resolve("large_export")
         NativeCsvIOImpl.export(exportPath, storage)
@@ -536,7 +551,6 @@ class NativeCsvIOImplTest {
     fun `test round-trip export and import preserves all data`() {
         val node1 =
             storage.addNode(
-                "n0",
                 mapOf(
                     "name" to "Node1".strVal,
                     "age" to 25.numVal,
@@ -544,8 +558,8 @@ class NativeCsvIOImplTest {
                     "active" to true.boolVal,
                 ),
             )
-        val node2 = storage.addNode("n1", mapOf("name" to "Node2".strVal))
-        val node3 = storage.addNode("n2", mapOf("name" to "Node3".strVal))
+        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
+        val node3 = storage.addNode(mapOf("name" to "Node3".strVal))
         addEdge(storage, node1, node2, StorageTestUtils.EDGE_TAG_1, mapOf("weight" to 1.0.numVal, "label" to "relation".strVal))
         addEdge(storage, node2, node3, StorageTestUtils.EDGE_TAG_2, mapOf("weight" to 2.0.numVal))
         addEdge(storage, node1, node3, StorageTestUtils.EDGE_TAG_3, mapOf("weight" to 3.0.numVal))
@@ -572,8 +586,8 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test multiple round-trips`() {
-        val node1 = storage.addNode("n0", mapOf("name" to "Node1".strVal))
-        val node2 = storage.addNode("n1", mapOf("name" to "Node2".strVal))
+        val node1 = storage.addNode(mapOf("name" to "Node1".strVal))
+        val node2 = storage.addNode(mapOf("name" to "Node2".strVal))
         addEdge(storage, node1, node2, StorageTestUtils.EDGE_TAG_1)
         var currentPath = tempDir.resolve("round_trip_1")
         NativeCsvIOImpl.export(currentPath, storage)
@@ -644,7 +658,7 @@ class NativeCsvIOImplTest {
 
     @Test
     fun `test import without meta file is backward compatible`() {
-        storage.addNode("n0", mapOf("name" to "Node1".strVal))
+        storage.addNode(mapOf("name" to "Node1".strVal))
         val exportPath = tempDir.resolve("no_meta")
         NativeCsvIOImpl.export(exportPath, storage)
         // Remove meta.csv to simulate old export format
@@ -793,8 +807,8 @@ class NativeCsvIOImplTest {
     fun `test import readNodes skips property when index out of range for that row`() {
         // Export a storage then truncate the last data row to have fewer columns than the header,
         // exercising the getOrNull(i) ?: continue branch in readNodes.
-        storage.addNode("n0", mapOf("name" to "Alice".strVal, "age" to 30.numVal))
-        storage.addNode("n1", mapOf("name" to "Bob".strVal, "age" to 25.numVal))
+        storage.addNode(mapOf("name" to "Alice".strVal, "age" to 30.numVal))
+        storage.addNode(mapOf("name" to "Bob".strVal, "age" to 25.numVal))
         val exportPath2 = tempDir.resolve("short_row")
         NativeCsvIOImpl.export(exportPath2, storage)
 
