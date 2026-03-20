@@ -1,18 +1,17 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 
 /**
- * Thread-safe in-memory graph storage using read-write locks.
+ * Thread-safe in-memory graph storage using read-write locks with auto-generated Int IDs.
  *
  * Concurrent reads, exclusive writes. Suitable for read-heavy workloads.
  * Uses internal non-locking helpers to avoid lock re-entrance overhead.
- * String-based keys throughout with columnar property storage.
+ * Int-based keys throughout with columnar property storage.
  * Adjacency uses snapshot-on-demand: mutable sets for O(1) writes,
  * cached immutable snapshots for O(1) repeated reads (invalidated on write).
  *
@@ -26,17 +25,21 @@ class NativeConcurStorageImpl : IStorage {
 
     private val lock = ReentrantReadWriteLock()
 
+    // Auto-increment counters (protected by write lock)
+    private var nodeCounter: Int = 0
+    private var edgeCounter: Int = 0
+
     // Deduplicates property key strings across entities
     private val keyPool = HashMap<String, String>()
 
     // Columnar node property storage: one HashMap per property name (column)
-    private val nodeColumns = HashMap<String, HashMap<String, IValue>>()
+    private val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
 
     // Edge endpoint index (edge ID -> src, dst, tag)
-    private val edgeEndpoints = HashMap<String, IStorage.EdgeStructure>()
+    private val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
 
     // Columnar edge property storage
-    private val edgeColumns = HashMap<String, HashMap<String, IValue>>()
+    private val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
 
     /**
      * Adjacency entry: mutable set for O(1) writes, cached snapshot for repeated reads.
@@ -46,22 +49,22 @@ class NativeConcurStorageImpl : IStorage {
      * build an equivalent snapshot; one wins the volatile store).
      */
     private class AdjEntry {
-        val set = HashSet<String>()
+        val set = HashSet<Int>()
 
         @Volatile
-        var cached: Set<String>? = emptySet()
+        var cached: Set<Int>? = emptySet()
 
-        fun add(id: String) {
+        fun add(id: Int) {
             set.add(id)
             cached = null
         }
 
-        fun remove(id: String) {
+        fun remove(id: Int) {
             set.remove(id)
             cached = null
         }
 
-        fun snapshot(): Set<String> {
+        fun snapshot(): Set<Int> {
             cached?.let { return it }
             val snap = java.util.Set.copyOf(set)
             cached = snap
@@ -70,8 +73,8 @@ class NativeConcurStorageImpl : IStorage {
     }
 
     // Adjacency lists with snapshot-on-demand
-    private val outEdges = HashMap<String, AdjEntry>()
-    private val inEdges = HashMap<String, AdjEntry>()
+    private val outEdges = HashMap<Int, AdjEntry>()
+    private val inEdges = HashMap<Int, AdjEntry>()
 
     // Metadata
     private val metaProperties = HashMap<String, IValue>()
@@ -79,7 +82,7 @@ class NativeConcurStorageImpl : IStorage {
     // Internal helpers (callers must hold appropriate lock)
     private fun internKey(key: String): String = keyPool.getOrPut(key) { key }
 
-    private fun collectNodeProperties(id: String): Map<String, IValue> {
+    private fun collectNodeProperties(id: Int): Map<String, IValue> {
         val result = HashMap<String, IValue>()
         for ((colName, col) in nodeColumns) {
             val v = col[id] ?: continue
@@ -88,7 +91,7 @@ class NativeConcurStorageImpl : IStorage {
         return result
     }
 
-    private fun collectEdgeProperties(id: String): Map<String, IValue> {
+    private fun collectEdgeProperties(id: Int): Map<String, IValue> {
         val result = HashMap<String, IValue>()
         for ((colName, col) in edgeColumns) {
             val v = col[id] ?: continue
@@ -98,8 +101,8 @@ class NativeConcurStorageImpl : IStorage {
     }
 
     private fun removeEntityFromColumns(
-        id: String,
-        columns: HashMap<String, HashMap<String, IValue>>,
+        id: Int,
+        columns: HashMap<String, HashMap<Int, IValue>>,
     ) {
         val colIter = columns.values.iterator()
         while (colIter.hasNext()) {
@@ -110,9 +113,9 @@ class NativeConcurStorageImpl : IStorage {
     }
 
     private fun setColumnarProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
-        columns: HashMap<String, HashMap<String, IValue>>,
+        columns: HashMap<String, HashMap<Int, IValue>>,
     ) {
         for ((key, value) in properties) {
             if (value != null) {
@@ -125,7 +128,7 @@ class NativeConcurStorageImpl : IStorage {
         }
     }
 
-    private fun deleteIncidentEdge(eid: String) {
+    private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
@@ -137,64 +140,61 @@ class NativeConcurStorageImpl : IStorage {
     // NODE OPERATIONS
     // ============================================================================
 
-    override val nodeIDs: Set<String>
+    override val nodeIDs: Set<Int>
         get() =
             lock.readLock().withLock {
                 if (isClosed) throw AccessClosedStorageException()
                 java.util.Set.copyOf(outEdges.keys)
             }
 
-    override fun containsNode(id: String): Boolean =
+    override fun containsNode(id: Int): Boolean =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
             id in outEdges
         }
 
-    override fun addNode(
-        nodeId: String,
-        properties: Map<String, IValue>,
-    ): String =
+    override fun addNode(properties: Map<String, IValue>): Int =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (nodeId in outEdges) throw EntityAlreadyExistException(nodeId)
-            outEdges[nodeId] = AdjEntry()
-            inEdges[nodeId] = AdjEntry()
+            val id = nodeCounter++
+            outEdges[id] = AdjEntry()
+            inEdges[id] = AdjEntry()
             for ((key, value) in properties) {
-                nodeColumns.getOrPut(internKey(key)) { HashMap() }[nodeId] = value
+                nodeColumns.getOrPut(internKey(key)) { HashMap() }[id] = value
             }
-            nodeId
+            id
         }
 
-    override fun getNodeProperties(id: String): Map<String, IValue> =
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in outEdges) throw EntityNotExistException(id)
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
             collectNodeProperties(id)
         }
 
     override fun getNodeProperty(
-        id: String,
+        id: Int,
         name: String,
     ): IValue? =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in outEdges) throw EntityNotExistException(id)
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
             nodeColumns[name]?.get(id)
         }
 
     override fun setNodeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        if (id !in outEdges) throw EntityNotExistException(id)
+        if (id !in outEdges) throw EntityNotExistException(id.toString())
         setColumnarProperties(id, properties, nodeColumns)
     }
 
-    override fun deleteNode(id: String): Unit =
+    override fun deleteNode(id: Int): Unit =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in outEdges) throw EntityNotExistException(id)
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
             val outEdgeIds = outEdges[id]?.set?.toList() ?: emptyList()
             val inEdgeIds = inEdges[id]?.set?.toList() ?: emptyList()
             for (eid in outEdgeIds) deleteIncidentEdge(eid)
@@ -208,76 +208,75 @@ class NativeConcurStorageImpl : IStorage {
     // EDGE OPERATIONS
     // ============================================================================
 
-    override val edgeIDs: Set<String>
+    override val edgeIDs: Set<Int>
         get() =
             lock.readLock().withLock {
                 if (isClosed) throw AccessClosedStorageException()
                 java.util.Set.copyOf(edgeEndpoints.keys)
             }
 
-    override fun containsEdge(id: String): Boolean =
+    override fun containsEdge(id: Int): Boolean =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
             id in edgeEndpoints
         }
 
     override fun addEdge(
-        src: String,
-        dst: String,
-        edgeId: String,
+        src: Int,
+        dst: Int,
         tag: String,
         properties: Map<String, IValue>,
-    ): String =
+    ): Int =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (src !in outEdges) throw EntityNotExistException(src)
-            if (dst !in outEdges) throw EntityNotExistException(dst)
-            if (edgeId in edgeEndpoints) throw EntityAlreadyExistException(edgeId)
-            edgeEndpoints[edgeId] = IStorage.EdgeStructure(src, dst, tag)
-            outEdges[src]!!.add(edgeId)
-            inEdges[dst]!!.add(edgeId)
+            if (src !in outEdges) throw EntityNotExistException(src.toString())
+            if (dst !in outEdges) throw EntityNotExistException(dst.toString())
+            val id = edgeCounter++
+            edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
+            outEdges[src]!!.add(id)
+            inEdges[dst]!!.add(id)
             for ((key, value) in properties) {
-                edgeColumns.getOrPut(internKey(key)) { HashMap() }[edgeId] = value
+                edgeColumns.getOrPut(internKey(key)) { HashMap() }[id] = value
             }
-            edgeId
+            id
         }
 
-    override fun getEdgeStructure(id: String): IStorage.EdgeStructure =
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            edgeEndpoints[id] ?: throw EntityNotExistException(id)
+            edgeEndpoints[id] ?: throw EntityNotExistException(id.toString())
         }
 
-    override fun getEdgeProperties(id: String): Map<String, IValue> =
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in edgeEndpoints) throw EntityNotExistException(id)
+            if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             collectEdgeProperties(id)
         }
 
     override fun getEdgeProperty(
-        id: String,
+        id: Int,
         name: String,
     ): IValue? =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in edgeEndpoints) throw EntityNotExistException(id)
+            if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             edgeColumns[name]?.get(id)
         }
 
     override fun setEdgeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = lock.writeLock().withLock {
         if (isClosed) throw AccessClosedStorageException()
-        if (id !in edgeEndpoints) throw EntityNotExistException(id)
+        if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
         setColumnarProperties(id, properties, edgeColumns)
     }
 
-    override fun deleteEdge(id: String): Unit =
+    override fun deleteEdge(id: Int): Unit =
         lock.writeLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in edgeEndpoints) throw EntityNotExistException(id)
+            if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             deleteIncidentEdge(id)
         }
 
@@ -285,17 +284,17 @@ class NativeConcurStorageImpl : IStorage {
     // ADJACENCY QUERIES — cached immutable snapshots, rebuilt on demand
     // ============================================================================
 
-    override fun getIncomingEdges(id: String): Set<String> =
+    override fun getIncomingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in outEdges) throw EntityNotExistException(id)
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
             inEdges[id]?.snapshot() ?: emptySet()
         }
 
-    override fun getOutgoingEdges(id: String): Set<String> =
+    override fun getOutgoingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
-            if (id !in outEdges) throw EntityNotExistException(id)
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
             outEdges[id]?.snapshot() ?: emptySet()
         }
 
@@ -339,20 +338,27 @@ class NativeConcurStorageImpl : IStorage {
             nodeColumns.clear()
             metaProperties.clear()
             keyPool.clear()
+            nodeCounter = 0
+            edgeCounter = 0
         }
 
-    override fun transferTo(target: IStorage): Unit =
+    override fun transferTo(target: IStorage): Map<Int, Int> =
         lock.readLock().withLock {
             if (isClosed) throw AccessClosedStorageException()
+            val nodeIdMap = HashMap<Int, Int>()
             for (nodeId in outEdges.keys) {
-                target.addNode(nodeId, collectNodeProperties(nodeId))
+                val newId = target.addNode(collectNodeProperties(nodeId))
+                nodeIdMap[nodeId] = newId
             }
             for ((edgeId, ep) in edgeEndpoints) {
-                target.addEdge(ep.src, ep.dst, edgeId, ep.tag, collectEdgeProperties(edgeId))
+                val newSrc = nodeIdMap[ep.src]!!
+                val newDst = nodeIdMap[ep.dst]!!
+                target.addEdge(newSrc, newDst, ep.tag, collectEdgeProperties(edgeId))
             }
             for (name in metaProperties.keys) {
                 target.setMeta(name, metaProperties[name])
             }
+            nodeIdMap
         }
 
     override fun close(): Unit =
