@@ -11,7 +11,8 @@ typealias NodeID = String
 /**
  * Abstract base class for graph nodes with storage-backed property management.
  *
- * The node's [id] is the user-provided [NodeID]. All properties stored in storage
+ * The node's [id] is the user-provided [NodeID]. Storage operations use the
+ * internal [storageId] (auto-generated Int). All properties stored in storage
  * are user properties — no internal metadata is kept in the property namespace.
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
@@ -31,19 +32,25 @@ abstract class AbcNode : AbcEntity() {
     protected lateinit var storage: IStorage
         private set
 
+    /** The storage-internal Int ID, injected by the graph layer via [bind]. */
+    var storageId: Int = -1
+        internal set
+
     /** The user-provided node ID, injected by the graph layer via [bind]. */
     lateinit var nodeId: NodeID
         internal set
 
     /**
-     * Initializes this node with the given storage and node ID.
+     * Initializes this node with the given storage, storage ID, and node ID.
      * Called by the graph layer after construction — must not be called by user code.
      */
     internal fun bind(
         storage: IStorage,
+        storageId: Int,
         nodeId: NodeID,
     ) {
         this.storage = storage
+        this.storageId = storageId
         this.nodeId = nodeId
     }
 
@@ -68,26 +75,26 @@ abstract class AbcNode : AbcEntity() {
      */
     fun doUseStorage(target: IStorage): Boolean = target == storage
 
-    override fun get(name: String): IValue? = storage.getNodeProperty(nodeId, name)
+    override fun get(name: String): IValue? = storage.getNodeProperty(storageId, name)
 
     override fun set(
         name: String,
         value: IValue?,
     ) {
-        storage.setNodeProperties(nodeId, mapOf(name to value))
+        storage.setNodeProperties(storageId, mapOf(name to value))
     }
 
-    override fun contains(name: String): Boolean = storage.getNodeProperty(nodeId, name) != null
+    override fun contains(name: String): Boolean = storage.getNodeProperty(storageId, name) != null
 
-    override fun asMap(): Map<String, IValue> = storage.getNodeProperties(nodeId)
+    override fun asMap(): Map<String, IValue> = storage.getNodeProperties(storageId)
 
     override fun update(props: Map<String, IValue?>) {
-        storage.setNodeProperties(nodeId, props)
+        storage.setNodeProperties(storageId, props)
     }
 
     override fun toString(): String = "{id=$id, type=${this.type}}"
 
-    override fun hashCode(): Int = nodeId.hashCode()
+    override fun hashCode(): Int = storageId
 
     override fun equals(other: Any?): Boolean = if (other is AbcNode) this.id == other.id else super.equals(other)
 }

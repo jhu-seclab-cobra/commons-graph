@@ -13,7 +13,7 @@ class AbcNodeTest {
     private lateinit var storage: NativeStorageImpl
     private lateinit var otherStorage: NativeStorageImpl
     private lateinit var testNode: TestNode
-    private var testNodeId: String = ""
+    private var testNodeStorageId: Int = -1
 
     private class TestNode : AbcNode() {
         override val type: AbcNode.Type =
@@ -24,10 +24,11 @@ class AbcNodeTest {
 
     private fun createTestNode(
         storage: NativeStorageImpl,
+        storageId: Int,
         nodeId: String,
     ): TestNode {
         val node = TestNode()
-        node.bind(storage, nodeId)
+        node.bind(storage, storageId, nodeId)
         return node
     }
 
@@ -35,8 +36,8 @@ class AbcNodeTest {
     fun setup() {
         storage = NativeStorageImpl()
         otherStorage = NativeStorageImpl()
-        testNodeId = storage.addNode("testNode")
-        testNode = createTestNode(storage, testNodeId)
+        testNodeStorageId = storage.addNode()
+        testNode = createTestNode(storage, testNodeStorageId, "testNode")
     }
 
     @AfterTest
@@ -213,7 +214,7 @@ class AbcNodeTest {
     fun `test propertiesStoredInStorage`() {
         testNode["name"] = "test".strVal
 
-        val props = storage.getNodeProperties(testNodeId)
+        val props = storage.getNodeProperties(testNodeStorageId)
 
         assertTrue(props.containsKey("name"))
         assertEquals("test", (props["name"] as StrVal).core)
@@ -245,21 +246,21 @@ class AbcNodeTest {
 
     @Test
     fun `test equals_sameID_returnsTrue`() {
-        val node1 = createTestNode(storage, testNodeId)
-        val node2 = createTestNode(storage, testNodeId)
+        val node1 = createTestNode(storage, testNodeStorageId, "testNode")
+        val node2 = createTestNode(storage, testNodeStorageId, "testNode")
 
         assertEquals(node1, node2)
     }
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val sid2 = storage.addNode("other")
-        assertNotEquals(createTestNode(storage, testNodeId), createTestNode(storage, sid2))
+        val sid2 = storage.addNode()
+        assertNotEquals(createTestNode(storage, testNodeStorageId, "testNode"), createTestNode(storage, sid2, "other"))
     }
 
     @Test
     fun `test equals_nonNodeObject_returnsFalse`() {
-        assertNotEquals<Any>(createTestNode(storage, testNodeId), "not a node")
+        assertNotEquals<Any>(createTestNode(storage, testNodeStorageId, "testNode"), "not a node")
     }
 
     @Test

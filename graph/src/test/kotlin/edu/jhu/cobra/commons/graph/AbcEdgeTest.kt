@@ -2,7 +2,6 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -13,8 +12,8 @@ import kotlin.test.*
 
 class AbcEdgeTest {
     private lateinit var storage: NativeStorageImpl
-    private var srcNodeId: String = ""
-    private var dstNodeId: String = ""
+    private var srcNodeStorageId: Int = -1
+    private var dstNodeStorageId: Int = -1
     private lateinit var testEdge: TestEdge
 
     private class TestEdge : AbcEdge() {
@@ -26,20 +25,23 @@ class AbcEdgeTest {
 
     private fun createTestEdge(
         storage: IStorage,
-        edgeId: String,
+        storageId: Int,
+        srcNid: String,
+        dstNid: String,
+        tag: String,
     ): TestEdge {
         val edge = TestEdge()
-        edge.bind(storage, edgeId)
+        edge.bind(storage, storageId, srcNid, dstNid, tag)
         return edge
     }
 
     @BeforeTest
     fun setup() {
         storage = NativeStorageImpl()
-        srcNodeId = storage.addNode("src")
-        dstNodeId = storage.addNode("dst")
-        val eid = storage.addEdge(srcNodeId, dstNodeId, "src-relation-dst", "relation")
-        testEdge = createTestEdge(storage, eid)
+        srcNodeStorageId = storage.addNode()
+        dstNodeStorageId = storage.addNode()
+        val eid = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "relation")
+        testEdge = createTestEdge(storage, eid, "src", "dst", "relation")
     }
 
     @AfterTest
@@ -51,8 +53,9 @@ class AbcEdgeTest {
 
     @Test
     fun `test edgeID_differentType_differentId`() {
-        val eid2 = storage.addEdge(srcNodeId, dstNodeId, StorageTestUtils.genEdgeId(), "other")
-        assertNotEquals(testEdge.edgeId, eid2)
+        val eid2 = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "other")
+        val edge2 = createTestEdge(storage, eid2, "src", "dst", "other")
+        assertNotEquals(testEdge.edgeId, edge2.edgeId)
     }
 
     // endregion
@@ -242,7 +245,7 @@ class AbcEdgeTest {
     fun `test propertiesStoredInStorage`() {
         testEdge["weight"] = 1.5.numVal
 
-        val props = storage.getEdgeProperties(testEdge.edgeId)
+        val props = storage.getEdgeProperties(testEdge.storageId)
 
         assertTrue(props.containsKey("weight"))
         assertEquals(1.5, (props["weight"] as NumVal).core)
@@ -254,19 +257,19 @@ class AbcEdgeTest {
 
     @Test
     fun `test equals_sameID_returnsTrue`() {
-        val eid = testEdge.edgeId
-        val edge1 = createTestEdge(storage, eid)
-        val edge2 = createTestEdge(storage, eid)
+        val sid = testEdge.storageId
+        val edge1 = createTestEdge(storage, sid, "src", "dst", "relation")
+        val edge2 = createTestEdge(storage, sid, "src", "dst", "relation")
 
         assertEquals(edge1, edge2)
     }
 
     @Test
     fun `test equals_differentID_returnsFalse`() {
-        val eid2 = storage.addEdge(srcNodeId, dstNodeId, StorageTestUtils.genEdgeId(), "other")
+        val eid2 = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "other")
         assertNotEquals(
-            createTestEdge(storage, testEdge.edgeId),
-            createTestEdge(storage, eid2),
+            createTestEdge(storage, testEdge.storageId, "src", "dst", "relation"),
+            createTestEdge(storage, eid2, "src", "dst", "other"),
         )
     }
 
