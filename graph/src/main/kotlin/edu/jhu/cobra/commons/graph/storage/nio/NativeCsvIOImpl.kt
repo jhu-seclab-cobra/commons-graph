@@ -295,11 +295,11 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): Path {
         CsvWriter(path = dstFile).use { writer ->
             from.nodeIDs.filter(predicate).forEach { nodeId ->
-                writer.writeNode(nodeId, from.getNodeProperties(nodeId))
+                writer.writeNode(nodeId.toString(), from.getNodeProperties(nodeId))
             }
             from.edgeIDs.filter(predicate).forEach { edgeId ->
                 val (src, dst, tag) = from.getEdgeStructure(edgeId)
-                writer.writeEdge(edgeId, src, dst, tag, from.getEdgeProperties(edgeId))
+                writer.writeEdge(edgeId.toString(), src.toString(), dst.toString(), tag, from.getEdgeProperties(edgeId))
             }
             for (name in from.metaNames) {
                 val value = from.getMeta(name) ?: continue
@@ -315,11 +315,15 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         predicate: EntityFilter,
     ): IStorage {
         CsvReader(path = srcFile).use { reader ->
+            val nodeStringToInt = HashMap<String, Int>()
             reader.readNodes().forEach { (nodeId, props) ->
-                into.addNode(nodeId, props)
+                val storageId = into.addNode(props)
+                nodeStringToInt[nodeId] = storageId
             }
             reader.readEdges().forEach { record ->
-                into.addEdge(record.src, record.dst, record.edgeId, record.tag, record.properties)
+                val srcInt = nodeStringToInt[record.src]!!
+                val dstInt = nodeStringToInt[record.dst]!!
+                into.addEdge(srcInt, dstInt, record.tag, record.properties)
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }

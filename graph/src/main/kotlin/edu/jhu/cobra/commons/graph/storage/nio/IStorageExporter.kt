@@ -4,9 +4,9 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import java.nio.file.Path
 
 /**
- * Filter function for selecting entities in storage based on their String ID.
+ * Filter function for selecting entities in storage based on their Int ID.
  */
-typealias EntityFilter = (String) -> Boolean
+typealias EntityFilter = (Int) -> Boolean
 
 interface IStorageExporter {
     /**
