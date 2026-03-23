@@ -62,11 +62,12 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             val edgesList = dbManager.indexTreeList("edges", MapSerializer).create()
             from.edgeIDs.filter(predicate).forEach { edgeID ->
                 val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
+                val structure = from.getEdgeStructure(edgeID)
                 edgesList.add(
                     edgeProperties.also {
-                        it.add(EDGE_SRC_KEY, NumVal(from.getEdgeSrc(edgeID)))
-                        it.add(EDGE_DST_KEY, NumVal(from.getEdgeDst(edgeID)))
-                        it.add(EDGE_TAG_KEY, StrVal(from.getEdgeTag(edgeID)))
+                        it.add(EDGE_SRC_KEY, NumVal(structure.src))
+                        it.add(EDGE_DST_KEY, NumVal(structure.dst))
+                        it.add(EDGE_TAG_KEY, StrVal(structure.tag))
                     },
                 )
             }

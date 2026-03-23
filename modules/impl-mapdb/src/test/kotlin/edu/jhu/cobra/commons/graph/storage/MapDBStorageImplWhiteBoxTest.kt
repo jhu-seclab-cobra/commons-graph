@@ -365,26 +365,26 @@ class MapDBStorageImplWhiteBoxTest {
     // -- Edge endpoint access --
 
     @Test
-    fun `test getEdgeSrc returns correct source`() {
+    fun `test getEdgeStructure returns correct source`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        assertEquals(n1, storage.getEdgeSrc(e))
+        assertEquals(n1, storage.getEdgeStructure(e).src)
     }
 
     @Test
-    fun `test getEdgeDst returns correct destination`() {
+    fun `test getEdgeStructure returns correct destination`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        assertEquals(n2, storage.getEdgeDst(e))
+        assertEquals(n2, storage.getEdgeStructure(e).dst)
     }
 
     @Test
-    fun `test getEdgeTag returns correct tag`() {
+    fun `test getEdgeStructure returns correct tag`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "myType")
-        assertEquals("myType", storage.getEdgeTag(e))
+        assertEquals("myType", storage.getEdgeStructure(e).tag)
     }
 }

@@ -151,19 +151,12 @@ class MapDBStorageImpl(
         edgeProperties.remove(id)
     }
 
-    override fun getEdgeSrc(id: Int): Int {
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
         ensureOpen()
-        return edgeSrcMap[id] ?: throw EntityNotExistException(id)
-    }
-
-    override fun getEdgeDst(id: Int): Int {
-        ensureOpen()
-        return edgeDstMap[id] ?: throw EntityNotExistException(id)
-    }
-
-    override fun getEdgeTag(id: Int): String {
-        ensureOpen()
-        return edgeTagMap[id] ?: throw EntityNotExistException(id)
+        val src = edgeSrcMap[id] ?: throw EntityNotExistException(id)
+        val dst = edgeDstMap[id] ?: throw EntityNotExistException(id)
+        val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
+        return IStorage.EdgeStructure(src, dst, tag)
     }
 
     override fun getIncomingEdges(id: Int): Set<Int> {
@@ -216,7 +209,7 @@ class MapDBStorageImpl(
         }
     }
 
-    override fun transferTo(target: IStorage) {
+    override fun transferTo(target: IStorage): Map<Int, Int> {
         ensureOpen()
         val idMap = HashMap<Int, Int>()
         for (nodeId in nodeProperties.keys) {
@@ -233,5 +226,6 @@ class MapDBStorageImpl(
         for (name in metaProperties.keys) {
             target.setMeta(name, metaProperties[name])
         }
+        return idMap
     }
 }

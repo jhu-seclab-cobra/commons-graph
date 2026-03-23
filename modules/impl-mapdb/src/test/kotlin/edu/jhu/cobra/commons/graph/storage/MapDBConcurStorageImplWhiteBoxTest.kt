@@ -353,33 +353,33 @@ class MapDBConcurStorageImplWhiteBoxTest {
         target.close()
     }
 
-    // -- getEdgeSrc, getEdgeDst, getEdgeTag --
+    // -- getEdgeStructure --
 
     @Test
-    fun `test getEdgeSrc returns correct source`() {
+    fun `test getEdgeStructure returns correct source`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "rel")
 
-        assertEquals(src, storage.getEdgeSrc(edgeId))
+        assertEquals(src, storage.getEdgeStructure(edgeId).src)
     }
 
     @Test
-    fun `test getEdgeDst returns correct destination`() {
+    fun `test getEdgeStructure returns correct destination`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "rel")
 
-        assertEquals(dst, storage.getEdgeDst(edgeId))
+        assertEquals(dst, storage.getEdgeStructure(edgeId).dst)
     }
 
     @Test
-    fun `test getEdgeTag returns correct tag`() {
+    fun `test getEdgeStructure returns correct tag`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "myType")
 
-        assertEquals("myType", storage.getEdgeTag(edgeId))
+        assertEquals("myType", storage.getEdgeStructure(edgeId).tag)
     }
 
     // -- Closed-state checks for remaining operations --
@@ -419,30 +419,12 @@ class MapDBConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
+    fun `test getEdgeStructure throws AccessClosedStorageException when closed`() {
         val src = storage.addNode()
         val dst = storage.addNode()
         val edgeId = storage.addEdge(src, dst, "rel")
         storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(edgeId) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
-        val src = storage.addNode()
-        val dst = storage.addNode()
-        val edgeId = storage.addEdge(src, dst, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(edgeId) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
-        val src = storage.addNode()
-        val dst = storage.addNode()
-        val edgeId = storage.addEdge(src, dst, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(edgeId) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeStructure(edgeId) }
     }
 
     @Test
@@ -537,18 +519,8 @@ class MapDBConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(999) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(999) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeTag(999) }
+    fun `test getEdgeStructure throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeStructure(999) }
     }
 
     @Test
@@ -599,8 +571,8 @@ class MapDBConcurStorageImplWhiteBoxTest {
         assertEquals(1, target.edgeIDs.size)
         assertEquals("val".strVal, target.getMeta("meta"))
         val tEdge = target.edgeIDs.first()
-        assertTrue(target.getEdgeSrc(tEdge) in target.nodeIDs)
-        assertTrue(target.getEdgeDst(tEdge) in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
         target.close()
     }
 }
