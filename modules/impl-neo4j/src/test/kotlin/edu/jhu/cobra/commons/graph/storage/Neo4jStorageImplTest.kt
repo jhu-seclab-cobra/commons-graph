@@ -33,7 +33,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test add and query node`() {
-        val nodeId = storage.addNode("n1", mapOf("prop1" to "value1".strVal))
+        val nodeId = storage.addNode(mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsNode(nodeId))
         assertEquals(1, storage.nodeIDs.size)
@@ -42,10 +42,10 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test add and query edge`() {
-        val srcId = storage.addNode("src")
-        val dstId = storage.addNode("dst")
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = storage.addEdge(srcId, dstId, "e1", "test-edge", mapOf("prop1" to "value1".strVal))
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge", mapOf("prop1" to "value1".strVal))
 
         assertTrue(storage.containsEdge(edgeId))
         assertEquals(1, storage.edgeIDs.size)
@@ -55,13 +55,13 @@ class Neo4jStorageImplTest {
     @Test
     fun `test add edge with non-existent nodes`() {
         assertFailsWith<EntityNotExistException> {
-            storage.addEdge("missing-src", "missing-dst", "e1", "test-edge")
+            storage.addEdge(-1, -2, "test-edge")
         }
     }
 
     @Test
     fun `test node properties operations`() {
-        val nodeId = storage.addNode("n1", mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal))
+        val nodeId = storage.addNode(mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal))
 
         val props = storage.getNodeProperties(nodeId)
         assertEquals(2, props.size)
@@ -74,11 +74,11 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test edge properties operations`() {
-        val srcId = storage.addNode("src")
-        val dstId = storage.addNode("dst")
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
         val edgeId = storage.addEdge(
-            srcId, dstId, "e1", "test-edge",
+            srcId, dstId, "test-edge",
             mapOf("prop1" to "value1".strVal, "prop2" to "value2".strVal),
         )
 
@@ -93,7 +93,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test delete node`() {
-        val nodeId = storage.addNode("n1")
+        val nodeId = storage.addNode()
         assertTrue(storage.containsNode(nodeId))
 
         storage.deleteNode(nodeId)
@@ -103,10 +103,10 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test delete edge`() {
-        val srcId = storage.addNode("src")
-        val dstId = storage.addNode("dst")
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = storage.addEdge(srcId, dstId, "e1", "test-edge")
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge")
         assertTrue(storage.containsEdge(edgeId))
 
         storage.deleteEdge(edgeId)
@@ -116,10 +116,10 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test incoming and outgoing edges`() {
-        val srcId = storage.addNode("src")
-        val dstId = storage.addNode("dst")
+        val srcId = storage.addNode()
+        val dstId = storage.addNode()
 
-        val edgeId = storage.addEdge(srcId, dstId, "e1", "test-edge")
+        val edgeId = storage.addEdge(srcId, dstId, "test-edge")
 
         assertEquals(1, storage.getOutgoingEdges(srcId).size)
         assertEquals(1, storage.getIncomingEdges(dstId).size)
@@ -129,7 +129,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test clear storage`() {
-        storage.addNode("n1")
+        storage.addNode()
 
         storage.clear()
         assertEquals(0, storage.nodeIDs.size)
@@ -141,7 +141,7 @@ class Neo4jStorageImplTest {
         storage.close()
 
         assertFailsWith<AccessClosedStorageException> {
-            storage.addNode("n1")
+            storage.addNode()
         }
         assertFailsWith<AccessClosedStorageException> {
             storage.nodeIDs
@@ -150,7 +150,7 @@ class Neo4jStorageImplTest {
 
     @Test
     fun `test invalid property names`() {
-        val nodeId = storage.addNode("n1")
+        val nodeId = storage.addNode()
 
         assertFailsWith<InvalidPropNameException> {
             storage.setNodeProperties(nodeId, mapOf("__meta_id__" to "value".strVal))
