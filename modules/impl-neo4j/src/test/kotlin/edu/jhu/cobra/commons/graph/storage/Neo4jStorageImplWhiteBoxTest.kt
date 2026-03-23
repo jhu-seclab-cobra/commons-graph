@@ -434,33 +434,25 @@ class Neo4jStorageImplWhiteBoxTest {
         }
     }
 
-    // -- getEdgeSrc, getEdgeDst, getEdgeTag --
+    // -- getEdgeStructure --
 
     @Test
-    fun `test getEdgeSrc returns correct source`() {
+    fun `test getEdgeStructure returns correct src, dst, and tag`() {
         val src = storage.addNode()
         val dst = storage.addNode()
-        val e = storage.addEdge(src, dst, "rel")
+        val e = storage.addEdge(src, dst, "FOLLOWS")
 
-        assertEquals(src, storage.getEdgeSrc(e))
+        val structure = storage.getEdgeStructure(e)
+        assertEquals(src, structure.src)
+        assertEquals(dst, structure.dst)
+        assertEquals("FOLLOWS", structure.tag)
     }
 
     @Test
-    fun `test getEdgeDst returns correct destination`() {
-        val src = storage.addNode()
-        val dst = storage.addNode()
-        val e = storage.addEdge(src, dst, "rel")
-
-        assertEquals(dst, storage.getEdgeDst(e))
-    }
-
-    @Test
-    fun `test getEdgeTag returns correct type`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "FOLLOWS")
-
-        assertEquals("FOLLOWS", storage.getEdgeTag(e))
+    fun `test getEdgeStructure nonexistent throws EntityNotExistException`() {
+        assertFailsWith<EntityNotExistException> {
+            storage.getEdgeStructure(-1)
+        }
     }
 
 }

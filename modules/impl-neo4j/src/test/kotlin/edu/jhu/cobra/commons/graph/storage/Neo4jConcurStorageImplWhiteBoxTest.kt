@@ -364,53 +364,24 @@ class Neo4jConcurStorageImplWhiteBoxTest {
         assertTrue(storage.containsNode(n2))
     }
 
-    // -- getEdgeSrc / getEdgeDst / getEdgeTag --
+    // -- getEdgeStructure --
 
     @Test
-    fun `test getEdgeSrc returns correct source node`() {
+    fun `test getEdgeStructure returns correct src, dst, and tag`() {
         val src = storage.addNode()
         val dst = storage.addNode()
-        val e = storage.addEdge(src, dst, "rel")
+        val e = storage.addEdge(src, dst, "FOLLOWS")
 
-        assertEquals(src, storage.getEdgeSrc(e))
+        val structure = storage.getEdgeStructure(e)
+        assertEquals(src, structure.src)
+        assertEquals(dst, structure.dst)
+        assertEquals("FOLLOWS", structure.tag)
     }
 
     @Test
-    fun `test getEdgeSrc nonexistent throws EntityNotExistException`() {
+    fun `test getEdgeStructure nonexistent throws EntityNotExistException`() {
         assertFailsWith<EntityNotExistException> {
-            storage.getEdgeSrc(-1)
-        }
-    }
-
-    @Test
-    fun `test getEdgeDst returns correct destination node`() {
-        val src = storage.addNode()
-        val dst = storage.addNode()
-        val e = storage.addEdge(src, dst, "rel")
-
-        assertEquals(dst, storage.getEdgeDst(e))
-    }
-
-    @Test
-    fun `test getEdgeDst nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> {
-            storage.getEdgeDst(-1)
-        }
-    }
-
-    @Test
-    fun `test getEdgeTag returns correct type string`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "FOLLOWS")
-
-        assertEquals("FOLLOWS", storage.getEdgeTag(e))
-    }
-
-    @Test
-    fun `test getEdgeTag nonexistent throws EntityNotExistException`() {
-        assertFailsWith<EntityNotExistException> {
-            storage.getEdgeTag(-1)
+            storage.getEdgeStructure(-1)
         }
     }
 

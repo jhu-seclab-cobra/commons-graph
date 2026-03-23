@@ -1,7 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.AccessClosedStorageException
-import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.get
 import edu.jhu.cobra.commons.graph.utils.keys
@@ -27,12 +26,9 @@ import kotlin.io.path.notExists
  * Provides ACID guarantees from Neo4j transactions plus read/write lock synchronization for
  * in-memory ID mapping structures.
  *
- * Stores caller-provided String IDs as the `storageID` property on Neo4j nodes and
- * relationships, and maintains a bidirectional map between String IDs and Neo4j element IDs
- * for fast lookup without full-graph scans.
- *
- * Edge structural info (src, dst, tag) is stored as the Neo4j relationship type (tag) and
- * endpoints (src/dst), and recovered via [getEdgeStructure].
+ * Uses auto-generated Int IDs externally, mapping them to Neo4j element IDs
+ * internally. The Int ID is persisted as a `storageID` property on Neo4j entities
+ * for recovery after database restart.
  *
  * For normal use cases without concurrent access, use [Neo4jStorageImpl] instead (lower overhead).
  *
@@ -44,14 +40,21 @@ class Neo4jConcurStorageImpl(
 ) : IStorage,
     AutoCloseable {
     private var isClosed: Boolean = false
+    private var nodeCounter: Int = 0
+    private var edgeCounter: Int = 0
 
     private val storageLock = ReentrantReadWriteLock()
 
-    // Bidirectional mapping: IStorage String ID <-> Neo4j element ID
-    private val stringToNeo4jNode = HashMap<String, String>()
-    private val neo4jToStringNode = HashMap<String, String>()
-    private val stringToNeo4jEdge = HashMap<String, String>()
-    private val neo4jToStringEdge = HashMap<String, String>()
+    // Bidirectional mapping: IStorage Int ID <-> Neo4j element ID
+    private val intToNeo4jNode = HashMap<Int, String>()
+    private val neo4jToIntNode = HashMap<String, Int>()
+    private val intToNeo4jEdge = HashMap<Int, String>()
+    private val neo4jToIntEdge = HashMap<String, Int>()
+
+    // Edge structural info cached in memory
+    private val edgeSrcMap = HashMap<Int, Int>()
+    private val edgeDstMap = HashMap<Int, Int>()
+    private val edgeTagMap = HashMap<Int, String>()
 
     private val metaProperties = HashMap<String, IValue>()
 
@@ -80,177 +83,194 @@ class Neo4jConcurStorageImpl(
 
     init {
         readTx {
-            getAllNodes().forEach { node ->
-                val sid = node.storageID
-                stringToNeo4jNode[sid] = node.elementId
-                neo4jToStringNode[node.elementId] = sid
+            for (node in getAllNodes()) {
+                val intId = node.storageID.toInt()
+                intToNeo4jNode[intId] = node.elementId
+                neo4jToIntNode[node.elementId] = intId
+                if (intId >= nodeCounter) nodeCounter = intId + 1
             }
-            getAllRelationships().forEach { rel ->
-                val sid = rel.storageID
-                stringToNeo4jEdge[sid] = rel.elementId
-                neo4jToStringEdge[rel.elementId] = sid
+            for (rel in getAllRelationships()) {
+                val intId = rel.storageID.toInt()
+                intToNeo4jEdge[intId] = rel.elementId
+                neo4jToIntEdge[rel.elementId] = intId
+                edgeSrcMap[intId] = neo4jToIntNode[rel.startNode.elementId]!!
+                edgeDstMap[intId] = neo4jToIntNode[rel.endNode.elementId]!!
+                edgeTagMap[intId] = rel.type.name()
+                if (intId >= edgeCounter) edgeCounter = intId + 1
             }
         }
     }
 
-    override val nodeIDs: Set<String>
+    override val nodeIDs: Set<Int>
         get() =
             storageLock.read {
                 if (isClosed) throw AccessClosedStorageException()
-                stringToNeo4jNode.keys.toSet()
+                intToNeo4jNode.keys.toSet()
             }
 
-    override val edgeIDs: Set<String>
+    override val edgeIDs: Set<Int>
         get() =
             storageLock.read {
                 if (isClosed) throw AccessClosedStorageException()
-                stringToNeo4jEdge.keys.toSet()
+                intToNeo4jEdge.keys.toSet()
             }
 
-    override fun containsNode(id: String): Boolean =
+    override fun containsNode(id: Int): Boolean =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
-            stringToNeo4jNode.containsKey(id)
+            intToNeo4jNode.containsKey(id)
         }
 
-    override fun containsEdge(id: String): Boolean =
+    override fun containsEdge(id: Int): Boolean =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
-            stringToNeo4jEdge.containsKey(id)
+            intToNeo4jEdge.containsKey(id)
         }
 
-    override fun addNode(nodeId: String, properties: Map<String, IValue>): String =
+    override fun addNode(properties: Map<String, IValue>): Int =
         storageLock.write {
             writeTx {
-                if (stringToNeo4jNode.containsKey(nodeId)) throw EntityAlreadyExistException(nodeId)
+                val id = nodeCounter++
                 val newNode = createNode()
-                newNode.storageID = nodeId
-                stringToNeo4jNode[nodeId] = newNode.elementId
-                neo4jToStringNode[newNode.elementId] = nodeId
-                properties.forEach { (name, value) -> newNode[name] = value }
-                nodeId
+                newNode.storageID = id.toString()
+                intToNeo4jNode[id] = newNode.elementId
+                neo4jToIntNode[newNode.elementId] = id
+                for ((name, value) in properties) {
+                    newNode[name] = value
+                }
+                id
             }
         }
 
     override fun addEdge(
-        src: String,
-        dst: String,
-        edgeId: String,
+        src: Int,
+        dst: Int,
         tag: String,
         properties: Map<String, IValue>,
-    ): String =
+    ): Int =
         storageLock.write {
             writeTx {
-                if (!stringToNeo4jNode.containsKey(src)) throw EntityNotExistException(src)
-                if (!stringToNeo4jNode.containsKey(dst)) throw EntityNotExistException(dst)
-                if (stringToNeo4jEdge.containsKey(edgeId)) throw EntityAlreadyExistException(edgeId)
-                val srcNode = getNodeByElementId(stringToNeo4jNode[src]!!)
-                val dstNode = getNodeByElementId(stringToNeo4jNode[dst]!!)
+                if (!intToNeo4jNode.containsKey(src)) throw EntityNotExistException(src)
+                if (!intToNeo4jNode.containsKey(dst)) throw EntityNotExistException(dst)
+                val id = edgeCounter++
+                val srcNode = getNodeByElementId(intToNeo4jNode[src]!!)
+                val dstNode = getNodeByElementId(intToNeo4jNode[dst]!!)
                 val newEdge = srcNode.createRelationshipTo(dstNode, RelationshipType.withName(tag))
-                newEdge.storageID = edgeId
-                stringToNeo4jEdge[edgeId] = newEdge.elementId
-                neo4jToStringEdge[newEdge.elementId] = edgeId
-                properties.forEach { (name, value) -> newEdge[name] = value }
-                edgeId
+                newEdge.storageID = id.toString()
+                intToNeo4jEdge[id] = newEdge.elementId
+                neo4jToIntEdge[newEdge.elementId] = id
+                edgeSrcMap[id] = src
+                edgeDstMap[id] = dst
+                edgeTagMap[id] = tag
+                for ((name, value) in properties) {
+                    newEdge[name] = value
+                }
+                id
             }
         }
 
-    override fun getNodeProperties(id: String): Map<String, IValue> =
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
             readTx {
-                if (!stringToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
-                val node = getNodeByElementId(stringToNeo4jNode[id]!!)
+                if (!intToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
+                val node = getNodeByElementId(intToNeo4jNode[id]!!)
                 node.keys.associateWith { node[it]!! }
             }
         }
 
-    override fun getEdgeProperties(id: String): Map<String, IValue> =
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
             readTx {
-                if (!stringToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
-                val edge = getRelationshipByElementId(stringToNeo4jEdge[id]!!)
+                if (!intToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
+                val edge = getRelationshipByElementId(intToNeo4jEdge[id]!!)
                 edge.keys.associateWith { edge[it]!! }
             }
         }
 
     override fun setNodeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
         writeTx {
-            if (!stringToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
-            val node = getNodeByElementId(stringToNeo4jNode[id]!!)
-            properties.forEach { (name, value) ->
+            if (!intToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
+            val node = getNodeByElementId(intToNeo4jNode[id]!!)
+            for ((name, value) in properties) {
                 if (value != null) node[name] = value else node.removeProperty(name)
             }
         }
     }
 
     override fun setEdgeProperties(
-        id: String,
+        id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
         writeTx {
-            if (!stringToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
-            val edge = getRelationshipByElementId(stringToNeo4jEdge[id]!!)
-            properties.forEach { (name, value) ->
+            if (!intToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
+            val edge = getRelationshipByElementId(intToNeo4jEdge[id]!!)
+            for ((name, value) in properties) {
                 if (value != null) edge[name] = value else edge.removeProperty(name)
             }
         }
     }
 
-    override fun deleteNode(id: String) =
+    override fun deleteNode(id: Int) =
         storageLock.write {
             writeTx {
-                if (!stringToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
-                val neo4jId = stringToNeo4jNode.remove(id)!!
-                neo4jToStringNode.remove(neo4jId)
+                if (!intToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
+                val neo4jId = intToNeo4jNode.remove(id)!!
+                neo4jToIntNode.remove(neo4jId)
                 val node = getNodeByElementId(neo4jId)
-                node.relationships.forEach { edge ->
-                    val edgeStrId = neo4jToStringEdge.remove(edge.elementId)
-                    if (edgeStrId != null) stringToNeo4jEdge.remove(edgeStrId)
+                for (edge in node.relationships) {
+                    val edgeIntId = neo4jToIntEdge.remove(edge.elementId)
+                    if (edgeIntId != null) {
+                        intToNeo4jEdge.remove(edgeIntId)
+                        edgeSrcMap.remove(edgeIntId)
+                        edgeDstMap.remove(edgeIntId)
+                        edgeTagMap.remove(edgeIntId)
+                    }
                     edge.delete()
                 }
                 node.delete()
             }
         }
 
-    override fun deleteEdge(id: String): Unit =
+    override fun deleteEdge(id: Int): Unit =
         storageLock.write {
             writeTx {
-                if (!stringToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
-                val neo4jId = stringToNeo4jEdge.remove(id)!!
-                neo4jToStringEdge.remove(neo4jId)
+                if (!intToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
+                val neo4jId = intToNeo4jEdge.remove(id)!!
+                neo4jToIntEdge.remove(neo4jId)
+                edgeSrcMap.remove(id)
+                edgeDstMap.remove(id)
+                edgeTagMap.remove(id)
                 getRelationshipByElementId(neo4jId).delete()
             }
         }
 
-    override fun getEdgeStructure(id: String): IStorage.EdgeStructure =
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
+        storageLock.read {
+            if (isClosed) throw AccessClosedStorageException()
+            val src = edgeSrcMap[id] ?: throw EntityNotExistException(id)
+            val dst = edgeDstMap[id] ?: throw EntityNotExistException(id)
+            val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
+            IStorage.EdgeStructure(src, dst, tag)
+        }
+
+    override fun getIncomingEdges(id: Int): Set<Int> =
         storageLock.read {
             readTx {
-                if (!stringToNeo4jEdge.containsKey(id)) throw EntityNotExistException(id)
-                val rel = getRelationshipByElementId(stringToNeo4jEdge[id]!!)
-                val src = neo4jToStringNode[rel.startNode.elementId]!!
-                val dst = neo4jToStringNode[rel.endNode.elementId]!!
-                IStorage.EdgeStructure(src, dst, rel.type.name())
+                if (!intToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
+                val node = getNodeByElementId(intToNeo4jNode[id]!!)
+                node.getRelationships(Direction.INCOMING).mapNotNull { neo4jToIntEdge[it.elementId] }.toSet()
             }
         }
 
-    override fun getIncomingEdges(id: String): Set<String> =
+    override fun getOutgoingEdges(id: Int): Set<Int> =
         storageLock.read {
             readTx {
-                if (!stringToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
-                val node = getNodeByElementId(stringToNeo4jNode[id]!!)
-                node.getRelationships(Direction.INCOMING).mapNotNull { neo4jToStringEdge[it.elementId] }.toSet()
-            }
-        }
-
-    override fun getOutgoingEdges(id: String): Set<String> =
-        storageLock.read {
-            readTx {
-                if (!stringToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
-                val node = getNodeByElementId(stringToNeo4jNode[id]!!)
-                node.getRelationships(Direction.OUTGOING).mapNotNull { neo4jToStringEdge[it.elementId] }.toSet()
+                if (!intToNeo4jNode.containsKey(id)) throw EntityNotExistException(id)
+                val node = getNodeByElementId(intToNeo4jNode[id]!!)
+                node.getRelationships(Direction.OUTGOING).mapNotNull { neo4jToIntEdge[it.elementId] }.toSet()
             }
         }
 
@@ -279,31 +299,39 @@ class Neo4jConcurStorageImpl(
     override fun clear() =
         storageLock.write {
             writeTx {
-                getAllRelationships().forEach { it.delete() }
-                getAllNodes().forEach { it.delete() }
-                stringToNeo4jNode.clear()
-                neo4jToStringNode.clear()
-                stringToNeo4jEdge.clear()
-                neo4jToStringEdge.clear()
+                for (rel in getAllRelationships()) rel.delete()
+                for (node in getAllNodes()) node.delete()
+                intToNeo4jNode.clear()
+                neo4jToIntNode.clear()
+                intToNeo4jEdge.clear()
+                neo4jToIntEdge.clear()
+                edgeSrcMap.clear()
+                edgeDstMap.clear()
+                edgeTagMap.clear()
                 metaProperties.clear()
+                nodeCounter = 0
+                edgeCounter = 0
             }
         }
 
-    override fun transferTo(target: IStorage) {
+    override fun transferTo(target: IStorage): Map<Int, Int> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
-            for (nodeId in stringToNeo4jNode.keys) {
-                target.addNode(nodeId, getNodeProperties(nodeId))
+            val idMap = HashMap<Int, Int>()
+            for (nodeId in intToNeo4jNode.keys) {
+                idMap[nodeId] = target.addNode(getNodeProperties(nodeId))
             }
-            for (edgeId in stringToNeo4jEdge.keys) {
+            for (edgeId in intToNeo4jEdge.keys) {
                 val structure = getEdgeStructure(edgeId)
-                target.addEdge(structure.src, structure.dst, edgeId, structure.tag, getEdgeProperties(edgeId))
+                val newSrc = idMap[structure.src] ?: structure.src
+                val newDst = idMap[structure.dst] ?: structure.dst
+                target.addEdge(newSrc, newDst, structure.tag, getEdgeProperties(edgeId))
             }
             for (name in metaProperties.keys) {
                 target.setMeta(name, metaProperties[name])
             }
+            idMap
         }
-    }
 
     override fun close(): Unit =
         storageLock.write {
