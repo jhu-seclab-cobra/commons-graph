@@ -10,10 +10,9 @@ import edu.jhu.cobra.commons.value.listVal
 /**
  * Abstract base class for graph edges with storage-backed property management.
  *
- * The edge's [id] is the deterministic string "$src-$tag-$dst". Storage operations
- * use the internal [storageId] (auto-generated Int). Structural info (source,
- * destination, tag) is injected at bind time by the graph layer — no lazy
- * storage lookup needed.
+ * Structural info (source, destination, tag) is injected at bind time by the
+ * graph layer — no lazy storage lookup needed. The storage-internal [storageId]
+ * serves as the identity for [equals] and [hashCode].
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
  * creation to inject storage and edge identity — these are not constructor
@@ -34,10 +33,6 @@ abstract class AbcEdge : AbcEntity() {
 
     /** The storage-internal Int ID, injected by the graph layer via [bind]. */
     var storageId: Int = -1
-        internal set
-
-    /** Deterministic edge ID string "$src-$tag-$dst", set at bind time. */
-    lateinit var edgeId: String
         internal set
 
     /** Source node ID, injected at bind time. */
@@ -68,13 +63,12 @@ abstract class AbcEdge : AbcEntity() {
         this.srcNid = srcNid
         this.dstNid = dstNid
         this.eTag = tag
-        this.edgeId = "$srcNid-$tag-$dstNid"
     }
 
     /**
-     * The deterministic edge identifier string.
+     * The edge identifier derived from source, tag, and destination.
      */
-    override val id: String get() = edgeId
+    override val id: String get() = "$srcNid-$eTag-$dstNid"
 
     /**
      * Visibility labels assigned to this edge.
@@ -111,5 +105,5 @@ abstract class AbcEdge : AbcEntity() {
 
     override fun hashCode(): Int = storageId
 
-    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.edgeId == other.edgeId else super.equals(other)
+    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.storageId == other.storageId else super.equals(other)
 }
