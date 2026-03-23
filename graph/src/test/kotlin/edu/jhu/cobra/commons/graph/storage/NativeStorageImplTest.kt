@@ -142,7 +142,7 @@ class NativeStorageImplTest {
         val src = addNode()
         val dst = addNode()
         val edgeId = addEdge(src, dst)
-        assertEquals(src, storage.getEdgeSrc(edgeId))
+        assertEquals(src, storage.getEdgeStructure(edgeId).src)
     }
 
     @Test
@@ -150,7 +150,7 @@ class NativeStorageImplTest {
         val src = addNode()
         val dst = addNode()
         val edgeId = addEdge(src, dst)
-        assertEquals(dst, storage.getEdgeDst(edgeId))
+        assertEquals(dst, storage.getEdgeStructure(edgeId).dst)
     }
 
     @Test
@@ -158,7 +158,7 @@ class NativeStorageImplTest {
         val src = addNode()
         val dst = addNode()
         val edgeId = storage.addEdge(src, dst, "custom_type")
-        assertEquals("custom_type", storage.getEdgeTag(edgeId))
+        assertEquals("custom_type", storage.getEdgeStructure(edgeId).tag)
     }
 
     // ============================================================================
@@ -291,8 +291,9 @@ class NativeStorageImplTest {
         assertTrue(target.containsNode(mappedN2))
         assertEquals(1, target.edgeIDs.size)
         val targetEdgeId = target.edgeIDs.first()
-        assertEquals(mappedN1, target.getEdgeSrc(targetEdgeId))
-        assertEquals(mappedN2, target.getEdgeDst(targetEdgeId))
+        val transferredEdge = target.getEdgeStructure(targetEdgeId)
+        assertEquals(mappedN1, transferredEdge.src)
+        assertEquals(mappedN2, transferredEdge.dst)
 
         target.close()
     }

@@ -732,7 +732,7 @@ class AbcMultipleGraphTest {
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
-        with(graph) { assertTrue(label.changes.contains(edge.edgeId)) }
+        assertTrue(label in edge.labels)
     }
 
     @Test
@@ -788,16 +788,13 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test labelChanges_writeThroughToStorage`() {
+    fun `test edgeLabels_persistedToStorage`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label = Label("wt")
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
-        val newGraph = createTestMultipleGraph(storage, posetStorage)
-        with(newGraph) {
-            assertTrue(label.changes.contains(edge.edgeId))
-        }
+        assertTrue(label in edge.labels)
     }
 
     @Test
@@ -1116,13 +1113,15 @@ class AbcMultipleGraphTest {
         with(graph) { label.parents = mapOf("up" to Label("root")) }
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
         val newGraph = createTestMultipleGraph(storage, posetStorage)
         with(newGraph) {
             assertEquals(mapOf<String, Label>("up" to Label("root")), label.parents)
-            assertTrue(label.changes.contains(edge.edgeId))
         }
+        val retrieved = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        assertNotNull(retrieved)
+        assertTrue(label in retrieved.labels)
     }
 
     // endregion

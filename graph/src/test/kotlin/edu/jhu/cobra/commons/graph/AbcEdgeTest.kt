@@ -55,7 +55,7 @@ class AbcEdgeTest {
     fun `test edgeID_differentType_differentId`() {
         val eid2 = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "other")
         val edge2 = createTestEdge(storage, eid2, "src", "dst", "other")
-        assertNotEquals(testEdge.edgeId, edge2.edgeId)
+        assertNotEquals(testEdge.id, edge2.id)
     }
 
     // endregion
