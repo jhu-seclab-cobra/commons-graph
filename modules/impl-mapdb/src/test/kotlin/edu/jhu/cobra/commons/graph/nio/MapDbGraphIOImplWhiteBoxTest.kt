@@ -95,7 +95,7 @@ class MapDbGraphIOImplWhiteBoxTest {
         assertEquals(1, dstStorage.edgeIDs.size)
         val importedEdge = dstStorage.edgeIDs.first()
         assertEquals(5, (dstStorage.getEdgeProperties(importedEdge)["weight"] as NumVal).core)
-        assertEquals("connects", dstStorage.getEdgeTag(importedEdge))
+        assertEquals("connects", dstStorage.getEdgeStructure(importedEdge).tag)
 
         dstStorage.close()
     }
@@ -283,7 +283,7 @@ class MapDbGraphIOImplWhiteBoxTest {
         assertEquals(1, dstStorage.edgeIDs.size)
         val importedEdge = dstStorage.edgeIDs.first()
         assertEquals("test", (dstStorage.getEdgeProperties(importedEdge)["data"] as StrVal).core)
-        assertEquals("type-with-special_chars", dstStorage.getEdgeTag(importedEdge))
+        assertEquals("type-with-special_chars", dstStorage.getEdgeStructure(importedEdge).tag)
 
         dstStorage.close()
     }

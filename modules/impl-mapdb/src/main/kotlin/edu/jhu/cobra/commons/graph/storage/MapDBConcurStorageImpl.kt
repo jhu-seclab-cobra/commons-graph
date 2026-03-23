@@ -172,22 +172,13 @@ class MapDBConcurStorageImpl(
             deleteEdgeWithoutLock(id)
         }
 
-    override fun getEdgeSrc(id: Int): Int =
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            edgeSrcMap[id] ?: throw EntityNotExistException(id)
-        }
-
-    override fun getEdgeDst(id: Int): Int =
-        dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
-            edgeDstMap[id] ?: throw EntityNotExistException(id)
-        }
-
-    override fun getEdgeTag(id: Int): String =
-        dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
-            edgeTagMap[id] ?: throw EntityNotExistException(id)
+            val src = edgeSrcMap[id] ?: throw EntityNotExistException(id)
+            val dst = edgeDstMap[id] ?: throw EntityNotExistException(id)
+            val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
+            IStorage.EdgeStructure(src, dst, tag)
         }
 
     override fun getIncomingEdges(id: Int): Set<Int> =
@@ -245,7 +236,7 @@ class MapDBConcurStorageImpl(
         }
     }
 
-    override fun transferTo(target: IStorage) {
+    override fun transferTo(target: IStorage): Map<Int, Int> =
         dbLock.read {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
             val idMap = HashMap<Int, Int>()
@@ -263,6 +254,6 @@ class MapDBConcurStorageImpl(
             for (name in metaProperties.keys) {
                 target.setMeta(name, metaProperties[name])
             }
+            idMap
         }
-    }
 }
