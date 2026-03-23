@@ -158,42 +158,6 @@ interface IStorage : Closeable {
     fun getEdgeStructure(id: Int): EdgeStructure
 
     /**
-     * Returns the source node ID of an edge.
-     *
-     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
-     *
-     * @param id The edge ID.
-     * @return The source node ID.
-     * @throws AccessClosedStorageException If storage is closed.
-     * @throws EntityNotExistException If edge does not exist.
-     */
-    fun getEdgeSrc(id: Int): Int = getEdgeStructure(id).src
-
-    /**
-     * Returns the destination node ID of an edge.
-     *
-     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
-     *
-     * @param id The edge ID.
-     * @return The destination node ID.
-     * @throws AccessClosedStorageException If storage is closed.
-     * @throws EntityNotExistException If edge does not exist.
-     */
-    fun getEdgeDst(id: Int): Int = getEdgeStructure(id).dst
-
-    /**
-     * Returns the tag of an edge.
-     *
-     * Default delegates to [getEdgeStructure]; implementations may override for efficiency.
-     *
-     * @param id The edge ID.
-     * @return The edge tag name.
-     * @throws AccessClosedStorageException If storage is closed.
-     * @throws EntityNotExistException If edge does not exist.
-     */
-    fun getEdgeTag(id: Int): String = getEdgeStructure(id).tag
-
-    /**
      * Returns all properties of an edge.
      *
      * @param id The edge ID.

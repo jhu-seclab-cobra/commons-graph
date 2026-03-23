@@ -21,9 +21,6 @@ interface IPoset {
     /** All ancestor labels traversing upwards through the parent hierarchy. */
     val Label.ancestors: Sequence<Label>
 
-    /** Edge IDs whose label set was modified involving this label. */
-    var Label.changes: Set<String>
-
     /**
      * Compares this label with another in the poset hierarchy.
      *
