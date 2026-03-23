@@ -158,26 +158,15 @@ class JgraphtConcurStorageImpl : IStorage {
             edgeTagMap.remove(id)
         }
 
-    override fun getEdgeSrc(id: Int): Int =
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
             val edgeStr = intToEdge[id]!!
-            vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
-        }
-
-    override fun getEdgeDst(id: Int): Int =
-        storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
-            if (id !in edgeProperties) throw EntityNotExistException(id)
-            val edgeStr = intToEdge[id]!!
-            vertexToInt[jgtGraph.getEdgeTarget(edgeStr)]!!
-        }
-
-    override fun getEdgeTag(id: Int): String =
-        storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
-            edgeTagMap[id] ?: throw EntityNotExistException(id)
+            val src = vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
+            val dst = vertexToInt[jgtGraph.getEdgeTarget(edgeStr)]!!
+            val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
+            IStorage.EdgeStructure(src, dst, tag)
         }
 
     override fun getIncomingEdges(id: Int): Set<Int> =
@@ -240,7 +229,7 @@ class JgraphtConcurStorageImpl : IStorage {
         }
     }
 
-    override fun transferTo(target: IStorage) {
+    override fun transferTo(target: IStorage): Map<Int, Int> =
         storageLock.read {
             if (isClosed) throw AccessClosedStorageException()
             val idMap = HashMap<Int, Int>()
@@ -248,21 +237,16 @@ class JgraphtConcurStorageImpl : IStorage {
                 idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
             }
             for (edgeId in edgeProperties.keys) {
-                val edgeStr = intToEdge[edgeId]!!
-                val srcVertex = jgtGraph.getEdgeSource(edgeStr)
-                val dstVertex = jgtGraph.getEdgeTarget(edgeStr)
-                val src = vertexToInt[srcVertex]!!
-                val dst = vertexToInt[dstVertex]!!
-                val type = edgeTagMap[edgeId]!!
-                val newSrc = idMap[src] ?: src
-                val newDst = idMap[dst] ?: dst
-                target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
+                val structure = getEdgeStructure(edgeId)
+                val newSrc = idMap[structure.src] ?: structure.src
+                val newDst = idMap[structure.dst] ?: structure.dst
+                target.addEdge(newSrc, newDst, structure.tag, edgeProperties[edgeId]!!)
             }
             for (name in metaProperties.keys) {
                 target.setMeta(name, metaProperties[name])
             }
+            idMap
         }
-    }
 
     override fun close(): Unit =
         storageLock.write {

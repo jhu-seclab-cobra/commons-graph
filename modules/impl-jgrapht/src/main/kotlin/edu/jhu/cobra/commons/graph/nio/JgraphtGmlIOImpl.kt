@@ -51,11 +51,12 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         val edgeList = from.edgeIDs.filter(predicate).toList()
         exporter.setEdgeAttributeProvider { index: Int ->
             val edgeID = edgeList[index]
+            val structure = from.getEdgeStructure(edgeID)
             val metaProp =
                 mapOf(
-                    EDGE_SRC_ATTR to StrVal(from.getEdgeSrc(edgeID).toString()),
-                    EDGE_DST_ATTR to StrVal(from.getEdgeDst(edgeID).toString()),
-                    EDGE_TYPE_ATTR to StrVal(from.getEdgeTag(edgeID)),
+                    EDGE_SRC_ATTR to StrVal(structure.src.toString()),
+                    EDGE_DST_ATTR to StrVal(structure.dst.toString()),
+                    EDGE_TAG_ATTR to StrVal(structure.tag),
                 )
             val props = metaProp + from.getEdgeProperties(edgeID)
             props.mapValues { (_, value) -> value.toAttribute }
@@ -67,9 +68,8 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             idOfVx[node] = index
         }
         edgeList.forEachIndexed { index, edge ->
-            val src = from.getEdgeSrc(edge)
-            val dst = from.getEdgeDst(edge)
-            graph.addEdge(idOfVx[src], idOfVx[dst], index)
+            val edgeStructure = from.getEdgeStructure(edge)
+            graph.addEdge(idOfVx[edgeStructure.src], idOfVx[edgeStructure.dst], index)
         }
         exporter.setParameter(GmlExporter.Parameter.EXPORT_VERTEX_LABELS, true)
         exporter.setParameter(GmlExporter.Parameter.EXPORT_EDGE_LABELS, true)
@@ -113,7 +113,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         edgeCache.values.forEach { props ->
             val oldSrc = (props.remove(EDGE_SRC_ATTR) as? StrVal)?.core ?: return@forEach
             val oldDst = (props.remove(EDGE_DST_ATTR) as? StrVal)?.core ?: return@forEach
-            val type = (props.remove(EDGE_TYPE_ATTR) as? StrVal)?.core ?: return@forEach
+            val type = (props.remove(EDGE_TAG_ATTR) as? StrVal)?.core ?: return@forEach
             val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
             val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
             into.addEdge(src, dst, type, props)

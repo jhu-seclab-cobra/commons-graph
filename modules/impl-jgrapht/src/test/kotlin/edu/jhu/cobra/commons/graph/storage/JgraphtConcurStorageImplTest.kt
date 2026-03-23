@@ -211,7 +211,7 @@ class JgraphtConcurStorageImplTest {
 
                             2 -> {
                                 val outEdges = storage.getOutgoingEdges(node1)
-                                val filtered = outEdges.filter { storage.getEdgeDst(it) == node3 }
+                                val filtered = outEdges.filter { storage.getEdgeStructure(it).dst == node3 }
                                 assertEquals(1, filtered.size)
                             }
 

@@ -347,33 +347,33 @@ class JgraphtConcurStorageImplWhiteBoxTest {
         target.close()
     }
 
-    // -- getEdgeSrc, getEdgeDst, getEdgeTag --
+    // -- getEdgeStructure --
 
     @Test
-    fun `test getEdgeSrc returns correct source`() {
+    fun `test getEdgeStructure returns correct source`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         val edge12 = storage.addEdge(node1, node2, "link")
 
-        assertEquals(node1, storage.getEdgeSrc(edge12))
+        assertEquals(node1, storage.getEdgeStructure(edge12).src)
     }
 
     @Test
-    fun `test getEdgeDst returns correct destination`() {
+    fun `test getEdgeStructure returns correct destination`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         val edge12 = storage.addEdge(node1, node2, "link")
 
-        assertEquals(node2, storage.getEdgeDst(edge12))
+        assertEquals(node2, storage.getEdgeStructure(edge12).dst)
     }
 
     @Test
-    fun `test getEdgeTag returns correct type`() {
+    fun `test getEdgeStructure returns correct type`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         val edge12 = storage.addEdge(node1, node2, "depends_on")
 
-        assertEquals("depends_on", storage.getEdgeTag(edge12))
+        assertEquals("depends_on", storage.getEdgeStructure(edge12).tag)
     }
 
     // -- Closed-state checks for all remaining operations --
@@ -413,30 +413,12 @@ class JgraphtConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
+    fun `test getEdgeStructure throws AccessClosedStorageException when closed`() {
         val node1 = storage.addNode()
         val node2 = storage.addNode()
         val edge12 = storage.addEdge(node1, node2, "rel")
         storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(edge12) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge12 = storage.addEdge(node1, node2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(edge12) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
-        val node1 = storage.addNode()
-        val node2 = storage.addNode()
-        val edge12 = storage.addEdge(node1, node2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(edge12) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeStructure(edge12) }
     }
 
     @Test
@@ -536,18 +518,8 @@ class JgraphtConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(999) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(999) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeTag(999) }
+    fun `test getEdgeStructure throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeStructure(999) }
     }
 
     @Test
@@ -598,8 +570,8 @@ class JgraphtConcurStorageImplWhiteBoxTest {
         assertEquals(1, target.edgeIDs.size)
         assertEquals("val".strVal, target.getMeta("meta"))
         val tEdge = target.edgeIDs.first()
-        assertTrue(target.getEdgeSrc(tEdge) in target.nodeIDs)
-        assertTrue(target.getEdgeDst(tEdge) in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
         target.close()
     }
 }
