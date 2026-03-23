@@ -147,25 +147,14 @@ class JgraphtStorageImpl : IStorage {
         edgeTagMap.remove(id)
     }
 
-    override fun getEdgeSrc(id: Int): Int {
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
         ensureOpen()
         if (id !in edgeProperties) throw EntityNotExistException(id)
         val edgeStr = intToEdge[id]!!
-        val srcVertex = jgtGraph.getEdgeSource(edgeStr)
-        return vertexToInt[srcVertex]!!
-    }
-
-    override fun getEdgeDst(id: Int): Int {
-        ensureOpen()
-        if (id !in edgeProperties) throw EntityNotExistException(id)
-        val edgeStr = intToEdge[id]!!
-        val dstVertex = jgtGraph.getEdgeTarget(edgeStr)
-        return vertexToInt[dstVertex]!!
-    }
-
-    override fun getEdgeTag(id: Int): String {
-        ensureOpen()
-        return edgeTagMap[id] ?: throw EntityNotExistException(id)
+        val src = vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
+        val dst = vertexToInt[jgtGraph.getEdgeTarget(edgeStr)]!!
+        val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
+        return IStorage.EdgeStructure(src, dst, tag)
     }
 
     override fun getIncomingEdges(id: Int): Set<Int> {
@@ -221,23 +210,22 @@ class JgraphtStorageImpl : IStorage {
         edgeCounter = 0
     }
 
-    override fun transferTo(target: IStorage) {
+    override fun transferTo(target: IStorage): Map<Int, Int> {
         ensureOpen()
         val idMap = HashMap<Int, Int>()
         for (nodeId in nodeProperties.keys) {
             idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
         }
         for (edgeId in edgeProperties.keys) {
-            val src = getEdgeSrc(edgeId)
-            val dst = getEdgeDst(edgeId)
-            val type = edgeTagMap[edgeId]!!
-            val newSrc = idMap[src] ?: src
-            val newDst = idMap[dst] ?: dst
-            target.addEdge(newSrc, newDst, type, edgeProperties[edgeId]!!)
+            val structure = getEdgeStructure(edgeId)
+            val newSrc = idMap[structure.src] ?: structure.src
+            val newDst = idMap[structure.dst] ?: structure.dst
+            target.addEdge(newSrc, newDst, structure.tag, edgeProperties[edgeId]!!)
         }
         for (name in metaProperties.keys) {
             target.setMeta(name, metaProperties[name])
         }
+        return idMap
     }
 
     override fun close() {

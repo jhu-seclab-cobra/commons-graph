@@ -434,27 +434,27 @@ class JgraphtStorageImplWhiteBoxTest {
     // -- Edge endpoint access --
 
     @Test
-    fun `test getEdgeSrc returns correct source`() {
+    fun `test getEdgeStructure returns correct source`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        assertEquals(n1, storage.getEdgeSrc(e))
+        assertEquals(n1, storage.getEdgeStructure(e).src)
     }
 
     @Test
-    fun `test getEdgeDst returns correct destination`() {
+    fun `test getEdgeStructure returns correct destination`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        assertEquals(n2, storage.getEdgeDst(e))
+        assertEquals(n2, storage.getEdgeStructure(e).dst)
     }
 
     @Test
-    fun `test getEdgeTag returns correct type`() {
+    fun `test getEdgeStructure returns correct type`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "myType")
-        assertEquals("myType", storage.getEdgeTag(e))
+        assertEquals("myType", storage.getEdgeStructure(e).tag)
     }
 
     // -- deleteNode also removes incoming edges (not only outgoing) --
@@ -494,21 +494,11 @@ class JgraphtStorageImplWhiteBoxTest {
         assertEquals(20, (props["b"] as NumVal).core)
     }
 
-    // -- getEdgeSrc/getEdgeDst/getEdgeTag throw for missing edge --
+    // -- getEdgeStructure throws for missing edge --
 
     @Test
-    fun `test getEdgeSrc throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeSrc(-1) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeDst(-1) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.getEdgeTag(-1) }
+    fun `test getEdgeStructure throws EntityNotExistException for missing edge`() {
+        assertFailsWith<EntityNotExistException> { storage.getEdgeStructure(-1) }
     }
 
     // -- Close-state branches for operations not yet tested --
@@ -541,30 +531,12 @@ class JgraphtStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `test getEdgeSrc throws AccessClosedStorageException when closed`() {
+    fun `test getEdgeStructure throws AccessClosedStorageException when closed`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
         storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeSrc(e) }
-    }
-
-    @Test
-    fun `test getEdgeDst throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeDst(e) }
-    }
-
-    @Test
-    fun `test getEdgeTag throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeTag(e) }
+        assertFailsWith<AccessClosedStorageException> { storage.getEdgeStructure(e) }
     }
 
     // -- transferTo id remapping fallback: when src/dst not found in idMap, original ID is used --
@@ -581,8 +553,8 @@ class JgraphtStorageImplWhiteBoxTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         val tEdge = target.edgeIDs.first()
-        assertTrue(target.getEdgeSrc(tEdge) in target.nodeIDs)
-        assertTrue(target.getEdgeDst(tEdge) in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
+        assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
         target.close()
     }
 
@@ -596,7 +568,7 @@ class JgraphtStorageImplWhiteBoxTest {
         storage.transferTo(target)
 
         val tEdge = target.edgeIDs.first()
-        assertEquals("typed", target.getEdgeTag(tEdge))
+        assertEquals("typed", target.getEdgeStructure(tEdge).tag)
         assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as NumVal).core)
         target.close()
     }
