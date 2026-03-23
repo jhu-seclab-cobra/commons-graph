@@ -4,9 +4,13 @@ plugins {
 
 rootProject.name = "commons-graph"
 
-includeBuild("extern/commons-value") {
-    dependencySubstitution {
-        substitute(module("com.github.jhu-seclab-cobra:commons-value")).using(project(":lib"))
+// Only include commons-value when building standalone (not as a composite build).
+// When included by a parent project, the parent is responsible for providing commons-value.
+if (gradle.parent == null) {
+    includeBuild("extern/commons-value") {
+        dependencySubstitution {
+            substitute(module("com.github.jhu-seclab-cobra:commons-value")).using(project(":lib"))
+        }
     }
 }
 
