@@ -11,8 +11,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Initialize commons-value submodule
+        run: git submodule update --init --force extern/commons-value
 
       - name: Set up JDK
         uses: actions/setup-java@v4
