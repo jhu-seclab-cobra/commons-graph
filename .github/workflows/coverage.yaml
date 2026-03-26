@@ -13,7 +13,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Initialize commons-value submodule
-        run: git submodule update --init --force extern/commons-value
+        run: |
+          git config submodule.extern/commons-value.update checkout
+          git submodule update --init extern/commons-value
 
       - name: Set up JDK
         uses: actions/setup-java@v4
