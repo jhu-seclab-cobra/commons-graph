@@ -24,7 +24,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run tests and generate coverage reports
-        run: ./gradlew :graph:test :modules:impl-mapdb:test :modules:impl-jgrapht:test :modules:impl-neo4j:test :graph:koverXmlReport :modules:impl-mapdb:koverXmlReport :modules:impl-jgrapht:koverXmlReport :modules:impl-neo4j:koverXmlReport -PexcludePerformanceTests=true
+        run: ./gradlew :jhu-seclab-cobra-commons-graph:test :jhu-seclab-cobra-commons-graph-impl-mapdb:test :jhu-seclab-cobra-commons-graph-impl-jgrapht:test :jhu-seclab-cobra-commons-graph-impl-neo4j:test :jhu-seclab-cobra-commons-graph:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-mapdb:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-jgrapht:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-neo4j:koverXmlReport -PexcludePerformanceTests=true
 
       - name: List all coverage reports (debug)
         run: find . -name report.xml
@@ -34,5 +34,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: jhu-seclab-cobra/commons-graph
-          files: ./graph/build/reports/kover/report.xml,./modules/impl-mapdb/build/reports/kover/report.xml,./modules/impl-jgrapht/build/reports/kover/report.xml,./modules/impl-neo4j/build/reports/kover/report.xml
+          files: ./commons-graph/build/reports/kover/report.xml,./commons-graph-impl-mapdb/build/reports/kover/report.xml,./commons-graph-impl-jgrapht/build/reports/kover/report.xml,./commons-graph-impl-neo4j/build/reports/kover/report.xml
           fail_ci_if_error: true
