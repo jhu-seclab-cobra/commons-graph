@@ -24,7 +24,17 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run tests and generate coverage reports
-        run: ./gradlew :jhu-seclab-cobra-commons-graph:test :jhu-seclab-cobra-commons-graph-impl-mapdb:test :jhu-seclab-cobra-commons-graph-impl-jgrapht:test :jhu-seclab-cobra-commons-graph-impl-neo4j:test :jhu-seclab-cobra-commons-graph:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-mapdb:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-jgrapht:koverXmlReport :jhu-seclab-cobra-commons-graph-impl-neo4j:koverXmlReport -PexcludePerformanceTests=true
+        run: >-
+          ./gradlew
+          :jhu-seclab-cobra-commons-graph:test
+          :jhu-seclab-cobra-commons-graph-impl-mapdb:test
+          :jhu-seclab-cobra-commons-graph-impl-jgrapht:test
+          :jhu-seclab-cobra-commons-graph-impl-neo4j:test
+          :jhu-seclab-cobra-commons-graph:koverXmlReport
+          :jhu-seclab-cobra-commons-graph-impl-mapdb:koverXmlReport
+          :jhu-seclab-cobra-commons-graph-impl-jgrapht:koverXmlReport
+          :jhu-seclab-cobra-commons-graph-impl-neo4j:koverXmlReport
+          -PexcludePerformanceTests=true
 
       - name: List all coverage reports (debug)
         run: find . -name report.xml
