@@ -2,28 +2,6 @@
 
 ## Open Bugs
 
-### B1. LayeredStorageImpl delete on promoted entities reverts to frozen snapshot
-
-**Severity:** Low (design ambiguity, not a bug)
-
-When `deleteNode(id)` targets a node promoted from frozen to active layer (via `ensureNodeInActiveLayer`), deletion removes only the active-layer shadow. The `frozenNodeGlobalToLocal` mapping persists, so `containsNode` returns `true` and the node reverts to its frozen-layer state. Same for `deleteEdge`.
-
-This is consistent with the overlay semantics: frozen layer is an immutable snapshot, active layer is an overlay. Deleting the overlay reverts to the snapshot. However, this means promoted entities cannot be fully deleted — only pure active-layer entities can be deleted.
-
-**Status:** Accepted as design behavior. Document as a constraint in `storage-layered.design.md`.
-
----
-
-### B3. AbcEntity nullable EntityProperty setter ignores null
-
-**Severity:** Medium
-
-The nullable `EntityProperty` delegate's `setValue` uses `value?.let { ... }`, making `node.prop = null` a no-op instead of removing the property. This contradicts `IEntity.set(name, null)` which specifies "null removes."
-
-**Reproduction:** Set a property via the delegate, then assign `null`. Query `contains(name)` — returns `true`.
-
----
-
 ### B4. AbcMultipleGraph queryCache not invalidation-safe
 
 **Severity:** Medium
@@ -42,22 +20,38 @@ Implements `IGraph`, `IPoset`, and `Closeable` — three distinct responsibiliti
 
 Contains inline storage, layer management, freeze logic, and 5 inner view classes. Exceeds detekt limits. Extract inner classes to top-level internal classes.
 
+---
+
+## Resolved
+
+### B1. LayeredStorageImpl delete on promoted entities reverts to frozen snapshot
+
+**Resolution:** Not a bug — correct overlay design behavior.
+
+Frozen layer is immutable. Delete removes the active-layer overlay, reverting to the frozen snapshot. Alternatives investigated (tombstone/whiteout, CoW rebuild, deletion log) all require compaction/vacuum mechanisms. RocksDB documents tombstone accumulation as a known performance problem. PostgreSQL dead tuples without VACUUM cause disk bloat and transaction ID wraparound. Current behavior is the simplest correct design for a 2-layer system where the caller manages layers explicitly.
+
+**References:** [OverlayFS](https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html), [RocksDB DeleteRange](https://rocksdb.org/blog/2018/11/21/delete-range.html), [PostgreSQL VACUUM](https://www.postgresql.org/docs/current/routine-vacuuming.html)
+
+### B3. AbcEntity nullable EntityProperty setter ignores null
+
+**Resolution:** Fixed. Changed `value?.let { thisRef[name] = it }` to `thisRef[name] = value`. Null now correctly propagates to `IEntity.set(name, null)` which removes the property.
+
 ### D3. NativeCsvIOImpl deserialization swallows exceptions
 
-`runCatching { }.getOrNull()` silently drops deserialization errors. Corrupted CSV data produces null values without error. Same pattern in `JgraphtGmlIOImpl`.
+**Resolution:** Fixed. Removed `runCatching { }.getOrNull()` wrappers in NativeCsvIOImpl and JgraphtGmlIOImpl. Deserialization errors now propagate.
 
 ### D4. MapDBStorageImpl clear() swallows DBException
 
-`clear()` catches `DBException.VolumeIOError` and silently ignores it. I/O failures during cleanup go unreported.
+**Resolution:** Fixed. Removed `try/catch(DBException.VolumeIOError)` blocks in MapDBStorageImpl and MapDBConcurStorageImpl. I/O errors now propagate.
 
 ### D5. Six transferTo implementations use silent fallback
 
-`idMap[src] ?: src` in edge remapping silently falls back to unmapped IDs instead of throwing. Masks bugs in ID mapping logic. Affects: JGraphT, MapDB, Neo4j (both regular and concurrent variants).
+**Resolution:** Fixed. Replaced `idMap[src] ?: src` with `idMap.getValue(src)` in JGraphT, MapDB, Neo4j (both regular and concurrent). Missing keys now throw `NoSuchElementException`.
 
 ### D6. Neo4j property access NPE on corrupted data
 
-`node[it]!!` in property iteration throws NPE if a stored byte array fails deserialization. Should use `requireNotNull` with context message.
+**Resolution:** Fixed. Replaced `node[it]!!` with `requireNotNull(node[key]) { "Property '$key' on entity $id has corrupted data" }` in Neo4jStorageImpl and Neo4jConcurStorageImpl.
 
 ### D7. filterVisitable materializes sequence (4-pass)
 
-`AbcMultipleGraph.filterVisitable` calls `.toList()` on the edge sequence, then iterates it three more times. Not on the hot path but wasteful.
+**Resolution:** Fixed. Reduced from 4 passes to 2 in AbcMultipleGraph. Pass 1 materializes edges while collecting visitable labels. Pass 2 filters by uncovered labels.
