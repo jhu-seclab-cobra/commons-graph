@@ -2,11 +2,7 @@
 
 ## Open Bugs
 
-### B4. AbcMultipleGraph queryCache not invalidation-safe
-
-**Severity:** Medium
-
-`queryCache` is a plain `MutableMap`. The `Label.parents` setter calls `queryCache.clear()`, but `Label.ancestors` returns a lazy `Sequence` that reads `queryCache` during iteration. If `parents` is set while an `ancestors` sequence is being consumed, `ConcurrentModificationException` can occur in single-threaded code.
+None.
 
 ---
 
@@ -51,6 +47,10 @@ Frozen layer is immutable. Delete removes the active-layer overlay, reverting to
 ### D6. Neo4j property access NPE on corrupted data
 
 **Resolution:** Fixed. Replaced `node[it]!!` with `requireNotNull(node[key]) { "Property '$key' on entity $id has corrupted data" }` in Neo4jStorageImpl and Neo4jConcurStorageImpl.
+
+### B4. AbcMultipleGraph queryCache not invalidation-safe
+
+**Resolution:** Not a bug. `compareTo` does not iterate `queryCache` entries — it only performs `in` checks and single-key reads/writes. `clear()` in the `parents` setter does not conflict with these operations. `ConcurrentModificationException` requires an active iterator on the map, which `compareTo` never creates. Verified by test.
 
 ### D7. filterVisitable materializes sequence (4-pass)
 

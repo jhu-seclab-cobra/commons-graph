@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestEdge
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestNode
+import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
@@ -82,5 +83,39 @@ internal class BugVerificationTest {
         node.optProp = null
         assertFalse("opt_prop" in node, "Property should be removed after set null — but nullable delegate ignores null")
         assertNull(node.optProp, "Property should return null after removal")
+    }
+
+    // --- Bug B4: queryCache invalidation during compareTo ---
+
+    @Test
+    fun `queryCache survives parents setter during compareTo sequence`() {
+        val graph = GraphTestUtils.createTestMultipleGraph()
+        val labelA = Label("A")
+        val labelB = Label("B")
+        val labelC = Label("C")
+
+        // Build hierarchy: C > B > A (C is ancestor of B, B is ancestor of A)
+        graph.addNode(withID = "n1")
+        with(graph) {
+            labelA.parents = mapOf("p" to labelB)
+            labelB.parents = mapOf("p" to labelC)
+        }
+
+        // compareTo uses ancestors sequence internally, which reads queryCache
+        // If parents setter is called between two compareTo calls, cache is cleared
+        // This should not cause ConcurrentModificationException
+        with(graph) {
+            val result1 = labelA.compareTo(labelC)
+            assertEquals(-1, result1, "A < C")
+
+            // Modify parents — clears queryCache
+            labelA.parents = mapOf("p" to labelB, "q" to labelC)
+
+            // compareTo again — should recompute without error
+            val result2 = labelA.compareTo(labelC)
+            assertEquals(-1, result2, "A < C still holds after parent change")
+        }
+
+        graph.close()
     }
 }
