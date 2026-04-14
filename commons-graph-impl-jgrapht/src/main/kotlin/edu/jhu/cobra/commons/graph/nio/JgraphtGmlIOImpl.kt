@@ -125,7 +125,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         get() {
             if (type != AttributeType.STRING || value.length < 6) return null
             val escaped = value.replace("\\\"", "\"").asCharBuffer()
-            return runCatching { DftCharBufferSerializerImpl.deserialize(escaped) }.getOrNull()
+            return DftCharBufferSerializerImpl.deserialize(escaped)
         }
 
     private val IValue.toAttribute: Attribute

@@ -185,7 +185,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         private fun deserialize(strValue: String): IValue? {
             if (strValue == "") return null
             val charBuffer = strValue.asCharBuffer()
-            return runCatching { DftCharBufferSerializerImpl.deserialize(charBuffer) }.getOrNull()
+            return DftCharBufferSerializerImpl.deserialize(charBuffer)
         }
 
         fun readNodes(): Iterator<NodeRecord> =
