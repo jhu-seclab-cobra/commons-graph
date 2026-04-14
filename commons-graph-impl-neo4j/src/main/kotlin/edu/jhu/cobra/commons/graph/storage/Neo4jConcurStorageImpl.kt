@@ -38,6 +38,7 @@ class Neo4jConcurStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
+    @Volatile
     private var isClosed: Boolean = false
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
@@ -329,10 +330,4 @@ class Neo4jConcurStorageImpl(
             isClosed = true
         }
 
-    private companion object {
-        private const val SID = "__sid__"
-        private const val TAG = "__tag__"
-        private val NODE_LABEL: Label = Label.label("_N")
-        private val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
-    }
 }

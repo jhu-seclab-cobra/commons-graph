@@ -18,10 +18,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
 
-private const val SID = "__sid__"
-private const val TAG = "__tag__"
-private val NODE_LABEL: Label = Label.label("_N")
-private val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
+internal const val SID = "__sid__"
+internal const val TAG = "__tag__"
+internal val NODE_LABEL: Label = Label.label("_N")
+internal val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
 
 /**
  * Non-concurrent [IStorage] using Neo4j 5.x embedded mode with zero in-memory ID mappings.
