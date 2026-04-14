@@ -1,0 +1,47 @@
+# commons-graph
+
+> Backend-agnostic directed property graph library for Kotlin/JVM with pluggable storage and label-based edge visibility.
+
+commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally. Abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and label hierarchy (poset) for edge visibility control.
+
+Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.graph.storage`. Labels: `edu.jhu.cobra.commons.graph.poset`. Traits: `edu.jhu.cobra.commons.graph.traits`.
+
+## Instructions for Agents
+
+- Use `NodeID` (String typealias) for all graph-level node operations.
+- Identify edges by `(src: NodeID, dst: NodeID, tag: String)` triples at the graph level.
+- Construct nodes via `graph.addNode(withID)`. Construct edges via `graph.addEdge(src, dst, tag)`.
+- Never construct `AbcNode` or `AbcEdge` subclasses directly. The graph layer binds them to storage.
+- Access entity properties via operator syntax: `entity["key"]`, `entity["key"] = value`, `"key" in entity`.
+- Property values are `IValue` types from the commons-value library.
+- Use `AbcMultipleGraph` for graphs allowing multiple edges between the same node pair.
+- Use `AbcSimpleGraph` for graphs allowing at most one edge per direction between any two nodes.
+- Use `Label` for edge visibility control. Pass `Label` to `addEdge`, `getOutgoingEdges`, `getChildren`, etc.
+- `Label.INFIMUM` is below all labels -- use as the visibility floor. `Label.SUPREMUM` is above all -- disables label filtering.
+- Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds only.
+- Close graphs via `graph.close()` to release storage resources. Graphs implement `Closeable`.
+- `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
+- Use `NativeStorageImpl` for single-threaded in-memory graphs.
+- Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
+- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics.
+- Never add language-specific analysis logic to this library. Language mapping belongs in analysis modules.
+
+## Graph API
+
+- [Graph & Base Classes](llms/graph.md): `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph` -- node/edge CRUD, traversal, label-filtered queries.
+
+## Storage
+
+- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs.
+
+## Entities
+
+- [Entities](llms/entity.md): `IEntity`, `AbcEntity`, `AbcNode`, `AbcEdge` -- property access, type delegates, storage binding.
+
+## Labels
+
+- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitNodeGroup` -- label hierarchy, edge visibility, node grouping.
+
+## Optional
+
+- [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.

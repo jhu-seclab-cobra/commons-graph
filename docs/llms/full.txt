@@ -1,0 +1,386 @@
+# commons-graph
+
+> Backend-agnostic directed property graph library for Kotlin/JVM with pluggable storage and label-based edge visibility.
+
+commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally. Abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and label hierarchy (poset) for edge visibility control.
+
+Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.graph.storage`. Labels: `edu.jhu.cobra.commons.graph.poset`. Traits: `edu.jhu.cobra.commons.graph.traits`.
+
+## Instructions for Agents
+
+- Use `NodeID` (String typealias) for all graph-level node operations.
+- Identify edges by `(src: NodeID, dst: NodeID, tag: String)` triples at the graph level.
+- Construct nodes via `graph.addNode(withID)`. Construct edges via `graph.addEdge(src, dst, tag)`.
+- Never construct `AbcNode` or `AbcEdge` subclasses directly. The graph layer binds them to storage.
+- Access entity properties via operator syntax: `entity["key"]`, `entity["key"] = value`, `"key" in entity`.
+- Property values are `IValue` types from the commons-value library.
+- Use `AbcMultipleGraph` for graphs allowing multiple edges between the same node pair.
+- Use `AbcSimpleGraph` for graphs allowing at most one edge per direction between any two nodes.
+- Use `Label` for edge visibility control. Pass `Label` to `addEdge`, `getOutgoingEdges`, `getChildren`, etc.
+- `Label.INFIMUM` is below all labels -- use as the visibility floor. `Label.SUPREMUM` is above all -- disables label filtering.
+- Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds only.
+- Close graphs via `graph.close()` to release storage resources. Graphs implement `Closeable`.
+- `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
+- Use `NativeStorageImpl` for single-threaded in-memory graphs.
+- Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
+- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics.
+- Never add language-specific analysis logic to this library. Language mapping belongs in analysis modules.
+
+## Graph API
+
+- [Graph & Base Classes](llms/graph.md): `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph` -- node/edge CRUD, traversal, label-filtered queries.
+
+## Storage
+
+- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs.
+
+## Entities
+
+- [Entities](llms/entity.md): `IEntity`, `AbcEntity`, `AbcNode`, `AbcEdge` -- property access, type delegates, storage binding.
+
+## Labels
+
+- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitNodeGroup` -- label hierarchy, edge visibility, node grouping.
+
+## Optional
+
+- [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.
+
+
+---
+
+# Referenced Documents
+
+
+## Source: llms/graph.md
+
+# Graph & Base Classes
+
+> Typed directed graph API with abstract base classes for multi-edge and simple-edge graphs.
+
+## Quick Start
+
+```kotlin
+class MyNode : AbcNode() {
+    enum class MyType : AbcNode.Type { DEFAULT }
+    override val type = MyType.DEFAULT
+}
+class MyEdge : AbcEdge() {
+    enum class MyType : AbcEdge.Type { DEFAULT }
+    override val type = MyType.DEFAULT
+}
+class MyGraph(
+    override val storage: IStorage,
+    override val posetStorage: IStorage,
+) : AbcMultipleGraph<MyNode, MyEdge>() {
+    override fun newNodeObj() = MyNode()
+    override fun newEdgeObj() = MyEdge()
+}
+
+val graph = MyGraph(NativeStorageImpl(), NativeStorageImpl())
+val n1 = graph.addNode("a")
+val n2 = graph.addNode("b")
+val edge = graph.addEdge("a", "b", "calls")
+edge["weight"] = NumVal(5)
+graph.close()
+```
+
+## API
+
+### `IGraph<N : AbcNode, E : AbcEdge>`
+
+- **`val nodeIDs: Set<NodeID>`** -- All node IDs in the graph.
+- **`addNode(withID: NodeID): N`** -- Create a node. Raises `EntityAlreadyExistException` if ID exists.
+- **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
+- **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
+- **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
+- **`getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
+- **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
+- **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
+- **`getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
+- **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
+- **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
+- **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
+- **`getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct predecessors via incoming edges.
+- **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
+- **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
+
+### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Closeable`)
+
+- **`abstract val storage: IStorage`** -- Graph data storage backend.
+- **`abstract val posetStorage: IStorage`** -- Label hierarchy storage backend.
+- **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
+- **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
+- **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
+- **`getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered incoming edges.
+- **`getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered successors.
+- **`getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered predecessors.
+- **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
+- **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
+- **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
+- **`close()`** -- Release caches. Does not close the storage instances.
+
+### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
+
+- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Same constraint: at most one edge per direction.
+
+## Gotchas
+
+- `NodeID` is a `String` typealias. Callers provide node IDs; the graph manages internal `Int` storage IDs.
+- `delNode` cascades to all incident edges. No orphan edges remain.
+- `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
+- `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
+- `close()` clears graph caches but does not call `storage.close()` or `posetStorage.close()`. Close storage separately.
+- `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
+- All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.
+
+
+---
+
+
+## Source: llms/storage.md
+
+# Storage Backends
+
+> Pluggable graph storage with auto-generated Int IDs, property management, and adjacency queries.
+
+## Quick Start
+
+```kotlin
+val storage = NativeStorageImpl()
+val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
+val nodeB = storage.addNode()
+val edgeId = storage.addEdge(nodeA, nodeB, "calls")
+storage.setEdgeProperties(edgeId, mapOf("weight" to NumVal(5)))
+storage.close()
+```
+
+## API
+
+### `IStorage` (extends `Closeable`)
+
+#### Node Operations
+
+- **`val nodeIDs: Set<Int>`** -- All node IDs. Raises `AccessClosedStorageException` if closed.
+- **`containsNode(id: Int): Boolean`** -- Check node existence.
+- **`addNode(properties: Map<String, IValue> = emptyMap()): Int`** -- Create node, return auto-generated ID.
+- **`getNodeProperties(id: Int): Map<String, IValue>`** -- All properties. Raises `EntityNotExistException` if absent.
+- **`getNodeProperty(id: Int, name: String): IValue?`** -- Single property. Returns `null` if property absent.
+- **`setNodeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete the property.
+- **`deleteNode(id: Int)`** -- Delete node and all incident edges.
+
+#### Edge Operations
+
+- **`val edgeIDs: Set<Int>`** -- All edge IDs.
+- **`containsEdge(id: Int): Boolean`** -- Check edge existence.
+- **`addEdge(src: Int, dst: Int, tag: String, properties: Map<String, IValue> = emptyMap()): Int`** -- Create edge, return auto-generated ID. Raises `EntityNotExistException` if endpoints missing.
+- **`getEdgeStructure(id: Int): EdgeStructure`** -- Returns `EdgeStructure(src: Int, dst: Int, tag: String)`.
+- **`getEdgeProperties(id: Int): Map<String, IValue>`** -- All properties.
+- **`getEdgeProperty(id: Int, name: String): IValue?`** -- Single property.
+- **`setEdgeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete.
+- **`deleteEdge(id: Int)`** -- Delete an edge.
+
+#### Adjacency
+
+- **`getIncomingEdges(id: Int): Set<Int>`** -- Incoming edge IDs to a node.
+- **`getOutgoingEdges(id: Int): Set<Int>`** -- Outgoing edge IDs from a node.
+
+#### Metadata
+
+- **`val metaNames: Set<String>`** -- All metadata property names.
+- **`getMeta(name: String): IValue?`** -- Retrieve metadata value.
+- **`setMeta(name: String, value: IValue?)`** -- Set or delete (`null`) metadata.
+
+#### Lifecycle
+
+- **`clear()`** -- Remove all nodes, edges, and metadata.
+- **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. Returns node ID mapping (source to target).
+- **`close()`** -- Release resources. All operations raise `AccessClosedStorageException` after close.
+
+### Implementations
+
+- **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
+- **`NativeConcurStorageImpl`** -- In-memory, thread-safe with read-write locks. No constructor parameters.
+- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines.
+
+### `LayeredStorageImpl` Extra API
+
+- **`val layerCount: Int`** -- Number of layers (1 = active only, 2 = active + frozen).
+- **`freeze()`** -- Merge active layer into frozen layer. Resets active layer.
+
+### External Backend Modules
+
+- **`JgraphtStorageImpl`** -- JGraphT backend (module: `commons-graph-impl-jgrapht`).
+- **`JgraphtConcurStorageImpl`** -- Concurrent JGraphT backend.
+- **`MapDBStorageImpl`** -- MapDB persistent backend (module: `commons-graph-impl-mapdb`).
+- **`MapDBConcurStorageImpl`** -- Concurrent MapDB backend.
+- **`Neo4jStorageImpl`** -- Neo4j backend (module: `commons-graph-impl-neo4j`).
+- **`Neo4jConcurStorageImpl`** -- Concurrent Neo4j backend.
+
+## Gotchas
+
+- `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
+- `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs.
+- `deleteNode` cascades to all incident edges in the same storage.
+- `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
+- `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.
+- `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
+- `NativeConcurStorageImpl` returns snapshot copies from adjacency queries. Mutations after retrieval do not affect the snapshot.
+
+
+---
+
+
+## Source: llms/entity.md
+
+# Entities
+
+> Graph entities (nodes, edges) with storage-backed typed property access.
+
+## Quick Start
+
+```kotlin
+val node = graph.addNode("myNode")
+node["color"] = "red".strVal
+val color = node["color"] as? StrVal
+val hasColor = "color" in node
+val allProps = node.asMap()
+
+val edge = graph.addEdge("a", "b", "calls")
+edge["weight"] = NumVal(10)
+edge.update(mapOf("weight" to NumVal(20), "stale" to null))
+```
+
+## API
+
+### `IEntity` (sealed interface)
+
+- **`val id: String`** -- Unique identifier. For nodes: user-provided `NodeID`. For edges: `"$src-$tag-$dst"`.
+- **`val type: IEntity.Type`** -- Entity type information. `IEntity.Type` has `val name: String`.
+- **`operator get(name: String): IValue?`** -- Retrieve property. Returns `null` if absent.
+- **`operator set(name: String, value: IValue?)`** -- Set property. Pass `null` to remove.
+- **`operator contains(name: String): Boolean`** -- Check property existence.
+- **`fun asMap(): Map<String, IValue>`** -- Snapshot of all properties.
+- **`fun update(props: Map<String, IValue?>)`** -- Bulk update. `null` values remove properties.
+
+### `AbcEntity` (sealed class, implements `IEntity`)
+
+- **`inline fun <reified T : IValue> getTypeProp(name: String): T?`** -- Type-safe property retrieval. Returns `null` on type mismatch.
+- **`protected fun EntityProperty(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for non-nullable typed property with default.
+- **`protected fun EntityProperty(optName: String? = null): ReadWriteProperty`** -- Delegate for nullable typed property.
+- **`protected fun EntityType(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for enum-based `IEntity.Type` property.
+
+### `AbcNode` (extends `AbcEntity`)
+
+- **`val nodeId: NodeID`** -- User-provided node identifier (same as `id`).
+- **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
+- **`abstract val type: AbcNode.Type`** -- Node type. Subclasses implement `AbcNode.Type` as an enum.
+- **`fun doUseStorage(target: IStorage): Boolean`** -- Check if node is bound to a specific storage.
+
+### `AbcEdge` (extends `AbcEntity`)
+
+- **`val srcNid: NodeID`** -- Source node ID.
+- **`val dstNid: NodeID`** -- Destination node ID.
+- **`val eTag: String`** -- Edge tag.
+- **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
+- **`var labels: Set<Label>`** -- Visibility labels assigned to this edge.
+- **`abstract val type: AbcEdge.Type`** -- Edge type. Subclasses implement `AbcEdge.Type` as an enum.
+
+### Property Delegate Usage
+
+```kotlin
+class MyNode : AbcNode() {
+    enum class MyType : AbcNode.Type { FUNC, CLASS }
+    override var type: MyType by EntityType(default = MyType.FUNC)
+    var name: StrVal by EntityProperty(default = StrVal())
+    var optData: NumVal? by EntityProperty()
+}
+```
+
+## Gotchas
+
+- Never instantiate `AbcNode` or `AbcEdge` subclasses directly. The graph layer calls `bind()` to inject storage and identity.
+- `AbcNode` filters the internal `__nid__` property from all user-facing APIs (`get`, `set`, `contains`, `asMap`, `update`). Setting `__nid__` raises `IllegalArgumentException`.
+- `AbcNode.equals` compares by `NodeID`. `AbcEdge.equals` compares by `storageId`.
+- `EntityType` delegate persists the enum name as a `StrVal` property. Renaming enum entries breaks deserialization.
+- `EntityProperty` nullable delegate silently ignores `null` writes -- it does not remove the property.
+- Property reads and writes go directly to storage. No local caching in the entity object.
+
+
+---
+
+
+## Source: llms/label.md
+
+# Labels & Poset
+
+> Label hierarchy (partial order set) for edge visibility control, plus node grouping trait.
+
+## Quick Start
+
+```kotlin
+val graph = MyGraph(NativeStorageImpl(), NativeStorageImpl())
+val v1 = Label("v1")
+val v2 = Label("v2")
+
+with(graph) {
+    v2.parents = mapOf("base" to v1)
+    val edge = addEdge("a", "b", "calls", v1)
+    val visible = getOutgoingEdges("a", v2)
+}
+```
+
+## API
+
+### `Label` (inline value class)
+
+- **`Label(core: LabelID)`** -- Create from string. `LabelID` is a `String` typealias.
+- **`Label(strVal: StrVal)`** -- Create from `StrVal`.
+- **`val core: LabelID`** -- The underlying string identifier.
+- **`Label.INFIMUM: Label`** -- Greatest lower bound. Below all labels in the poset.
+- **`Label.SUPREMUM: Label`** -- Least upper bound. Above all labels in the poset.
+
+### `IPoset` (interface, implemented by `AbcMultipleGraph`)
+
+- **`val allLabels: Set<Label>`** -- All registered labels, including `INFIMUM` and `SUPREMUM`.
+- **`var Label.parents: Map<String, Label>`** -- Named parent labels. Setting replaces all parents. Reading returns current parents.
+- **`val Label.ancestors: Sequence<Label>`** -- All transitive ancestors through the parent hierarchy.
+- **`fun Label.compareTo(other: Label): Int?`** -- Compare in hierarchy. Positive if `this > other`, negative if `this < other`, `0` if equal, `null` if incomparable.
+
+### Edge Visibility Rules
+
+- An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy.
+- `Label.SUPREMUM` disables label filtering -- all edges pass.
+- `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
+- Edges with no labels are visible only when no label filter is applied.
+
+### `TraitNodeGroup<N, E>` (interface, extends `IGraph`)
+
+- **`val groupPrefix: String`** -- Prefix for grouped node IDs. Typically the graph name.
+- **`val groupedNodesCounter: MutableMap<String, Int>`** -- Monotonic counter per group name.
+- **`addGroupNode(group: String, suffix: String? = null): N`** -- Add node with ID `prefix@group#suffix`. Auto-generates suffix from counter when `null`. Raises `IllegalArgumentException` if group not in `groupedNodesCounter`.
+- **`addGroupNode(sameGroupNode: AbcNode, suffix: String? = null): N`** -- Add node to same group as existing node.
+- **`getGroupNode(group: String, suffix: String): N?`** -- Retrieve grouped node.
+- **`getGroupName(node: AbcNode): String?`** -- Extract group name from node ID. Returns `null` if format invalid.
+
+### Node ID Format
+
+- Grouped node IDs follow: `{prefix}@{group}#{suffix}`.
+- `@` and `#` are reserved delimiters. Group names and suffixes must not contain them.
+
+## Gotchas
+
+- Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
+- `Label.parents` setter replaces all parents. Merge with existing parents if appending: `label.parents = label.parents + mapOf("new" to parentLabel)`.
+- `Label.compareTo` returns `null` for incomparable labels. Always handle the `null` case.
+- `IPoset` operations require the `AbcMultipleGraph` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
+- `TraitNodeGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
+- Group counters only increase. Deleting grouped nodes does not decrement the counter.
+
+
+---
