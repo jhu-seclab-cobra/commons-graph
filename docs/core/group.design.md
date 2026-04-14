@@ -45,7 +45,7 @@ interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
 A string prefix for all generated node IDs. `@` characters stripped when constructing node IDs.
 
 **`groupedNodesCounter`**
-Maps each registered group name to its next auto-increment value. Group must be registered (key present) before `addGroupNode` can be called. Counter only increases -- deletions do not decrement, ensuring O(1) creation without existence checks. For concurrent implementations, use a thread-safe type (`ConcurrentHashMap`) since `compute` is used for atomic increment.
+Maps each registered group name to its next auto-increment value. Group must be registered (key present) before `addGroupNode` can be called.
 
 **Methods:**
 

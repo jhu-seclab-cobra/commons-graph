@@ -1,12 +1,12 @@
-# Storage Module Design -- IStorage and NativeStorageImpl
+# Storage Module Design -- IStorage, NativeStorageImpl, and NativeConcurStorageImpl
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `NativeStorageImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`
+- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `NativeStorageImpl`, `NativeConcurStorageImpl`
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`
 - **Abstract**: `IStorage` (implemented by all storage types)
 - **Exceptions**: `AccessClosedStorageException` raised on closed storage; `EntityNotExistException` raised on missing entity access
-- **Dependency roles**: Data holders: `IValue`, `EdgeStructure`. Orchestrator: `IStorage` implementations.
+- **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations.
 
 The storage layer is the **backend-agnostic directed property graph engine**. It manages nodes and edges identified by auto-generated `Int` IDs, per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), edge structural metadata (source, destination, tag), and graph-level metadata. It does not know about domain types (`Label`).
 
@@ -70,26 +70,19 @@ interface IStorage : Closeable {
 
 ### NativeStorageImpl
 
-**Responsibility:** Pure in-memory `IStorage` implementation using `HashMap` with auto-generated `Int` IDs. Not thread-safe.
+**Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe.
 
-**State / Fields:**
+- After `close()`, all state is cleared and `isClosed` is set; subsequent operations throw `AccessClosedStorageException`
 
-```
-nodeColumns:    HashMap<String, HashMap<Int, IValue>>  <- one column per property name
-edgeColumns:    HashMap<String, HashMap<Int, IValue>>  <- one column per property name
-edgeEndpoints:  HashMap<Int, EdgeStructure>            <- edge ID -> (src, dst, tag)
-outEdges:       HashMap<Int, MutableSet<Int>>          <- node ID -> outgoing edge IDs
-inEdges:        HashMap<Int, MutableSet<Int>>          <- node ID -> incoming edge IDs
-metaProperties: HashMap<String, IValue>
-nodeCounter:    Int                                    <- auto-increment
-edgeCounter:    Int                                    <- auto-increment
-```
+---
 
-- Node existence determined by `outEdges.containsKey(id)` -- no separate node set
-- Columnar property storage: one `HashMap<Int, IValue>` per property name (column)
-- `getNodeProperties` returns a zero-copy `ColumnViewMap` that assembles properties lazily from columns
-- All operations are O(1) average
-- After `close()`, all maps are cleared and `isClosed` is set; subsequent operations throw `AccessClosedStorageException`
+### NativeConcurStorageImpl
+
+**Responsibility:** Thread-safe in-memory `IStorage` with `ReentrantReadWriteLock`.
+
+- Multiple concurrent reads allowed (read lock)
+- Writes are exclusive (write lock)
+- `nodeIDs` and `edgeIDs` return snapshot copies for thread safety
 
 ---
 
@@ -110,3 +103,8 @@ edgeCounter:    Int                                    <- auto-increment
 - `addEdge` rejects edges whose src or dst node does not exist with `EntityNotExistException`
 - Property access/modification on non-existent entities throws `EntityNotExistException`
 - `deleteNode` cascades -- all incident edges removed before the node is deleted
+
+### NativeConcurStorageImpl
+
+- Read operations acquire read lock; write operations acquire write lock
+- Adjacency snapshot invalidated on write; rebuilt lazily on next read

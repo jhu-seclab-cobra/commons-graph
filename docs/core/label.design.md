@@ -2,13 +2,13 @@
 
 ## Design Overview
 
-- **Classes**: `Label`, `LabelID`, `IPoset`, `AbcMultipleGraph` (label integration), `AbcEdge` (label storage)
-- **Relationships**: `IPoset` defines the poset contract; `AbcMultipleGraph` implements `IPoset` using a dedicated `IStorage` for the label DAG; `AbcEdge.labels` stores label assignments
+- **Classes**: `Label`, `LabelID`, `IPoset`
+- **Relationships**: `IPoset` defines the poset contract; `AbcMultipleGraph` implements `IPoset` using a dedicated `IStorage` for the label DAG (see `docs/basic/graph.design.md`); `AbcEdge.labels` stores label assignments (see `docs/basic/entity.design.md`)
 - **Abstract**: `IPoset` (implemented by `AbcMultipleGraph`)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
 - **Dependency roles**: Data holders: `Label`. Orchestrator: `AbcMultipleGraph` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence).
 
-The label system provides **label-based edge visibility** integrated into `IGraph`, `IPoset`, and `AbcMultipleGraph`. The poset structure over `Label` values is defined by `IPoset`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are declared on `AbcMultipleGraph` (see `docs/basic/graph.design.md`). `AbcMultipleGraph` implements `IPoset` with a **dedicated poset `IStorage`** -- labels stored as nodes (with a `"label"` property holding `Label.core` as `StrVal`), parent relationships as edges (`child -> parent`, edge tag = relationship name).
+The label system provides **label-based edge visibility** integrated into `IGraph`, `IPoset`, and `AbcMultipleGraph`. The poset structure over `Label` values is defined by `IPoset`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are declared on `AbcMultipleGraph` (see `docs/basic/graph.design.md`). `AbcMultipleGraph` implements `IPoset` with a **dedicated poset `IStorage`** -- labels stored as nodes, parent relationships as edges (`child -> parent`, edge tag = relationship name).
 
 ---
 
@@ -75,28 +75,26 @@ Getting reads from a `ListVal` property named `"labels"` on the edge via storage
 
 ---
 
-### AbcMultipleGraph (label implementation)
+### AbcMultipleGraph (label integration)
 
 **Responsibility:** Implements `IPoset` using a dedicated `posetStorage: IStorage` instance.
 
-The poset store uses auto-generated `Int` IDs. Each label node has a `"label"` property storing `Label.core` as `StrVal`:
+The poset store uses auto-generated `Int` IDs:
 
 | Poset concept | IStorage mapping |
 |---------------|-------------------|
 | Label `L` | Node with property `"label"` = `L.core` as `StrVal` |
 | `L.parents = mapOf("sub" to P)` | Edge from `L`'s node to `P`'s node, tag = `"sub"` |
 
-`allLabels` derived from `posetStorage.nodeIDs` (reading `"label"` property from each node) plus `INFIMUM` and `SUPREMUM`.
+`allLabels` derived from `posetStorage.nodeIDs` plus `INFIMUM` and `SUPREMUM`.
 
-`labelIdCache: HashMap<String, Int>` maps label core strings to poset storage `Int` IDs. `posetIntToLabel: HashMap<Int, String>` provides the reverse mapping. Both populated eagerly on first access.
+`Label.parents` getter reads outgoing edges from the label node -- each edge's destination is a parent label, the edge tag is the relationship name. Setter removes all existing parent edges and creates new ones.
 
-`Label.parents` getter reads outgoing edges from the label node -- each edge's destination is a parent label, the edge tag is the relationship name. Setter removes all existing parent edges and creates new ones. Setting parents clears the `compareTo` query cache.
+`Label.ancestors` performs BFS over parent edges, yielding ancestor labels transitively.
 
-`Label.ancestors` performs BFS over parent edges using `posetStorage.getOutgoingEdges` + `posetStorage.getEdgeStructure`, yielding ancestor labels transitively.
+`Label.compareTo(other)` performs bidirectional reachability queries via `ancestors` traversal.
 
-`Label.compareTo(other)` performs bidirectional reachability queries via `ancestors` traversal. Results cached in a `MutableMap<Pair<Label, Label>, Int?>`. Cache cleared when `Label.parents` is set.
-
-`close()` clears internal caches only. Poset state persisted in the poset store.
+**Close contract:** `close()` releases internal resources. Poset state persisted in the poset store.
 
 Label-filtered graph traversal methods are documented in `docs/basic/graph.design.md`.
 

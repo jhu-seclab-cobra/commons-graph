@@ -85,23 +85,18 @@ Delegates call `get`/`set` internally, so all reads/writes go through storage.
 
 ```kotlin
 abstract class AbcNode : AbcEntity() {
-    protected lateinit var storage: IStorage   // injected by bind()
     var storageId: Int                         // injected by bind()
     lateinit var nodeId: NodeID                // injected by bind()
     internal fun bind(storage: IStorage, storageId: Int, nodeId: NodeID)
     override val id: NodeID                    // delegates to nodeId
     abstract override val type: AbcNode.Type
-    fun doUseStorage(target: IStorage): Boolean
 }
 ```
 
-- `storage` -- the backing `IStorage`, injected via `bind()`
 - `storageId` -- the storage-internal `Int` ID, injected via `bind()`; used for all storage operations
 - `nodeId` -- the user-provided `NodeID`, injected via `bind()`
 - `id` -- returns `nodeId`
-- `doUseStorage(target)` -- returns true if the entity's storage matches the given target
-- `hashCode()` -- based on `storageId`
-- `equals()` -- compares by `id`
+- `bind()` -- post-construction injection of storage reference, storage ID, and node ID
 - Property access filters the internal `PROP_NODE_ID` property from all user-facing APIs
 
 ---
@@ -114,7 +109,6 @@ abstract class AbcNode : AbcEntity() {
 
 ```kotlin
 abstract class AbcEdge : AbcEntity() {
-    protected lateinit var storage: IStorage   // injected by bind()
     var storageId: Int                         // injected by bind()
     lateinit var srcNid: NodeID                // injected by bind()
     lateinit var dstNid: NodeID                // injected by bind()
@@ -126,13 +120,11 @@ abstract class AbcEdge : AbcEntity() {
 }
 ```
 
-- `storage` -- the backing `IStorage`, injected via `bind()`
 - `storageId` -- the storage-internal `Int` ID, injected via `bind()`
 - `srcNid` / `dstNid` -- source and destination `NodeID`s, injected at bind time
 - `eTag` -- the edge tag, injected at bind time
 - `labels` -- the set of `Label` values, backed by a `ListVal` storage property named `"labels"`
-- `hashCode()` -- based on `storageId`
-- `equals()` -- compares by `storageId`
+- `bind()` -- post-construction injection of storage reference, storage ID, and structural info
 - `toString()` format: `{srcNid-eTag-dstNid, type}`
 
 ---

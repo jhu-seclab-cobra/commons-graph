@@ -10,7 +10,7 @@
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
 
-The graph layer maintains bidirectional `NodeID`-to-`Int` mapping and a nested edge index (`src -> tag -> dst -> storageId`), delegating to `IStorage` via auto-generated `Int` IDs. Edge lookup by `(src, dst, tag)` uses the nested index with zero String allocation.
+The graph layer maintains bidirectional `NodeID`-to-`Int` mapping and a nested edge index (`src -> tag -> dst -> storageId`), delegating to `IStorage` via auto-generated `Int` IDs.
 
 ---
 
@@ -73,18 +73,11 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 AbcMultipleGraph
 +-- abstract storage: IStorage          <- main graph storage
 +-- abstract posetStorage: IStorage     <- label hierarchy storage
-+-- nodeEntries: HashMap<NodeID, NodeEntry<N>>    <- NodeID -> (nodeId, storageId, ref)
-+-- nodeByStorageId: HashMap<Int, NodeEntry<N>>   <- reverse mapping
-+-- edgeIndex: HashMap<NodeID, HashMap<String, HashMap<NodeID, Int>>>  <- src->tag->dst->storageId
-+-- edgeCache: HashMap<Int, SoftReference<E>>
-+-- labelIdCache: HashMap<String, Int>            <- label core -> poset storage Int ID
 +-- newNodeObj(): N                     <- subclass entity factory (protected abstract)
 +-- newEdgeObj(): E                     <- subclass entity factory (protected abstract)
 ```
 
-**Entity caching:** `SoftReference`-based caches. Entity objects created via `newNodeObj()` / `newEdgeObj()` then initialized via `bind()`. BFS traversals use `Int` visited sets for identity-function hashCode.
-
-**Close behavior:** Clears all internal caches. Does not close storage instances.
+**Close contract:** `close()` releases internal resources. Does not close storage instances.
 
 **Label-filtered methods (concrete class, not inherited from IGraph):**
 
@@ -99,7 +92,7 @@ AbcMultipleGraph
 | `getDescendants(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
 | `getAncestors(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
 
-**Edge visibility rule:** An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded. `Label.SUPREMUM` sees all edges.
+Edge visibility rule: see `docs/core/label.design.md`.
 
 ---
 
@@ -120,5 +113,4 @@ Deletion of a non-existent entity is a no-op at the graph level.
 ### AbcMultipleGraph
 
 - Both src and dst nodes must exist before adding an edge
-- `nodeIDs` derives from `nodeEntries.keys`
-- Edge lookup by `(src, dst, tag)` uses nested `edgeIndex` map with zero String allocation
+- Edge lookup by `(src, dst, tag)` uses nested edge index
