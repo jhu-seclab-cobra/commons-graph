@@ -2,32 +2,17 @@
 
 Paired design: `storage.design.md`
 
----
-
 ## Current Baseline
 
-Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS (HotSpot C2 JIT), G1GC with tuned flags.
-Each metric is the **median of 3-5 independent measured iterations** after JIT warmup.
-**Each implementation runs in a separate JVM invocation** to eliminate JIT cross-contamination.
+macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Median of 3-5 iterations after JIT warmup. Separate JVM per implementation.
 
-Run with (isolated per implementation):
 ```bash
-# Per-implementation isolation (recommended for cross-implementation comparison)
 ./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests -Pbenchmark.impl=NativeStorageImpl --rerun
-./gradlew :graph:test --tests "*.GraphPerformanceTest" -PincludePerformanceTests -Pbenchmark.impl=NativeStorage --rerun
-
-# All implementations in single JVM (faster but JIT cross-contamination biases later runs)
-./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
 ```
 
 JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`
 
-> **Note**: IStorage uses auto-generated `Int` IDs. The graph layer (`AbcMultipleGraph`) maintains
-> `NodeID↔Int` bidirectional mapping. All HashMap lookups use Int keys in the storage layer,
-> providing identity-function hashCode for optimal performance.
->
-> **Node property storage**: NativeStorageImpl uses columnar layout — one `HashMap<Int, IValue>` per property name.
-> This reduces per-node object count from O(N) maps to O(K) columns (K = distinct property names, typically K << N).
+Int-keyed storage (identity-function hashCode). NativeStorageImpl uses columnar layout -- one `HashMap<Int, IValue>` per property name (O(K) columns, K << N).
 
 ### Storage-Level Benchmarks
 
@@ -131,9 +116,18 @@ JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:I
 
 ---
 
-## Key Improvements
+## Cross-Implementation Comparison
 
-See individual entries in completed optimizations below. Summary of per-optimization deltas available in each entry's **Result** field.
+| Metric (best config) | Native | JGraphT | MapDB (memDB) | Neo4j |
+|---|---|---|---|---|
+| Population 10K/30K (ms) | 9.3 | 18.5 | 150.9 (5K/15K) | 37,959 (1K/3K) |
+| Node lookup (ops/s) | 128.09M | 40.46M | 1.14M | 23.40M |
+| Property read (ops/s) | 51.46M | 81.13M | 1.61M | 452.5K |
+| Edge query out (ops/s) | 101.66M | 8.97M | 1.43M | 696.8K |
+
+---
+
+## Key Improvements
 
 ### Completed Optimizations
 
@@ -158,34 +152,48 @@ See individual entries in completed optimizations below. Summary of per-optimiza
 
 ---
 
+## Evaluated & Rejected
+
+| ID | Title | Result | Reason |
+|---|---|---|---|
+| P6-3 | Pre-sized HashMap in collectNodeProperties/collectEdgeProperties | -20% read regression | Over-allocates when entities use subset of columns; larger table hurts cache locality |
+| P6-4 | Pure copy-on-write adjacency (immutable Set + rebuild) | Edge query +300%, but edge add -86% at 1M | Kotlin `Set + element` rebuilds full LinkedHashSet; hub nodes cause O(n^2) write |
+| P6-5 | Replace SoftReference cache with direct HashMap | Not measured | SoftReference provides GC elasticity for large graphs (1M+ nodes); risks OOM |
+| P6-6 | Set.copyOf() in getIncomingEdges/getOutgoingEdges | -21% out, -19% in | `Set.copyOf()` re-hashes; `HashSet(set)` copies table structure directly |
+| P6-7 | toTypedArray() in deleteNode edge snapshot | -18% regression | Reflective array creation; `toList()` uses `Object[]` directly |
+| P9-2 | Native Int storage for __sid__ | Already optimized | `__sid__` stored as native `Long`, not serialized through `DftByteArraySerializerImpl` |
+| P9-5 | Eclipse Collections for ID mapping | Not applicable | Current zero-mapping architecture uses no in-memory ID maps |
+
+---
+
+## Candidates
+
+### P6-2: NativeStorage cold getNode slower than warm
+
+Cold 29.73M vs warm 57.60M (1.9x). Gap reduced from 3.2x by I4. Proposed: eliminate SoftReference or use LRU cache. Risk: medium (GC behavior change).
+
+---
+
+## Remaining Known Bottlenecks
+
+- getChildren caps at ~3M ops/sec: `getOutgoingEdges()` -> `cachedEdge()` -> `getNode(it.dstNid)`.
+- NativeConcurStorageImpl read-lock: 34.30M vs 51.46M (1.5x). Not actionable without JMH isolation.
+- Neo4j population: 37,959ms for 1K/3K. WAL + lock manager overhead per write transaction.
+- MapDB serialization: 1.61M property read vs 51.46M NativeStorage.
+
+---
+
 ## Key Insights
 
-1. **NativeStorageImpl is fastest for single-threaded read/write.** Property read 51M, edge queries 102M/106M (isolated JVM).
-
-2. **Columnar node storage reduces memory and improves GC-sensitive paths.** Fewer per-node objects (O(K) columns vs O(N) maps).
-
-3. **LayeredStorage property read approaches NativeStorage in single-layer mode.** ColumnViewMap provides O(1) per-key lookups without materializing the full property map.
-
-4. **Graph-level getChildren caps at ~3M ops/sec.** Bottleneck: `getOutgoingEdges()` -> `cachedEdge()` -> `getNode(it.dstNid)`.
-
-5. **Cold vs warm gap reduced to ~2x.** Down from 3.2x (pre-I4) -> ~2x (post-I15). Dominant cost was `AbcNode.toString().hashCode()`.
-
-6. **Edge index provides O(1) findEdge.** Benefits `getEdge`, `containEdge`, `delEdge`, and label-aware `addEdge`.
-
-7. **Label hierarchy uses native edge encoding.** `Label.parents` uses posetStorage edges instead of MapVal property serialization.
-
-8. **JIT cross-contamination requires per-implementation JVM isolation.** Use `-Pbenchmark.impl=<name>` for reliable cross-implementation comparisons.
-
-9. **Memory footprint is similar across implementations.** NativeStorage 97 MB, ConcurStorage 104 MB, LayeredStorage 97 MB (50K nodes + 150K edges).
-
-10. **`Set.copyOf()` vs `HashSet(set)` depends on context.** Key-set snapshots: `Set.copyOf()` is compact. Adjacency snapshots: `HashSet(set)` is 20% faster (copies table structure directly).
-
-11. **`toTypedArray()` is slower than `toList()` for generic Set snapshots.** Reflective array creation vs direct `Object[]`.
-
-12. **Snapshot-on-demand beats copy-on-read and pure copy-on-write.** 55M read with O(1) write vs 7M copy-on-read or catastrophic O(n^2) write.
-
-13. **SoftReference is critical for GC elasticity in graph caches.** Removing SoftReference risks OOM on large graphs (1M+ nodes).
-
-14. **Double HashMap lookup is measurable in hot paths.** `map[id] ?: throw` saves one lookup. 10-15% improvement at 100M+ ops/sec.
-
-15. **`toString().hashCode()` is catastrophically expensive in tight loops.** Cold query +270% by switching to `nodeId.hashCode()`.
+1. **NativeStorageImpl is fastest for single-threaded read/write.** Property read 51M, edge queries 102M/106M.
+2. **Columnar node storage reduces memory and improves GC-sensitive paths.** O(K) columns vs O(N) maps.
+3. **LayeredStorage property read approaches NativeStorage in single-layer mode.** ColumnViewMap O(1) per-key without materializing full map.
+4. **Cold vs warm gap reduced to ~2x.** Down from 3.2x (pre-I4) via `AbcNode.hashCode()` fix (I15).
+5. **Edge index provides O(1) findEdge.** Benefits `getEdge`, `containEdge`, `delEdge`, and label-aware `addEdge`.
+6. **Label hierarchy uses native edge encoding.** Poset edges instead of MapVal property serialization.
+7. **JIT cross-contamination requires per-implementation JVM isolation.** Use `-Pbenchmark.impl=<name>`.
+8. **Memory footprint is similar across implementations.** 97-104 MB at 50K nodes + 150K edges.
+9. **Snapshot-on-demand beats copy-on-read and copy-on-write.** 55M read with O(1) write vs 7M or O(n^2).
+10. **SoftReference is critical for GC elasticity.** Removing risks OOM on large graphs (1M+ nodes).
+11. **Double HashMap lookup is measurable in hot paths.** 10-15% improvement at 100M+ ops/sec.
+12. **`toString().hashCode()` is catastrophically expensive in tight loops.** Cold query +270% by switching to `nodeId.hashCode()`.

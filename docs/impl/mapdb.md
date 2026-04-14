@@ -24,7 +24,6 @@ Paired design: `storage.design.md`
 
 - File-based DB collections must use `.createOrOpen()`, not `.create()` (reopening after restart would fail).
 - Use `.create()` only when a fresh state is explicitly needed (e.g., single-write IO temp file).
-- `MapVal.add(key, value)` is mutable; for off-heap storage, re-`put` to DB after modification, otherwise changes are not persisted.
 - MapDB 3.x non-transactional mode: `db.close()` persists data; no `commit()` needed.
 - `closeOnJvmShutdown()` is a safety net; call `close()` explicitly as primary path.
 
@@ -39,42 +38,6 @@ Paired design: `storage.design.md`
 | `hashMap` | node/edge properties, graph structure | O(1) read/write, primary storage |
 | `indexTreeList` | IO import/export sequences | ordered list, suited for full-scan iteration |
 
-#### EntityPropertyMap internal structure
-
-- `identities`: `hashMap<Int, SetVal>().counterEnable().createOrOpen()` — stores the set of property key names per entity (Int ID key, via `MapDbIDSerializer`)
-- `propertiesMap`: `hashMap<String, IValue>().createOrOpen()` — flattened storage with composite key `"$entityId:$propName"`
-
-`counterEnable()` makes `size` query O(1) (maintains internal counter). Without it, `size` requires O(n) scan.
-
-### Adjacency storage: serialization overhead
-
-**Source:** MapDB source `StoreDirect`, `Store2.serialize`; deepwiki jankotek/mapdb
-
-**Problem:** `MapDBStorageImpl` uses in-memory `HashMap<Int, MutableSet<Int>>` for adjacency (`outEdges`, `inEdges`), avoiding MapDB serialization for topology. Property storage goes through `EntityPropertyMap`, which uses MapDB off-heap maps with `MapDbValSerializer`.
-
-**MapDB copy-on-write:** MapDB `StoreDirect` uses copy-on-write for value updates. Modifying a stored collection requires full re-serialization and write-back. Even adding one property key to the `identities` SetVal requires: serialize entire new SetVal, allocate new off-heap space, release old space.
-
-### concurrencyDisable() effect
-
-**Source:** MapDB source `Store2` (`ReentrantLock`, `ReentrantReadWriteLock`); deepwiki jankotek/mapdb
-
-`concurrencyDisable()` removes MapDB's internal `structuralLock`, `newRecidLock`, and segmented `locks` array overhead. In single-thread scenarios:
-- Eliminates per-get/put lock acquisition/release.
-- For high-frequency property reads (e.g., `getNodeProperties` per-attribute access), cumulative savings are significant.
-
-`MapDBStorageImpl` (single-thread) correctly enables this. `MapDBConcurStorageImpl` (multi-thread) uses external `ReentrantReadWriteLock` coordination while keeping MapDB internal concurrency enabled.
-
-### fileMmapEnableIfSupported() effect
-
-**Source:** MapDB source `MappedFileVol`, `FileChannel.map`; deepwiki jankotek/mapdb
-
-| Mode | Read/write method | Advantage |
-|------|------------------|-----------|
-| RandomAccessFile (default) | System call per read/write | Better compatibility |
-| **Memory-mapped (mmap)** | Direct memory access, OS page cache | Significant large-file improvement; avoids user/kernel switch |
-
-File-based DB should always enable `fileMmapEnableIfSupported()` (currently used correctly).
-
 ### Serialization
 
 `MapDbValSerializer<T>` bridges `DftByteArraySerializerImpl` and MapDB `Serializer` interface, delegating to `Serializer.BYTE_ARRAY` for underlying bytes. `isTrusted()` returns `true`, consistent with `Serializer.BYTE_ARRAY`.
@@ -87,3 +50,12 @@ File-based DB should always enable `fileMmapEnableIfSupported()` (currently used
 | `Serializer.BYTE_ARRAY` | Underlying byte handling delegated to built-in implementation |
 | `MapDbValSerializer<T>` | `IValue` subtypes, bridges `DftByteArraySerializerImpl` |
 | `MapDbIDSerializer` | Entity Int IDs, serializes via `NumVal` through same path |
+
+### fileMmapEnableIfSupported() effect
+
+| Mode | Read/write method | Advantage |
+|------|------------------|-----------|
+| RandomAccessFile (default) | System call per read/write | Better compatibility |
+| **Memory-mapped (mmap)** | Direct memory access, OS page cache | Significant large-file improvement; avoids user/kernel switch |
+
+File-based DB should always enable `fileMmapEnableIfSupported()`.

@@ -37,48 +37,9 @@ Paired designs: all modules (global dependency)
 
 ## Design-specific
 
-### Serialization overhead across modules
-
-**Source:** deepwiki jankotek/mapdb (Serializer analysis), deepwiki neo4j/neo4j (ValueRepresentation analysis)
-
-`DftByteArraySerializerImpl` is the serialization bottleneck for all persistent modules. Every property read/write goes through the full serialize/deserialize chain:
-
-| Module | Serialization path | Per-property-operation cost |
-|--------|-------------------|----------------------------|
-| Neo4j | `IValue -> DftByteArraySerializerImpl -> ByteArray -> Neo4j setProperty` | serialize + DB write |
-| MapDB | `IValue -> DftByteArraySerializerImpl -> ByteArray -> Serializer.BYTE_ARRAY -> DataOutput2` | serialize + MapDB serialize + off-heap write |
-| JGraphT GML | `IValue -> DftCharBufferSerializerImpl -> CharBuffer -> GML attribute` | serialize (IO-time only, not high-frequency) |
-
-**Hot path:** `getNodeProperties` / `getEdgeProperties` deserialize per-property. A node with N properties requires N deserializations. For property-dense graphs, this is the dominant bottleneck.
-
-**Optimization directions:**
-- Batch serialization: serialize the entire property Map as a single ByteArray (reduce N calls to 1).
-- Cache layer: cache deserialized property values at entity level, write back only on dirty.
-- Native type passthrough: for Neo4j, store primitive types (String/Number) as native properties, bypassing serialization.
-
 ### Serializer selection
 
 | Serializer | Output type | Use case |
 |------------|------------|----------|
 | `DftByteArraySerializerImpl` | `ByteArray` | MapDB, Neo4j property storage (binary, compact) |
 | `DftCharBufferSerializerImpl` | `CharBuffer` | GML/CSV text IO (readable, JSON-like encoding) |
-
-### Module usage
-
-```kotlin
-// impl-mapdb: MapDbValSerializer delegates to DftByteArraySerializerImpl
-override fun serialize(out: DataOutput2, value: T) =
-    delegator.serialize(out, core.serialize(value))
-
-// impl-neo4j: Neo4JUtils calls directly
-setProperty(name, DftByteArraySerializerImpl.serialize(value))
-val deserialized = DftByteArraySerializerImpl.deserialize(bytes)
-
-// impl-jgrapht GML IO: DftCharBufferSerializerImpl
-val attribute = value.asCharBuffer.let { DftCharBufferSerializerImpl.serialize(it) }
-val value = DftCharBufferSerializerImpl.deserialize(charBuffer)
-```
-
-### kotlinx-coroutines 1.10.2
-
-Listed in `gradle/libs.versions.toml` but unused in production code. All concurrency uses `ReentrantReadWriteLock` (JDK). Reserved for future use.

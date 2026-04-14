@@ -2,28 +2,21 @@
 
 Paired design: `storage.design.md`, `neo4j.md`
 
----
-
 ## Current Baseline
 
-Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tuned flags.
+macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Separate JVM per implementation.
 
 ```bash
 ./gradlew :modules:impl-neo4j:test --tests "*.Neo4jPerformanceTest" -PincludePerformanceTests --rerun
 ```
 
-Scale tiers (smaller due to Neo4j startup overhead): 1K/3K, 5K/15K, 10K/30K nodes/edges.
+Scale tiers: 1K/3K, 5K/15K, 10K/30K nodes/edges.
 
 ### Architecture
 
-Neo4j module provides two `IStorage` implementations using Neo4j 5.26.0 embedded mode:
-- **`Neo4jStorageImpl`** — non-concurrent, zero in-memory ID mappings; all lookups via Neo4j transactions + schema-indexed `__sid__` properties
-- **`Neo4jConcurStorageImpl`** — thread-safe, `ReentrantReadWriteLock` over same structures
+Zero in-memory ID mappings. All lookups via Neo4j transactions + schema-indexed `__sid__` properties. Every data access requires a `Transaction` (Neo4j 5.x). All `IValue` properties serialized to `ByteArray` via `DftByteArraySerializerImpl`.
 
-Key overhead sources:
-1. **Transaction per operation** — Neo4j 5.x requires `Transaction` for all data access, even reads
-2. **Serialization** — all `IValue` properties serialized to `ByteArray` via `DftByteArraySerializerImpl`
-3. **Schema index lookups** — `findNode(label, key, value)` / `findRelationship(type, key, value)` on `__sid__` property
+Two implementations: `Neo4jStorageImpl` (non-concurrent) and `Neo4jConcurStorageImpl` (thread-safe, `ReentrantReadWriteLock`).
 
 ### Graph Population (median ms)
 
@@ -31,6 +24,8 @@ Key overhead sources:
 |---|---|---|---|
 | Neo4jStorageImpl | 37,959.5 | 174,599.1 | 174,001.1 |
 | Neo4jConcurStorageImpl | 17,965.9 | 90,629.1 | 173,379.5 |
+
+Anomaly: 5K/15K (174,599ms) is slower than 10K/30K (174,001ms) for Neo4jStorageImpl. Likely JIT warmup or GC pressure variation between runs; warrants re-measurement with more iterations.
 
 ### Node Lookup (20K lookups on 5K nodes)
 
@@ -59,84 +54,47 @@ Key overhead sources:
 
 _None yet._
 
----
-
 ## Completed Optimizations
 
 _None yet._
 
----
-
 ## Evaluated & Rejected
 
-_None yet._
-
----
+| ID | Title | Result | Reason |
+|---|---|---|---|
+| P9-2 | Native Int storage for __sid__ | Already optimized | `__sid__` stored as native `Long`, not serialized through `DftByteArraySerializerImpl` |
+| P9-5 | Eclipse Collections for ID mapping | Not applicable | Zero-mapping architecture uses no in-memory ID maps |
 
 ## Candidates
 
 ### P9-1: Transaction batching for transferTo
 
-**Problem**: `transferTo` reads properties and structure per-entity, each in a separate `readTx`. For N nodes and E edges, this creates many transactions. Current implementation already uses a single `readTx` block for the entire transfer, but individual helper methods could be optimized further.
-
-**Expected impact**: Reduces transaction creation overhead for bulk operations.
-
-**Risk**: Low. Single long-running read transaction holds Neo4j resources longer.
-
-### P9-2: Native Int storage for __sid__
-
-**Problem**: `__sid__` is stored as `Long` (via `id.toLong()` / `(prop as Long).toInt()`). This is already a native Neo4j type, not serialized through `DftByteArraySerializerImpl`.
-
-**Status**: Already optimized in current implementation. No action needed.
+Per-entity `readTx` creates many transactions for bulk operations. Proposed: batch into single long-running read transaction. Risk: low (holds Neo4j resources longer).
 
 ### P9-3: Property native type fast path
 
-**Problem**: All `IValue` properties serialized to `ByteArray`. For `NumVal`/`StrVal`, this adds unnecessary overhead.
-
-**Proposed change**: Store primitive `IValue` types as Neo4j native properties. Only complex types use `ByteArray`.
-
-**Expected impact**: ~10x faster property access for common types.
-
-**Risk**: Medium. Type-aware get/set logic in `Neo4JUtils`. Migration path for existing databases.
+Store primitive `IValue` types (`NumVal`/`StrVal`) as Neo4j native properties. Only complex types use `ByteArray`. Expected: ~10x faster property access for common types. Risk: medium (type-aware get/set logic, migration path).
 
 ### P9-4: Entity.keys filtering optimization
 
-**Problem**: `Entity.keys` extension calls `propertyKeys.filter { it !in RESERVED_PROPS }.distinct()`. The `distinct()` creates an unnecessary intermediate collection.
-
-**Proposed change**: Use `filterNot` directly without `distinct()` (property keys are already unique per entity).
-
-**Expected impact**: Minor. One less intermediate collection per property read.
-
-**Risk**: Low.
-
-### P9-5: Eclipse Collections for ID mapping
-
-**Problem**: If in-memory ID maps were used, `HashMap<Int, Long>` and `HashMap<Long, Int>` would autobox all keys/values. Current implementation uses zero in-memory ID maps (all lookups via Neo4j transactions), so autoboxing is not an issue.
-
-**Status**: Not applicable to current zero-mapping architecture.
+Remove unnecessary `distinct()` call (property keys already unique per entity). One less intermediate collection per property read. Risk: low.
 
 ---
 
 ## Remaining Known Bottlenecks
 
-- Population catastrophically slow (37,959ms for 1K/3K). Each addNode/addEdge opens a write transaction with WAL, lock manager, and transaction bookkeeping.
-- Population does not scale linearly. 5K/15K (174,599ms) is 4.6x the 1K/3K cost for 5x data.
+- Population: 37,959ms for 1K/3K. Each addNode/addEdge opens a write transaction with WAL, lock manager, and bookkeeping.
+- Population does not scale linearly: 5K/15K is 4.6x the 1K/3K cost for 5x data.
 - Property write 3,900x slower than read (116 vs 452.5K). Write transaction commit includes WAL flush + lock release.
 
 ---
 
 ## Key Insights
 
-1. **Population is catastrophically slow.** 37,959ms for 1K/3K — over 14,000x slower than NativeStorageImpl (2.6ms for 10K/30K). Each write transaction incurs WAL + lock manager + bookkeeping overhead.
-
-2. **Node lookup is fast.** 23.40M ops/sec. `containsNode` opens a `readTx` and uses schema-indexed `findNode`, but overhead is dominated by transaction creation, not the index lookup.
-
-3. **ConcurStorage is faster than non-Concur for node lookup.** 34.12M vs 23.40M. Likely JIT warmup artifact, not a real advantage.
-
-4. **Property write is 3,900x slower than read.** 116 vs 452.5K. Write transaction commit includes WAL flush.
-
-5. **Edge query is symmetric.** 696.8K ≈ 744.7K. Neo4j relationship chain threading provides O(1) both directions.
-
-6. **ConcurStorage lock overhead is negligible relative to Neo4j transaction cost.** Edge query Concur (699.3K) ≈ non-Concur (696.8K). Lock ~20-50ns is invisible next to ~1-10us transaction overhead.
-
-7. **Neo4j's value is persistence and query language, not throughput.** Property read 452.5K is 114x slower than NativeStorageImpl (51.46M). Use only when Cypher queries, ACID transactions, or disk persistence are required.
+1. **Population is dominated by per-operation write transactions.** WAL + lock manager + bookkeeping per write.
+2. **Node lookup is fast.** 23.40M ops/sec. Transaction creation overhead dominates over index lookup cost.
+3. **ConcurStorage faster than non-Concur for node lookup.** 34.12M vs 23.40M. Likely JIT warmup artifact.
+4. **Property write is 3,900x slower than read.** Write transaction commit includes WAL flush.
+5. **Edge query is symmetric.** 696.8K ~ 744.7K. Neo4j relationship chain threading provides O(1) both directions.
+6. **ConcurStorage lock overhead is negligible.** Lock ~20-50ns is invisible next to ~1-10us transaction overhead.
+7. **Neo4j's value is persistence and query language, not throughput.** Use only when Cypher, ACID, or disk persistence are required.

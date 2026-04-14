@@ -38,47 +38,18 @@ Paired design: `storage.design.md`
 
 ## Design-specific
 
-### Zero in-memory ID mapping
-
-Neo4j 5.x implementation uses no in-memory ID maps. Entity lookups go through Neo4j transactions and schema-indexed `__sid__` properties:
-
-```kotlin
-private fun Transaction.findNodeBySid(id: Int) =
-    findNode(NODE_LABEL, SID, id.toLong())
-
-private fun Transaction.findEdgeBySid(id: Int) =
-    findRelationship(EDGE_TYPE, SID, id.toLong())
-```
-
-`containsNode` / `containsEdge` open a `readTx` to check existence. `nodeIDs` / `edgeIDs` iterate all nodes/relationships to collect SIDs. This trades per-operation latency for unlimited capacity (only disk space limits, not JVM heap).
-
 ### Neo4j 5.x transaction model
 
 Neo4j 5.x uses explicit `tx.commit()`. Uncommitted transactions roll back on `tx.close()`. Nested `beginTx()` is no longer supported in the 5.x API; each `beginTx()` creates an independent transaction.
 
 `readTx` and `writeTx` each open a fresh transaction. `writeTx` commits; `readTx` closes without commit (read-only).
 
-### Property serialization as ByteArray
+### Neo4j Label vs commons-graph Label
 
-**Source:** Neo4j source analysis (`ValueRepresentation` enum); deepwiki neo4j/neo4j
-
-All properties are serialized to `ByteArray` via `DftByteArraySerializerImpl` and stored as Neo4j native byte-array properties. Internal reserved properties (`__sid__`, `__tag__`) are stored as native `Long`/`String`.
-
-| Dimension | Native types (String/int/long) | ByteArray |
-|-----------|-------------------------------|-----------|
-| Storage efficiency | Neo4j internal `string_block_size` / `array_block_size` optimization | Loses type-aware compact storage |
-| Read/write overhead | Direct, zero serialization cost | serialize/deserialize per access |
-| Index support | RANGE / TEXT / POINT indexes | Not indexable (opaque binary) |
-| Cypher query | Range, string matching | No type-aware queries |
-
-**Conclusion:** Acceptable for the current embedded primary-key-index scenario (no Cypher query / property index dependency). If future Cypher range queries or property indexes are needed, store primitive types (String/Number) as native types and reserve ByteArray for complex types (ListVal/MapVal).
-
-### clear() order
-
-Relationships must be deleted before nodes. Deleting a node with existing relationships throws `ConstraintViolationException`.
+Neo4j `org.neo4j.graphdb.Label` is a node classification interface used for schema indexing and partitioning. The commons-graph `Label` value class (`edu.jhu.cobra.commons.graph.label`) is an analysis-domain label stored as a `StrVal` property. These are unrelated; Neo4j Label groups nodes for index scoping, while commons-graph Label is a user-defined analytical tag.
 
 ### Neo4JUtils extension functions
 
 `Neo4JUtils.kt` provides extension functions on `org.neo4j.graphdb.Entity`:
-- `Entity.keys` — filters out reserved properties (`__meta_id__`, `__sid__`, `__tag__`), returns user-visible property names.
+- `Entity.keys` — filters out reserved properties (`__sid__`, `__tag__`), returns user-visible property names.
 - `Entity[name]` / `Entity[name] = value` — property get/set via `DftByteArraySerializerImpl`; throws `InvalidPropNameException` for reserved names.

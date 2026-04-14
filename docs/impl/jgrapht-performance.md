@@ -2,11 +2,9 @@
 
 Paired design: `storage.design.md`, `jgrapht.md`
 
----
-
 ## Current Baseline
 
-Benchmarked on macOS (Apple Silicon), Eclipse Temurin 21.0.6+7-LTS, G1GC with tuned flags.
+macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Separate JVM per implementation.
 
 ```bash
 ./gradlew :modules:impl-jgrapht:test --tests "*.JgraphtPerformanceTest" -PincludePerformanceTests --rerun
@@ -16,17 +14,9 @@ Scale tiers: 10K/30K, 100K/300K, 1M/3M nodes/edges.
 
 ### Architecture
 
-JGraphT module provides two `IStorage` implementations:
-- **`JgraphtStorageImpl`** — non-concurrent, JGraphT graph + HashMap properties
-- **`JgraphtConcurStorageImpl`** — thread-safe, `ReentrantReadWriteLock` over same structures
+JGraphT `DirectedPseudograph<String, String>` for topology with Int-to-String bidirectional mapping. Property storage in JVM `HashMap<Int, MutableMap<String, IValue>>`. O(1) `incomingEdgesOf`/`outgoingEdgesOf` via internal `DirectedEdgeContainer`.
 
-Internal structure:
-- `jgtGraph: DirectedPseudograph<String, String>` — JGraphT graph for topology, using String vertices/edges with Int-to-String bidirectional mapping
-- `nodeProperties: HashMap<Int, MutableMap<String, IValue>>` — node property storage keyed by Int ID
-- `edgeProperties: HashMap<Int, MutableMap<String, IValue>>` — edge property storage keyed by Int ID
-- `edgeTagMap: HashMap<Int, String>` — edge tag cache keyed by Int ID
-
-JGraphT provides O(1) `incomingEdgesOf`/`outgoingEdgesOf` via internal `DirectedEdgeContainer`. Edge endpoint and property queries are backed by JVM HashMap.
+Two implementations: `JgraphtStorageImpl` (non-concurrent) and `JgraphtConcurStorageImpl` (thread-safe, `ReentrantReadWriteLock`).
 
 ### Graph Population (median ms)
 
@@ -62,81 +52,42 @@ JGraphT provides O(1) `incomingEdgesOf`/`outgoingEdgesOf` via internal `Directed
 
 _None yet._
 
----
-
 ## Completed Optimizations
 
 _None yet._
 
----
-
 ## Evaluated & Rejected
 
-_None yet._
-
----
+| ID | Title | Result | Reason |
+|---|---|---|---|
+| P7-1 | FastLookupGraphSpecificsStrategy | YAGNI | IStorage interface does not expose `getEdgesBetween`; no hot path benefits from O(1) vertex-pair lookup |
 
 ## Candidates
 
-### P7-1: FastLookupGraphSpecificsStrategy
-
-**Problem**: `DirectedPseudograph` default strategy resolves `getEdge(u, v)` / `containsEdge(u, v)` / `getAllEdges(u, v)` in O(out_degree(u)) by scanning outgoing edges.
-
-**Proposed change**: Use `FastLookupGraphSpecificsStrategy` with additional `Map<Pair<V,V>, Set<E>>` for O(1) vertex-pair edge lookup.
-
-**Expected impact**: `getEdgesBetween`-equivalent operations become O(1). Memory cost: one additional Map entry per edge.
-
-**Risk**: Low. Only beneficial if `getEdgesBetween` or `containsEdge(src, dst)` is a hot path. Current IStorage interface does not expose `getEdgesBetween`, so this is future-proofing.
-
 ### P7-2: Eliminate redundant deleteNode edge traversal
 
-**Problem**: `deleteNode` manually iterates all incident edges to remove from property/mapping maps, then calls `jgtGraph.removeVertex(id)` which internally iterates all edges again. Total cost: 2 x O(degree).
-
-**Proposed change**: Collect edge IDs, clean only property/mapping maps, then let `removeVertex` handle topology cleanup.
-
-**Expected impact**: Halves delete cost for high-degree nodes.
-
-**Risk**: Low. `removeVertex` already handles topology cleanup internally.
+Manual edge iteration + `removeVertex` internal iteration = 2 x O(degree). Proposed: collect edge IDs, clean property/mapping maps only, let `removeVertex` handle topology. Risk: low.
 
 ### P7-3: Direct property map return (avoid defensive copy)
 
-**Problem**: If `getNodeProperties`/`getEdgeProperties` returns a defensive copy, every property read allocates a new Map.
-
-**Proposed change**: Return an unmodifiable view (`Collections.unmodifiableMap()`) of the internal map.
-
-**Expected impact**: Eliminates O(properties) allocation per property read.
-
-**Risk**: Medium. Callers must not retain references across mutations.
+Return `Collections.unmodifiableMap()` view instead of defensive copy. Eliminates O(properties) allocation per read. Risk: medium (callers must not retain references across mutations).
 
 ### P7-4: Eclipse Collections for edge structural maps
 
-**Problem**: `edgeTagMap: HashMap<Int, String>` and bidirectional mapping maps (`intToVertex`, `vertexToInt`, `intToEdge`, `edgeToInt`) use boxed keys. For 300K edges, this creates significant Integer wrapper objects.
-
-**Proposed change**: Use eclipse-collections primitive maps for Int-keyed structural maps.
-
-**Expected impact**: Eliminates autoboxing. Reduces memory ~3x for edge maps.
-
-**Risk**: Low. Adds eclipse-collections dependency. Internal-only change.
+`edgeTagMap`, bidirectional mapping maps use boxed Int keys. Eclipse-collections primitive maps eliminate autoboxing and reduce memory ~3x. Risk: low (adds dependency, internal-only).
 
 ---
 
 ## Remaining Known Bottlenecks
 
-- Population 4x slower than NativeStorage due to JGraphT `DirectedPseudograph.addEdge()` internal `DirectedEdgeContainer` allocation overhead.
-- ConcurStorage property read 8.5x slowdown (9.57M vs 81.13M) — lock acquisition cost dominates when underlying operation is ~12ns direct HashMap reference return.
+- Population overhead from JGraphT `DirectedEdgeContainer` allocation per vertex.
+- ConcurStorage property read 8.5x slowdown (9.57M vs 81.13M): lock acquisition dominates when underlying operation is ~12ns.
 
 ---
 
 ## Key Insights
 
-1. **JGraphT property read is fastest of all implementations.** 81.13M ops/sec. Returns internal `MutableMap` reference directly.
-
-2. **JGraphT population is 4x slower than NativeStorage.** 251.7 ms vs 88.2 ms at 100K/300K. JGraphT `DirectedEdgeContainer` per-vertex allocation overhead.
-
-3. **ConcurStorage property read shows 8.5x slowdown.** Lock acquisition (~20-50ns) is disproportionate when the underlying operation (~12ns) is extremely fast.
-
-4. **Edge query is symmetric.** Outgoing 8.97M ≈ Incoming 8.79M. `DirectedEdgeContainer` provides O(1) both directions.
-
-5. **`removeVertex` automatically deletes all edges.** Exploiting this avoids redundant manual edge cleanup in `deleteNode`.
-
-6. **In-memory only — no persistence overhead.** No serialization, transaction, or disk I/O cost. Performance ceiling is JVM HashMap + JGraphT data structure speed.
+1. **Property read returns internal MutableMap reference directly.** 81.13M ops/sec, highest of all implementations.
+2. **Edge query is symmetric.** Outgoing 8.97M ~ Incoming 8.79M. `DirectedEdgeContainer` O(1) both directions.
+3. **`removeVertex` automatically deletes all edges.** Exploiting this avoids redundant manual cleanup in `deleteNode`.
+4. **In-memory only -- no persistence overhead.** Performance ceiling is JVM HashMap + JGraphT data structure speed.
