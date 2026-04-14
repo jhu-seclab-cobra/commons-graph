@@ -1,5 +1,20 @@
 @file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
 
+/**
+ * Performance benchmarks for Neo4j-based IStorage implementations.
+ *
+ * Tests both [Neo4jStorageImpl] and [Neo4jConcurStorageImpl].
+ * Neo4j startup is heavyweight, so scale tiers are smaller than in-memory
+ * implementations: 1K/3K, 5K/15K, 10K/30K (nodes/edges).
+ *
+ * Run with: `./gradlew :modules:impl-neo4j:test --tests "*.Neo4jPerformanceTest"`
+ *
+ * - `benchmark graph population at scale`
+ * - `benchmark node operations on large graph`
+ * - `benchmark property read and write`
+ * - `benchmark memory and disk footprint`
+ * - `benchmark edge query`
+ */
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
@@ -11,16 +26,7 @@ import kotlin.io.path.isRegularFile
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
-/**
- * Performance benchmarks for Neo4j-based IStorage implementations.
- *
- * Tests both Neo4jStorageImpl and Neo4jConcurStorageImpl.
- * Neo4j startup is heavyweight, so scale tiers are smaller than in-memory
- * implementations: 1K/3K, 5K/15K, 10K/30K (nodes/edges).
- *
- * Run with: ./gradlew :modules:impl-neo4j:test --tests "*.Neo4jPerformanceTest"
- */
-class Neo4jPerformanceTest {
+internal class Neo4jPerformanceTest {
     private val tempDirs = mutableListOf<Path>()
     private val storages = mutableListOf<IStorage>()
 

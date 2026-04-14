@@ -1,3 +1,16 @@
+/**
+ * Performance benchmarks for JGraphT-based IStorage implementations at scale.
+ *
+ * Scale tiers: 10K/30K, 100K/300K, 1M/3M (nodes/edges).
+ *
+ * Run with: `./gradlew :modules:impl-jgrapht:test --tests "*.JgraphtPerformanceTest"`
+ *
+ * - `benchmark graph population at scale`
+ * - `benchmark node lookup on large graph`
+ * - `benchmark property read and write on large graph`
+ * - `benchmark memory footprint`
+ * - `benchmark edge query on large graph`
+ */
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
@@ -5,14 +18,7 @@ import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
-/**
- * Performance benchmarks for JGraphT-based IStorage implementations at scale.
- *
- * Scale tiers: 10K/30K, 100K/300K, 1M/3M (nodes/edges).
- *
- * Run with: ./gradlew :modules:impl-jgrapht:test --tests "*.JgraphtPerformanceTest"
- */
-class JgraphtPerformanceTest {
+internal class JgraphtPerformanceTest {
     private val storages = mutableListOf<IStorage>()
 
     @AfterTest

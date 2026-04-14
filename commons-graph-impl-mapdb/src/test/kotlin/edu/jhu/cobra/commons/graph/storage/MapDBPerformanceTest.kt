@@ -1,3 +1,21 @@
+/**
+ * Performance benchmarks for MapDB-based IStorage implementations.
+ *
+ * Tests both [MapDBStorageImpl] and [MapDBConcurStorageImpl] across different
+ * MapDB configuration parameters:
+ *   - `memoryDB()`:              pure heap memory
+ *   - `memoryDirectDB()`:        off-heap direct byte buffers
+ *   - `tempFileDB()`:            temp file with default settings
+ *   - `tempFileDB().fileMmapEnableIfSupported()`: temp file with mmap
+ *
+ * Run with: `./gradlew :modules:impl-mapdb:test --tests "*.MapDBPerformanceTest"`
+ *
+ * - `benchmark graph population across configs`
+ * - `benchmark node lookup across configs`
+ * - `benchmark property read and write across configs`
+ * - `benchmark memory footprint across configs`
+ * - `benchmark edge query across configs`
+ */
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
@@ -10,19 +28,7 @@ import kotlin.io.path.isRegularFile
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
-/**
- * Performance benchmarks for MapDB-based IStorage implementations.
- *
- * Tests both MapDBStorageImpl and MapDBConcurStorageImpl across different
- * MapDB configuration parameters:
- *   - memoryDB():              pure heap memory
- *   - memoryDirectDB():        off-heap direct byte buffers
- *   - tempFileDB():            temp file with default settings
- *   - tempFileDB().fileMmapEnableIfSupported(): temp file with mmap
- *
- * Run with: ./gradlew :modules:impl-mapdb:test --tests "*.MapDBPerformanceTest"
- */
-class MapDBPerformanceTest {
+internal class MapDBPerformanceTest {
     private val storages = mutableListOf<IStorage>()
 
     @AfterTest
@@ -122,8 +128,6 @@ class MapDBPerformanceTest {
     private fun fmtMs(ms: Double): String = String.format("%.1f", ms)
 
     // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON -- GRAPH POPULATION
-    // ========================================================================
 
     @Test
     fun `benchmark graph population across configs`() {
@@ -144,10 +148,6 @@ class MapDBPerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON -- NODE LOOKUP
-    // ========================================================================
-
     @Test
     fun `benchmark node lookup across configs`() {
         val nodeCount = 5_000
@@ -165,10 +165,6 @@ class MapDBPerformanceTest {
             s.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON -- PROPERTY READ/WRITE
-    // ========================================================================
 
     @Test
     fun `benchmark property read and write across configs`() {
@@ -191,10 +187,6 @@ class MapDBPerformanceTest {
             s.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: CONFIG COMPARISON -- EDGE QUERY
-    // ========================================================================
 
     private val tempDirs = mutableListOf<Path>()
 
