@@ -1,119 +1,84 @@
 # JGraphT 1.4.0 — Implementation Notes
 
-Paired designs: `storage.design.md`, `traits/label.design.md`
+Paired designs: `storage.design.md`, `core/label.design.md`
 
 ---
 
 ## APIs
 
-**`org.jgrapht.graph.DirectedPseudograph`** `DirectedPseudograph(EdgeID::class.java)` — 有向伪图（允许自环和平行边）；用于 `JgraphtStorageImpl` 主存储。
-**`org.jgrapht.graph.SimpleDirectedGraph`** `SimpleDirectedGraph(DefaultEdge::class.java)` — 有向简单图（无自环、无平行边）；用于 `JgraphtLatticeImpl` 格结构。
-**`org.jgrapht.Graph`** `addVertex(v)` / `removeVertex(v)` — 顶点操作；`removeVertex` 自动移除所有关联边。`addEdge(src, dst, edge)` / `removeEdge(edge)` — 边操作。`incomingEdgesOf(v)` / `outgoingEdgesOf(v)` — O(1) 返回内部 Set 引用。`getAllEdges(src, dst)` — 返回两顶点间所有边；顶点不存在时返回 `null`（注意 NPE）。`getEdgeSource(e)` / `getEdgeTarget(e)` — 获取边端点。
-**`org.jgrapht.nio.gml.GmlExporter`** `GmlExporter()` — 创建导出器；`setVertexAttributeProvider` / `setEdgeAttributeProvider` — 附加属性；`setParameter(Parameter.EXPORT_VERTEX_LABELS, true)` — 启用 label 导出（必须设置）；`exportGraph(graph, file)` — 导出到文件。
-**`org.jgrapht.nio.gml.GmlImporter`** `GmlImporter()` — 创建导入器；`addVertexAttributeConsumer` / `addEdgeAttributeConsumer` — 消费属性回调；目标图需设置 `vertexSupplier` / `edgeSupplier`。
-**`org.jgrapht.util.SupplierUtil`** `createIntegerSupplier()` — 为 GML IO 提供自增整数 supplier；`createStringSupplier()` — 字符串 supplier。
+**`org.jgrapht.graph.DirectedPseudograph`** `DirectedPseudograph(String::class.java)` — directed pseudograph (allows self-loops and parallel edges); used by `JgraphtStorageImpl` as main graph storage. Internally uses String-typed vertices/edges with Int-to-String bidirectional mapping.
+**`org.jgrapht.graph.SimpleDirectedGraph`** `SimpleDirectedGraph(DefaultEdge::class.java)` — directed simple graph (no self-loops, no parallel edges); used by `JgraphtLatticeImpl` for lattice structure.
+**`org.jgrapht.Graph`** `addVertex(v)` / `removeVertex(v)` — vertex operations; `removeVertex` automatically removes all incident edges. `addEdge(src, dst, edge)` / `removeEdge(edge)` — edge operations. `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` — O(1) returning internal Set reference. `getAllEdges(src, dst)` — returns all edges between two vertices; returns `null` when vertex does not exist (NPE risk). `getEdgeSource(e)` / `getEdgeTarget(e)` — get edge endpoints.
+**`org.jgrapht.nio.gml.GmlExporter`** `GmlExporter()` — create exporter; `setVertexAttributeProvider` / `setEdgeAttributeProvider` — attach attributes; `setParameter(Parameter.EXPORT_VERTEX_LABELS, true)` — enable label export (must be set); `exportGraph(graph, file)` — export to file.
+**`org.jgrapht.nio.gml.GmlImporter`** `GmlImporter()` — create importer; `addVertexAttributeConsumer` / `addEdgeAttributeConsumer` — attribute callbacks; target graph requires `vertexSupplier` / `edgeSupplier`.
+**`org.jgrapht.util.SupplierUtil`** `createIntegerSupplier()` — auto-incrementing integer supplier for GML IO; `createStringSupplier()` — string supplier.
 
 ---
 
 ## Libraries
 
-- `org.jgrapht:jgrapht-core:1.4.0` — 图数据结构（DirectedPseudograph, SimpleDirectedGraph）
-- `org.jgrapht:jgrapht-io:1.4.0` — 图 IO（GmlExporter, GmlImporter）
-- `edu.jhu.cobra:commons-value:0.1.0` — `IValue` 序列化体系，GML IO 使用 `DftCharBufferSerializerImpl`
+- `org.jgrapht:jgrapht-core:1.4.0` — graph data structures (DirectedPseudograph, SimpleDirectedGraph)
+- `org.jgrapht:jgrapht-io:1.4.0` — graph IO (GmlExporter, GmlImporter)
+- `edu.jhu.cobra:commons-value:0.1.0` — `IValue` serialization; GML IO uses `DftCharBufferSerializerImpl`
 
 ---
 
 ## Developer instructions
 
-- GML 导出使用 `Int` 作为临时顶点/边替代 `NodeID`/`EdgeID`，再通过 attribute provider 附加真实 ID 和属性（避免 GML 格式对复杂键类型的限制）
-- GML 导入必须设置 `vertexSupplier` / `edgeSupplier`，否则 `GmlImporter` 无法自动 supply 对象
-- `EXPORT_VERTEX_LABELS` / `EXPORT_EDGE_LABELS` 必须显式设置为 `true`，否则 label 字段不写入文件
-- `incomingEdgesOf` / `outgoingEdgesOf` 返回内部 Set 引用，修改前需复制
+- GML export uses `Int` as temporary vertex/edge substitute, attaching real IDs and properties via attribute providers (avoids GML format limitations on complex key types).
+- GML import requires `vertexSupplier` / `edgeSupplier`; `GmlImporter` cannot auto-supply objects without them.
+- `EXPORT_VERTEX_LABELS` / `EXPORT_EDGE_LABELS` must be explicitly set to `true`; otherwise label fields are omitted from output.
+- `incomingEdgesOf` / `outgoingEdgesOf` return internal Set references; copy before modification.
 
 ---
 
 ## Design-specific
 
-### 性能分析：DirectedPseudograph 内部结构
+### DirectedPseudograph internals
 
-**来源：** JGraphT 源码 `DirectedSpecifics`、`DirectedEdgeContainer`；deepwiki jgrapht/jgrapht
+**Source:** JGraphT source `DirectedSpecifics`, `DirectedEdgeContainer`; deepwiki jgrapht/jgrapht
 
-JGraphT `DirectedPseudograph` 使用 `DirectedSpecifics` 实现，内部结构为 `Map<V, DirectedEdgeContainer<V, E>>`。每个 `DirectedEdgeContainer` 维护独立的 incoming/outgoing `Set<E>`。
+JGraphT `DirectedPseudograph` uses `DirectedSpecifics` internally: `Map<V, DirectedEdgeContainer<V, E>>`. Each `DirectedEdgeContainer` maintains separate incoming/outgoing `Set<E>`.
 
-| 操作 | 复杂度 | 说明 |
-|------|--------|------|
-| `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` | O(1) | 直接返回内部 Set 引用（非复制） |
-| `getAllEdges(src, dst)` | O(out_degree(src)) | 遍历 src 的出边过滤 target；与手动遍历 `outgoingEdgesOf` 过滤等价 |
-| `removeVertex(v)` | O(degree(v)) | 自动删除所有关联边；内部逐边调用 `removeEdgeFromTouchingVertices` |
-| `addEdge(src, dst, e)` | O(1) | 插入到 src 的 outgoing set 和 dst 的 incoming set |
-| `containsEdge(src, dst)` | O(out_degree(src)) | 遍历 src 的出边查找（默认策略） |
+| Operation | Complexity | Notes |
+|-----------|-----------|-------|
+| `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` | O(1) | Returns internal Set reference (not a copy) |
+| `getAllEdges(src, dst)` | O(out_degree(src)) | Scans src outgoing edges filtering by target |
+| `removeVertex(v)` | O(degree(v)) | Automatically deletes all incident edges |
+| `addEdge(src, dst, e)` | O(1) | Inserts into src outgoing set and dst incoming set |
+| `containsEdge(src, dst)` | O(out_degree(src)) | Scans src outgoing edges (default strategy) |
 
-### 性能分析：FastLookupGraphSpecificsStrategy
+### FastLookupGraphSpecificsStrategy
 
-**来源：** JGraphT 源码 `FastLookupDirectedSpecifics`、`GraphPerformanceTest`；deepwiki jgrapht/jgrapht
+**Source:** JGraphT source `FastLookupDirectedSpecifics`, `GraphPerformanceTest`; deepwiki jgrapht/jgrapht
 
-JGraphT 提供 `FastLookupGraphSpecificsStrategy`，内部额外维护 `Map<Pair<V,V>, Set<E>>` (`touchingVerticesToEdgeMap`)，实现顶点对间 O(1) 边查找。
+JGraphT provides `FastLookupGraphSpecificsStrategy`, maintaining an additional `Map<Pair<V,V>, Set<E>>` (`touchingVerticesToEdgeMap`) for O(1) vertex-pair edge lookup.
 
-| 操作 | DefaultStrategy | FastLookupStrategy |
-|------|-----------------|--------------------|
+| Operation | DefaultStrategy | FastLookupStrategy |
+|-----------|-----------------|--------------------|
 | `getEdge(u, v)` / `containsEdge(u, v)` | O(out_degree(u)) | **O(1)** |
 | `getAllEdges(u, v)` | O(out_degree(u)) | **O(1)** |
-| `addEdge` | O(1) | O(1) + 额外 map put |
-| 内存开销 | 基础 | 额外 `Map<Pair, Set>` |
+| `addEdge` | O(1) | O(1) + extra map put |
+| Memory overhead | Baseline | Additional `Map<Pair, Set>` |
 
-**启用方式（JGraphT 1.4.0+）：**
+**Recommendation:** Enable `FastLookupGraphSpecificsStrategy` when `getEdgesBetween` is a hot path or the graph is dense. Memory cost: one extra Map entry per edge.
 
-```kotlin
-val strategy = FastLookupGraphSpecificsStrategy<NodeID, EdgeID>()
-val jgtGraph = DirectedPseudograph<NodeID, EdgeID>(
-    null, // vertexSupplier
-    null, // edgeSupplier
-    false, // weighted
-    false, // allowMultipleEdges — 实际由 Pseudograph 语义控制
-    strategy
-)
-```
+### Dual-structure synchronization
 
-**建议：** 当 `getEdgesBetween` 为高频操作或图稠密时，应启用 `FastLookupGraphSpecificsStrategy`。内存代价为每条边额外一个 Map entry，对于中等规模图可接受。
+`JgraphtStorageImpl` maintains two structures:
+- `jgtGraph`: JGraphT graph (`DirectedPseudograph<String, String>`) for topology queries (in/out edges)
+- `nodeProperties` / `edgeProperties`: JVM HashMap keyed by Int IDs for property storage
 
-### 双结构同步
+The Int-to-String bidirectional mapping (`intToVertex`/`vertexToInt`, `intToEdge`/`edgeToInt`) translates between external Int IDs and JGraphT internal String vertices/edges. Both structures must stay synchronized. `containsNode` / `containsEdge` only check `nodeProperties` / `edgeProperties`, not the JGraphT graph.
 
-`JgraphtStorageImpl` 维护两套结构：
-- `jgtGraph`：JGraphT 内部图，负责拓扑查询（入/出边）
-- `nodeProperties` / `edgeProperties`：JVM HashMap，负责属性存储
+### getEdgesBetween potential NPE
 
-两者必须始终同步。`containsNode` / `containsEdge` 只查 `nodeProperties`，不校验 JGraphT 是否也存在，两者不一致时无法检测。
+`getAllEdges(from, to)` returns `null` when a vertex does not exist. Calling `.toSet()` on null throws NPE. Validate node existence before calling.
 
-### getEdgesBetween 潜在 NPE
+### deleteNode redundant operations
 
-`getAllEdges(from, to)` 在顶点不存在时返回 `null`，直接 `.toSet()` 抛 NPE。应在调用前校验节点存在：
+**Source:** JGraphT source `DirectedSpecifics.removeEdgeFromTouchingVertices`
 
-```kotlin
-override fun getEdgesBetween(from: NodeID, to: NodeID): Set<EdgeID> {
-    if (isClosed) throw AccessClosedStorageException()
-    if (from !in nodeProperties) throw EntityNotExistException(from)
-    if (to !in nodeProperties) throw EntityNotExistException(to)
-    return jgtGraph.getAllEdges(from, to)?.toSet() ?: emptySet()
-}
-```
+`removeVertex(id)` in JGraphT automatically removes all incident edges (O(degree)). Current code manually removes each edge before `removeVertex`, causing each edge to be visited twice: 2 x O(degree).
 
-### 性能分析：deleteNode 冗余操作
-
-**来源：** JGraphT 源码 `DirectedSpecifics.removeEdgeFromTouchingVertices`
-
-`removeVertex(id)` 在 JGraphT 内部自动移除所有关联边（O(degree)）。当前代码在 `removeVertex` 前手动逐边调用 `deleteEdge`，导致每条关联边被访问两次。
-
-**当前代价：** 2 × O(degree) — 手动删边 O(degree) + removeVertex 内部空操作 O(degree)
-
-**优化做法：** 先取出关联边 ID 仅清理 `edgeProperties`（O(degree) HashMap remove），再 `removeVertex` 让 JGraphT 处理拓扑（O(degree)）。总计 O(degree)，节省一半操作：
-
-```kotlin
-override fun deleteNode(id: NodeID) {
-    if (!containsNode(id)) throw EntityNotExistException(id)
-    val incEdges = jgtGraph.incomingEdgesOf(id).toList()
-    val outEdges = jgtGraph.outgoingEdgesOf(id).toList()
-    (incEdges + outEdges).forEach { edgeProperties.remove(it) }
-    jgtGraph.removeVertex(id)   // JGraphT 内部一并删边
-    nodeProperties.remove(id)
-}
-```
+**Optimization:** Collect incident edge IDs, clean only property/mapping maps, then call `removeVertex` to handle topology. Total: O(degree), saving half the operations.
