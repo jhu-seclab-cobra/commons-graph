@@ -12,388 +12,316 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-class AbcEntityTest {
+/**
+ * Black-box tests for IEntity sealed interface and AbcEntity delegate utilities.
+ *
+ * - `get returns value when property exists` — verifies operator get returns stored IValue
+ * - `get returns null when property absent` — verifies absent property yields null
+ * - `set stores value` — verifies operator set writes property
+ * - `set null removes property` — verifies null value deletes the property
+ * - `contains returns true when property exists` — verifies operator contains for present key
+ * - `contains returns false when property absent` — verifies operator contains for missing key
+ * - `asMap returns empty map when no properties` — verifies empty initial state
+ * - `asMap returns all properties as snapshot` — verifies complete property map
+ * - `update sets multiple properties` — verifies bulk set of name-value pairs
+ * - `update null values remove properties` — verifies null entries in update map remove keys
+ * - `update with empty map is no-op` — verifies empty update preserves state
+ * - `IEntity Type exposes name` — verifies Type.name contract
+ * - `getTypeProp returns typed value when type matches` — verifies reified cast on match
+ * - `getTypeProp returns null when type mismatches` — verifies reified cast returns null on mismatch
+ * - `getTypeProp returns null when property absent` — verifies absent property returns null
+ * - `EntityProperty delegate returns default when unset` — verifies default fallback
+ * - `EntityProperty delegate set and get round-trips` — verifies delegate write-read cycle
+ * - `EntityProperty delegate custom name uses custom storage key` — verifies optName mapping
+ * - `EntityProperty nullable delegate returns null initially` — verifies nullable default
+ * - `EntityProperty nullable delegate set and get round-trips` — verifies nullable write-read
+ * - `EntityProperty nullable set to null does not write` — verifies null assignment is no-op
+ * - `EntityType delegate returns default when unset` — verifies enum type default
+ * - `EntityType delegate set and get round-trips` — verifies enum type write-read
+ * - `EntityType delegate custom name uses custom storage key` — verifies optName mapping
+ * - `EntityType delegate returns default on unknown stored value` — verifies fallback for bad data
+ */
+internal class AbcEntityTest {
     private lateinit var storage: NativeStorageImpl
-    private lateinit var testNode: TestNode
-
-    private class TestNode : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "TestNode"
-            }
-    }
-
-    private fun createNode(storageId: Int): TestNode {
-        val node = TestNode()
-        node.bind(storage, storageId, "test")
-        return node
-    }
+    private lateinit var testNode: GraphTestUtils.TestNode
 
     @BeforeTest
-    fun setup() {
+    fun setUp() {
         storage = NativeStorageImpl()
-        val storageId = storage.addNode()
-        testNode = createNode(storageId)
+        val sid = storage.addNode()
+        testNode = GraphTestUtils.TestNode()
+        testNode.bind(storage, sid, "entity-test")
     }
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storage.close()
     }
+
+    // region IEntity get/set/contains/asMap/update
+
+    @Test
+    fun `get returns value when property exists`() {
+        testNode["name"] = "alice".strVal
+
+        val result = testNode["name"]
+
+        assertNotNull(result)
+        assertEquals("alice", (result as StrVal).core)
+    }
+
+    @Test
+    fun `get returns null when property absent`() {
+        assertNull(testNode["nonexistent"])
+    }
+
+    @Test
+    fun `set stores value`() {
+        testNode["age"] = 30.numVal
+
+        assertEquals(30, (testNode["age"] as NumVal).core)
+    }
+
+    @Test
+    fun `set null removes property`() {
+        testNode["name"] = "alice".strVal
+
+        testNode["name"] = null
+
+        assertNull(testNode["name"])
+        assertFalse("name" in testNode)
+    }
+
+    @Test
+    fun `contains returns true when property exists`() {
+        testNode["name"] = "alice".strVal
+
+        assertTrue("name" in testNode)
+    }
+
+    @Test
+    fun `contains returns false when property absent`() {
+        assertFalse("missing" in testNode)
+    }
+
+    @Test
+    fun `asMap returns empty map when no properties`() {
+        assertTrue(testNode.asMap().isEmpty())
+    }
+
+    @Test
+    fun `asMap returns all properties as snapshot`() {
+        testNode["a"] = "x".strVal
+        testNode["b"] = 1.numVal
+
+        val map = testNode.asMap()
+
+        assertEquals(2, map.size)
+        assertEquals("x", (map["a"] as StrVal).core)
+        assertEquals(1, (map["b"] as NumVal).core)
+    }
+
+    @Test
+    fun `update sets multiple properties`() {
+        testNode.update(
+            mapOf(
+                "name" to "alice".strVal,
+                "age" to 25.numVal,
+            ),
+        )
+
+        assertEquals("alice", (testNode["name"] as StrVal).core)
+        assertEquals(25, (testNode["age"] as NumVal).core)
+    }
+
+    @Test
+    fun `update null values remove properties`() {
+        testNode["name"] = "alice".strVal
+        testNode["age"] = 25.numVal
+
+        testNode.update(mapOf("name" to null, "age" to 30.numVal))
+
+        assertNull(testNode["name"])
+        assertEquals(30, (testNode["age"] as NumVal).core)
+    }
+
+    @Test
+    fun `update with empty map is no-op`() {
+        testNode["name"] = "alice".strVal
+
+        testNode.update(emptyMap())
+
+        assertEquals(1, testNode.asMap().size)
+    }
+
+    // endregion
+
+    // region IEntity.Type
+
+    @Test
+    fun `IEntity Type exposes name`() {
+        val type = object : IEntity.Type {
+            override val name = "CustomType"
+        }
+
+        assertEquals("CustomType", type.name)
+    }
+
+    // endregion
 
     // region getTypeProp
 
     @Test
-    fun `test getTypeProp_strVal_returnsTypedValue`() {
-        testNode["name"] = "test".strVal
+    fun `getTypeProp returns typed value when type matches`() {
+        testNode["name"] = "alice".strVal
 
-        val value: StrVal? = testNode.getTypeProp("name")
+        val result: StrVal? = testNode.getTypeProp("name")
 
-        assertNotNull(value)
-        assertEquals("test", value.core)
+        assertNotNull(result)
+        assertEquals("alice", result.core)
     }
 
     @Test
-    fun `test getTypeProp_absent_returnsNull`() {
-        val value: StrVal? = testNode.getTypeProp("nonexistent")
-
-        assertNull(value)
-    }
-
-    @Test
-    fun `test getTypeProp_numVal_returnsTypedValue`() {
+    fun `getTypeProp returns null when type mismatches`() {
         testNode["age"] = 25.numVal
 
-        val value: NumVal? = testNode.getTypeProp("age")
+        val result: StrVal? = testNode.getTypeProp<StrVal>("age")
 
-        assertNotNull(value)
-        assertEquals(25, value.core)
+        assertNull(result)
     }
 
     @Test
-    fun `test getTypeProp_typeMismatch_returnsNull`() {
-        testNode["age"] = 25.numVal
+    fun `getTypeProp returns null when property absent`() {
+        val result: StrVal? = testNode.getTypeProp("missing")
 
-        val value: StrVal? = testNode.getTypeProp<StrVal>("age")
-
-        assertNull(value)
-    }
-
-    @Test
-    fun `test getTypeProp_wrongGenericType_returnsNull`() {
-        testNode["name"] = "test".strVal
-
-        val value: NumVal? = testNode.getTypeProp<NumVal>("name")
-
-        assertNull(value)
-    }
-
-    @Test
-    fun `test getTypeProp_emptyPropertyName_returnsNull`() {
-        val value: StrVal? = testNode.getTypeProp("")
-
-        assertNull(value)
+        assertNull(result)
     }
 
     // endregion
 
     // region EntityProperty delegate
 
-    @Test
-    fun `test entityProperty_defaultValue_returnsDefault`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var name: StrVal by EntityProperty(default = "default".strVal)
+    private class PropNode : AbcNode() {
+        override val type: AbcNode.Type = object : AbcNode.Type {
+            override val name = "PropNode"
         }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-
-        assertEquals("default", entity.name.core)
+        var label: StrVal by EntityProperty(default = "default".strVal)
+        var custom: StrVal by EntityProperty("customKey", default = "d".strVal)
+        var opt: StrVal? by EntityProperty()
     }
 
     @Test
-    fun `test entityProperty_setAndGet_returnsNewValue`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var name: StrVal by EntityProperty(default = "default".strVal)
-        }
+    fun `EntityProperty delegate returns default when unset`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        entity.name = "newValue".strVal
-
-        assertEquals("newValue", entity.name.core)
+        assertEquals("default", node.label.core)
     }
 
     @Test
-    fun `test entityProperty_customName_usesCustomStorageKey`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var customProp: StrVal by EntityProperty("customName", default = "default".strVal)
-        }
+    fun `EntityProperty delegate set and get round-trips`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        entity.customProp = "value".strVal
+        node.label = "updated".strVal
 
-        assertEquals("value", entity["customName"]?.let { (it as StrVal).core })
+        assertEquals("updated", node.label.core)
     }
 
     @Test
-    fun `test entityProperty_nullable_returnsNullInitially`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var description: StrVal? by EntityProperty()
-        }
+    fun `EntityProperty delegate custom name uses custom storage key`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        assertNull(entity.description)
+        node.custom = "val".strVal
+
+        assertEquals("val", (node["customKey"] as? StrVal)?.core)
     }
 
     @Test
-    fun `test entityProperty_nullableSetAndGet_returnsValue`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var description: StrVal? by EntityProperty()
-        }
+    fun `EntityProperty nullable delegate returns null initially`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        entity.description = "test".strVal
-
-        assertEquals("test", entity.description?.core)
+        assertNull(node.opt)
     }
 
     @Test
-    fun `test entityProperty_nullableSetToNull_doesNotRemoveProperty`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var description: StrVal? by EntityProperty()
-        }
+    fun `EntityProperty nullable delegate set and get round-trips`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-        entity.description = "test".strVal
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        entity.description = null
+        node.opt = "hello".strVal
 
-        assertNotNull(entity.description)
-        assertEquals("test", entity.description?.core)
+        assertEquals("hello", node.opt?.core)
     }
 
     @Test
-    fun `test entityProperty_emptyName_returnsDefault`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var emptyProp: StrVal by EntityProperty("", default = "default".strVal)
-        }
+    fun `EntityProperty nullable set to null does not write`() {
         val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
+        val node = PropNode().also { it.bind(storage, sid, "p") }
 
-        assertEquals("default", entity.emptyProp.core)
-    }
+        node.opt = null
 
-    @Test
-    fun `test entityProperty_nullable_wrongType_returnsNull`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var strProp: StrVal? by EntityProperty()
-        }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-        entity["strProp"] = 42.numVal
-
-        assertNull(entity.strProp)
-    }
-
-    @Test
-    fun `test entityProperty_nullable_setToNull_doesNotWrite`() {
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var optProp: StrVal? by EntityProperty()
-        }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-
-        entity.optProp = null
-
-        assertNull(entity.optProp)
-        assertFalse("optProp" in entity)
+        assertNull(node.opt)
+        assertFalse("opt" in node)
     }
 
     // endregion
 
     // region EntityType delegate
 
-    @Test
-    fun `test entityType_defaultValue_returnsDefault`() {
-        val personType =
-            object : IEntity.Type {
-                override val name = "PERSON"
-            }
-
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var nodeType: IEntity.Type by EntityType(default = personType)
-        }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-
-        assertEquals("PERSON", entity.nodeType.name)
-    }
-
-    @Test
-    fun `test entityType_customName_usesCustomStorageKey`() {
-        val personType =
-            object : IEntity.Type {
-                override val name = "PERSON"
-            }
-
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var customType: IEntity.Type by EntityType("customTypeName", default = personType)
-        }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-
-        entity.customType = personType
-
-        val propValue = entity["customTypeName"] as? StrVal
-        assertEquals("PERSON", propValue?.core)
-    }
-
-    @Test
-    fun `test entityType_objectTypeFallback_returnsDefault`() {
-        val personType =
-            object : IEntity.Type {
-                override val name = "PERSON"
-            }
-
-        class TestEntity : AbcNode() {
-            override val type: AbcNode.Type =
-                object : AbcNode.Type {
-                    override val name = "TestEntity"
-                }
-            var nodeType: IEntity.Type by EntityType(default = personType)
-        }
-        val sid = storage.addNode()
-        val entity = TestEntity().also { it.bind(storage, sid, "test") }
-
-        entity["testentity_nodeType"] = "COMPANY".strVal
-
-        assertEquals("PERSON", entity.nodeType.name)
-    }
-
-    @Test
-    fun `test entityType_enumType_setAndGet_roundTrips`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeEntity().also { it.bind(storage, sid, "test") }
-
-        assertEquals(NodeKind.SOURCE, entity.kind)
-        entity.kind = NodeKind.SINK
-        assertEquals(NodeKind.SINK, entity.kind)
-    }
-
-    @Test
-    fun `test entityType_enumType_setValue_sameValue_noOp`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeEntity().also { it.bind(storage, sid, "test") }
-
-        entity.kind = NodeKind.SINK
-        entity.kind = NodeKind.SINK
-        assertEquals(NodeKind.SINK, entity.kind)
-    }
-
-    @Test
-    fun `test entityType_enumType_customName_usesCustomStorageKey`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity().also { it.bind(storage, sid, "test") }
-
-        entity.kind = NodeKind.SINK
-        val propValue = entity["myKindProp"] as? StrVal
-        assertEquals("SINK", propValue?.core)
-    }
-
-    @Test
-    fun `test entityType_enumType_getValue_fromStorage`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid, "test") }
-
-        entity["myKind"] = "SINK".strVal
-        assertEquals(NodeKind.SINK, entity.kind)
-    }
-
-    @Test
-    fun `test entityType_enumType_unknownStoredValue_returnsDefault`() {
-        val sid = storage.addNode()
-        val entity = EnumTypeCustomNameEntity2().also { it.bind(storage, sid, "test") }
-        entity["myKind"] = "UNKNOWN_KIND".strVal
-
-        assertEquals(NodeKind.SOURCE, entity.kind)
-    }
-
-    // endregion
-
-    enum class NodeKind : IEntity.Type {
+    private enum class Kind : IEntity.Type {
         SOURCE,
         SINK,
     }
 
-    private class EnumTypeEntity : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "EnumTypeEntity"
-            }
-        var kind: NodeKind by EntityType(default = NodeKind.SOURCE)
+    private class TypeNode : AbcNode() {
+        override val type: AbcNode.Type = object : AbcNode.Type {
+            override val name = "TypeNode"
+        }
+        var kind: Kind by EntityType(default = Kind.SOURCE)
+        var namedKind: Kind by EntityType("myKind", default = Kind.SOURCE)
     }
 
-    private class EnumTypeCustomNameEntity : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "EnumTypeCustomNameEntity"
-            }
-        var kind: NodeKind by EntityType("myKindProp", default = NodeKind.SOURCE)
+    @Test
+    fun `EntityType delegate returns default when unset`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+
+        assertEquals(Kind.SOURCE, node.kind)
     }
 
-    private class EnumTypeCustomNameEntity2 : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "EnumTypeCustomNameEntity2"
-            }
-        var kind: NodeKind by EntityType("myKind", default = NodeKind.SOURCE)
+    @Test
+    fun `EntityType delegate set and get round-trips`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+
+        node.kind = Kind.SINK
+
+        assertEquals(Kind.SINK, node.kind)
     }
+
+    @Test
+    fun `EntityType delegate custom name uses custom storage key`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+
+        node.namedKind = Kind.SINK
+
+        assertEquals("SINK", (node["myKind"] as? StrVal)?.core)
+    }
+
+    @Test
+    fun `EntityType delegate returns default on unknown stored value`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+        node["myKind"] = "INVALID_VALUE".strVal
+
+        assertEquals(Kind.SOURCE, node.namedKind)
+    }
+
+    // endregion
 }

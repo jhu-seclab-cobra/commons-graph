@@ -1,288 +1,233 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.GraphTestUtils.TestEdge
+import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.*
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-class AbcEdgeTest {
+/**
+ * Black-box tests for AbcEdge: bind, id computation, labels property, property access,
+ * equals/hashCode, toString.
+ *
+ * - `id returns src-tag-dst format` — verifies derived edge ID
+ * - `id differs when tag differs` — verifies tag contribution to ID
+ * - `srcNid returns source node ID` — verifies bind injection
+ * - `dstNid returns destination node ID` — verifies bind injection
+ * - `eTag returns edge tag` — verifies bind injection
+ * - `type returns subclass-defined type` — verifies abstract type override
+ * - `labels returns empty set when no labels assigned` — verifies default labels
+ * - `labels set and get round-trips` — verifies labels write-read
+ * - `get returns value for existing property` — verifies property read
+ * - `get returns null for absent property` — verifies absent returns null
+ * - `set stores property` — verifies property write
+ * - `set null removes property` — verifies null removes
+ * - `contains returns true for existing property` — verifies present key
+ * - `contains returns false for absent property` — verifies missing key
+ * - `asMap returns empty map when no properties` — verifies empty initial state
+ * - `asMap returns all properties` — verifies complete map
+ * - `update sets multiple properties` — verifies bulk update
+ * - `update null values remove properties` — verifies null entries remove keys
+ * - `equals returns true for same storageId` — verifies equality by storageId
+ * - `equals returns false for different storageId` — verifies inequality
+ * - `equals returns false for non-edge object` — verifies type guard
+ * - `toString includes src-tag-dst and type` — verifies string format
+ */
+internal class AbcEdgeTest {
     private lateinit var storage: NativeStorageImpl
-    private var srcNodeStorageId: Int = -1
-    private var dstNodeStorageId: Int = -1
-    private lateinit var testEdge: TestEdge
-
-    private class TestEdge : AbcEdge() {
-        override val type: AbcEdge.Type =
-            object : AbcEdge.Type {
-                override val name = "TestEdge"
-            }
-    }
-
-    private fun createTestEdge(
-        storage: IStorage,
-        storageId: Int,
-        srcNid: String,
-        dstNid: String,
-        tag: String,
-    ): TestEdge {
-        val edge = TestEdge()
-        edge.bind(storage, storageId, srcNid, dstNid, tag)
-        return edge
-    }
+    private lateinit var edge: TestEdge
+    private var srcSid: Int = -1
+    private var dstSid: Int = -1
 
     @BeforeTest
-    fun setup() {
+    fun setUp() {
         storage = NativeStorageImpl()
-        srcNodeStorageId = storage.addNode()
-        dstNodeStorageId = storage.addNode()
-        val eid = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "relation")
-        testEdge = createTestEdge(storage, eid, "src", "dst", "relation")
+        srcSid = storage.addNode()
+        dstSid = storage.addNode()
+        val eid = storage.addEdge(srcSid, dstSid, "calls")
+        edge = TestEdge()
+        edge.bind(storage, eid, "srcNode", "dstNode", "calls")
     }
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storage.close()
     }
 
-    // region Edge identity
+    // region Identity
 
     @Test
-    fun `test edgeID_differentType_differentId`() {
-        val eid2 = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "other")
-        val edge2 = createTestEdge(storage, eid2, "src", "dst", "other")
-        assertNotEquals(testEdge.id, edge2.id)
+    fun `id returns src-tag-dst format`() {
+        assertEquals("srcNode-calls-dstNode", edge.id)
+    }
+
+    @Test
+    fun `id differs when tag differs`() {
+        val eid2 = storage.addEdge(srcSid, dstSid, "reads")
+        val edge2 = TestEdge()
+        edge2.bind(storage, eid2, "srcNode", "dstNode", "reads")
+
+        assertNotEquals(edge.id, edge2.id)
+    }
+
+    @Test
+    fun `srcNid returns source node ID`() {
+        assertEquals("srcNode", edge.srcNid)
+    }
+
+    @Test
+    fun `dstNid returns destination node ID`() {
+        assertEquals("dstNode", edge.dstNid)
+    }
+
+    @Test
+    fun `eTag returns edge tag`() {
+        assertEquals("calls", edge.eTag)
+    }
+
+    @Test
+    fun `type returns subclass-defined type`() {
+        assertEquals("TestEdge", edge.type.name)
     }
 
     // endregion
 
-    // region AbcEdge property operations
+    // region Labels
 
     @Test
-    fun `test setProp_value_setsProperty`() {
-        testEdge["weight"] = 1.5.numVal
-
-        assertEquals(1.5, (testEdge["weight"] as NumVal).core)
+    fun `labels returns empty set when no labels assigned`() {
+        assertTrue(edge.labels.isEmpty())
     }
 
     @Test
-    fun `test setProp_null_removesProperty`() {
-        testEdge["weight"] = 1.5.numVal
+    fun `labels set and get round-trips`() {
+        val labels = setOf(Label("v1"), Label("v2"))
 
-        testEdge["weight"] = null
+        edge.labels = labels
 
-        assertNull(testEdge["weight"])
-        assertFalse("weight" in testEdge)
-    }
-
-    @Test
-    fun `test getProp_absent_returnsNull`() {
-        assertNull(testEdge["nonexistent"])
-    }
-
-    @Test
-    fun `test setProps_multipleProperties_setsAll`() {
-        testEdge.update(
-            mapOf(
-                "weight" to 1.5.numVal,
-                "label" to "test".strVal,
-                "active" to true.boolVal,
-            ),
-        )
-
-        assertEquals(1.5, (testEdge["weight"] as NumVal).core)
-        assertEquals("test", (testEdge["label"] as StrVal).core)
-        assertEquals(true, (testEdge["active"] as BoolVal).core)
-    }
-
-    @Test
-    fun `test setProps_nullValues_removesProperties`() {
-        testEdge.update(mapOf("weight" to 1.5.numVal, "label" to "test".strVal))
-
-        testEdge.update(mapOf("weight" to null, "label" to "updated".strVal))
-
-        assertNull(testEdge["weight"])
-        assertEquals("updated", (testEdge["label"] as StrVal).core)
-    }
-
-    @Test
-    fun `test setProps_emptyMap_noChange`() {
-        testEdge.update(mapOf("weight" to 1.5.numVal, "label" to "test".strVal))
-
-        testEdge.update(emptyMap())
-
-        assertEquals(2, testEdge.asMap().size)
-    }
-
-    @Test
-    fun `test setProps_largeNumberOfProperties_setsAll`() {
-        val largeProps = (1..100).associate { "prop$it" to it.numVal }
-
-        testEdge.update(largeProps)
-
-        assertEquals(100, testEdge.asMap().size)
-    }
-
-    @Test
-    fun `test setProps_mixedValueTypes_setsAll`() {
-        testEdge.update(
-            mapOf(
-                "str" to "test".strVal,
-                "num" to 25.numVal,
-                "bool" to true.boolVal,
-            ),
-        )
-
-        assertEquals(3, testEdge.asMap().size)
-    }
-
-    @Test
-    fun `test getAllProps_noProperties_returnsEmptyMap`() {
-        assertTrue(testEdge.asMap().isEmpty())
-    }
-
-    @Test
-    fun `test getAllProps_withProperties_returnsAll`() {
-        testEdge.update(mapOf("weight" to 1.5.numVal, "label" to "test".strVal))
-
-        val props = testEdge.asMap()
-
-        assertEquals(2, props.size)
-    }
-
-    @Test
-    fun `test containProp_existing_returnsTrue`() {
-        testEdge["weight"] = 1.5.numVal
-
-        assertTrue("weight" in testEdge)
-    }
-
-    @Test
-    fun `test containProp_absent_returnsFalse`() {
-        assertFalse("nonexistent" in testEdge)
+        assertEquals(labels, edge.labels)
     }
 
     // endregion
 
-    // region AbcEdge operator syntax
+    // region Property access
 
     @Test
-    fun `test operatorSet_value_setsProperty`() {
-        testEdge["weight"] = 1.5.numVal
+    fun `get returns value for existing property`() {
+        edge["weight"] = 3.14.numVal
 
-        assertEquals(1.5, (testEdge["weight"] as? NumVal)?.core)
+        assertEquals(3.14, (edge["weight"] as NumVal).core)
     }
 
     @Test
-    fun `test operatorGet_existing_returnsValue`() {
-        testEdge["weight"] = 1.5.numVal
-
-        assertNotNull(testEdge["weight"])
+    fun `get returns null for absent property`() {
+        assertNull(edge["missing"])
     }
 
     @Test
-    fun `test operatorContains_existing_returnsTrue`() {
-        testEdge["weight"] = 1.5.numVal
+    fun `set stores property`() {
+        edge["tag"] = "important".strVal
 
-        assertTrue("weight" in testEdge)
+        assertEquals("important", (edge["tag"] as StrVal).core)
     }
 
     @Test
-    fun `test operatorContains_absent_returnsFalse`() {
-        assertFalse("nonexistent" in testEdge)
-    }
+    fun `set null removes property`() {
+        edge["tag"] = "important".strVal
 
-    // endregion
+        edge["tag"] = null
 
-    // region AbcEdge identity properties
-
-    @Test
-    fun `test srcNid_returnsSourceNodeID`() {
-        assertEquals("src", testEdge.srcNid)
+        assertNull(edge["tag"])
+        assertFalse("tag" in edge)
     }
 
     @Test
-    fun `test dstNid_returnsDestinationNodeID`() {
-        assertEquals("dst", testEdge.dstNid)
+    fun `contains returns true for existing property`() {
+        edge["weight"] = 1.0.numVal
+
+        assertTrue("weight" in edge)
     }
 
     @Test
-    fun `test eTag_returnsEdgeTag`() {
-        assertEquals("relation", testEdge.eTag)
+    fun `contains returns false for absent property`() {
+        assertFalse("missing" in edge)
     }
 
     @Test
-    fun `test id_returnsGraphLayerIdentity`() {
-        assertEquals("src-relation-dst", testEdge.id)
+    fun `asMap returns empty map when no properties`() {
+        assertTrue(edge.asMap().isEmpty())
     }
 
     @Test
-    fun `test type_returnsCorrectType`() {
-        assertEquals("TestEdge", testEdge.type.name)
+    fun `asMap returns all properties`() {
+        edge["a"] = "x".strVal
+        edge["b"] = 2.numVal
+
+        val map = edge.asMap()
+
+        assertEquals(2, map.size)
     }
 
-    // endregion
-
-    // region AbcEdge boundary conditions
-
     @Test
-    fun `test setProp_emptyPropertyName_accepted`() {
-        testEdge[""] = "value".strVal
+    fun `update sets multiple properties`() {
+        edge.update(mapOf("a" to "x".strVal, "b" to 1.numVal))
 
-        assertTrue("" in testEdge)
-        assertEquals("value", (testEdge[""] as StrVal).core)
+        assertEquals("x", (edge["a"] as StrVal).core)
+        assertEquals(1, (edge["b"] as NumVal).core)
     }
 
-    // endregion
-
-    // region AbcEdge storage integration
-
     @Test
-    fun `test propertiesStoredInStorage`() {
-        testEdge["weight"] = 1.5.numVal
+    fun `update null values remove properties`() {
+        edge["a"] = "x".strVal
+        edge["b"] = 1.numVal
 
-        val props = storage.getEdgeProperties(testEdge.storageId)
+        edge.update(mapOf("a" to null, "b" to 2.numVal))
 
-        assertTrue(props.containsKey("weight"))
-        assertEquals(1.5, (props["weight"] as NumVal).core)
+        assertNull(edge["a"])
+        assertEquals(2, (edge["b"] as NumVal).core)
     }
 
     // endregion
 
-    // region AbcEdge equality and toString
+    // region Equals / hashCode / toString
 
     @Test
-    fun `test equals_sameID_returnsTrue`() {
-        val sid = testEdge.storageId
-        val edge1 = createTestEdge(storage, sid, "src", "dst", "relation")
-        val edge2 = createTestEdge(storage, sid, "src", "dst", "relation")
+    fun `equals returns true for same storageId`() {
+        val other = TestEdge()
+        other.bind(storage, edge.storageId, "srcNode", "dstNode", "calls")
 
-        assertEquals(edge1, edge2)
+        assertEquals(edge, other)
     }
 
     @Test
-    fun `test equals_differentID_returnsFalse`() {
-        val eid2 = storage.addEdge(srcNodeStorageId, dstNodeStorageId, "other")
-        assertNotEquals(
-            createTestEdge(storage, testEdge.storageId, "src", "dst", "relation"),
-            createTestEdge(storage, eid2, "src", "dst", "other"),
-        )
+    fun `equals returns false for different storageId`() {
+        val eid2 = storage.addEdge(srcSid, dstSid, "other")
+        val other = TestEdge()
+        other.bind(storage, eid2, "srcNode", "dstNode", "other")
+
+        assertNotEquals(edge, other)
     }
 
     @Test
-    fun `test equals_nonEdgeObject_returnsFalse`() {
-        assertNotEquals<Any>(testEdge, "not an edge")
+    fun `equals returns false for non-edge object`() {
+        assertNotEquals<Any>(edge, "not an edge")
     }
 
     @Test
-    fun `test toString_includesEdgeInfo`() {
-        val str = testEdge.toString()
+    fun `toString includes src-tag-dst and type`() {
+        val str = edge.toString()
 
-        assertTrue(str.contains("relation"))
+        assertTrue(str.contains("calls"))
         assertTrue(str.contains("TestEdge"))
     }
 

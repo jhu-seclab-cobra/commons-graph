@@ -6,7 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * Performance benchmarks for core IStorage implementations at varying scales.
+ * Performance benchmarks for core `IStorage` implementations at varying scales.
  *
  * Scale tiers use node/edge counts as the primary metric:
  *   - Small:  10K nodes / 30K edges
@@ -16,13 +16,25 @@ import kotlin.test.Test
  * Each measurement uses warmup iterations (JIT stabilization) followed by
  * multiple measured iterations, reporting median values.
  *
+ * Tests:
+ * - `benchmark graph population at scale` -- population throughput across implementations and sizes
+ * - `benchmark node add at scale` -- node insertion ops/sec
+ * - `benchmark edge add at scale` -- edge insertion ops/sec
+ * - `benchmark node lookup on large graph` -- containsNode ops/sec
+ * - `benchmark property read and write on large graph` -- property I/O ops/sec
+ * - `benchmark edge query on large graph` -- adjacency query ops/sec
+ * - `benchmark node delete with cascade` -- cascade deletion ops/sec
+ * - `benchmark mixed workload at scale` -- combined operation throughput
+ * - `benchmark memory footprint` -- heap usage per implementation
+ * - `benchmark layered storage multi-layer query` -- layer-count impact on query speed
+ *
  * Run with: ./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
  */
-class StoragePerformanceTest {
+internal class StoragePerformanceTest {
     private val storages = mutableListOf<IStorage>()
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storages.forEach { runCatching { it.close() } }
         storages.clear()
     }
@@ -46,10 +58,6 @@ class StoragePerformanceTest {
         return storage
     }
 
-    /**
-     * Populates a graph with [nodeCount] nodes and [edgesPerNode] edges per node.
-     * Returns an array of node IDs for subsequent lookups.
-     */
     private fun populateGraph(
         storage: IStorage,
         nodeCount: Int,
@@ -123,10 +131,6 @@ class StoragePerformanceTest {
 
     private fun fmtMs(ms: Double): String = String.format("%.1f", ms)
 
-    // ========================================================================
-    // BENCHMARK: GRAPH POPULATION AT SCALE
-    // ========================================================================
-
     @Test
     fun `benchmark graph population at scale`() {
         data class Scale(
@@ -166,10 +170,6 @@ class StoragePerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: NODE ADD
-    // ========================================================================
-
     @Test
     fun `benchmark node add at scale`() {
         val scales = listOf(10_000, 100_000, 1_000_000)
@@ -203,10 +203,6 @@ class StoragePerformanceTest {
             )
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: EDGE ADD
-    // ========================================================================
 
     @Test
     fun `benchmark edge add at scale`() {
@@ -249,10 +245,6 @@ class StoragePerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: NODE LOOKUP on large graph
-    // ========================================================================
-
     @Test
     fun `benchmark node lookup on large graph`() {
         val nodeCount = 100_000
@@ -272,10 +264,6 @@ class StoragePerformanceTest {
             storage.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: PROPERTY READ/WRITE on large graph
-    // ========================================================================
 
     @Test
     fun `benchmark property read and write on large graph`() {
@@ -304,10 +292,6 @@ class StoragePerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: EDGE QUERY on large graph
-    // ========================================================================
-
     @Test
     fun `benchmark edge query on large graph`() {
         val nodeCount = 10_000
@@ -332,10 +316,6 @@ class StoragePerformanceTest {
             storage.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: NODE DELETE with cascade
-    // ========================================================================
 
     @Test
     fun `benchmark node delete with cascade`() {
@@ -366,10 +346,6 @@ class StoragePerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: MIXED WORKLOAD at scale
-    // ========================================================================
-
     @Test
     fun `benchmark mixed workload at scale`() {
         val iterations = 50_000
@@ -395,10 +371,6 @@ class StoragePerformanceTest {
             println(String.format("%-24s %14s", name, fmtMs(ms)))
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: MEMORY FOOTPRINT
-    // ========================================================================
 
     @Test
     fun `benchmark memory footprint`() {
@@ -440,10 +412,6 @@ class StoragePerformanceTest {
             storage.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: LAYERED STORAGE — MULTI-LAYER QUERY
-    // ========================================================================
 
     @Test
     fun `benchmark layered storage multi-layer query`() {

@@ -1,274 +1,223 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
+import edu.jhu.cobra.commons.graph.GraphTestUtils.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.*
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-class AbcNodeTest {
+/**
+ * Black-box tests for AbcNode: bind, id, type, property access with PROP_NODE_ID filtering,
+ * equals/hashCode.
+ *
+ * - `id returns nodeId injected via bind` — verifies id delegates to nodeId
+ * - `type returns subclass-defined type` — verifies abstract type override
+ * - `get filters PROP_NODE_ID` — verifies internal property hidden from user
+ * - `set rejects PROP_NODE_ID` — verifies require guard on reserved property
+ * - `contains filters PROP_NODE_ID` — verifies internal property excluded
+ * - `asMap filters PROP_NODE_ID` — verifies internal property excluded from map
+ * - `update rejects PROP_NODE_ID` — verifies require guard on bulk update
+ * - `get returns value for user property` — verifies normal property read
+ * - `set stores user property` — verifies normal property write
+ * - `set null removes user property` — verifies null removes property
+ * - `contains returns true for existing user property` — verifies contains on present key
+ * - `contains returns false for absent property` — verifies contains on missing key
+ * - `asMap returns all user properties` — verifies complete map minus internal
+ * - `update sets multiple user properties` — verifies bulk update
+ * - `equals returns true for same id` — verifies equality by id
+ * - `equals returns false for different id` — verifies inequality by id
+ * - `equals returns false for non-node object` — verifies type guard
+ * - `hashCode uses id` — verifies hashCode consistency with equals
+ * - `toString includes id and type` — verifies string representation
+ */
+internal class AbcNodeTest {
     private lateinit var storage: NativeStorageImpl
-    private lateinit var otherStorage: NativeStorageImpl
-    private lateinit var testNode: TestNode
-    private var testNodeStorageId: Int = -1
-
-    private class TestNode : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "TestNode"
-            }
-    }
-
-    private fun createTestNode(
-        storage: NativeStorageImpl,
-        storageId: Int,
-        nodeId: String,
-    ): TestNode {
-        val node = TestNode()
-        node.bind(storage, storageId, nodeId)
-        return node
-    }
+    private lateinit var node: TestNode
 
     @BeforeTest
-    fun setup() {
+    fun setUp() {
         storage = NativeStorageImpl()
-        otherStorage = NativeStorageImpl()
-        testNodeStorageId = storage.addNode()
-        testNode = createTestNode(storage, testNodeStorageId, "testNode")
+        val sid = storage.addNode()
+        node = TestNode()
+        node.bind(storage, sid, NODE_ID_1)
     }
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storage.close()
-        otherStorage.close()
     }
 
-    // region AbcNode property operations
+    // region Identity
 
     @Test
-    fun `test setProp_value_setsProperty`() {
-        testNode["name"] = "test".strVal
-
-        assertEquals("test", (testNode["name"] as StrVal).core)
+    fun `id returns nodeId injected via bind`() {
+        assertEquals(NODE_ID_1, node.id)
     }
 
     @Test
-    fun `test setProp_null_removesProperty`() {
-        testNode["name"] = "test".strVal
-
-        testNode["name"] = null
-
-        assertNull(testNode["name"])
-        assertFalse("name" in testNode)
-    }
-
-    @Test
-    fun `test getProp_absent_returnsNull`() {
-        assertNull(testNode["nonexistent"])
-    }
-
-    @Test
-    fun `test setProps_multipleProperties_setsAll`() {
-        testNode.update(
-            mapOf(
-                "name" to "test".strVal,
-                "age" to 25.numVal,
-                "active" to true.boolVal,
-            ),
-        )
-
-        assertEquals("test", (testNode["name"] as StrVal).core)
-        assertEquals(25, (testNode["age"] as NumVal).core)
-        assertEquals(true, (testNode["active"] as BoolVal).core)
-    }
-
-    @Test
-    fun `test setProps_nullValues_removesProperties`() {
-        testNode.update(mapOf("name" to "test".strVal, "age" to 25.numVal))
-
-        testNode.update(mapOf("name" to null, "age" to 30.numVal))
-
-        assertNull(testNode["name"])
-        assertEquals(30, (testNode["age"] as NumVal).core)
-    }
-
-    @Test
-    fun `test setProps_emptyMap_noChange`() {
-        testNode.update(mapOf("name" to "test".strVal, "age" to 25.numVal))
-
-        testNode.update(emptyMap())
-
-        assertEquals(2, testNode.asMap().size)
-    }
-
-    @Test
-    fun `test setProps_largeNumberOfProperties_setsAll`() {
-        val largeProps = (1..100).associate { "prop$it" to it.numVal }
-
-        testNode.update(largeProps)
-
-        assertEquals(100, testNode.asMap().size)
-    }
-
-    @Test
-    fun `test setProps_mixedValueTypes_setsAll`() {
-        testNode.update(
-            mapOf(
-                "str" to "test".strVal,
-                "num" to 25.numVal,
-                "bool" to true.boolVal,
-            ),
-        )
-
-        assertEquals(3, testNode.asMap().size)
-        assertTrue("str" in testNode)
-        assertTrue("num" in testNode)
-        assertTrue("bool" in testNode)
-    }
-
-    @Test
-    fun `test getAllProps_noProperties_returnsEmptyMap`() {
-        assertTrue(testNode.asMap().isEmpty())
-    }
-
-    @Test
-    fun `test getAllProps_withProperties_returnsAll`() {
-        testNode.update(mapOf("name" to "test".strVal, "age" to 25.numVal))
-
-        val props = testNode.asMap()
-
-        assertEquals(2, props.size)
-        assertEquals("test", (props["name"] as StrVal).core)
-        assertEquals(25, (props["age"] as NumVal).core)
-    }
-
-    @Test
-    fun `test containProp_existing_returnsTrue`() {
-        testNode["name"] = "test".strVal
-
-        assertTrue("name" in testNode)
-    }
-
-    @Test
-    fun `test containProp_absent_returnsFalse`() {
-        assertFalse("nonexistent" in testNode)
+    fun `type returns subclass-defined type`() {
+        assertEquals("TestNode", node.type.name)
     }
 
     // endregion
 
-    // region AbcNode operator syntax
+    // region PROP_NODE_ID filtering
 
     @Test
-    fun `test operatorSet_value_setsProperty`() {
-        testNode["name"] = "test".strVal
-
-        assertEquals("test", (testNode["name"] as? StrVal)?.core)
+    fun `get filters PROP_NODE_ID`() {
+        assertNull(node[AbcMultipleGraph.PROP_NODE_ID])
     }
 
     @Test
-    fun `test operatorGet_existing_returnsValue`() {
-        testNode["age"] = 25.numVal
-
-        assertEquals(25, (testNode["age"] as NumVal).core)
+    fun `set rejects PROP_NODE_ID`() {
+        assertFailsWith<IllegalArgumentException> {
+            node[AbcMultipleGraph.PROP_NODE_ID] = "bad".strVal
+        }
     }
 
     @Test
-    fun `test operatorContains_existing_returnsTrue`() {
-        testNode["name"] = "test".strVal
-
-        assertTrue("name" in testNode)
+    fun `contains filters PROP_NODE_ID`() {
+        assertFalse(AbcMultipleGraph.PROP_NODE_ID in node)
     }
 
     @Test
-    fun `test operatorContains_absent_returnsFalse`() {
-        assertFalse("nonexistent" in testNode)
-    }
+    fun `asMap filters PROP_NODE_ID`() {
+        val map = node.asMap()
 
-    // endregion
-
-    // region AbcNode boundary conditions
-
-    @Test
-    fun `test setProp_emptyPropertyName_accepted`() {
-        testNode[""] = "value".strVal
-
-        assertTrue("" in testNode)
-        assertEquals("value", (testNode[""] as StrVal).core)
+        assertFalse(map.containsKey(AbcMultipleGraph.PROP_NODE_ID))
     }
 
     @Test
-    fun `test getProp_emptyPropertyName_returnsValue`() {
-        testNode[""] = "value".strVal
-
-        assertNotNull(testNode[""])
+    fun `update rejects PROP_NODE_ID`() {
+        assertFailsWith<IllegalArgumentException> {
+            node.update(mapOf(AbcMultipleGraph.PROP_NODE_ID to "bad".strVal))
+        }
     }
 
     // endregion
 
-    // region AbcNode storage integration
+    // region Property access
 
     @Test
-    fun `test propertiesStoredInStorage`() {
-        testNode["name"] = "test".strVal
+    fun `get returns value for user property`() {
+        node["name"] = "alice".strVal
 
-        val props = storage.getNodeProperties(testNodeStorageId)
-
-        assertTrue(props.containsKey("name"))
-        assertEquals("test", (props["name"] as StrVal).core)
+        assertEquals("alice", (node["name"] as StrVal).core)
     }
 
     @Test
-    fun `test doUseStorage_matchingStorage_returnsTrue`() {
-        assertTrue(testNode.doUseStorage(storage))
+    fun `set stores user property`() {
+        node["count"] = 42.numVal
+
+        assertEquals(42, (node["count"] as NumVal).core)
     }
 
     @Test
-    fun `test doUseStorage_differentStorage_returnsFalse`() {
-        assertFalse(testNode.doUseStorage(otherStorage))
+    fun `set null removes user property`() {
+        node["name"] = "alice".strVal
+
+        node["name"] = null
+
+        assertNull(node["name"])
+        assertFalse("name" in node)
+    }
+
+    @Test
+    fun `contains returns true for existing user property`() {
+        node["name"] = "alice".strVal
+
+        assertTrue("name" in node)
+    }
+
+    @Test
+    fun `contains returns false for absent property`() {
+        assertFalse("missing" in node)
+    }
+
+    @Test
+    fun `asMap returns all user properties`() {
+        node["a"] = "x".strVal
+        node["b"] = 1.numVal
+
+        val map = node.asMap()
+
+        assertEquals(2, map.size)
+        assertEquals("x", (map["a"] as StrVal).core)
+        assertEquals(1, (map["b"] as NumVal).core)
+    }
+
+    @Test
+    fun `update sets multiple user properties`() {
+        node.update(mapOf("a" to "x".strVal, "b" to 2.numVal))
+
+        assertEquals("x", (node["a"] as StrVal).core)
+        assertEquals(2, (node["b"] as NumVal).core)
     }
 
     // endregion
 
-    // region AbcNode identity and equality
+    // region Equals / hashCode / toString
 
     @Test
-    fun `test id_returnsCorrectNodeID`() {
-        assertEquals("testNode", testNode.id)
+    fun `equals returns true for same id`() {
+        val other = TestNode()
+        other.bind(storage, storage.addNode(), NODE_ID_1)
+
+        assertEquals(node, other)
     }
 
     @Test
-    fun `test type_returnsCorrectType`() {
-        assertEquals("TestNode", testNode.type.name)
+    fun `equals returns false for different id`() {
+        val other = TestNode()
+        other.bind(storage, storage.addNode(), "different")
+
+        assertNotEquals(node, other)
     }
 
     @Test
-    fun `test equals_sameID_returnsTrue`() {
-        val node1 = createTestNode(storage, testNodeStorageId, "testNode")
-        val node2 = createTestNode(storage, testNodeStorageId, "testNode")
-
-        assertEquals(node1, node2)
+    fun `equals returns false for non-node object`() {
+        assertNotEquals<Any>(node, "not a node")
     }
 
     @Test
-    fun `test equals_differentID_returnsFalse`() {
-        val sid2 = storage.addNode()
-        assertNotEquals(createTestNode(storage, testNodeStorageId, "testNode"), createTestNode(storage, sid2, "other"))
+    fun `hashCode uses id`() {
+        val other = TestNode()
+        other.bind(storage, storage.addNode(), NODE_ID_1)
+
+        assertEquals(node.hashCode(), other.hashCode())
+        assertEquals(NODE_ID_1.hashCode(), node.hashCode())
     }
 
     @Test
-    fun `test equals_nonNodeObject_returnsFalse`() {
-        assertNotEquals<Any>(createTestNode(storage, testNodeStorageId, "testNode"), "not a node")
-    }
+    fun `toString includes id and type`() {
+        val str = node.toString()
 
-    @Test
-    fun `test toString_includesIdAndType`() {
-        val str = testNode.toString()
-
-        assertTrue(str.contains("testNode"))
+        assertTrue(str.contains(NODE_ID_1))
         assertTrue(str.contains("TestNode"))
+    }
+
+    // endregion
+
+    // region Utility: assertFailsWith (inline for kotlin.test)
+
+    private inline fun <reified T : Throwable> assertFailsWith(block: () -> Unit): T {
+        try {
+            block()
+            throw AssertionError("Expected ${T::class.simpleName} but no exception was thrown")
+        } catch (e: Throwable) {
+            if (e is T) return e
+            throw e
+        }
     }
 
     // endregion

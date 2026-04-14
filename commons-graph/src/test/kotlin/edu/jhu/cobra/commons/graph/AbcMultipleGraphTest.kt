@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_3
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_4
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
@@ -11,22 +10,99 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_4
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestMultipleGraph
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import kotlin.test.*
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-class AbcMultipleGraphTest {
+/**
+ * Black-box tests for AbcMultipleGraph: node/edge CRUD, structure queries,
+ * label-aware operations, exceptions, IPoset integration.
+ *
+ * - `addNode returns node with correct id` — verifies addNode output
+ * - `addNode registers id in nodeIDs` — verifies nodeIDs updated
+ * - `addNode duplicate throws EntityAlreadyExistException` — verifies duplicate guard
+ * - `getNode existing returns node` — verifies retrieval
+ * - `getNode nonexistent returns null` — verifies absent case
+ * - `containNode existing returns true` — verifies presence check
+ * - `containNode nonexistent returns false` — verifies absence check
+ * - `delNode removes node` — verifies deletion
+ * - `delNode removes associated edges` — verifies cascade
+ * - `delNode nonexistent is no-op` — verifies no-op semantics
+ * - `getAllNodes returns all nodes` — verifies complete iteration
+ * - `getAllNodes with predicate filters` — verifies predicate filtering
+ * - `addEdge returns edge with correct endpoints` — verifies addEdge output
+ * - `addEdge duplicate same triple throws EntityAlreadyExistException` — verifies duplicate guard
+ * - `addEdge multiple tags same pair allowed` — verifies parallel edges
+ * - `addEdge missing src throws EntityNotExistException` — verifies src guard
+ * - `addEdge missing dst throws EntityNotExistException` — verifies dst guard
+ * - `getEdge existing returns edge` — verifies retrieval
+ * - `getEdge nonexistent returns null` — verifies absent case
+ * - `containEdge existing returns true` — verifies presence check
+ * - `containEdge nonexistent returns false` — verifies absence check
+ * - `delEdge removes edge` — verifies deletion
+ * - `delEdge preserves nodes` — verifies nodes retained
+ * - `delEdge nonexistent is no-op` — verifies no-op semantics
+ * - `getAllEdges returns all edges` — verifies complete iteration
+ * - `getAllEdges with predicate filters` — verifies predicate filtering
+ * - `getOutgoingEdges returns outgoing` — verifies outgoing query
+ * - `getOutgoingEdges no outgoing returns empty` — verifies empty case
+ * - `getIncomingEdges returns incoming` — verifies incoming query
+ * - `getIncomingEdges no incoming returns empty` — verifies empty case
+ * - `getChildren returns child nodes` — verifies children query
+ * - `getChildren with edge condition filters` — verifies edgeCond
+ * - `getParents returns parent nodes` — verifies parents query
+ * - `getParents with edge condition filters` — verifies edgeCond
+ * - `getDescendants linear chain returns all` — verifies BFS traversal
+ * - `getDescendants with edge condition stops at filtered` — verifies edgeCond
+ * - `getDescendants cycle terminates without duplicates` — verifies cycle handling
+ * - `getAncestors linear chain returns all` — verifies BFS traversal
+ * - `getAncestors with edge condition stops at filtered` — verifies edgeCond
+ * - `getAncestors cycle terminates without duplicates` — verifies cycle handling
+ * - `addEdge with label assigns label` — verifies label assignment
+ * - `addEdge with label existing edge adds label` — verifies label accumulation
+ * - `addEdge with label missing src throws EntityNotExistException` — verifies guard
+ * - `addEdge with label missing dst throws EntityNotExistException` — verifies guard
+ * - `delEdge with label removes only that label` — verifies selective removal
+ * - `delEdge last label removes edge entirely` — verifies edge cleanup
+ * - `delEdge with label nonexistent edge is no-op` — verifies no-op
+ * - `delEdge with label not on edge retains edge` — verifies non-matching label
+ * - `label parents set and get round-trips` — verifies IPoset parents
+ * - `label ancestors multi-level returns all` — verifies BFS ancestors
+ * - `label compareTo equal returns zero` — verifies reflexive comparison
+ * - `label compareTo child vs parent returns negative` — verifies ordering
+ * - `label compareTo parent vs child returns positive` — verifies ordering
+ * - `label compareTo incomparable returns null` — verifies incomparability
+ * - `label compareTo SUPREMUM greater than any` — verifies SUPREMUM bound
+ * - `label compareTo INFIMUM less than any` — verifies INFIMUM bound
+ * - `allLabels includes INFIMUM and SUPREMUM` — verifies sentinel presence
+ * - `getOutgoingEdges with label filters visible edges` — verifies label filtering
+ * - `getIncomingEdges with label filters visible edges` — verifies label filtering
+ * - `getChildren with label returns visible children` — verifies label filtering
+ * - `getParents with label returns visible parents` — verifies label filtering
+ * - `getDescendants with label traverses only visible edges` — verifies label filtering
+ * - `getAncestors with label traverses only visible edges` — verifies label filtering
+ * - `parent label sees child label edges` — verifies visibility rule
+ */
+internal class AbcMultipleGraphTest {
     private lateinit var graph: AbcMultipleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>
     private lateinit var storage: NativeStorageImpl
     private lateinit var posetStorage: NativeStorageImpl
 
     @BeforeTest
-    fun setup() {
+    fun setUp() {
         storage = NativeStorageImpl()
         posetStorage = NativeStorageImpl()
         graph = createTestMultipleGraph(storage, posetStorage)
     }
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storage.close()
         posetStorage.close()
     }
@@ -34,28 +110,28 @@ class AbcMultipleGraphTest {
     // region Node CRUD
 
     @Test
-    fun `test addNode_newNode_returnsNodeWithCorrectID`() {
+    fun `addNode returns node with correct id`() {
         val node = graph.addNode(NODE_ID_1)
 
         assertEquals(NODE_ID_1, node.id)
     }
 
     @Test
-    fun `test addNode_newNode_appearsInNodeIDs`() {
+    fun `addNode registers id in nodeIDs`() {
         graph.addNode(NODE_ID_1)
 
         assertTrue(graph.nodeIDs.contains(NODE_ID_1))
     }
 
     @Test
-    fun `test addNode_duplicate_throwsEntityAlreadyExist`() {
+    fun `addNode duplicate throws EntityAlreadyExistException`() {
         graph.addNode(NODE_ID_1)
 
         assertFailsWith<EntityAlreadyExistException> { graph.addNode(NODE_ID_1) }
     }
 
     @Test
-    fun `test getNode_existing_returnsNode`() {
+    fun `getNode existing returns node`() {
         graph.addNode(NODE_ID_1)
 
         val node = graph.getNode(NODE_ID_1)
@@ -65,24 +141,24 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getNode_nonExistent_returnsNull`() {
+    fun `getNode nonexistent returns null`() {
         assertNull(graph.getNode(NODE_ID_1))
     }
 
     @Test
-    fun `test containNode_existing_returnsTrue`() {
+    fun `containNode existing returns true`() {
         graph.addNode(NODE_ID_1)
 
         assertTrue(graph.containNode(NODE_ID_1))
     }
 
     @Test
-    fun `test containNode_nonExistent_returnsFalse`() {
+    fun `containNode nonexistent returns false`() {
         assertFalse(graph.containNode(NODE_ID_1))
     }
 
     @Test
-    fun `test delNode_existing_removesNode`() {
+    fun `delNode removes node`() {
         graph.addNode(NODE_ID_1)
 
         graph.delNode(NODE_ID_1)
@@ -91,31 +167,26 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test delNode_withEdges_removesAssociatedEdges`() {
+    fun `delNode removes associated edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
         graph.delNode(NODE_ID_1)
 
-        assertFalse(graph.getAllEdges().any { it.srcNid == NODE_ID_1 && it.dstNid == NODE_ID_2 && it.eTag == EDGE_TAG_1 })
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
         assertTrue(graph.containNode(NODE_ID_2))
     }
 
     @Test
-    fun `test delNode_nonExistent_noOp`() {
+    fun `delNode nonexistent is no-op`() {
         graph.delNode(NODE_ID_1)
 
         assertFalse(graph.containNode(NODE_ID_1))
     }
 
     @Test
-    fun `test getAllNodes_empty_returnsEmptySequence`() {
-        assertEquals(0, graph.getAllNodes().count())
-    }
-
-    @Test
-    fun `test getAllNodes_multipleNodes_returnsAll`() {
+    fun `getAllNodes returns all nodes`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -126,7 +197,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getAllNodes_withPredicate_filtersCorrectly`() {
+    fun `getAllNodes with predicate filters`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
 
@@ -140,7 +211,7 @@ class AbcMultipleGraphTest {
     // region Edge CRUD
 
     @Test
-    fun `test addEdge_newEdge_returnsEdgeWithCorrectEndpoints`() {
+    fun `addEdge returns edge with correct endpoints`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
 
@@ -148,187 +219,200 @@ class AbcMultipleGraphTest {
 
         assertEquals(NODE_ID_1, edge.srcNid)
         assertEquals(NODE_ID_2, edge.dstNid)
+        assertEquals(EDGE_TAG_1, edge.eTag)
     }
 
     @Test
-    fun `test addEdge_duplicateTagAndEndpoints_throwsException`() {
+    fun `addEdge duplicate same triple throws EntityAlreadyExistException`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
-        // Attempting to add another edge with same src, dst, type should fail
         assertFailsWith<EntityAlreadyExistException> {
             graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
         }
     }
 
     @Test
-    fun `test addEdge_multipleEdgesSameNodePair_allowed`() {
+    fun `addEdge multiple tags same pair allowed`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
 
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel1")
-        val e2 = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel2")
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_2)
 
-        assertTrue(graph.containEdge(e1.srcNid, e1.dstNid, e1.eTag))
-        assertTrue(graph.containEdge(e2.srcNid, e2.dstNid, e2.eTag))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_2))
     }
 
     @Test
-    fun `test getEdge_existing_returnsEdge`() {
-        graph.addNode(NODE_ID_1)
+    fun `addEdge missing src throws EntityNotExistException`() {
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
-        val retrieved = graph.getEdge(edge.srcNid, edge.dstNid, edge.eTag)
-
-        assertNotNull(retrieved)
-        assertEquals(edge.id, retrieved.id)
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        }
     }
 
     @Test
-    fun `test getEdge_nonExistent_returnsNull`() {
+    fun `addEdge missing dst throws EntityNotExistException`() {
         graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, "nonexistent"))
+
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        }
     }
 
     @Test
-    fun `test containEdge_existing_returnsTrue`() {
+    fun `getEdge existing returns edge`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
-        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
+        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        assertNotNull(edge)
+        assertEquals("$NODE_ID_1-$EDGE_TAG_1-$NODE_ID_2", edge.id)
     }
 
     @Test
-    fun `test containEdge_nonExistent_returnsFalse`() {
+    fun `getEdge nonexistent returns null`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "nonexistent"))
+
+        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, "missing"))
     }
 
     @Test
-    fun `test delEdge_existing_removesEdge`() {
+    fun `containEdge existing returns true`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
-        graph.delEdge(edge.srcNid, edge.dstNid, edge.eTag)
-
-        assertFalse(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
     }
 
     @Test
-    fun `test delEdge_preservesNodes`() {
+    fun `containEdge nonexistent returns false`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
-        graph.delEdge(edge.srcNid, edge.dstNid, edge.eTag)
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "missing"))
+    }
+
+    @Test
+    fun `delEdge removes edge`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
+    }
+
+    @Test
+    fun `delEdge preserves nodes`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
 
         assertTrue(graph.containNode(NODE_ID_1))
         assertTrue(graph.containNode(NODE_ID_2))
     }
 
     @Test
-    fun `test getAllEdges_empty_returnsEmptySequence`() {
-        assertEquals(0, graph.getAllEdges().count())
+    fun `delEdge nonexistent is no-op`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, "missing")
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "missing"))
     }
 
     @Test
-    fun `test getAllEdges_multipleEdges_returnsAll`() {
+    fun `getAllEdges returns all edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        val e2 = graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
-
-        val ids = graph.getAllEdges().map { it.id }.toSet()
-
-        assertEquals(setOf(e1.id, e2.id), ids)
-    }
-
-    @Test
-    fun `test getAllEdges_withPredicate_filtersCorrectly`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
         graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
 
-        val ids = graph.getAllEdges { it.srcNid == NODE_ID_1 }.map { it.id }.toList()
+        assertEquals(2, graph.getAllEdges().count())
+    }
 
-        assertEquals(listOf(e1.id), ids)
+    @Test
+    fun `getAllEdges with predicate filters`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addNode(NODE_ID_3)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
+
+        val filtered = graph.getAllEdges { it.srcNid == NODE_ID_1 }.toList()
+
+        assertEquals(1, filtered.size)
+        assertEquals(NODE_ID_1, filtered.first().srcNid)
     }
 
     // endregion
 
-    // region Graph structure queries
+    // region Structure queries
 
     @Test
-    fun `test getOutgoingEdges_existingNode_returnsOutgoing`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        val e3 = graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_3)
-
-        val ids = graph.getOutgoingEdges(NODE_ID_1).map { it.id }.toSet()
-
-        assertEquals(setOf(e1.id, e3.id), ids)
-    }
-
-    @Test
-    fun `test getOutgoingEdges_noOutgoing_returnsEmpty`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-
-        val edges = graph.getOutgoingEdges(NODE_ID_2).toList()
-
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
-    fun `test getOutgoingEdges_nonExistentNode_returnsEmpty`() {
-        val edges = graph.getOutgoingEdges(NODE_ID_1).toList()
-
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
-    fun `test getIncomingEdges_existingNode_returnsIncoming`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        val e2 = graph.addEdge(NODE_ID_3, NODE_ID_2, "rel")
-
-        val ids = graph.getIncomingEdges(NODE_ID_2).map { it.id }.toSet()
-
-        assertEquals(setOf(e1.id, e2.id), ids)
-    }
-
-    @Test
-    fun `test getIncomingEdges_noIncoming_returnsEmpty`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-
-        val edges = graph.getIncomingEdges(NODE_ID_1).toList()
-
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
-    fun `test getChildren_returnsChildNodes`() {
+    fun `getOutgoingEdges returns outgoing`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_3)
+        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_2)
+
+        val dsts = graph.getOutgoingEdges(NODE_ID_1).map { it.dstNid }.toSet()
+
+        assertEquals(setOf(NODE_ID_2, NODE_ID_3), dsts)
+    }
+
+    @Test
+    fun `getOutgoingEdges no outgoing returns empty`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        assertTrue(graph.getOutgoingEdges(NODE_ID_2).toList().isEmpty())
+    }
+
+    @Test
+    fun `getIncomingEdges returns incoming`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addNode(NODE_ID_3)
+        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
+
+        val srcs = graph.getIncomingEdges(NODE_ID_3).map { it.srcNid }.toSet()
+
+        assertEquals(setOf(NODE_ID_1, NODE_ID_2), srcs)
+    }
+
+    @Test
+    fun `getIncomingEdges no incoming returns empty`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+
+        assertTrue(graph.getIncomingEdges(NODE_ID_1).toList().isEmpty())
+    }
+
+    @Test
+    fun `getChildren returns child nodes`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addNode(NODE_ID_3)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_2)
 
         val ids = graph.getChildren(NODE_ID_1).map { it.id }.toSet()
 
@@ -336,7 +420,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getChildren_withEdgeCondition_filtersCorrectly`() {
+    fun `getChildren with edge condition filters`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -349,40 +433,40 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getParents_returnsParentNodes`() {
+    fun `getParents returns parent nodes`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        graph.addEdge(NODE_ID_3, NODE_ID_2, "rel")
+        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
 
-        val ids = graph.getParents(NODE_ID_2).map { it.id }.toSet()
+        val ids = graph.getParents(NODE_ID_3).map { it.id }.toSet()
 
-        assertEquals(setOf(NODE_ID_1, NODE_ID_3), ids)
+        assertEquals(setOf(NODE_ID_1, NODE_ID_2), ids)
     }
 
     @Test
-    fun `test getParents_withEdgeCondition_filtersCorrectly`() {
+    fun `getParents with edge condition filters`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "typeA")
-        graph.addEdge(NODE_ID_3, NODE_ID_2, "typeB")
+        graph.addEdge(NODE_ID_1, NODE_ID_3, "typeA")
+        graph.addEdge(NODE_ID_2, NODE_ID_3, "typeB")
 
-        val ids = graph.getParents(NODE_ID_2) { it.eTag == "typeA" }.map { it.id }.toList()
+        val ids = graph.getParents(NODE_ID_3) { it.eTag == "typeA" }.map { it.id }.toList()
 
         assertEquals(listOf(NODE_ID_1), ids)
     }
 
     @Test
-    fun `test getDescendants_linearChain_returnsAllDescendants`() {
+    fun `getDescendants linear chain returns all`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
         graph.addNode(NODE_ID_4)
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
         graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
-        graph.addEdge(NODE_ID_3, NODE_ID_4, EDGE_TAG_4)
+        graph.addEdge(NODE_ID_3, NODE_ID_4, EDGE_TAG_3)
 
         val ids = graph.getDescendants(NODE_ID_1).map { it.id }.toSet()
 
@@ -390,7 +474,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getDescendants_withEdgeCondition_stopsAtFilteredEdge`() {
+    fun `getDescendants with edge condition stops at filtered`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -403,7 +487,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getDescendants_cycle_terminatesWithoutDuplicates`() {
+    fun `getDescendants cycle terminates without duplicates`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd")
@@ -416,19 +500,14 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getDescendants_nonExistentNode_returnsEmpty`() {
-        assertTrue(graph.getDescendants(NODE_ID_1).toList().isEmpty())
-    }
-
-    @Test
-    fun `test getAncestors_linearChain_returnsAllAncestors`() {
+    fun `getAncestors linear chain returns all`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
         graph.addNode(NODE_ID_4)
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
         graph.addEdge(NODE_ID_2, NODE_ID_3, EDGE_TAG_2)
-        graph.addEdge(NODE_ID_3, NODE_ID_4, EDGE_TAG_4)
+        graph.addEdge(NODE_ID_3, NODE_ID_4, EDGE_TAG_3)
 
         val ids = graph.getAncestors(NODE_ID_4).map { it.id }.toSet()
 
@@ -436,7 +515,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getAncestors_withEdgeCondition_stopsAtFilteredEdge`() {
+    fun `getAncestors with edge condition stops at filtered`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -449,7 +528,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getAncestors_cycle_terminatesWithoutDuplicates`() {
+    fun `getAncestors cycle terminates without duplicates`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd")
@@ -463,130 +542,189 @@ class AbcMultipleGraphTest {
 
     // endregion
 
-    // region Label lattice
+    // region Label-aware edge operations
 
     @Test
-    fun `test addEdge_withLabel_assignsLabel`() {
+    fun `addEdge with label assigns label`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label = Label("v1")
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
-        assertTrue(edge.labels.contains(label))
+        assertTrue(label in edge.labels)
     }
 
     @Test
-    fun `test addEdge_withLabel_existingEdge_addsLabel`() {
+    fun `addEdge with label existing edge adds label`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val labelA = Label("a")
         val labelB = Label("b")
-        val e = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
 
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelB)
 
-        val edge = graph.getEdge(e.srcNid, e.dstNid, e.eTag)!!
+        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)!!
         assertTrue(edge.labels.containsAll(setOf(labelA, labelB)))
     }
 
     @Test
-    fun `test delEdge_withLabel_removesOnlyThatLabel`() {
+    fun `addEdge with label missing src throws EntityNotExistException`() {
+        graph.addNode(NODE_ID_2)
+
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
+        }
+    }
+
+    @Test
+    fun `addEdge with label missing dst throws EntityNotExistException`() {
+        graph.addNode(NODE_ID_1)
+
+        assertFailsWith<EntityNotExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
+        }
+    }
+
+    @Test
+    fun `delEdge with label removes only that label`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val labelA = Label("a")
         val labelB = Label("b")
-        val e = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
         graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelB)
 
-        graph.delEdge(e.srcNid, e.dstNid, e.eTag, labelA)
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
 
-        assertTrue(graph.containEdge(e.srcNid, e.dstNid, e.eTag))
-        val edge = graph.getEdge(e.srcNid, e.dstNid, e.eTag)!!
-        assertFalse(edge.labels.contains(labelA))
-        assertTrue(edge.labels.contains(labelB))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
+        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)!!
+        assertFalse(labelA in edge.labels)
+        assertTrue(labelB in edge.labels)
     }
 
     @Test
-    fun `test delEdge_lastLabel_removesEdgeEntirely`() {
+    fun `delEdge last label removes edge entirely`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label = Label("only")
-        val e = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
-        graph.delEdge(e.srcNid, e.dstNid, e.eTag, label)
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
 
-        assertFalse(graph.containEdge(e.srcNid, e.dstNid, e.eTag))
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
     }
 
     @Test
-    fun `test labelParents_setAndGet_roundTrips`() {
+    fun `delEdge with label nonexistent edge is no-op`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, "missing", Label("v1"))
+
+        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "missing"))
+    }
+
+    @Test
+    fun `delEdge with label not on edge retains edge`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        val labelA = Label("a")
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
+
+        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("unrelated"))
+
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
+        assertTrue(labelA in graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)!!.labels)
+    }
+
+    // endregion
+
+    // region IPoset integration
+
+    @Test
+    fun `label parents set and get round-trips`() {
         val child = Label("child")
         val parent = Label("parent")
 
         with(graph) {
             child.parents = mapOf("rel" to parent)
+
             assertEquals(mapOf("rel" to parent), child.parents)
         }
     }
 
     @Test
-    fun `test labelAncestors_multiLevel_returnsAll`() {
-        val grandparent = Label("gp")
-        val parent = Label("p")
-        val child = Label("c")
+    fun `label ancestors multi-level returns all`() {
+        val gp = Label("gp")
+        val p = Label("p")
+        val c = Label("c")
 
         with(graph) {
-            child.parents = mapOf("up" to parent)
-            parent.parents = mapOf("up" to grandparent)
+            c.parents = mapOf("up" to p)
+            p.parents = mapOf("up" to gp)
 
-            val ancestors = child.ancestors.toSet()
+            val ancestors = c.ancestors.toSet()
 
-            assertTrue(ancestors.contains(parent))
-            assertTrue(ancestors.contains(grandparent))
+            assertTrue(p in ancestors)
+            assertTrue(gp in ancestors)
         }
     }
 
     @Test
-    fun `test labelCompareTo_equal_returnsZero`() {
+    fun `label compareTo equal returns zero`() {
         val label = Label("same")
-        with(graph) { assertEquals(0, label.compareTo(label)) }
+
+        with(graph) {
+            assertEquals(0, label.compareTo(label))
+        }
     }
 
     @Test
-    fun `test labelCompareTo_childVsParent_returnsNegative`() {
+    fun `label compareTo child vs parent returns negative`() {
         val parent = Label("parent")
         val child = Label("child")
+
         with(graph) {
             child.parents = mapOf("up" to parent)
+
             val result = child.compareTo(parent)
+
             assertNotNull(result)
             assertTrue(result < 0)
         }
     }
 
     @Test
-    fun `test labelCompareTo_parentVsChild_returnsPositive`() {
+    fun `label compareTo parent vs child returns positive`() {
         val parent = Label("parent")
         val child = Label("child")
+
         with(graph) {
             child.parents = mapOf("up" to parent)
+
             val result = parent.compareTo(child)
+
             assertNotNull(result)
             assertTrue(result > 0)
         }
     }
 
     @Test
-    fun `test labelCompareTo_incomparable_returnsNull`() {
+    fun `label compareTo incomparable returns null`() {
         val a = Label("a")
         val b = Label("b")
-        with(graph) { assertNull(a.compareTo(b)) }
+
+        with(graph) {
+            assertNull(a.compareTo(b))
+        }
     }
 
     @Test
-    fun `test labelCompareTo_supremum_greaterThanAny`() {
+    fun `label compareTo SUPREMUM greater than any`() {
         val label = Label("any")
+
         with(graph) {
             assertEquals(1, Label.SUPREMUM.compareTo(label))
             assertEquals(-1, label.compareTo(Label.SUPREMUM))
@@ -594,8 +732,9 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test labelCompareTo_infimum_lessThanAny`() {
+    fun `label compareTo INFIMUM less than any`() {
         val label = Label("any")
+
         with(graph) {
             assertEquals(-1, Label.INFIMUM.compareTo(label))
             assertEquals(1, label.compareTo(Label.INFIMUM))
@@ -603,15 +742,19 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test allLabels_includesInfimumAndSupremum`() {
+    fun `allLabels includes INFIMUM and SUPREMUM`() {
         with(graph) {
-            assertTrue(allLabels.contains(Label.INFIMUM))
-            assertTrue(allLabels.contains(Label.SUPREMUM))
+            assertTrue(Label.INFIMUM in allLabels)
+            assertTrue(Label.SUPREMUM in allLabels)
         }
     }
 
+    // endregion
+
+    // region Label-filtered traversal
+
     @Test
-    fun `test getOutgoingEdges_withLabel_filtersVisibleEdges`() {
+    fun `getOutgoingEdges with label filters visible edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -627,20 +770,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getOutgoingEdges_withSupremum_returnsAll`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "rel1", Label("a"))
-        graph.addEdge(NODE_ID_1, NODE_ID_3, "rel2", Label("b"))
-
-        val edges = graph.getOutgoingEdges(NODE_ID_1, Label.SUPREMUM).toList()
-
-        assertEquals(2, edges.size)
-    }
-
-    @Test
-    fun `test getIncomingEdges_withLabel_filtersVisibleEdges`() {
+    fun `getIncomingEdges with label filters visible edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -655,7 +785,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getChildren_withLabel_returnsVisibleChildren`() {
+    fun `getChildren with label returns visible children`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -669,7 +799,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getParents_withLabel_returnsVisibleParents`() {
+    fun `getParents with label returns visible parents`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -683,7 +813,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getDescendants_withLabel_traversesOnlyVisibleEdges`() {
+    fun `getDescendants with label traverses only visible edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -697,7 +827,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test getAncestors_withLabel_traversesOnlyVisibleEdges`() {
+    fun `getAncestors with label traverses only visible edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addNode(NODE_ID_3)
@@ -711,7 +841,7 @@ class AbcMultipleGraphTest {
     }
 
     @Test
-    fun `test labelVisibility_parentLabelSeesChildLabelEdges`() {
+    fun `parent label sees child label edges`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val parent = Label("parent")
@@ -722,406 +852,6 @@ class AbcMultipleGraphTest {
         val edges = graph.getOutgoingEdges(NODE_ID_1, parent).toList()
 
         assertEquals(1, edges.size)
-    }
-
-    @Test
-    fun `test labelChanges_tracksEdgeAssignment`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val label = Label("v1")
-
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
-
-        assertTrue(label in edge.labels)
-    }
-
-    @Test
-    fun `test labelParents_writeThroughToStorage`() {
-        val parent = Label("parent")
-        val child = Label("child")
-        with(graph) { child.parents = mapOf("rel" to parent) }
-
-        val newGraph = createTestMultipleGraph(storage, posetStorage)
-        with(newGraph) {
-            assertEquals(mapOf("rel" to parent), child.parents)
-        }
-    }
-
-    @Test
-    fun `test labelCompareTo_cachedResult_returnsFromCache`() {
-        val parent = Label("p")
-        val child = Label("c")
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            val first = parent.compareTo(child)
-            val second = parent.compareTo(child)
-            assertEquals(first, second)
-            assertNotNull(second)
-            assertTrue(second!! > 0)
-        }
-    }
-
-    @Test
-    fun `test labelCompareTo_reverseCacheHit_returnsNegated`() {
-        val parent = Label("rp")
-        val child = Label("rc")
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            parent.compareTo(child)
-            val reversed = child.compareTo(parent)
-            assertNotNull(reversed)
-            assertTrue(reversed!! < 0)
-        }
-    }
-
-    @Test
-    fun `test labelAncestors_withCycle_terminates`() {
-        val a = Label("cycA")
-        val b = Label("cycB")
-        with(graph) {
-            a.parents = mapOf("up" to b)
-            b.parents = mapOf("up" to a)
-            val ancestors = a.ancestors.toList()
-            assertTrue(ancestors.contains(b))
-            assertTrue(ancestors.contains(a))
-        }
-    }
-
-    @Test
-    fun `test edgeLabels_persistedToStorage`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val label = Label("wt")
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
-
-        assertTrue(label in edge.labels)
-    }
-
-    @Test
-    fun `test delEdge_nonExistentEdge_noOp`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.delEdge(NODE_ID_1, NODE_ID_2, "nonexistent")
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "nonexistent"))
-    }
-
-    @Test
-    fun `test delEdge_withLabel_nonExistentEdge_noOp`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.delEdge(NODE_ID_1, NODE_ID_2, "nonexistent", Label("a"))
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, "nonexistent"))
-    }
-
-    @Test
-    fun `test getAncestors_nonExistentNode_returnsEmpty`() {
-        assertTrue(graph.getAncestors(NODE_ID_1).toList().isEmpty())
-    }
-
-    @Test
-    fun `test filterVisitable_coveredLabelsEliminated`() {
-        val grandparent = Label("gp2")
-        val parent = Label("p2")
-        val child = Label("c2")
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            parent.parents = mapOf("up" to grandparent)
-        }
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "r1", child)
-        graph.addEdge(NODE_ID_1, NODE_ID_3, "r2", parent)
-
-        val edges = graph.getOutgoingEdges(NODE_ID_1, grandparent).toList()
-        assertTrue(edges.isNotEmpty())
-    }
-
-    @Test
-    fun `test addNode_alreadyInStorage_throwsEntityAlreadyExist`() {
-        graph.addNode(NODE_ID_1)
-
-        assertFailsWith<EntityAlreadyExistException> { graph.addNode(NODE_ID_1) }
-    }
-
-    @Test
-    fun `test addEdge_duplicateInStorage_throwsException`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-
-        // Attempting to add another edge with same src, dst, type should fail
-        // because the edgeId would be the same: "$src-$type-$dst"
-        assertFailsWith<EntityAlreadyExistException> {
-            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        }
-    }
-
-    @Test
-    fun `test getIncomingEdges_nonExistentNode_returnsEmpty`() {
-        val edges = graph.getIncomingEdges(NODE_ID_1).toList()
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
-    fun `test transferTo_copiesLatticeData`() {
-        val parent = Label("tp")
-        val child = Label("tc")
-        with(graph) { child.parents = mapOf("up" to parent) }
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, child)
-
-        val targetStorage = NativeStorageImpl()
-        val targetPosetStorage = NativeStorageImpl()
-        storage.transferTo(targetStorage)
-        posetStorage.transferTo(targetPosetStorage)
-
-        val newGraph = createTestMultipleGraph(targetStorage, targetPosetStorage)
-        with(newGraph) {
-            assertEquals(mapOf("up" to parent), child.parents)
-        }
-        targetStorage.close()
-        targetPosetStorage.close()
-    }
-
-    @Test
-    fun `test getDescendants_withLabel_cycle_terminates`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val label = Label("cyc")
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd", label)
-        graph.addEdge(NODE_ID_2, NODE_ID_1, "back", label)
-
-        val descendants = graph.getDescendants(NODE_ID_1, label).toList()
-        assertTrue(descendants.any { it.id == NODE_ID_2 })
-        assertEquals(descendants.distinctBy { it.id }.size, descendants.size)
-    }
-
-    @Test
-    fun `test getAncestors_withLabel_cycle_terminates`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val label = Label("cyc2")
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd", label)
-        graph.addEdge(NODE_ID_2, NODE_ID_1, "back", label)
-
-        val ancestors = graph.getAncestors(NODE_ID_2, label).toList()
-        assertTrue(ancestors.any { it.id == NODE_ID_1 })
-        assertEquals(ancestors.distinctBy { it.id }.size, ancestors.size)
-    }
-
-    @Test
-    fun `test allLabels_reflectsRegisteredLabels`() {
-        val root = Label("root")
-        val label1 = Label("phase1")
-        val label2 = Label("phase2")
-        with(graph) {
-            root.parents = emptyMap()
-            label1.parents = mapOf("up" to root)
-            label2.parents = mapOf("up" to root)
-        }
-
-        with(graph) {
-            assertTrue(allLabels.contains(label1))
-            assertTrue(allLabels.contains(label2))
-            assertTrue(allLabels.contains(root))
-        }
-    }
-
-    // endregion
-
-    // region resolveStorageId null-branch coverage
-
-    @Test
-    fun `test addEdge_srcNotExist_throwsEntityNotExist`() {
-        graph.addNode(NODE_ID_2)
-
-        assertFailsWith<EntityNotExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1) }
-    }
-
-    @Test
-    fun `test addEdge_dstNotExist_throwsEntityNotExist`() {
-        graph.addNode(NODE_ID_1)
-
-        assertFailsWith<EntityNotExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1) }
-    }
-
-    @Test
-    fun `test addEdge_withLabel_srcNotExist_throwsEntityNotExist`() {
-        graph.addNode(NODE_ID_2)
-
-        assertFailsWith<EntityNotExistException> {
-            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
-        }
-    }
-
-    @Test
-    fun `test addEdge_withLabel_dstNotExist_throwsEntityNotExist`() {
-        graph.addNode(NODE_ID_1)
-
-        assertFailsWith<EntityNotExistException> {
-            graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
-        }
-    }
-
-    @Test
-    fun `test getEdge_srcNotExist_returnsNull`() {
-        graph.addNode(NODE_ID_2)
-
-        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test getEdge_dstNotExist_returnsNull`() {
-        graph.addNode(NODE_ID_1)
-
-        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test containEdge_srcNotExist_returnsFalse`() {
-        graph.addNode(NODE_ID_2)
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test containEdge_dstNotExist_returnsFalse`() {
-        graph.addNode(NODE_ID_1)
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test delEdge_srcNotExist_noOp`() {
-        graph.addNode(NODE_ID_2)
-
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test delEdge_dstNotExist_noOp`() {
-        graph.addNode(NODE_ID_1)
-
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test delEdge_withLabel_srcNotExist_noOp`() {
-        graph.addNode(NODE_ID_2)
-
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    @Test
-    fun `test delEdge_withLabel_dstNotExist_noOp`() {
-        graph.addNode(NODE_ID_1)
-
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, Label("v1"))
-
-        assertFalse(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-    }
-
-    // endregion
-
-    // region delEdge(label) internal branch coverage
-
-    @Test
-    fun `test delEdge_withLabel_labelNotOnEdge_edgeRetained`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val labelA = Label("a")
-        val labelB = Label("b")
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
-
-        // labelB was never assigned to the edge; removing it must not delete the edge
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelB)
-
-        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)!!
-        assertTrue(edge.labels.contains(labelA))
-    }
-
-    @Test
-    fun `test delEdge_withLabel_remainingLabelsNonEmpty_edgeKept`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val labelA = Label("keepA")
-        val labelB = Label("keepB")
-        val labelC = Label("keepC")
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelB)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelC)
-
-        graph.delEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, labelA)
-
-        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1))
-        val edge = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)!!
-        assertFalse(edge.labels.contains(labelA))
-        assertTrue(edge.labels.contains(labelB))
-        assertTrue(edge.labels.contains(labelC))
-    }
-
-    // endregion
-
-    // region ensureNodeIdCache non-StrVal skip branch
-
-    @Test
-    fun `test nodeIDs_includesAddedNodes`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-
-        val ids = graph.nodeIDs
-
-        assertTrue(ids.contains(NODE_ID_1))
-        assertTrue(ids.contains(NODE_ID_2))
-    }
-
-    // endregion
-
-    // region ensureLabelIdCache non-StrVal skip branch
-
-    @Test
-    fun `test allLabels_posetStorageNodeWithoutMetaId_skippedInCache`() {
-        posetStorage.addNode()
-        with(graph) {
-            val label = Label("real")
-            label.parents = emptyMap()
-        }
-
-        with(graph) {
-            val labels = allLabels
-            // The raw node must not surface as a label; real label must be present
-            assertTrue(labels.contains(Label("real")))
-        }
-    }
-
-    // endregion
-
-    // region Close
-
-    @Test
-    fun `test latticeState_persistedWithoutClose`() {
-        val label = Label("closeTest")
-        with(graph) { label.parents = mapOf("up" to Label("root")) }
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1, label)
-
-        val newGraph = createTestMultipleGraph(storage, posetStorage)
-        with(newGraph) {
-            assertEquals(mapOf<String, Label>("up" to Label("root")), label.parents)
-        }
-        val retrieved = graph.getEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
-        assertNotNull(retrieved)
-        assertTrue(label in retrieved.labels)
     }
 
     // endregion

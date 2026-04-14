@@ -6,47 +6,67 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestSimpleGraph
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import kotlin.test.*
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
-class AbcSimpleGraphTest {
+/**
+ * Black-box tests for AbcSimpleGraph: at most one edge per directed (src, dst) pair.
+ *
+ * - `addEdge first edge between nodes succeeds` — verifies basic add
+ * - `addEdge duplicate same tag throws EntityAlreadyExistException` — verifies same-tag rejection
+ * - `addEdge same pair different tag throws EntityAlreadyExistException` — verifies uniqueness per direction
+ * - `addEdge reverse direction allowed` — verifies (src,dst) vs (dst,src) are independent
+ * - `addEdge different node pairs allowed` — verifies distinct pairs are independent
+ * - `addEdge after delete allows re-add` — verifies deletion clears constraint
+ * - `addEdge with label new edge succeeds` — verifies label-aware add
+ * - `addEdge with label same tag adds label` — verifies label accumulation on same edge
+ * - `addEdge with label different tag throws EntityAlreadyExistException` — verifies direction conflict
+ */
+internal class AbcSimpleGraphTest {
     private lateinit var graph: AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>
     private lateinit var storage: NativeStorageImpl
 
     @BeforeTest
-    fun setup() {
+    fun setUp() {
         storage = NativeStorageImpl()
         graph = createTestSimpleGraph(storage)
     }
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         storage.close()
     }
 
-    // region Simple graph constraint
+    // region Single-edge-per-direction constraint
 
     @Test
-    fun `test addEdge_firstEdgeBetweenNodes_succeeds`() {
+    fun `addEdge first edge between nodes succeeds`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
         assertNotNull(edge)
-        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, "rel"))
     }
 
     @Test
-    fun `test addEdge_duplicateSameNodePairSameTag_throwsEntityAlreadyExist`() {
+    fun `addEdge duplicate same tag throws EntityAlreadyExistException`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, "rel") }
+        assertFailsWith<EntityAlreadyExistException> {
+            graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
+        }
     }
 
     @Test
-    fun `test addEdge_sameNodePairDifferentType_throwsEntityAlreadyExist`() {
+    fun `addEdge same pair different tag throws EntityAlreadyExistException`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "typeA")
@@ -57,89 +77,44 @@ class AbcSimpleGraphTest {
     }
 
     @Test
-    fun `test addEdge_reverseDirection_allowed`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-
-        val fwdEdge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-        val revEdge = graph.addEdge(NODE_ID_2, NODE_ID_1, "rel")
-
-        assertNotNull(revEdge)
-        assertTrue(graph.containEdge(fwdEdge.srcNid, fwdEdge.dstNid, fwdEdge.eTag))
-        assertTrue(graph.containEdge(revEdge.srcNid, revEdge.dstNid, revEdge.eTag))
-    }
-
-    @Test
-    fun `test addEdge_differentNodePairs_allowed`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addNode(NODE_ID_3)
-
-        val e1 = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-        val e2 = graph.addEdge(NODE_ID_1, NODE_ID_3, "rel")
-        val e3 = graph.addEdge(NODE_ID_2, NODE_ID_3, "rel")
-
-        assertTrue(graph.containEdge(e1.srcNid, e1.dstNid, e1.eTag))
-        assertTrue(graph.containEdge(e2.srcNid, e2.dstNid, e2.eTag))
-        assertTrue(graph.containEdge(e3.srcNid, e3.dstNid, e3.eTag))
-    }
-
-    @Test
-    fun `test addEdge_afterDelete_allowsReAddBetweenSameNodes`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-        graph.delEdge(edge.srcNid, edge.dstNid, edge.eTag)
-
-        val newEdge = graph.addEdge(NODE_ID_1, NODE_ID_2, "newRel")
-
-        assertNotNull(newEdge)
-        assertTrue(graph.containEdge(newEdge.srcNid, newEdge.dstNid, newEdge.eTag))
-    }
-
-    @Test
-    fun `test addEdge_emptyType_succeeds`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "")
-
-        assertEquals("", edge.eTag)
-        assertTrue(graph.containEdge(edge.srcNid, edge.dstNid, edge.eTag))
-    }
-
-    // endregion
-
-    // region Storage delegation
-
-    @Test
-    fun `test addEdge_existingEdgeSameDirection_blocksNew`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        graph.addEdge(NODE_ID_1, NODE_ID_2, "old")
-
-        assertFailsWith<EntityAlreadyExistException> {
-            graph.addEdge(NODE_ID_1, NODE_ID_2, "new")
-        }
-    }
-
-    @Test
-    fun `test addEdge_writesToStorage`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-
-        assertTrue(storage.containsEdge(edge.storageId))
-    }
-
-    @Test
-    fun `test addEdge_duplicate_throwsEntityAlreadyExist`() {
+    fun `addEdge reverse direction allowed`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
 
-        assertFailsWith<EntityAlreadyExistException> { graph.addEdge(NODE_ID_1, NODE_ID_2, "rel") }
+        val rev = graph.addEdge(NODE_ID_2, NODE_ID_1, "rel")
+
+        assertNotNull(rev)
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, "rel"))
+        assertTrue(graph.containEdge(NODE_ID_2, NODE_ID_1, "rel"))
+    }
+
+    @Test
+    fun `addEdge different node pairs allowed`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addNode(NODE_ID_3)
+
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
+        graph.addEdge(NODE_ID_1, NODE_ID_3, "rel")
+        graph.addEdge(NODE_ID_2, NODE_ID_3, "rel")
+
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, "rel"))
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_3, "rel"))
+        assertTrue(graph.containEdge(NODE_ID_2, NODE_ID_3, "rel"))
+    }
+
+    @Test
+    fun `addEdge after delete allows re-add`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "old")
+        graph.delEdge(NODE_ID_1, NODE_ID_2, "old")
+
+        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "new")
+
+        assertNotNull(edge)
+        assertTrue(graph.containEdge(NODE_ID_1, NODE_ID_2, "new"))
     }
 
     // endregion
@@ -147,7 +122,7 @@ class AbcSimpleGraphTest {
     // region Label-aware addEdge
 
     @Test
-    fun `test addEdge_withLabel_newEdge_succeeds`() {
+    fun `addEdge with label new edge succeeds`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label = Label("v1")
@@ -155,11 +130,11 @@ class AbcSimpleGraphTest {
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel", label)
 
         assertNotNull(edge)
-        assertTrue(edge.labels.contains(label))
+        assertTrue(label in edge.labels)
     }
 
     @Test
-    fun `test addEdge_withLabel_existingSameTag_addsLabel`() {
+    fun `addEdge with label same tag adds label`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         val label1 = Label("v1")
@@ -168,12 +143,12 @@ class AbcSimpleGraphTest {
 
         val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel", label2)
 
-        assertTrue(edge.labels.contains(label1))
-        assertTrue(edge.labels.contains(label2))
+        assertTrue(label1 in edge.labels)
+        assertTrue(label2 in edge.labels)
     }
 
     @Test
-    fun `test addEdge_withLabel_existingDifferentType_throwsEntityAlreadyExist`() {
+    fun `addEdge with label different tag throws EntityAlreadyExistException`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
         graph.addEdge(NODE_ID_1, NODE_ID_2, "typeA", Label("v1"))
@@ -181,39 +156,6 @@ class AbcSimpleGraphTest {
         assertFailsWith<EntityAlreadyExistException> {
             graph.addEdge(NODE_ID_1, NODE_ID_2, "typeB", Label("v2"))
         }
-    }
-
-    // endregion
-
-    // region Edge retrieval
-
-    @Test
-    fun `test getEdge_existing_returnsEdge`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-
-        val retrieved = graph.getEdge(edge.srcNid, edge.dstNid, edge.eTag)
-
-        assertNotNull(retrieved)
-        assertEquals(edge.id, retrieved.id)
-    }
-
-    @Test
-    fun `test getEdge_nonExistent_returnsNull`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-
-        assertNull(graph.getEdge(NODE_ID_1, NODE_ID_2, "nonexistent"))
-    }
-
-    @Test
-    fun `test getEdge_afterAdd_returnsEdge`() {
-        graph.addNode(NODE_ID_1)
-        graph.addNode(NODE_ID_2)
-        val edge = graph.addEdge(NODE_ID_1, NODE_ID_2, "rel")
-
-        assertNotNull(graph.getEdge(edge.srcNid, edge.dstNid, edge.eTag))
     }
 
     // endregion

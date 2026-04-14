@@ -9,26 +9,32 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * Performance benchmarks for IGraph implementations (AbcMultipleGraph, AbcSimpleGraph)
- * backed by different IStorage implementations, including lattice operations.
+ * Performance benchmarks for `IGraph` implementations (`AbcMultipleGraph`, `AbcSimpleGraph`)
+ * backed by different `IStorage` implementations, including lattice operations.
  *
  * Scale tiers:
  *   - Small:  10K nodes / 30K edges
  *   - Medium: 100K nodes / 300K edges
  *   - Large:  1M nodes / 3M edges
  *
+ * Tests:
+ * - `benchmark multiple graph population with different storages` -- AbcMultipleGraph population throughput
+ * - `benchmark simple graph population with different storages` -- AbcSimpleGraph population throughput
+ * - `benchmark graph-level queries with different storages` -- node/edge/adjacency query ops/sec
+ * - `benchmark lattice label assignment and filtered queries` -- label assign + filtered query ops/sec
+ * - `benchmark cold query pattern - each node accessed once` -- cold-cache access pattern
+ * - `benchmark mixed access pattern and memory usage` -- hot/cold mix + heap measurement
+ *
  * Run with: ./gradlew :graph:test --tests "*.GraphPerformanceTest"
  */
-class GraphPerformanceTest {
+internal class GraphPerformanceTest {
     private val closeables = mutableListOf<AutoCloseable>()
 
     @AfterTest
-    fun cleanup() {
+    fun tearDown() {
         closeables.forEach { runCatching { it.close() } }
         closeables.clear()
     }
-
-    // -- Storage factories for graph backends ---------------------------------
 
     private val storageNames: List<String> =
         run {
@@ -48,8 +54,6 @@ class GraphPerformanceTest {
         closeables.add(storage)
         return storage
     }
-
-    // -- Graph helpers --------------------------------------------------------
 
     private fun createMultipleGraph(storageName: String): AbcMultipleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
         val s = createStorage(storageName)
@@ -86,8 +90,6 @@ class GraphPerformanceTest {
             }
         }
     }
-
-    // -- Measurement helpers --------------------------------------------------
 
     private companion object {
         const val WARMUP = 2
@@ -141,10 +143,6 @@ class GraphPerformanceTest {
 
     private fun fmtMs(ms: Double): String = String.format("%.1f", ms)
 
-    // ========================================================================
-    // BENCHMARK: AbcMultipleGraph POPULATION (different storages)
-    // ========================================================================
-
     @Test
     fun `benchmark multiple graph population with different storages`() {
         data class Scale(
@@ -181,10 +179,6 @@ class GraphPerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: AbcSimpleGraph POPULATION (different storages)
-    // ========================================================================
-
     @Test
     fun `benchmark simple graph population with different storages`() {
         val nodeCount = 100_000
@@ -204,10 +198,6 @@ class GraphPerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: GRAPH-LEVEL NODE/EDGE QUERIES
-    // ========================================================================
-
     @Test
     fun `benchmark graph-level queries with different storages`() {
         val nodeCount = 10_000
@@ -224,7 +214,6 @@ class GraphPerformanceTest {
             val getNodeOps = benchmarkOpsPerSec(queryCount) { i -> g.getNode(nodeId(i % nodeCount)) }
             val outEdgeOps = benchmarkOpsPerSec(queryCount) { i -> g.getOutgoingEdges(nodeId(i % nodeCount)).count() }
             val childrenOps = benchmarkOpsPerSec(queryCount) { i -> g.getChildren(nodeId(i % nodeCount)).count() }
-            // Descendants is expensive — use fewer iterations
             val descendOps = benchmarkOpsPerSec(1_000) { i -> g.getDescendants(nodeId(i % nodeCount)).take(20).count() }
 
             println(
@@ -241,10 +230,6 @@ class GraphPerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: LATTICE OPERATIONS
-    // ========================================================================
-
     @Test
     fun `benchmark lattice label assignment and filtered queries`() {
         val nodeCount = 5_000
@@ -259,7 +244,6 @@ class GraphPerformanceTest {
             val g = createMultipleGraph(name)
             populateMultipleGraph(g, nodeCount, edgesPerNode)
 
-            // Build a simple label hierarchy: L0 < L1 < L2 < ... < L(n-1)
             val labels = (0 until labelCount).map { Label("L$it") }
             with(g) {
                 for (i in 1 until labelCount) {
@@ -267,7 +251,6 @@ class GraphPerformanceTest {
                 }
             }
 
-            // Assign labels to edges
             val assignMs =
                 benchmarkMs(warmup = 1, measured = 3) {
                     var idx = 0
@@ -277,7 +260,6 @@ class GraphPerformanceTest {
                     }
                 }
 
-            // Filtered edge query using mid-level label
             val midLabel = labels[labelCount / 2]
             val filteredOps =
                 benchmarkOpsPerSec(queryCount) { i ->
@@ -295,10 +277,6 @@ class GraphPerformanceTest {
             g.close()
         }
     }
-
-    // ========================================================================
-    // BENCHMARK: COLD QUERY (each node accessed only 1-2 times)
-    // ========================================================================
 
     @Test
     fun `benchmark cold query pattern - each node accessed once`() {
@@ -340,10 +318,6 @@ class GraphPerformanceTest {
         }
     }
 
-    // ========================================================================
-    // BENCHMARK: MIXED ACCESS (most cold, some hot) + MEMORY
-    // ========================================================================
-
     @Test
     fun `benchmark mixed access pattern and memory usage`() {
         val nodeCount = 50_000
@@ -354,10 +328,9 @@ class GraphPerformanceTest {
         println(String.format("%-20s %12s %12s %14s", "Storage", "mixedOps/s", "getChild/s", "heapUsed(MB)"))
         println("-".repeat(60))
 
-        // 80% of accesses go to hotNodeCount nodes, 20% spread across all
         val rng = java.util.Random(42)
         val accessPattern =
-            IntArray(totalOps) { i ->
+            IntArray(totalOps) { _ ->
                 if (rng.nextDouble() < 0.8) rng.nextInt(hotNodeCount) else rng.nextInt(nodeCount)
             }
 
@@ -375,7 +348,6 @@ class GraphPerformanceTest {
                     g.getChildren(nodeId(accessPattern[i])).count()
                 }
 
-            // Measure heap after full access
             System.gc()
             Thread.sleep(100)
             System.gc()

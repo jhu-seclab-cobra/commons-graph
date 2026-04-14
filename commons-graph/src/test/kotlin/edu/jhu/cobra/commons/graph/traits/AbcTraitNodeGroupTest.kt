@@ -7,30 +7,21 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 
 /**
  * Base class for TraitNodeGroup tests providing shared test infrastructure.
+ *
+ * Provides TestNode, TestEdge, TestGraph (AbcSimpleGraph + TraitNodeGroup),
+ * and a helper to register groups.
  */
-abstract class AbcTraitNodeGroupTest {
+internal abstract class AbcTraitNodeGroupTest {
     protected class TestNode : AbcNode() {
-        enum class Type {
-            TEST,
+        override val type: AbcNode.Type = object : AbcNode.Type {
+            override val name: String = "TestNode"
         }
-
-        override val type: AbcNode.Type
-            get() =
-                object : AbcNode.Type {
-                    override val name: String get() = Type.TEST.name
-                }
     }
 
     protected class TestEdge : AbcEdge() {
-        enum class Type {
-            TEST,
+        override val type: AbcEdge.Type = object : AbcEdge.Type {
+            override val name: String = "TestEdge"
         }
-
-        override val type: AbcEdge.Type
-            get() =
-                object : AbcEdge.Type {
-                    override val name: String get() = Type.TEST.name
-                }
     }
 
     protected class TestGraph :

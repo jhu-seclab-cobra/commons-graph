@@ -6,46 +6,70 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
-class LabelTest {
+/**
+ * Black-box tests for Label value class, INFIMUM/SUPREMUM sentinels.
+ *
+ * - `Label created from string exposes core` — verifies primary constructor
+ * - `Label created from StrVal exposes core` — verifies secondary constructor
+ * - `Labels with same core are equal` — verifies value class equality
+ * - `Labels with same core have equal hashCode` — verifies hashCode consistency
+ * - `Labels with different core are not equal` — verifies inequality
+ * - `INFIMUM core is Int MIN_VALUE string` — verifies INFIMUM sentinel value
+ * - `SUPREMUM core is Int MAX_VALUE string` — verifies SUPREMUM sentinel value
+ * - `INFIMUM and SUPREMUM are distinct` — verifies sentinels differ
+ */
+internal class LabelTest {
+
     @Test
-    fun `test Label creation from string`() {
+    fun `Label created from string exposes core`() {
         val label = Label("test")
+
         assertEquals("test", label.core)
     }
 
     @Test
-    fun `test Label creation from StrVal`() {
+    fun `Label created from StrVal exposes core`() {
         val label = Label("test".strVal)
+
         assertEquals("test", label.core)
     }
 
     @Test
-    fun `test Label value class equality`() {
+    fun `Labels with same core are equal`() {
         val a = Label("same")
         val b = Label("same")
+
         assertEquals(a, b)
+    }
+
+    @Test
+    fun `Labels with same core have equal hashCode`() {
+        val a = Label("same")
+        val b = Label("same")
+
         assertEquals(a.hashCode(), b.hashCode())
     }
 
     @Test
-    fun `test Label value class inequality`() {
+    fun `Labels with different core are not equal`() {
         val a = Label("one")
         val b = Label("two")
+
         assertNotEquals(a, b)
     }
 
     @Test
-    fun `test INFIMUM sentinel`() {
+    fun `INFIMUM core is Int MIN_VALUE string`() {
         assertEquals(Int.MIN_VALUE.toString(), Label.INFIMUM.core)
     }
 
     @Test
-    fun `test SUPREMUM sentinel`() {
+    fun `SUPREMUM core is Int MAX_VALUE string`() {
         assertEquals(Int.MAX_VALUE.toString(), Label.SUPREMUM.core)
     }
 
     @Test
-    fun `test INFIMUM and SUPREMUM are distinct`() {
+    fun `INFIMUM and SUPREMUM are distinct`() {
         assertNotEquals(Label.INFIMUM, Label.SUPREMUM)
     }
 }
