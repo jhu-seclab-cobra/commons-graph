@@ -174,13 +174,17 @@ class Neo4jStorageImpl(
     override fun getNodeProperties(id: Int): Map<String, IValue> =
         readTx {
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-            node.keys.associateWith { node[it]!! }
+            node.keys.associateWith { key ->
+                requireNotNull(node[key]) { "Property '$key' on node $id has corrupted data" }
+            }
         }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         readTx {
             val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
-            edge.keys.associateWith { edge[it]!! }
+            edge.keys.associateWith { key ->
+                requireNotNull(edge[key]) { "Property '$key' on edge $id has corrupted data" }
+            }
         }
 
     override fun setNodeProperties(
@@ -276,16 +280,21 @@ class Neo4jStorageImpl(
             val idMap = HashMap<Int, Int>()
             for (node in findNodes(NODE_LABEL)) {
                 val oldId = (node.getProperty(SID) as Long).toInt()
-                val props = node.keys.associateWith { node[it]!! }
+                val props = node.keys.associateWith { key ->
+                    requireNotNull(node[key]) { "Property '$key' on node $oldId has corrupted data" }
+                }
                 idMap[oldId] = target.addNode(props)
             }
             for (rel in findRelationships(EDGE_TYPE)) {
                 val src = (rel.startNode.getProperty(SID) as Long).toInt()
                 val dst = (rel.endNode.getProperty(SID) as Long).toInt()
                 val tag = rel.getProperty(TAG) as String
-                val props = rel.keys.associateWith { rel[it]!! }
-                val newSrc = idMap[src] ?: src
-                val newDst = idMap[dst] ?: dst
+                val relSid = (rel.getProperty(SID) as Long).toInt()
+                val props = rel.keys.associateWith { key ->
+                    requireNotNull(rel[key]) { "Property '$key' on edge $relSid has corrupted data" }
+                }
+                val newSrc = idMap.getValue(src)
+                val newDst = idMap.getValue(dst)
                 target.addEdge(newSrc, newDst, tag, props)
             }
             for (name in metaProperties.keys) {
