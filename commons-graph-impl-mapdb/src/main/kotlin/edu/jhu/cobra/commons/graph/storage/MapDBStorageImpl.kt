@@ -162,13 +162,13 @@ class MapDBStorageImpl(
     override fun getIncomingEdges(id: Int): Set<Int> {
         ensureOpen()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        return inEdges[id] ?: emptySet()
+        return inEdges[id]?.toSet() ?: emptySet()
     }
 
     override fun getOutgoingEdges(id: Int): Set<Int> {
         ensureOpen()
         if (!containsNode(id)) throw EntityNotExistException(id)
-        return outEdges[id] ?: emptySet()
+        return outEdges[id]?.toSet() ?: emptySet()
     }
 
     override val metaNames: Set<String>
