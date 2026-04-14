@@ -104,7 +104,7 @@ abstract class AbcNode : AbcEntity() {
 
     override fun toString(): String = "{id=$id, type=${this.type}}"
 
-    override fun hashCode(): Int = storageId
+    override fun hashCode(): Int = id.hashCode()
 
     override fun equals(other: Any?): Boolean = if (other is AbcNode) this.id == other.id else super.equals(other)
 }
