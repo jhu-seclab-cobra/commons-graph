@@ -238,8 +238,8 @@ class JgraphtConcurStorageImpl : IStorage {
             }
             for (edgeId in edgeProperties.keys) {
                 val structure = getEdgeStructure(edgeId)
-                val newSrc = idMap[structure.src] ?: structure.src
-                val newDst = idMap[structure.dst] ?: structure.dst
+                val newSrc = idMap.getValue(structure.src)
+                val newDst = idMap.getValue(structure.dst)
                 target.addEdge(newSrc, newDst, structure.tag, edgeProperties[edgeId]!!)
             }
             for (name in metaProperties.keys) {
