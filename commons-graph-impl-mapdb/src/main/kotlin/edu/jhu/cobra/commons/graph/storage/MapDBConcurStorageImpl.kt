@@ -5,7 +5,6 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.EntityPropertyMap
 import edu.jhu.cobra.commons.value.IValue
 import org.mapdb.DB
-import org.mapdb.DBException
 import org.mapdb.DBMaker
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -215,24 +214,19 @@ class MapDBConcurStorageImpl(
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    @Suppress("SwallowedException")
     override fun clear() {
         dbLock.write {
             if (dbManager.isClosed()) throw AccessClosedStorageException()
-            try {
-                nodeCounter = 0
-                edgeCounter = 0
-                edgeProperties.clear()
-                nodeProperties.clear()
-                edgeSrcMap.clear()
-                edgeDstMap.clear()
-                edgeTagMap.clear()
-                outEdges.clear()
-                inEdges.clear()
-                metaProperties.clear()
-            } catch (e: DBException.VolumeIOError) {
-                // swallow
-            }
+            nodeCounter = 0
+            edgeCounter = 0
+            edgeProperties.clear()
+            nodeProperties.clear()
+            edgeSrcMap.clear()
+            edgeDstMap.clear()
+            edgeTagMap.clear()
+            outEdges.clear()
+            inEdges.clear()
+            metaProperties.clear()
         }
     }
 
@@ -247,8 +241,8 @@ class MapDBConcurStorageImpl(
                 val src = edgeSrcMap[edgeId]!!
                 val dst = edgeDstMap[edgeId]!!
                 val tag = edgeTagMap[edgeId]!!
-                val newSrc = idMap[src] ?: src
-                val newDst = idMap[dst] ?: dst
+                val newSrc = idMap.getValue(src)
+                val newDst = idMap.getValue(dst)
                 target.addEdge(newSrc, newDst, tag, edgeProperties[edgeId]!!)
             }
             for (name in metaProperties.keys) {
