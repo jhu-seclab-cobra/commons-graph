@@ -70,7 +70,7 @@ sealed class AbcEntity : IEntity {
                 property: KProperty<*>,
                 value: T?,
             ) {
-                value?.let { thisRef[optName ?: property.name] = it }
+                thisRef[optName ?: property.name] = value
             }
         }
 

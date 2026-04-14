@@ -3,8 +3,12 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestEdge
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IValue
+import edu.jhu.cobra.commons.value.StrVal
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -12,7 +16,7 @@ import kotlin.test.assertTrue
  * Each test isolates one defect. Run before fixing to confirm the bug exists.
  *
  * - `AbcNode hashCode equals contract` — hashCode uses storageId but equals uses id
- * - `MapDB getOutgoingEdges returns mutable internal set` — caller can corrupt adjacency
+ * - `nullable EntityProperty delegate set null should remove property` — B3 hidden semantics
  */
 internal class BugVerificationTest {
 
@@ -57,5 +61,26 @@ internal class BugVerificationTest {
         // Two nodes with same id should be deduplicated in a HashSet
         val set = hashSetOf(node1, node2)
         assertEquals(1, set.size, "HashSet should treat equal nodes as one (broken if hashCode differs)")
+    }
+
+    // --- Bug B3: nullable EntityProperty delegate ignores null ---
+
+    class NullableTestNode : AbcNode() {
+        override val type = object : AbcNode.Type { override val name = "NullableTest" }
+        var optProp: IValue? by EntityProperty<IValue>("opt_prop")
+    }
+
+    @Test
+    fun `nullable EntityProperty delegate set null should remove property`() {
+        val storage = NativeStorageImpl()
+        val node = NullableTestNode()
+        node.bind(storage, storage.addNode(), "test-node")
+
+        node.optProp = StrVal("hello")
+        assertTrue("opt_prop" in node, "Property should exist after set")
+
+        node.optProp = null
+        assertFalse("opt_prop" in node, "Property should be removed after set null — but nullable delegate ignores null")
+        assertNull(node.optProp, "Property should return null after removal")
     }
 }
