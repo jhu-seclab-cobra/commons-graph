@@ -504,26 +504,29 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
      */
     private fun Sequence<E>.filterVisitable(by: Label): Sequence<E> {
         if (by == Label.SUPREMUM) return this
-        val edgesWithLabels = this.map { e -> e to e.labels }.toList()
-        val allVisitable =
-            edgesWithLabels
-                .flatMap { (_, labels) ->
-                    labels.filter { l ->
-                        by == l || by.compareTo(l)?.let { it > 0 } ?: false
-                    }
-                }.toSet()
-        val allNotCovered =
-            allVisitable
-                .filter { cur ->
-                    !allVisitable.any { other ->
-                        other != cur && other.compareTo(cur)?.let { it > 0 } ?: false
-                    }
-                }.toSet()
+        // Pass 1: materialize edges and collect all visitable labels in one traversal
+        val edgesWithLabels = ArrayList<Pair<E, Set<Label>>>()
+        val allVisitable = HashSet<Label>()
+        for (e in this) {
+            val labels = e.labels
+            edgesWithLabels.add(e to labels)
+            for (l in labels) {
+                if (by == l || by.compareTo(l)?.let { it > 0 } == true) {
+                    allVisitable.add(l)
+                }
+            }
+        }
+        // Remove covered labels: a label is covered if another visitable label is strictly above it
+        val allNotCovered = allVisitable.filterTo(HashSet()) { cur ->
+            allVisitable.none { other ->
+                other != cur && other.compareTo(cur)?.let { it > 0 } == true
+            }
+        }
+        // Pass 2: filter edges that have at least one not-covered label
         return edgesWithLabels
-            .filter { (_, labels) ->
-                labels.any { it in allNotCovered }
-            }.map { it.first }
             .asSequence()
+            .filter { (_, labels) -> labels.any { it in allNotCovered } }
+            .map { it.first }
     }
 
     /**
