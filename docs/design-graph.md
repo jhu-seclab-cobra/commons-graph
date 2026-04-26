@@ -1,16 +1,16 @@
-# Graph Module Design
+# Graph Design
 
 ## Design Overview
 
-- **Classes**: `IGraph`, `AbcMultipleGraph`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph`, `IPoset`, and `Closeable`; `AbcMultipleGraph` contains two `IStorage` instances (one for graph, one for label poset)
+- **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`
+- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `Closeable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
 - **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `AccessClosedStorageException` raised on storage access after close
-- **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories, graph storage, and poset storage). Helpers: `IStorage` (injected via abstract property).
+- **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property).
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
 
-The graph layer maintains bidirectional `NodeID`-to-`Int` mapping and a nested edge index (`src -> tag -> dst -> storageId`), delegating to `IStorage` via auto-generated `Int` IDs.
+`AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Edge lookups by `(src, dst, tag)` scan the source node's adjacency list in storage -- O(out-degree) per query.
 
 ---
 
@@ -65,34 +65,31 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 ### AbcMultipleGraph
 
-**Responsibility:** Canonical `IGraph` + `IPoset` + `Closeable` implementation. Allows multiple parallel edges between the same `(src, dst)` pair. Label poset state stored in a dedicated poset `IStorage` instance.
+**Responsibility:** Canonical `IGraph` + `Closeable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `TraitPoset` when mixed in by concrete graph classes.
 
 **State / Fields:**
 
 ```
 AbcMultipleGraph
 +-- abstract storage: IStorage          <- main graph storage
-+-- abstract posetStorage: IStorage     <- label hierarchy storage
 +-- newNodeObj(): N                     <- subclass entity factory (protected abstract)
 +-- newEdgeObj(): E                     <- subclass entity factory (protected abstract)
 ```
 
-**Close contract:** `close()` releases internal resources. Does not close storage instances.
+**Close contract:** `close()` releases internal resources. Does not close storage instances. Concrete classes mixing in traits are responsible for clearing trait caches.
 
-**Label-filtered methods (concrete class, not inherited from IGraph):**
+---
+
+### AbcSimpleGraph
+
+**Responsibility:** Graph variant enforcing at most one edge per directed `(src, dst)` pair. Extends `AbcMultipleGraph`. All node CRUD, label, and traversal operations are inherited.
+
+**Overridden Methods:**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge(src, dst, tag, label)` | Creates or reuses edge and assigns label | `src`, `dst`: NodeID; `tag`; `label`: Label | `E` | `EntityNotExistException` if src/dst missing |
-| `delEdge(src, dst, tag, label)` | Removes label from edge; if no labels remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label`: Label | -- | -- |
-| `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`: NodeID; `label`; `cond` | `Sequence<E>` | -- |
-| `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`: NodeID; `label`; `cond` | `Sequence<E>` | -- |
-| `getChildren(of, label, cond)` | Adjacent nodes via label-filtered outgoing edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
-| `getParents(of, label, cond)` | Adjacent nodes via label-filtered incoming edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
-| `getDescendants(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
-| `getAncestors(of, label, cond)` | BFS via label-filtered edges | `of`: NodeID; `label`; `cond` | `Sequence<N>` | -- |
-
-Edge visibility rule: see `docs/core/label.design.md`.
+| `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
+| `addEdge(src, dst, tag, label)` | Rejects if an edge exists between `(src, dst)` with a different tag; otherwise delegates to super | `src`, `dst`: NodeID; `tag`: String; `label`: Label | `E` | `EntityAlreadyExistException` if direction conflict |
 
 ---
 
@@ -100,7 +97,7 @@ Edge visibility rule: see `docs/core/label.design.md`.
 
 | Exception | When raised |
 |-----------|------------|
-| `EntityAlreadyExistException` | Adding a node/edge that already exists |
+| `EntityAlreadyExistException` | Adding a node/edge that already exists; adding a second edge between the same `(src, dst)` pair in `AbcSimpleGraph` |
 | `EntityNotExistException` | Adding an edge whose src/dst node is missing |
 | `AccessClosedStorageException` | Accessing storage after `close()` |
 
@@ -113,4 +110,8 @@ Deletion of a non-existent entity is a no-op at the graph level.
 ### AbcMultipleGraph
 
 - Both src and dst nodes must exist before adding an edge
-- Edge lookup by `(src, dst, tag)` uses nested edge index
+- Edge lookups by `(src, dst, tag)` scan the source node's adjacency list in storage -- O(out-degree) per query
+
+### AbcSimpleGraph
+
+- At most one edge per directed `(src, dst)` pair of any type; `addEdge` rejects duplicates with `EntityAlreadyExistException`

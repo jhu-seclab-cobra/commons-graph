@@ -1,6 +1,6 @@
 # Neo4j Module Performance
 
-Paired design: `storage.design.md`, `neo4j.md`
+Paired design: `design-storage.md`, `impl.md`
 
 ## Current Baseline
 
@@ -25,7 +25,7 @@ Two implementations: `Neo4jStorageImpl` (non-concurrent) and `Neo4jConcurStorage
 | Neo4jStorageImpl | 37,959.5 | 174,599.1 | 174,001.1 |
 | Neo4jConcurStorageImpl | 17,965.9 | 90,629.1 | 173,379.5 |
 
-Anomaly: 5K/15K (174,599ms) is slower than 10K/30K (174,001ms) for Neo4jStorageImpl. Likely JIT warmup or GC pressure variation between runs; warrants re-measurement with more iterations.
+Anomaly: 5K/15K (174,599ms) is slower than 10K/30K (174,001ms) for Neo4jStorageImpl. Likely JIT warmup or GC pressure variation; warrants re-measurement.
 
 ### Node Lookup (20K lookups on 5K nodes)
 
@@ -50,34 +50,26 @@ Anomaly: 5K/15K (174,599ms) is slower than 10K/30K (174,001ms) for Neo4jStorageI
 
 ---
 
-## Key Improvements
-
-_None yet._
-
-## Completed Optimizations
-
-_None yet._
-
 ## Evaluated & Rejected
 
 | ID | Title | Result | Reason |
 |---|---|---|---|
-| P9-2 | Native Int storage for __sid__ | Already optimized | `__sid__` stored as native `Long`, not serialized through `DftByteArraySerializerImpl` |
-| P9-5 | Eclipse Collections for ID mapping | Not applicable | Zero-mapping architecture uses no in-memory ID maps |
+| P9-2 | Native Int storage for __sid__ | Already optimized | `__sid__` stored as native `Long` |
+| P9-5 | Eclipse Collections for ID mapping | Not applicable | Zero-mapping architecture |
 
 ## Candidates
 
 ### P9-1: Transaction batching for transferTo
 
-Per-entity `readTx` creates many transactions for bulk operations. Proposed: batch into single long-running read transaction. Risk: low (holds Neo4j resources longer).
+Per-entity `readTx` creates many transactions for bulk operations. Proposed: batch into single long-running read transaction. Risk: low.
 
 ### P9-3: Property native type fast path
 
-Store primitive `IValue` types (`NumVal`/`StrVal`) as Neo4j native properties. Only complex types use `ByteArray`. Expected: ~10x faster property access for common types. Risk: medium (type-aware get/set logic, migration path).
+Store primitive `IValue` types as Neo4j native properties. Expected: ~10x faster property access for common types. Risk: medium.
 
 ### P9-4: Entity.keys filtering optimization
 
-Remove unnecessary `distinct()` call (property keys already unique per entity). One less intermediate collection per property read. Risk: low.
+Remove unnecessary `distinct()` call (property keys already unique per entity). Risk: low.
 
 ---
 
@@ -85,16 +77,16 @@ Remove unnecessary `distinct()` call (property keys already unique per entity). 
 
 - Population: 37,959ms for 1K/3K. Each addNode/addEdge opens a write transaction with WAL, lock manager, and bookkeeping.
 - Population does not scale linearly: 5K/15K is 4.6x the 1K/3K cost for 5x data.
-- Property write 3,900x slower than read (116 vs 452.5K). Write transaction commit includes WAL flush + lock release.
+- Property write 3,900x slower than read (116 vs 452.5K). Write transaction commit includes WAL flush.
 
 ---
 
 ## Key Insights
 
-1. **Population is dominated by per-operation write transactions.** WAL + lock manager + bookkeeping per write.
-2. **Node lookup is fast.** 23.40M ops/sec. Transaction creation overhead dominates over index lookup cost.
+1. **Population is dominated by per-operation write transactions.** WAL + lock manager per write.
+2. **Node lookup is fast.** 23.40M ops/sec.
 3. **ConcurStorage faster than non-Concur for node lookup.** 34.12M vs 23.40M. Likely JIT warmup artifact.
 4. **Property write is 3,900x slower than read.** Write transaction commit includes WAL flush.
-5. **Edge query is symmetric.** 696.8K ~ 744.7K. Neo4j relationship chain threading provides O(1) both directions.
-6. **ConcurStorage lock overhead is negligible.** Lock ~20-50ns is invisible next to ~1-10us transaction overhead.
+5. **Edge query is symmetric.** Neo4j relationship chain threading provides O(1) both directions.
+6. **ConcurStorage lock overhead is negligible.** Lock ~20-50ns invisible next to ~1-10us transaction overhead.
 7. **Neo4j's value is persistence and query language, not throughput.** Use only when Cypher, ACID, or disk persistence are required.

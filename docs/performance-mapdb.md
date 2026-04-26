@@ -1,6 +1,6 @@
 # MapDB Module Performance
 
-Paired design: `storage.design.md`, `mapdb.md`
+Paired design: `design-storage.md`, `impl.md`
 
 ## Current Baseline
 
@@ -72,38 +72,30 @@ Two implementations: `MapDBStorageImpl` (non-concurrent, `concurrencyDisable()`)
 
 ---
 
-## Key Improvements
-
-_None yet._
-
-## Completed Optimizations
-
-_None yet._
-
 ## Evaluated & Rejected
 
 | ID | Title | Result | Reason |
 |---|---|---|---|
-| P8-1 | Split adjacency by direction | Not applicable | Adjacency already uses in-memory `HashMap<Int, MutableSet<Int>>`; MapDB serialization only applies to `EntityPropertyMap` |
-| -- | Off-heap storage for graph module | ~3-6us per access | Serialization overhead negates GC benefit. See `performance.md` cross-implementation comparison |
+| P8-1 | Split adjacency by direction | Not applicable | Adjacency already uses in-memory `HashMap<Int, MutableSet<Int>>` |
+| -- | Off-heap storage for graph module | ~3-6us per access | Serialization overhead negates GC benefit |
 
 ## Candidates
 
 ### P8-2: Composite key edge storage
 
-MapDB copy-on-write requires full re-serialization for identity SetVal updates. Proposed: store each edge as independent `BTreeMap` entry with composite key, O(1) insertion. Risk: medium (increases key count, requires BTreeMap).
+MapDB copy-on-write requires full re-serialization for identity SetVal updates. Proposed: store each edge as independent `BTreeMap` entry with composite key. Risk: medium.
 
 ### P8-3: Native type property fast path
 
-Detect `NumVal`/`StrVal` and store with MapDB built-in `Serializer.LONG` / `Serializer.STRING`. Risk: high (requires separate collections per type or tagged union).
+Detect `NumVal`/`StrVal` and store with MapDB built-in serializers. Risk: high (requires separate collections per type).
 
 ### P8-4: concurrencyDisable() quantification
 
-Benchmark `memoryDB()` with and without `concurrencyDisable()`. Risk: none (benchmark-only).
+Benchmark `memoryDB()` with and without `concurrencyDisable()`. Risk: none.
 
 ### P8-5: Batch property operations
 
-Store all properties as single serialized blob per entity. Reduces MapDB access from O(properties) to O(1). Risk: medium (loses per-property granularity).
+Store all properties as single serialized blob per entity. Risk: medium (loses per-property granularity).
 
 ---
 
@@ -118,9 +110,9 @@ Store all properties as single serialized blob per entity. Reduces MapDB access 
 ## Key Insights
 
 1. **Serialization is the dominant cost.** Property read 1.61M for memoryDB.
-2. **Write is disproportionately slow.** 94.7K write vs 1.61M read for memoryDB (serialize + record update + page split).
+2. **Write is disproportionately slow.** 94.7K write vs 1.61M read for memoryDB.
 3. **tempFileDB without mmap is 10x slower.** 163.4K vs 1.83M for node lookup.
-4. **mmap nearly matches in-memory performance.** tempFile+mmap 1.83M vs memoryDB 1.14M for node lookup.
-5. **ConcurStorage read penalty is 3.7x for memoryDB.** Double-lock overhead (external RWLock + MapDB internal).
+4. **mmap nearly matches in-memory performance.** tempFile+mmap 1.83M vs memoryDB 1.14M.
+5. **ConcurStorage read penalty is 3.7x for memoryDB.** Double-lock overhead.
 6. **Edge query is symmetric.** Serialization cost dominates over data structure asymmetry.
-7. **`concurrencyDisable()` shows minimal population benefit.** 150.9ms vs 154.2ms. Serialization masks lock overhead.
+7. **`concurrencyDisable()` shows minimal population benefit.** Serialization masks lock overhead.

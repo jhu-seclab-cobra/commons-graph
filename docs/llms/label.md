@@ -42,23 +42,26 @@ with(graph) {
 
 ### `TraitNodeGroup<N, E>` (interface, extends `IGraph`)
 
-- **`val groupPrefix: String`** -- Prefix for grouped node IDs. Typically the graph name.
-- **`val groupedNodesCounter: MutableMap<String, Int>`** -- Monotonic counter per group name.
-- **`addGroupNode(group: String, suffix: String? = null): N`** -- Add node with ID `prefix@group#suffix`. Auto-generates suffix from counter when `null`. Raises `IllegalArgumentException` if group not in `groupedNodesCounter`.
-- **`addGroupNode(sameGroupNode: AbcNode, suffix: String? = null): N`** -- Add node to same group as existing node.
-- **`getGroupNode(group: String, suffix: String): N?`** -- Retrieve grouped node.
-- **`getGroupName(node: AbcNode): String?`** -- Extract group name from node ID. Returns `null` if format invalid.
+Group membership stored as node properties, not encoded in NodeID.
 
-### Node ID Format
-
-- Grouped node IDs follow: `{prefix}@{group}#{suffix}`.
-- `@` and `#` are reserved delimiters. Group names and suffixes must not contain them.
+- **`val groupPrefix: String`** -- Prefix for auto-generated node IDs (e.g., `"AST"`, `"ADG"`).
+- **`fun assignGroup(node: N, group: String, suffix: String? = null)`** -- Assign an existing node to a group. Sets `__group__` and `__suffix__` properties.
+- **`fun addGroupNode(group: String, suffix: String? = null): N`** -- Create a node with an opaque auto-generated ID and assign it to the group.
+- **`fun addGroupNode(sameGroupNode: AbcNode, suffix: String? = null): N`** -- Create a node in the same group as an existing node.
+- **`fun getGroupNode(group: String, suffix: String): N?`** -- Retrieve a node by group and suffix.
+- **`fun getGroupName(node: AbcNode): String?`** -- Read `__group__` property. Returns `null` if node has no group.
+- **`fun getGroupSuffix(node: AbcNode): String?`** -- Read `__suffix__` property.
+- **`fun getGroupNodes(group: String): Sequence<N>`** -- All nodes in a group.
+- **`fun rebuildGroupCaches()`** -- Restore in-memory caches from node properties and storage meta. Call after `rebuild()`.
 
 ## Gotchas
 
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
 - `Label.parents` setter replaces all parents. Merge with existing parents if appending: `label.parents = label.parents + mapOf("new" to parentLabel)`.
 - `Label.compareTo` returns `null` for incomparable labels. Always handle the `null` case.
-- `IPoset` operations require the `AbcMultipleGraph` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
+- `IPoset` operations require a `TraitPoset` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
 - `TraitNodeGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
 - Group counters only increase. Deleting grouped nodes does not decrement the counter.
+- Call `rebuildGroupCaches()` after `rebuild()`. Without it, suffix index and counters are empty.
+- Nodes created via `addNode(withID)` have no group. Call `assignGroup` to add them to a group.
+- No character restrictions on group names (arbitrary strings allowed).

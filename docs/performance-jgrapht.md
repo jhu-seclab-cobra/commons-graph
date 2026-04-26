@@ -1,6 +1,6 @@
 # JGraphT Module Performance
 
-Paired design: `storage.design.md`, `jgrapht.md`
+Paired design: `design-storage.md`, `impl.md`
 
 ## Current Baseline
 
@@ -48,19 +48,11 @@ Two implementations: `JgraphtStorageImpl` (non-concurrent) and `JgraphtConcurSto
 
 ---
 
-## Key Improvements
-
-_None yet._
-
-## Completed Optimizations
-
-_None yet._
-
 ## Evaluated & Rejected
 
 | ID | Title | Result | Reason |
 |---|---|---|---|
-| P7-1 | FastLookupGraphSpecificsStrategy | YAGNI | IStorage interface does not expose `getEdgesBetween`; no hot path benefits from O(1) vertex-pair lookup |
+| P7-1 | FastLookupGraphSpecificsStrategy | YAGNI | IStorage interface does not expose `getEdgesBetween`; no hot path benefits |
 
 ## Candidates
 
@@ -70,24 +62,24 @@ Manual edge iteration + `removeVertex` internal iteration = 2 x O(degree). Propo
 
 ### P7-3: Direct property map return (avoid defensive copy)
 
-Return `Collections.unmodifiableMap()` view instead of defensive copy. Eliminates O(properties) allocation per read. Risk: medium (callers must not retain references across mutations).
+Return `Collections.unmodifiableMap()` view instead of defensive copy. Risk: medium (callers must not retain references across mutations).
 
 ### P7-4: Eclipse Collections for edge structural maps
 
-`edgeTagMap`, bidirectional mapping maps use boxed Int keys. Eclipse-collections primitive maps eliminate autoboxing and reduce memory ~3x. Risk: low (adds dependency, internal-only).
+`edgeTagMap`, bidirectional mapping maps use boxed Int keys. Primitive maps eliminate autoboxing and reduce memory ~3x. Risk: low.
 
 ---
 
 ## Remaining Known Bottlenecks
 
 - Population overhead from JGraphT `DirectedEdgeContainer` allocation per vertex.
-- ConcurStorage property read 8.5x slowdown (9.57M vs 81.13M): lock acquisition dominates when underlying operation is ~12ns.
+- ConcurStorage property read 8.5x slowdown (9.57M vs 81.13M): lock acquisition dominates.
 
 ---
 
 ## Key Insights
 
 1. **Property read returns internal MutableMap reference directly.** 81.13M ops/sec, highest of all implementations.
-2. **Edge query is symmetric.** Outgoing 8.97M ~ Incoming 8.79M. `DirectedEdgeContainer` O(1) both directions.
-3. **`removeVertex` automatically deletes all edges.** Exploiting this avoids redundant manual cleanup in `deleteNode`.
-4. **In-memory only -- no persistence overhead.** Performance ceiling is JVM HashMap + JGraphT data structure speed.
+2. **Edge query is symmetric.** `DirectedEdgeContainer` O(1) both directions.
+3. **`removeVertex` automatically deletes all edges.** Exploiting this avoids redundant manual cleanup.
+4. **In-memory only -- no persistence overhead.**

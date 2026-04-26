@@ -1,4 +1,4 @@
-# Entity Module Design
+# Entity Design
 
 ## Design Overview
 
@@ -135,9 +135,3 @@ abstract class AbcEdge : AbcEntity() {
 |-----------|------------|
 | `EntityNotExistException` | Node/edge does not exist in storage (from storage layer) |
 
----
-
-## Validation Rules
-
-- All properties in the entity namespace are user properties; `PROP_NODE_ID` is filtered from node property APIs
-- `AbcNode.set`/`update` reject writes to `PROP_NODE_ID` with `require`
