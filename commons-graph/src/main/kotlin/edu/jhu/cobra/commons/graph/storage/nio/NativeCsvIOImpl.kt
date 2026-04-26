@@ -129,26 +129,26 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         ) {
             require(!isClosed) { "The file is closed" }
             val tempFile = File.createTempFile("tmp", ".txt")
-            val reader = file.bufferedReader()
-            val writer = tempFile.bufferedWriter()
             try {
-                val headerSequence =
-                    if (fixedPrefix.isEmpty()) {
-                        header.asSequence()
-                    } else {
-                        sequenceOf(fixedPrefix) + header.asSequence()
+                file.bufferedReader().use { reader ->
+                    tempFile.bufferedWriter().use { writer ->
+                        val headerSequence =
+                            if (fixedPrefix.isEmpty()) {
+                                header.asSequence()
+                            } else {
+                                sequenceOf(fixedPrefix) + header.asSequence()
+                            }
+                        val fmtHeader = headerSequence.map { escape(it) }
+                        val newFirstLine = fmtHeader.joinToString(CSV_DELIMITER)
+                        writer.appendLine(newFirstLine)
+                        reader.readLine()
+                        reader.forEachLine(writer::appendLine)
                     }
-                val fmtHeader = headerSequence.map { escape(it) }
-                val newFirstLine = fmtHeader.joinToString(CSV_DELIMITER)
-                writer.appendLine(newFirstLine)
-                reader.readLine()
-                reader.forEachLine(writer::appendLine)
+                }
+                tempFile.copyTo(file, overwrite = true)
             } finally {
-                reader.close()
-                writer.close()
+                tempFile.delete()
             }
-            tempFile.copyTo(file, overwrite = true)
-            tempFile.delete()
         }
 
         override fun close() {
@@ -321,8 +321,12 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 nodeStringToInt[nodeId] = storageId
             }
             reader.readEdges().forEach { record ->
-                val srcInt = nodeStringToInt[record.src]!!
-                val dstInt = nodeStringToInt[record.dst]!!
+                val srcInt = requireNotNull(nodeStringToInt[record.src]) {
+                    "Edge references unknown source node '${record.src}'"
+                }
+                val dstInt = requireNotNull(nodeStringToInt[record.dst]) {
+                    "Edge references unknown destination node '${record.dst}'"
+                }
                 into.addEdge(srcInt, dstInt, record.tag, record.properties)
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
