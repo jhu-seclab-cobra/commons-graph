@@ -1,4 +1,4 @@
-# commons-graph
+# COBRA.COMMONS.GRAPH
 
 > Common Graph — backend-agnostic graph abstraction for COBRA.
 
