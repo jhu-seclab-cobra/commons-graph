@@ -103,30 +103,13 @@ class NativeConcurStorageImpl : IStorage {
     private fun removeEntityFromColumns(
         id: Int,
         columns: HashMap<String, HashMap<Int, IValue>>,
-    ) {
-        val colIter = columns.values.iterator()
-        while (colIter.hasNext()) {
-            val col = colIter.next()
-            col.remove(id)
-            if (col.isEmpty()) colIter.remove()
-        }
-    }
+    ) = ColumnarUtils.removeEntityFromColumns(id, columns)
 
     private fun setColumnarProperties(
         id: Int,
         properties: Map<String, IValue?>,
         columns: HashMap<String, HashMap<Int, IValue>>,
-    ) {
-        for ((key, value) in properties) {
-            if (value != null) {
-                columns.getOrPut(internKey(key)) { HashMap() }[id] = value
-            } else {
-                val col = columns[key] ?: continue
-                col.remove(id)
-                if (col.isEmpty()) columns.remove(key)
-            }
-        }
-    }
+    ) = ColumnarUtils.setColumnarProperties(id, properties, columns, ::internKey)
 
     private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
