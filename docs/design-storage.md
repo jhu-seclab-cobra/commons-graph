@@ -23,7 +23,7 @@ The storage layer is the **backend-agnostic directed property graph engine**. It
 **Methods:**
 
 ```kotlin
-interface IStorage : Closeable {
+interface IStorage : Flushable {
     val nodeIDs: Set<Int>
     val edgeIDs: Set<Int>
     fun containsNode(id: Int): Boolean

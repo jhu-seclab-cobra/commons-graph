@@ -1,6 +1,6 @@
 # commons-graph Performance Optimizations
 
-Optimization log for core module. Benchmarks in `impl-performance.md`.
+Optimization log for core module. Benchmarks in [performance.md](performance.md).
 
 ## Key Improvements
 

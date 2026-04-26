@@ -10,7 +10,7 @@ None.
 
 ### D1. AbcMultipleGraph god object (570 lines, 25+ public methods)
 
-Implements `IGraph`, `IPoset`, and `Closeable` — three distinct responsibilities. Exceeds detekt 600-line class limit. Split into: graph CRUD core, poset mixin, traversal mixin.
+Implements `IGraph`, `IPoset`, and `Flushable` — three distinct responsibilities. Exceeds detekt 600-line class limit. Split into: graph CRUD core, poset mixin, traversal mixin.
 
 ### D2. LayeredStorageImpl file length (695 lines)
 
@@ -19,6 +19,18 @@ Contains inline storage, layer management, freeze logic, and 5 inner view classe
 ---
 
 ## Resolved
+
+### B5. getAllEdges iterates foreign edges in shared-storage scenario
+
+**Resolution:** Fixed. Added `nodeByStorageId` membership filter in `getAllEdges`: edges whose src or dst is not registered in this graph are skipped before `cachedEdge`.
+
+### B6. claimNode not implemented — shared-storage node claiming
+
+**Resolution:** Fixed. Added `claimNode(from: AbcNode): N` to `IGraph` and `AbcMultipleGraph`. Registers an existing storage row (by `from.storageId`) in this graph's node caches without creating a new storage row. Consumer `wrapNode` replaced by `claimNode`.
+
+### B7. rebuild() claims all storage nodes regardless of graph ownership
+
+**Resolution:** Fixed. `rebuild(ownerPrefix)` accepts optional prefix parameter. When provided, only nodes whose NodeID starts with the prefix are restored. Claimed nodes must be re-claimed after rebuild.
 
 ### B1. LayeredStorageImpl delete on promoted entities reverts to frozen snapshot
 

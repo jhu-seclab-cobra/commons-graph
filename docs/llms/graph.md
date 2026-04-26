@@ -26,7 +26,7 @@ val n1 = graph.addNode("a")
 val n2 = graph.addNode("b")
 val edge = graph.addEdge("a", "b", "calls")
 edge["weight"] = NumVal(5)
-graph.close()
+graph.flush()
 ```
 
 ## API
@@ -38,12 +38,12 @@ graph.close()
 - **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
 - **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
 - **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
-- **`getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
+- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
 - **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
 - **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
 - **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
-- **`getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
+- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
 - **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
 - **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
 - **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
@@ -51,7 +51,7 @@ graph.close()
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Closeable`)
+### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Flushable`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
 - **`abstract val posetStorage: IStorage`** -- Label hierarchy storage backend.
@@ -66,7 +66,7 @@ graph.close()
 - **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
 - **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
 - **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
-- **`close()`** -- Release caches. Does not close the storage instances.
+- **`flush()` -- Persist node ownership to storage. Does not close the storage instances.
 
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 

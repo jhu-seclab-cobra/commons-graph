@@ -41,7 +41,7 @@ val b = graph.addNode("B")
 val e = graph.addEdge("A", "B", "calls")      // returns MyEdge
 a["weight"] = 42.numVal                        // property access
 graph.getChildren("A")                         // Sequence<MyNode>
-graph.close()
+graph.flush()
 ```
 
 ## API
@@ -58,7 +58,7 @@ graph.close()
 
 | Class | Description |
 |-------|-------------|
-| `AbcMultipleGraph` | Implements `IGraph` + `IPoset` + `Closeable`. Label-aware edges. Dual storage (graph + poset). |
+| `AbcMultipleGraph` | Implements `IGraph` + `IPoset` + `Flushable`. Label-aware edges. Dual storage (graph + poset). |
 | `AbcSimpleGraph` | Extends `AbcMultipleGraph`. Enforces single edge per source-destination direction. |
 | `AbcNode` | Lightweight node wrapper. Bound to storage via `bind()`. |
 | `AbcEdge` | Lightweight edge wrapper. Resolves source, destination, tag lazily. |
@@ -79,7 +79,7 @@ graph.close()
 | Type | Description |
 |------|-------------|
 | `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
-| `TraitNodeGroup` | Node grouping with auto-ID generation. |
+| `TraitGroup` | Node grouping with auto-ID generation. |
 | `NodeID` | Typealias for `String`. User-facing node identifier. |
 
 **Exceptions**

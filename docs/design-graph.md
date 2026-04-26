@@ -3,7 +3,7 @@
 ## Design Overview
 
 - **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `Closeable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
+- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `Flushable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
 - **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `AccessClosedStorageException` raised on storage access after close
 - **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property).
@@ -29,15 +29,16 @@ The graph layer translates domain-level graph operations into coordinated calls 
 interface IGraph<N : AbcNode, E : AbcEdge> {
     val nodeIDs: Set<NodeID>
     fun addNode(withID: NodeID): N
+    fun claimNode(from: AbcNode): N
     fun getNode(whoseID: NodeID): N?
     fun containNode(whoseID: NodeID): Boolean
     fun delNode(whoseID: NodeID)
-    fun getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>
+    fun getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>
     fun addEdge(src: NodeID, dst: NodeID, tag: String): E
     fun getEdge(src: NodeID, dst: NodeID, tag: String): E?
     fun containEdge(src: NodeID, dst: NodeID, tag: String): Boolean
     fun delEdge(src: NodeID, dst: NodeID, tag: String)
-    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
+    fun getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>
     fun getIncomingEdges(of: NodeID): Sequence<E>
     fun getOutgoingEdges(of: NodeID): Sequence<E>
     fun getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>
@@ -49,7 +50,8 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addNode` | Creates a node and registers ID in storage | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
+| `addNode` | Creates a new storage row and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
+| `claimNode` | Registers an existing storage row in this graph without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | -- |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
 | `delNode` | Removes all associated edges then the node | `whoseID`: NodeID | -- | -- |
 | `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `tag` | `E` | `EntityNotExistException` if src/dst missing |
@@ -65,18 +67,43 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 ### AbcMultipleGraph
 
-**Responsibility:** Canonical `IGraph` + `Closeable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `TraitPoset` when mixed in by concrete graph classes.
+**Responsibility:** Canonical `IGraph` + `Flushable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `TraitPoset` when mixed in by concrete graph classes.
 
 **State / Fields:**
 
 ```
 AbcMultipleGraph
-+-- abstract storage: IStorage          <- main graph storage
-+-- newNodeObj(): N                     <- subclass entity factory (protected abstract)
-+-- newEdgeObj(): E                     <- subclass entity factory (protected abstract)
++-- abstract storage: IStorage              <- main graph storage
++-- abstract graphId: String                <- graph identifier for ownership tracking
++-- newNodeObj(): N                         <- subclass entity factory (protected abstract)
++-- newEdgeObj(): E                         <- subclass entity factory (protected abstract)
++-- nodeEntries: Map<NodeID, NodeEntry>     <- NodeID → storageId mapping (private)
++-- nodeByStorageId: Map<Int, NodeEntry>    <- storageId → NodeEntry mapping (private)
 ```
 
-**Close contract:** `close()` releases internal resources. Does not close storage instances. Concrete classes mixing in traits are responsible for clearing trait caches.
+**Shared Storage:**
+
+Multiple graph instances may share a single `IStorage`. Each graph maintains its own `nodeEntries` and `nodeByStorageId`. A node in storage can be registered by multiple graphs via `claimNode` — each graph holds its own typed view (`N`) of the same storage row, sharing all properties.
+
+**Node Operations:**
+
+| Method | Behavior |
+|--------|----------|
+| `addNode(withID)` | Creates a new storage row via `storage.addNode()`. Registers in this graph. |
+| `claimNode(from)` | Registers an existing storage row (via `from.storageId`) in this graph. No new storage row created. Returns existing node if already claimed. |
+
+**Edge Isolation:**
+
+All edge query methods (`getAllEdges`, `getOutgoingEdges`, `getIncomingEdges`, `getAncestors`, `getDescendants`) filter by `nodeByStorageId` membership — only edges whose both endpoints are registered in this graph are returned. Edges belonging to other graphs sharing the same storage are excluded.
+
+**Ownership Persistence (`__owners__`):**
+
+Node ownership is persisted lazily via a `__owners__` SetVal property on each storage row.
+
+- `flush()` writes `graphId` into `__owners__` for every node in `nodeByStorageId`. Zero runtime overhead — ownership only persisted on explicit flush.
+- `rebuild()` restores nodes where `graphId` is in `__owners__`. When `__owners__` is absent (first run), falls back to restoring all nodes.
+
+**Flush contract:** `flush()` persists node ownership to storage. Does not release caches or close storage. Graph remains usable after flush.
 
 ---
 

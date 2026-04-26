@@ -15,7 +15,7 @@ storage.close()
 
 ## API
 
-### `IStorage` (extends `Closeable`)
+### `IStorage` (extends `Flushable`)
 
 #### Node Operations
 
