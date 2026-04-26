@@ -197,7 +197,17 @@ class LayeredStorageImpl(
         frozenEdgeLocalToGlobal.putAll(edgeL2G)
     }
 
-    private fun clearActiveLayer() {
+    /**
+     * Clears all data in the active layer while preserving the frozen layer.
+     *
+     * Removes all active-layer nodes, edges, properties, and metadata.
+     * The frozen layer and its ID mappings remain intact, so subsequent
+     * reads still resolve against frozen data.
+     *
+     * @throws AccessClosedStorageException If storage is closed.
+     */
+    fun clearActiveLayer() {
+        ensureOpen()
         activeOutEdges.clear()
         activeInEdges.clear()
         activeEdgeEndpoints.clear()
