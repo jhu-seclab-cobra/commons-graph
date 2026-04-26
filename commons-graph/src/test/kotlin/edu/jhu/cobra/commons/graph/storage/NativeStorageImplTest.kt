@@ -57,6 +57,14 @@ import kotlin.test.assertTrue
  * - `clear removes all nodes edges and metadata` -- full reset
  * - `transferTo copies all data and returns node ID mapping` -- cross-storage transfer
  * - `close prevents subsequent operations with AccessClosedStorageException` -- lifecycle guard
+ * - `closed storage throws AccessClosedStorageException for all operations` -- all ensureOpen branches
+ * - `ColumnViewMap isEmpty returns true when entity has no properties` -- empty ColumnViewMap
+ * - `ColumnViewMap containsKey returns true for existing and false for absent` -- containsKey paths
+ * - `ColumnViewMap get returns value for existing and null for absent` -- get hit and miss
+ * - `setColumnarProperties creates new column for first property of that name` -- column creation
+ * - `removeEntityFromColumns removes column when it becomes empty` -- column cleanup
+ * - `removeEntityFromColumns keeps column when other entities remain` -- column retention
+ * - `deleteNode with no incident edges succeeds` -- empty adjacency sets
  */
 internal class NativeStorageImplTest {
     private lateinit var storage: NativeStorageImpl
@@ -403,6 +411,119 @@ internal class NativeStorageImplTest {
         assertFailsWith<AccessClosedStorageException> { storage.addNode() }
         assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
         assertFailsWith<AccessClosedStorageException> { storage.clear() }
+    }
+
+    @Test
+    fun `closed storage throws AccessClosedStorageException for all operations`() {
+        val closed = NativeStorageImpl()
+        closed.close()
+
+        val operations: Map<String, () -> Unit> = mapOf(
+            "containsNode" to { closed.containsNode(0) },
+            "getNodeProperties" to { closed.getNodeProperties(0) },
+            "getNodeProperty" to { closed.getNodeProperty(0, "k") },
+            "setNodeProperties" to { closed.setNodeProperties(0, emptyMap()) },
+            "deleteNode" to { closed.deleteNode(0) },
+            "containsEdge" to { closed.containsEdge(0) },
+            "addEdge" to { closed.addEdge(0, 0, "t") },
+            "getEdgeStructure" to { closed.getEdgeStructure(0) },
+            "getEdgeProperties" to { closed.getEdgeProperties(0) },
+            "getEdgeProperty" to { closed.getEdgeProperty(0, "k") },
+            "setEdgeProperties" to { closed.setEdgeProperties(0, emptyMap()) },
+            "deleteEdge" to { closed.deleteEdge(0) },
+            "getIncomingEdges" to { closed.getIncomingEdges(0) },
+            "getOutgoingEdges" to { closed.getOutgoingEdges(0) },
+            "getMeta" to { closed.getMeta("k") },
+            "setMeta" to { closed.setMeta("k", "v".strVal) },
+            "metaNames" to { closed.metaNames },
+            "transferTo" to { closed.transferTo(NativeStorageImpl()) },
+            "edgeIDs" to { closed.edgeIDs },
+            "nodeIDs" to { closed.nodeIDs },
+        )
+
+        for ((name, op) in operations) {
+            assertFailsWith<AccessClosedStorageException>("$name did not throw") { op() }
+        }
+    }
+
+    // endregion
+
+    // region ColumnViewMap
+
+    @Test
+    fun `ColumnViewMap isEmpty returns true when entity has no properties`() {
+        val nodeId = storage.addNode()
+
+        val props = storage.getNodeProperties(nodeId)
+
+        assertTrue(props.isEmpty())
+    }
+
+    @Test
+    fun `ColumnViewMap containsKey returns true for existing and false for absent`() {
+        val nodeId = storage.addNode(mapOf("name" to "Alice".strVal))
+
+        val props = storage.getNodeProperties(nodeId)
+
+        assertTrue(props.containsKey("name"))
+        assertFalse(props.containsKey("absent"))
+    }
+
+    @Test
+    fun `ColumnViewMap get returns value for existing and null for absent`() {
+        val nodeId = storage.addNode(mapOf("name" to "Alice".strVal))
+
+        val props = storage.getNodeProperties(nodeId)
+
+        assertEquals("Alice", (props["name"] as StrVal).core)
+        assertNull(props["absent"])
+    }
+
+    // endregion
+
+    // region Columnar storage internals
+
+    @Test
+    fun `setColumnarProperties creates new column for first property of that name`() {
+        val n1 = storage.addNode(mapOf("a" to "1".strVal))
+
+        // "b" column does not exist yet; setNodeProperties creates it
+        storage.setNodeProperties(n1, mapOf("b" to "2".strVal))
+
+        assertEquals("1", (storage.getNodeProperty(n1, "a") as StrVal).core)
+        assertEquals("2", (storage.getNodeProperty(n1, "b") as StrVal).core)
+    }
+
+    @Test
+    fun `removeEntityFromColumns removes column when it becomes empty`() {
+        val n1 = storage.addNode(mapOf("unique" to "only".strVal))
+
+        storage.deleteNode(n1)
+
+        // Add a new node — "unique" column should be gone, so no stale data
+        val n2 = storage.addNode()
+        assertNull(storage.getNodeProperty(n2, "unique"))
+        assertTrue(storage.getNodeProperties(n2).isEmpty())
+    }
+
+    @Test
+    fun `removeEntityFromColumns keeps column when other entities remain`() {
+        val n1 = storage.addNode(mapOf("shared" to "A".strVal))
+        val n2 = storage.addNode(mapOf("shared" to "B".strVal))
+
+        storage.deleteNode(n1)
+
+        assertEquals("B", (storage.getNodeProperty(n2, "shared") as StrVal).core)
+    }
+
+    @Test
+    fun `deleteNode with no incident edges succeeds`() {
+        val n1 = storage.addNode(mapOf("name" to "isolated".strVal))
+
+        storage.deleteNode(n1)
+
+        assertFalse(storage.containsNode(n1))
+        assertTrue(storage.nodeIDs.isEmpty())
     }
 
     // endregion

@@ -42,6 +42,10 @@ import kotlin.test.assertTrue
  * - `EntityType delegate set and get round-trips` — verifies enum type write-read
  * - `EntityType delegate custom name uses custom storage key` — verifies optName mapping
  * - `EntityType delegate returns default on unknown stored value` — verifies fallback for bad data
+ * - `EntityProperty nullable delegate returns null when storage value is null` — nullable delegate null in storage
+ * - `EntityType delegate returns default when stored value is non-StrVal type` — wrong type in storage
+ * - `getTypeProp returns null when property exists but wrong type` — type mismatch returns null
+ * - `EntityType delegate set same value is no-op` — skip write when value unchanged
  */
 internal class AbcEntityTest {
     private lateinit var storage: NativeStorageImpl
@@ -321,6 +325,49 @@ internal class AbcEntityTest {
         node["myKind"] = "INVALID_VALUE".strVal
 
         assertEquals(Kind.SOURCE, node.namedKind)
+    }
+
+    // endregion
+
+    // region Branch coverage
+
+    @Test
+    fun `EntityProperty nullable delegate returns null when storage value is null`() {
+        val sid = storage.addNode()
+        val node = PropNode().also { it.bind(storage, sid, "p") }
+        node.opt = "temp".strVal
+        node["opt"] = null
+
+        assertNull(node.opt)
+    }
+
+    @Test
+    fun `EntityType delegate returns default when stored value is non-StrVal type`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+        node["myKind"] = 42.numVal
+
+        assertEquals(Kind.SOURCE, node.namedKind)
+    }
+
+    @Test
+    fun `getTypeProp returns null when property exists but wrong type`() {
+        testNode["count"] = 100.numVal
+
+        val result: StrVal? = testNode.getTypeProp("count")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `EntityType delegate set same value is no-op`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+        node.namedKind = Kind.SINK
+
+        node.namedKind = Kind.SINK
+
+        assertEquals(Kind.SINK, node.namedKind)
     }
 
     // endregion

@@ -2,10 +2,8 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.graph.traits.TraitPoset
 
-/**
- * Test utilities for graph tests providing shared test data and helper functions.
- */
 object GraphTestUtils {
     const val NODE_ID_1: NodeID = "node1"
     const val NODE_ID_2: NodeID = "node2"
@@ -36,50 +34,52 @@ object GraphTestUtils {
     fun createTestMultipleGraph(
         storage: IStorage = NativeStorageImpl(),
         posetStorage: IStorage = NativeStorageImpl(),
-    ): AbcMultipleGraph<TestNode, TestEdge> =
-        object : AbcMultipleGraph<TestNode, TestEdge>() {
-            override val storage: IStorage = storage
-            override val posetStorage: IStorage = posetStorage
+    ): TestMultipleGraphWithPoset = TestMultipleGraphWithPoset(storage, posetStorage)
 
-            override fun newNodeObj() = TestNode()
-
-            override fun newEdgeObj() = TestEdge()
-        }
-
-    class TestMultipleGraph(
-        storage: IStorage,
-        posetStorage: IStorage = NativeStorageImpl(),
-    ) : AbcMultipleGraph<TestNode, TestEdge>() {
-        override val storage: IStorage = storage
-        override val posetStorage: IStorage = posetStorage
+    class TestMultipleGraphWithPoset(
+        graphStorage: IStorage,
+        override val posetStorage: IStorage = NativeStorageImpl(),
+    ) : AbcMultipleGraph<TestNode, TestEdge>(),
+        TraitPoset<TestNode, TestEdge> {
+        override val storage: IStorage = graphStorage
+        override val posetState = TraitPoset.PosetState()
 
         override fun newNodeObj() = TestNode()
+        override fun newEdgeObj() = TestEdge()
+    }
 
+    class TestMultipleGraph(
+        graphStorage: IStorage,
+    ) : AbcMultipleGraph<TestNode, TestEdge>() {
+        override val storage: IStorage = graphStorage
+
+        override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
     }
 
     fun createTestSimpleGraph(
         storage: IStorage = NativeStorageImpl(),
         posetStorage: IStorage = NativeStorageImpl(),
-    ): AbcSimpleGraph<TestNode, TestEdge> =
-        object : AbcSimpleGraph<TestNode, TestEdge>() {
-            override val storage: IStorage = storage
-            override val posetStorage: IStorage = posetStorage
+    ): TestSimpleGraphWithPoset = TestSimpleGraphWithPoset(storage, posetStorage)
 
-            override fun newNodeObj() = TestNode()
-
-            override fun newEdgeObj() = TestEdge()
-        }
-
-    class TestSimpleGraph(
-        storage: IStorage,
-        posetStorage: IStorage = NativeStorageImpl(),
-    ) : AbcSimpleGraph<TestNode, TestEdge>() {
-        override val storage: IStorage = storage
-        override val posetStorage: IStorage = posetStorage
+    class TestSimpleGraphWithPoset(
+        graphStorage: IStorage,
+        override val posetStorage: IStorage = NativeStorageImpl(),
+    ) : AbcSimpleGraph<TestNode, TestEdge>(),
+        TraitPoset<TestNode, TestEdge> {
+        override val storage: IStorage = graphStorage
+        override val posetState = TraitPoset.PosetState()
 
         override fun newNodeObj() = TestNode()
+        override fun newEdgeObj() = TestEdge()
+    }
 
+    class TestSimpleGraph(
+        graphStorage: IStorage,
+    ) : AbcSimpleGraph<TestNode, TestEdge>() {
+        override val storage: IStorage = graphStorage
+
+        override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
     }
 }

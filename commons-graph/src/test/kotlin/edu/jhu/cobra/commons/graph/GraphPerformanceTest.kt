@@ -55,7 +55,7 @@ internal class GraphPerformanceTest {
         return storage
     }
 
-    private fun createMultipleGraph(storageName: String): AbcMultipleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
+    private fun createMultipleGraph(storageName: String): GraphTestUtils.TestMultipleGraphWithPoset {
         val s = createStorage(storageName)
         val ps = NativeStorageImpl()
         closeables.add(ps)

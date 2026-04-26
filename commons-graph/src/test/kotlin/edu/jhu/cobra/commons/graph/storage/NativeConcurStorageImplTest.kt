@@ -6,11 +6,11 @@ import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -53,6 +53,9 @@ import kotlin.test.assertTrue
  * - `clear removes all nodes edges and metadata` -- full reset
  * - `transferTo copies all data and returns node ID mapping` -- transfer
  * - `close prevents subsequent operations` -- lifecycle guard
+ *
+ * Closed-storage guard:
+ * - `closed storage throws AccessClosedStorageException for all operations` -- all ensureOpen branches
  *
  * Thread-safety tests:
  * - `concurrent reads do not deadlock` -- parallel read lock acquisition
@@ -335,6 +338,43 @@ internal class NativeConcurStorageImplTest {
 
     // endregion
 
+    // region Closed-storage guard
+
+    @Test
+    fun `closed storage throws AccessClosedStorageException for all operations`() {
+        val closed = NativeConcurStorageImpl()
+        closed.close()
+
+        val operations: Map<String, () -> Unit> = mapOf(
+            "containsNode" to { closed.containsNode(0) },
+            "getNodeProperties" to { closed.getNodeProperties(0) },
+            "getNodeProperty" to { closed.getNodeProperty(0, "k") },
+            "setNodeProperties" to { closed.setNodeProperties(0, emptyMap()) },
+            "deleteNode" to { closed.deleteNode(0) },
+            "containsEdge" to { closed.containsEdge(0) },
+            "addEdge" to { closed.addEdge(0, 0, "t") },
+            "getEdgeStructure" to { closed.getEdgeStructure(0) },
+            "getEdgeProperties" to { closed.getEdgeProperties(0) },
+            "getEdgeProperty" to { closed.getEdgeProperty(0, "k") },
+            "setEdgeProperties" to { closed.setEdgeProperties(0, emptyMap()) },
+            "deleteEdge" to { closed.deleteEdge(0) },
+            "getIncomingEdges" to { closed.getIncomingEdges(0) },
+            "getOutgoingEdges" to { closed.getOutgoingEdges(0) },
+            "getMeta" to { closed.getMeta("k") },
+            "setMeta" to { closed.setMeta("k", "v".strVal) },
+            "metaNames" to { closed.metaNames },
+            "transferTo" to { closed.transferTo(NativeConcurStorageImpl()) },
+            "edgeIDs" to { closed.edgeIDs },
+            "nodeIDs" to { closed.nodeIDs },
+        )
+
+        for ((name, op) in operations) {
+            assertFailsWith<AccessClosedStorageException>("$name did not throw") { op() }
+        }
+    }
+
+    // endregion
+
     // region Thread safety
 
     @Test
@@ -347,7 +387,7 @@ internal class NativeConcurStorageImplTest {
         val opsPerThread = 500
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
-        val errors = AtomicInteger(0)
+        val errors = CopyOnWriteArrayList<Exception>()
         val timedOut = AtomicBoolean(false)
 
         for (t in 0 until threadCount) {
@@ -359,8 +399,8 @@ internal class NativeConcurStorageImplTest {
                         storage.getOutgoingEdges(n1)
                         storage.getIncomingEdges(n2)
                     }
-                } catch (_: Exception) {
-                    errors.incrementAndGet()
+                } catch (e: Exception) {
+                    errors.add(e)
                 } finally {
                     latch.countDown()
                 }
@@ -372,7 +412,7 @@ internal class NativeConcurStorageImplTest {
         if (!completed) timedOut.set(true)
 
         assertFalse(timedOut.get(), "Concurrent reads timed out, potential deadlock")
-        assertEquals(0, errors.get())
+        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
     }
 
     @Test
@@ -381,7 +421,7 @@ internal class NativeConcurStorageImplTest {
         val nodesPerThread = 100
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
-        val errors = AtomicInteger(0)
+        val errors = CopyOnWriteArrayList<Exception>()
 
         for (t in 0 until threadCount) {
             executor.submit {
@@ -389,8 +429,8 @@ internal class NativeConcurStorageImplTest {
                     repeat(nodesPerThread) {
                         storage.addNode(mapOf("thread" to t.numVal))
                     }
-                } catch (_: Exception) {
-                    errors.incrementAndGet()
+                } catch (e: Exception) {
+                    errors.add(e)
                 } finally {
                     latch.countDown()
                 }
@@ -400,7 +440,7 @@ internal class NativeConcurStorageImplTest {
         latch.await(30, TimeUnit.SECONDS)
         executor.shutdown()
 
-        assertEquals(0, errors.get())
+        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
         assertEquals(threadCount * nodesPerThread, storage.nodeIDs.size)
     }
 
@@ -411,7 +451,7 @@ internal class NativeConcurStorageImplTest {
         val opsPerThread = 200
         val executor = Executors.newFixedThreadPool(threadCount * 2)
         val latch = CountDownLatch(threadCount * 2)
-        val errors = AtomicInteger(0)
+        val errors = CopyOnWriteArrayList<Exception>()
 
         for (t in 0 until threadCount) {
             executor.submit {
@@ -420,8 +460,8 @@ internal class NativeConcurStorageImplTest {
                         val current = storage.getNodeProperties(node)["counter"] as NumVal
                         storage.setNodeProperties(node, mapOf("counter" to (current.core.toInt() + 1).numVal))
                     }
-                } catch (_: Exception) {
-                    errors.incrementAndGet()
+                } catch (e: Exception) {
+                    errors.add(e)
                 } finally {
                     latch.countDown()
                 }
@@ -435,8 +475,8 @@ internal class NativeConcurStorageImplTest {
                         val value = storage.getNodeProperties(node)["counter"] as NumVal
                         assertTrue(value.core.toInt() >= 0)
                     }
-                } catch (_: Exception) {
-                    errors.incrementAndGet()
+                } catch (e: Exception) {
+                    errors.add(e)
                 } finally {
                     latch.countDown()
                 }
@@ -446,7 +486,7 @@ internal class NativeConcurStorageImplTest {
         latch.await(30, TimeUnit.SECONDS)
         executor.shutdown()
 
-        assertEquals(0, errors.get())
+        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
         val finalValue = (storage.getNodeProperties(node)["counter"] as NumVal).core.toInt()
         assertTrue(finalValue > 0)
     }

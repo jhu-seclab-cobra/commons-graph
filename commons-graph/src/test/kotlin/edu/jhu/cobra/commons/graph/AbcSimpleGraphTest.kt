@@ -27,7 +27,7 @@ import kotlin.test.assertTrue
  * - `addEdge with label different tag throws EntityAlreadyExistException` — verifies direction conflict
  */
 internal class AbcSimpleGraphTest {
-    private lateinit var graph: AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>
+    private lateinit var graph: GraphTestUtils.TestSimpleGraphWithPoset
     private lateinit var storage: NativeStorageImpl
 
     @BeforeTest
