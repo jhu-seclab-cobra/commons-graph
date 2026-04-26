@@ -36,6 +36,7 @@ Optimization log for core module. Benchmarks in `impl-performance.md`.
 | P6-7 | toTypedArray() deleteNode | -18%; reflective array creation |
 | P9-2 | Native Int __sid__ | Already native Long |
 | P9-5 | Eclipse Collections ID mapping | Zero-mapping architecture |
+| P10-3 | filterVisitable O(V·H) maximal | -32% to -47% filteredQuery; ancestors BFS uncached, slower than queryCache-backed compareTo |
 
 ---
 
@@ -48,17 +49,6 @@ All IStorage implementations use `HashMap<Int, *>` for property columns, adjacen
 ### P10-2: Replace inner HashSet\<Int\> in adjacency with IntHashSet
 
 Adjacency `MutableSet<Int>` boxes each edge ID. `IntHashSet` stores raw int[]. ~5 MB saved at 155K edges; combined with P10-1: ~18 MB total. Risk: low. Same dependency.
-
-### P10-3: filterVisitable — precompute ancestor set, fast path, O(V·H) maximal
-
-`filterVisitable` calls `by.compareTo(l)` per label per edge. Cache-miss compareTo triggers BFS (O(H)). Coverage elimination is O(V²) pairwise compareTo. Three improvements:
-1. **Precompute**: One BFS for `by.ancestors.toHashSet()`, then O(1) membership test per label.
-2. **Fast path**: V ≤ 1 → skip coverage pass (>95% of calls in CobraPHP).
-3. **Maximal elements**: O(V·H) ancestor scan replaces O(V²) pairwise compareTo.
-
-Secondary bottleneck: `e.labels` getter allocates HashSet + Label objects per call. Hierarchy depth H typically 3-5 but can reach 10-20 in deep branch/call nesting.
-
-**File**: `AbcMultipleGraph.kt`. **Risk**: Low.
 
 ### P6-2: NativeStorage cold getNode slower than warm
 
@@ -81,3 +71,4 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 11. **Double HashMap lookup measurable in hot paths.** 10-15% at 100M+ ops/sec.
 12. **`toString().hashCode()` catastrophic in tight loops.** Cold query +270%.
 13. **Int boxing in HashMap\<Int, *\> costs ~30 MB at 120K nodes.**
+14. **queryCache makes O(V²) compareTo effectively O(V²·1).** Replacing with uncached BFS is slower despite better asymptotic complexity.
