@@ -19,7 +19,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 - Use `Label` for edge visibility control. Pass `Label` to `addEdge`, `getOutgoingEdges`, `getChildren`, etc.
 - `Label.INFIMUM` is below all labels -- use as the visibility floor. `Label.SUPREMUM` is above all -- disables label filtering.
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds only.
-- Close graphs via `graph.close()` to release storage resources. Graphs implement `Closeable`.
+- Close graphs via `graph.flush()` to release storage resources. Graphs implement `Flushable`.
 - `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
 - Use `NativeStorageImpl` for single-threaded in-memory graphs.
 - Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
@@ -40,7 +40,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 
 ## Labels
 
-- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitNodeGroup` -- label hierarchy, edge visibility, node grouping.
+- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitGroup` -- label hierarchy, edge visibility, node grouping.
 
 ## Optional
 
@@ -82,7 +82,7 @@ val n1 = graph.addNode("a")
 val n2 = graph.addNode("b")
 val edge = graph.addEdge("a", "b", "calls")
 edge["weight"] = NumVal(5)
-graph.close()
+graph.flush()
 ```
 
 ## API
@@ -94,12 +94,12 @@ graph.close()
 - **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
 - **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
 - **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
-- **`getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
+- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
 - **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
 - **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
 - **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
-- **`getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
+- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
 - **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
 - **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
 - **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
@@ -107,7 +107,7 @@ graph.close()
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Closeable`)
+### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Flushable`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
 - **`abstract val posetStorage: IStorage`** -- Label hierarchy storage backend.
@@ -122,7 +122,7 @@ graph.close()
 - **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
 - **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
 - **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
-- **`close()`** -- Release caches. Does not close the storage instances.
+- **`flush()` -- Persist node ownership to storage. Does not close the storage instances.
 
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 
@@ -359,7 +359,7 @@ with(graph) {
 - `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
 - Edges with no labels are visible only when no label filter is applied.
 
-### `TraitNodeGroup<N, E>` (interface, extends `IGraph`)
+### `TraitGroup<N, E>` (interface, extends `IGraph`)
 
 - **`val groupPrefix: String`** -- Prefix for grouped node IDs. Typically the graph name.
 - **`val groupedNodesCounter: MutableMap<String, Int>`** -- Monotonic counter per group name.
@@ -379,7 +379,7 @@ with(graph) {
 - `Label.parents` setter replaces all parents. Merge with existing parents if appending: `label.parents = label.parents + mapOf("new" to parentLabel)`.
 - `Label.compareTo` returns `null` for incomparable labels. Always handle the `null` case.
 - `IPoset` operations require the `AbcMultipleGraph` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
-- `TraitNodeGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
+- `TraitGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
 - Group counters only increase. Deleting grouped nodes does not decrement the counter.
 
 

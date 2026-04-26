@@ -42,6 +42,7 @@ object GraphTestUtils {
     ) : AbcMultipleGraph<TestNode, TestEdge>(),
         TraitPoset<TestNode, TestEdge> {
         override val storage: IStorage = graphStorage
+        override val graphId: String = "TestMultiplePoset"
         override val posetState = TraitPoset.PosetState()
 
         override fun newNodeObj() = TestNode()
@@ -52,6 +53,7 @@ object GraphTestUtils {
         graphStorage: IStorage,
     ) : AbcMultipleGraph<TestNode, TestEdge>() {
         override val storage: IStorage = graphStorage
+        override val graphId: String = "TestMultiple"
 
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
@@ -68,6 +70,7 @@ object GraphTestUtils {
     ) : AbcSimpleGraph<TestNode, TestEdge>(),
         TraitPoset<TestNode, TestEdge> {
         override val storage: IStorage = graphStorage
+        override val graphId: String = "TestSimplePoset"
         override val posetState = TraitPoset.PosetState()
 
         override fun newNodeObj() = TestNode()
@@ -78,6 +81,7 @@ object GraphTestUtils {
         graphStorage: IStorage,
     ) : AbcSimpleGraph<TestNode, TestEdge>() {
         override val storage: IStorage = graphStorage
+        override val graphId: String = "TestSimple"
 
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()

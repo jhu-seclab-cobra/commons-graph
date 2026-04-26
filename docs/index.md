@@ -6,7 +6,7 @@
 | [design-entity.md](design-entity.md) | Entity module -- InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
 | [design-graph.md](design-graph.md) | Graph module -- IGraph, AbcMultipleGraph, AbcSimpleGraph |
 | [design-storage.md](design-storage.md) | Storage module -- IStorage, NativeStorageImpl, NativeConcurStorageImpl, LayeredStorageImpl |
-| [design-group.md](design-group.md) | Node grouping -- TraitNodeGroup, property-based group membership |
+| [design-group.md](design-group.md) | Node grouping -- TraitGroup, property-based group membership |
 | [design-label.md](design-label.md) | Label system -- Label, IPoset, edge visibility |
 | [impl.md](impl.md) | Library APIs -- commons-value, JGraphT, MapDB, Neo4j |
 | [performance.md](performance.md) | Core module benchmarks -- NativeStorage, LayeredStorage, graph-level |

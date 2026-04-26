@@ -19,7 +19,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 - Use `Label` for edge visibility control. Pass `Label` to `addEdge`, `getOutgoingEdges`, `getChildren`, etc.
 - `Label.INFIMUM` is below all labels -- use as the visibility floor. `Label.SUPREMUM` is above all -- disables label filtering.
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds only.
-- Close graphs via `graph.close()` to release storage resources. Graphs implement `Closeable`.
+- Persist graph ownership via `graph.flush()`. Graphs implement `Flushable`.
 - `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
 - Use `NativeStorageImpl` for single-threaded in-memory graphs.
 - Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
@@ -40,7 +40,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 
 ## Labels
 
-- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitNodeGroup` -- label hierarchy, edge visibility, node grouping.
+- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `TraitGroup` -- label hierarchy, edge visibility, node grouping.
 
 ## Optional
 

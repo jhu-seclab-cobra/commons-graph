@@ -40,7 +40,7 @@ with(graph) {
 - `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
 - Edges with no labels are visible only when no label filter is applied.
 
-### `TraitNodeGroup<N, E>` (interface, extends `IGraph`)
+### `TraitGroup<N, E>` (interface, extends `IGraph`)
 
 Group membership stored as node properties, not encoded in NodeID.
 
@@ -60,7 +60,7 @@ Group membership stored as node properties, not encoded in NodeID.
 - `Label.parents` setter replaces all parents. Merge with existing parents if appending: `label.parents = label.parents + mapOf("new" to parentLabel)`.
 - `Label.compareTo` returns `null` for incomparable labels. Always handle the `null` case.
 - `IPoset` operations require a `TraitPoset` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
-- `TraitNodeGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
+- `TraitGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
 - Group counters only increase. Deleting grouped nodes does not decrement the counter.
 - Call `rebuildGroupCaches()` after `rebuild()`. Without it, suffix index and counters are empty.
 - Nodes created via `addNode(withID)` have no group. Call `assignGroup` to add them to a group.

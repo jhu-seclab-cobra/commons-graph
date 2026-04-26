@@ -2,19 +2,19 @@
 
 ## Design Overview
 
-- **Classes**: `TraitNodeGroup`
-- **Relationships**: `TraitNodeGroup` extends `IGraph<N, E>` (interface mixin)
-- **Abstract**: `TraitNodeGroup` (implemented by concrete graph classes alongside `AbcSimpleGraph` / `AbcMultipleGraph`)
+- **Classes**: `TraitGroup`
+- **Relationships**: `TraitGroup` extends `IGraph<N, E>` (interface mixin)
+- **Abstract**: `TraitGroup` (implemented by concrete graph classes alongside `AbcSimpleGraph` / `AbcMultipleGraph`)
 - **Exceptions**: `IllegalArgumentException` raised on invalid group/suffix
-- **Dependency roles**: Orchestrator: `TraitNodeGroup` (manages group metadata, delegates node creation to `IGraph`). Data holders: reserved node properties `__group__`, `__suffix__`.
+- **Dependency roles**: Orchestrator: `TraitGroup` (manages group metadata, delegates node creation to `IGraph`). Data holders: reserved node properties `__group__`, `__suffix__`.
 
-`TraitNodeGroup` is an optional graph trait providing group membership management for nodes. Group membership is stored as **node properties** (`__group__`, `__suffix__`), not encoded in the NodeID. Per-group counters are persisted via **storage metadata** (`__group_counter_*`). The trait does **not** own NodeID generation — callers control IDs via `IGraph.addNode`, or use the convenience `addGroupNode` which generates an opaque ID internally.
+`TraitGroup` is an optional graph trait providing group membership management for nodes. Group membership is stored as **node properties** (`__group__`, `__suffix__`), not encoded in the NodeID. Per-group counters are persisted via **storage metadata** (`__group_counter_*`). The trait does **not** own NodeID generation — callers control IDs via `IGraph.addNode`, or use the convenience `addGroupNode` which generates an opaque ID internally.
 
 ---
 
 ## Class / Type Specifications
 
-### TraitNodeGroup
+### TraitGroup
 
 **Responsibility:** Manages node-to-group assignment, group-scoped lookup, and group enumeration. Decoupled from NodeID format.
 
@@ -29,7 +29,7 @@
 **State / Fields:**
 
 ```kotlin
-interface TraitNodeGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
+interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     val groupPrefix: String
     val groupedNodesCounter: MutableMap<String, Int>
     val suffixIndex: MutableMap<String, NodeID>
