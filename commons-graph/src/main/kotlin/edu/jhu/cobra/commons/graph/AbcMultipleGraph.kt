@@ -1,10 +1,13 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
-import java.io.Closeable
+import java.io.Flushable
 import java.lang.ref.SoftReference
+import java.util.logging.Level
+import java.util.logging.Logger
 
 /**
  * Abstract directed multi-graph allowing multiple edges between the same pair of
@@ -22,12 +25,16 @@ import java.lang.ref.SoftReference
 @Suppress("TooManyFunctions")
 abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     IGraph<N, E>,
-    Closeable {
+    Flushable {
     companion object {
         internal const val PROP_NODE_ID = "__nid__"
+        internal const val PROP_OWNERS = "__owners__"
+        private val logger: Logger = Logger.getLogger(AbcMultipleGraph::class.java.name)
     }
 
     abstract val storage: IStorage
+
+    abstract val graphId: String
 
     private class NodeEntry<N>(
         val nodeId: NodeID,
@@ -95,6 +102,14 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         return cachedNode(entry)
     }
 
+    override fun claimNode(from: AbcNode): N {
+        nodeEntries[from.id]?.let { return cachedNode(it) }
+        val entry = NodeEntry<N>(from.id, from.storageId, null)
+        nodeEntries[from.id] = entry
+        nodeByStorageId[from.storageId] = entry
+        return cachedNode(entry)
+    }
+
     override fun getNode(whoseID: NodeID): N? {
         val entry = nodeEntries[whoseID] ?: return null
         return cachedNode(entry)
@@ -115,11 +130,11 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         storage.deleteNode(entry.storageId)
     }
 
-    override fun getAllNodes(doSatfy: (N) -> Boolean): Sequence<N> =
+    override fun getAllNodes(doSatisfy: (N) -> Boolean): Sequence<N> =
         nodeEntries.values
             .asSequence()
             .map { cachedNode(it) }
-            .filter(doSatfy)
+            .filter(doSatisfy)
 
     // endregion
 
@@ -170,11 +185,15 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         storage.deleteEdge(storageId)
     }
 
-    override fun getAllEdges(doSatfy: (E) -> Boolean): Sequence<E> =
+    override fun getAllEdges(doSatisfy: (E) -> Boolean): Sequence<E> =
         storage.edgeIDs
             .asSequence()
+            .filter { edgeId ->
+                val s = storage.getEdgeStructure(edgeId)
+                s.src in nodeByStorageId && s.dst in nodeByStorageId
+            }
             .map { cachedEdge(it) }
-            .filter(doSatfy)
+            .filter(doSatisfy)
 
     // endregion
 
@@ -182,12 +201,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getOutgoingEdges(of: NodeID): Sequence<E> {
         val entry = nodeEntries[of] ?: return emptySequence()
-        return storage.getOutgoingEdges(entry.storageId).asSequence().map { cachedEdge(it) }
+        return storage.getOutgoingEdges(entry.storageId)
+            .asSequence()
+            .filter { storage.getEdgeStructure(it).dst in nodeByStorageId }
+            .map { cachedEdge(it) }
     }
 
     override fun getIncomingEdges(of: NodeID): Sequence<E> {
         val entry = nodeEntries[of] ?: return emptySequence()
-        return storage.getIncomingEdges(entry.storageId).asSequence().map { cachedEdge(it) }
+        return storage.getIncomingEdges(entry.storageId)
+            .asSequence()
+            .filter { storage.getEdgeStructure(it).src in nodeByStorageId }
+            .map { cachedEdge(it) }
     }
 
     override fun getParents(
@@ -211,26 +236,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ) = sequence {
-        val startEntry = nodeEntries[of] ?: return@sequence
-        val visited = hashSetOf<Int>()
-        val queue = ArrayDeque<Int>().apply { add(startEntry.storageId) }
-        while (queue.isNotEmpty()) {
-            val currentInt = queue.removeFirst()
-            if (!visited.add(currentInt)) continue
-            storage.getIncomingEdges(currentInt).forEach { edgeIntId ->
-                val parentInt = storage.getEdgeStructure(edgeIntId).src
-                val edge = cachedEdge(edgeIntId)
-                if (!edgeCond(edge)) return@forEach
-                yield(cachedNode(parentInt))
-                queue.add(parentInt)
-            }
-        }
-    }
+    ) = bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }
 
     override fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean,
+    ) = bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }
+
+    private fun bfsTraversal(
+        of: NodeID,
+        edgeCond: (E) -> Boolean,
+        adjacentEdges: (Int) -> Set<Int>,
+        neighborId: (IStorage.EdgeStructure) -> Int,
     ) = sequence {
         val startEntry = nodeEntries[of] ?: return@sequence
         val visited = hashSetOf<Int>()
@@ -238,12 +255,13 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         while (queue.isNotEmpty()) {
             val currentInt = queue.removeFirst()
             if (!visited.add(currentInt)) continue
-            storage.getOutgoingEdges(currentInt).forEach { edgeIntId ->
-                val childInt = storage.getEdgeStructure(edgeIntId).dst
+            adjacentEdges(currentInt).forEach { edgeIntId ->
+                val nextInt = neighborId(storage.getEdgeStructure(edgeIntId))
+                if (nextInt !in nodeByStorageId) return@forEach
                 val edge = cachedEdge(edgeIntId)
                 if (!edgeCond(edge)) return@forEach
-                yield(cachedNode(childInt))
-                queue.add(childInt)
+                yield(cachedNode(nextInt))
+                queue.add(nextInt)
             }
         }
     }
@@ -253,9 +271,10 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     /**
      * Rebuilds graph-layer caches from storage state.
      *
-     * Restores [nodeEntries] and [nodeByStorageId] by reading persisted
-     * [PROP_NODE_ID] node properties. Call after deserializing or re-opening
-     * a storage that was previously populated.
+     * Restores [nodeEntries] and [nodeByStorageId] from persisted properties.
+     * Uses [PROP_OWNERS] to determine which nodes belong to this graph
+     * (written by [flush]). Falls back to loading all nodes when
+     * [PROP_OWNERS] is absent (first run before any flush).
      */
     protected fun rebuild() {
         nodeEntries.clear()
@@ -263,6 +282,8 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         edgeCache.clear()
         for (storageId in storage.nodeIDs) {
             val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal ?: continue
+            val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
+            if (owners != null && !owners.contains(StrVal(graphId))) continue
             val nodeId: NodeID = nodeIdVal.core
             val entry = NodeEntry<N>(nodeId, storageId, null)
             nodeEntries[nodeId] = entry
@@ -270,9 +291,18 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         }
     }
 
-    override fun close() {
-        nodeEntries.clear()
-        nodeByStorageId.clear()
-        edgeCache.clear()
+    override fun flush() {
+        for ((storageId, _) in nodeByStorageId) {
+            try {
+                val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+                if (!existing.contains(StrVal(graphId))) {
+                    val updated = SetVal(existing.core + StrVal(graphId))
+                    storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to updated))
+                }
+            } catch (e: Exception) {
+                logger.log(Level.WARNING, "flush: failed to write PROP_OWNERS for storageId=$storageId", e)
+            }
+        }
     }
+
 }

@@ -18,13 +18,15 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
     fun addNode(withID: NodeID): N
 
+    fun claimNode(from: AbcNode): N
+
     fun getNode(whoseID: NodeID): N?
 
     fun containNode(whoseID: NodeID): Boolean
 
     fun delNode(whoseID: NodeID)
 
-    fun getAllNodes(doSatfy: (N) -> Boolean = { true }): Sequence<N>
+    fun getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>
 
     // endregion
 
@@ -54,7 +56,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
         tag: String,
     )
 
-    fun getAllEdges(doSatfy: (E) -> Boolean = { true }): Sequence<E>
+    fun getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>
 
     // endregion
 

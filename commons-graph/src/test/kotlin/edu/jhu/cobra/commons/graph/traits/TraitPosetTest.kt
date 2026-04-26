@@ -87,6 +87,7 @@ internal class TraitPosetTest {
         AbcSimpleGraph<TestNode, TestEdge>(),
         TraitPoset<TestNode, TestEdge> {
         override val storage = NativeStorageImpl()
+        override val graphId: String = "TestPoset"
         override val posetStorage = NativeStorageImpl()
         override val posetState = TraitPoset.PosetState()
         override fun newNodeObj() = TestNode()
@@ -102,7 +103,7 @@ internal class TraitPosetTest {
 
     @AfterTest
     fun tearDown() {
-        graph.close()
+        // graph does not need closing
     }
 
     // region IPoset

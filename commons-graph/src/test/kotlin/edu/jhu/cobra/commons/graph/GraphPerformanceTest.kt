@@ -60,7 +60,7 @@ internal class GraphPerformanceTest {
         val ps = NativeStorageImpl()
         closeables.add(ps)
         val g = GraphTestUtils.createTestMultipleGraph(s, ps)
-        closeables.add(g)
+        // graph does not need closing
         return g
     }
 
@@ -69,7 +69,7 @@ internal class GraphPerformanceTest {
         val ps = NativeStorageImpl()
         closeables.add(ps)
         val g = GraphTestUtils.createTestSimpleGraph(s, ps)
-        closeables.add(g)
+        // graph does not need closing
         return g
     }
 
@@ -165,7 +165,7 @@ internal class GraphPerformanceTest {
                     benchmarkMs(warmup = 1, measured = 3) {
                         val g = createMultipleGraph(name)
                         populateMultipleGraph(g, n, epn)
-                        g.close()
+                        // graph does not need closing
                     }
                 }
             println(
@@ -192,7 +192,7 @@ internal class GraphPerformanceTest {
                 benchmarkMs(warmup = 1, measured = 3) {
                     val g = createSimpleGraph(name)
                     populateMultipleGraph(g, nodeCount, edgesPerNode)
-                    g.close()
+                    // graph does not need closing
                 }
             println(String.format("%-20s %14s", name, fmtMs(ms)))
         }
@@ -226,7 +226,7 @@ internal class GraphPerformanceTest {
                     fmt(descendOps),
                 ),
             )
-            g.close()
+            // graph does not need closing
         }
     }
 
@@ -274,7 +274,7 @@ internal class GraphPerformanceTest {
                     fmt(filteredOps),
                 ),
             )
-            g.close()
+            // graph does not need closing
         }
     }
 
@@ -314,7 +314,7 @@ internal class GraphPerformanceTest {
                     fmt(childrenOps),
                 ),
             )
-            g.close()
+            // graph does not need closing
         }
     }
 
@@ -363,7 +363,7 @@ internal class GraphPerformanceTest {
                     String.format("%.1f", usedMB),
                 ),
             )
-            g.close()
+            // graph does not need closing
         }
     }
 }
