@@ -36,19 +36,13 @@ Optimization log for core module. Benchmarks in `impl-performance.md`.
 | P6-7 | toTypedArray() deleteNode | -18%; reflective array creation |
 | P9-2 | Native Int __sid__ | Already native Long |
 | P9-5 | Eclipse Collections ID mapping | Zero-mapping architecture |
+| P10-1 | Eclipse Collections IntObjectHashMap | -17% to -50% all metrics; memory -10% but constant-factor overhead worse than JDK HashMap |
+| P10-2 | Eclipse Collections IntHashSet | Not tested; P10-1 regression makes shared dependency unjustified |
 | P10-3 | filterVisitable O(V·H) maximal | -32% to -47% filteredQuery; ancestors BFS uncached, slower than queryCache-backed compareTo |
 
 ---
 
 ## Candidates
-
-### P10-1: Replace HashMap\<Int, *\> with primitive-key maps
-
-All IStorage implementations use `HashMap<Int, *>` for property columns, adjacency, and edge endpoints. JVM generics force Int boxing (16 bytes/Integer + 32 bytes/Entry). Eclipse Collections `IntObjectHashMap` eliminates boxing entirely. Estimated ~70% reduction in HashMap overhead (~77 MB -> ~23 MB) at 120K nodes / 155K edges. Risk: low. Dependency: `eclipse-collections:11.1.0`.
-
-### P10-2: Replace inner HashSet\<Int\> in adjacency with IntHashSet
-
-Adjacency `MutableSet<Int>` boxes each edge ID. `IntHashSet` stores raw int[]. ~5 MB saved at 155K edges; combined with P10-1: ~18 MB total. Risk: low. Same dependency.
 
 ### P6-2: NativeStorage cold getNode slower than warm
 
@@ -72,3 +66,4 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 12. **`toString().hashCode()` catastrophic in tight loops.** Cold query +270%.
 13. **Int boxing in HashMap\<Int, *\> costs ~30 MB at 120K nodes.**
 14. **queryCache makes O(V²) compareTo effectively O(V²·1).** Replacing with uncached BFS is slower despite better asymptotic complexity.
+15. **Eclipse Collections IntObjectHashMap slower than JDK HashMap<Int,*>.** JVM autoboxing cache (-128..127) + JIT inline caching make JDK HashMap competitive. Eclipse overhead in hash function and iteration outweighs boxing savings.
