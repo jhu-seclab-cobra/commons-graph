@@ -27,13 +27,22 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
 
     val suffixIndex: MutableMap<Pair<String, String>, NodeID>
 
+    fun registerGroup(group: String) {
+        require(group.isNotEmpty()) { "Group name cannot be empty" }
+        groupedNodesCounter.putIfAbsent(group, 0)
+    }
+
     fun assignGroup(node: N, group: String, suffix: String? = null) {
         require(group.isNotEmpty()) { "Group name cannot be empty" }
         require(group in groupedNodesCounter) { "Group $group not registered" }
         require(suffix == null || suffix.isNotEmpty()) { "Suffix cannot be empty" }
-        val counter = groupedNodesCounter.compute(group) { _, v -> v!! + 1 }!!
-        storage.setMeta("$META_COUNTER_PREFIX$group", counter.numVal)
-        val actualSuffix = suffix ?: counter.toString()
+        val actualSuffix = if (suffix != null) {
+            suffix
+        } else {
+            val counter = groupedNodesCounter.compute(group) { _, v -> v!! + 1 }!!
+            storage.setMeta("$META_COUNTER_PREFIX$group", counter.numVal)
+            counter.toString()
+        }
         val key = group to actualSuffix
         if (key in suffixIndex) throw EntityAlreadyExistException("$group:$actualSuffix")
         node[PROP_GROUP] = group.strVal

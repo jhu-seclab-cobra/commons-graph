@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
  * - `addGroupNode auto suffix uses counter` — verifies auto-increment suffix
  * - `addGroupNode custom suffix uses provided value` — verifies explicit suffix
  * - `addGroupNode increments counter` — verifies monotonic counter
- * - `addGroupNode custom suffix still increments counter` — verifies counter always advances
+ * - `addGroupNode custom suffix does not increment counter` — verifies counter only advances for auto-suffix
  * - `addGroupNode unregistered group throws IllegalArgumentException` — verifies registration guard
  * - `addGroupNode empty group throws IllegalArgumentException` — verifies empty group guard
  * - `addGroupNode empty suffix throws IllegalArgumentException` — verifies empty suffix guard
@@ -109,11 +109,11 @@ internal class TraitGroupTest : AbcTraitGroupTest() {
     }
 
     @Test
-    fun `addGroupNode custom suffix still increments counter`() {
+    fun `addGroupNode custom suffix does not increment counter`() {
         registerGroup("users")
         graph.addGroupNode("users", "custom")
         val auto = graph.addGroupNode("users")
-        assertEquals("2", graph.getGroupSuffix(auto))
+        assertEquals("1", graph.getGroupSuffix(auto))
     }
 
     @Test
@@ -161,7 +161,7 @@ internal class TraitGroupTest : AbcTraitGroupTest() {
     @Test
     fun `addGroupNode group name with special characters allowed`() {
         val group = "/src/Controller@2.php#main"
-        graph.groupedNodesCounter[group] = 0
+        graph.registerGroup(group)
         val node = graph.addGroupNode(group)
         assertEquals(group, graph.getGroupName(node))
     }
@@ -474,8 +474,8 @@ internal class TraitGroupTest : AbcTraitGroupTest() {
     @Test
     fun `rebuildGroupCaches persisted counter positive`() {
         registerGroup("grp")
-        graph.addGroupNode("grp", "a")
-        graph.addGroupNode("grp", "b")
+        graph.addGroupNode("grp")
+        graph.addGroupNode("grp")
         val counterBefore = graph.groupedNodesCounter["grp"]
         assertEquals(2, counterBefore)
 

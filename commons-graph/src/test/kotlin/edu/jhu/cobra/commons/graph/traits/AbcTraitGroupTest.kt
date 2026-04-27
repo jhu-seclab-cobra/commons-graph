@@ -39,6 +39,6 @@ internal abstract class AbcTraitGroupTest {
     protected lateinit var graph: TestGraph
 
     protected fun registerGroup(group: String) {
-        graph.groupedNodesCounter[group] = 0
+        graph.registerGroup(group)
     }
 }

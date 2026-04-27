@@ -24,7 +24,8 @@
 |----------|-----------|------|---------|
 | `__group__` | Node | `StrVal` | Group name this node belongs to |
 | `__suffix__` | Node | `StrVal` | Suffix identifying this node within its group |
-| `__group_counter_<group>` | Storage meta | `NumVal` | Monotonically increasing counter for the group |
+| `__grp_cnt_<group>` | Storage meta | `NumVal` | Monotonically increasing per-group counter (auto-suffix only) |
+| `__grp_global_cnt__` | Storage meta | `NumVal` | Global monotonic counter for NodeID generation across all groups |
 
 **State / Fields:**
 
@@ -32,7 +33,7 @@
 interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     val groupPrefix: String
     val groupedNodesCounter: MutableMap<String, Int>
-    val suffixIndex: MutableMap<String, NodeID>
+    val suffixIndex: MutableMap<Pair<String, String>, NodeID>
 }
 ```
 
@@ -44,7 +45,8 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `assignGroup(node, group, suffix?)` | Sets `__group__` and `__suffix__` properties on an existing node. Updates suffix index. Does not modify the node's ID. | `node`: existing node; `group`: non-empty string; `suffix`: optional (defaults to counter) | -- | `IllegalArgumentException` if group empty or not registered |
+| `registerGroup(group)` | Registers a group name for use with `addGroupNode` and `assignGroup`. Idempotent — repeated calls with the same name are no-ops. | `group`: non-empty string | -- | `IllegalArgumentException` if group empty |
+| `assignGroup(node, group, suffix?)` | Sets `__group__` and `__suffix__` properties on an existing node. Updates suffix index. Does not modify the node's ID. When `suffix` is null, increments the per-group counter and uses it as suffix. When `suffix` is provided, uses it directly without incrementing the counter. | `node`: existing node; `group`: non-empty string; `suffix`: optional (defaults to counter) | -- | `IllegalArgumentException` if group empty or not registered |
 | `addGroupNode(group, suffix?)` | Generates an opaque NodeID (`{groupPrefix}_{globalCounter}`), calls `addNode`, then `assignGroup`. Convenience method combining creation and assignment. | `group`: registered group; `suffix`: optional | `N` | `IllegalArgumentException` if group not registered |
 | `addGroupNode(sameGroupNode, suffix?)` | Reads group from existing node's `__group__` property, delegates to `addGroupNode(group, suffix)`. | `sameGroupNode`: node with `__group__` property; `suffix`: optional | `N` | `IllegalArgumentException` if node has no group |
 | `getGroupNode(group, suffix)` | Looks up NodeID in suffix index, returns node or null. | `group`; `suffix` | `N?` | `IllegalArgumentException` if group or suffix empty |
@@ -61,7 +63,7 @@ Callers needing custom IDs use `addNode(withID)` followed by `assignGroup(node, 
 
 **Counter Persistence:**
 
-Per-group counters are written to storage meta (`__group_counter_<group>`) on every `addGroupNode` call. `rebuildGroupCaches` restores counters from meta, so counters survive serialization/deserialization cycles.
+Per-group counters are written to storage meta (`__grp_cnt_<group>`) when auto-generated suffix is used (i.e., `suffix` parameter is null). Explicit suffix calls do not increment or persist the counter. `rebuildGroupCaches` restores counters from meta, so counters survive serialization/deserialization cycles. Global counter (`__grp_global_cnt__`) is incremented on every `addGroupNode` call for NodeID generation.
 
 ---
 
@@ -77,5 +79,5 @@ Per-group counters are written to storage meta (`__group_counter_<group>`) on ev
 
 - Group name must be non-empty. No character restrictions (arbitrary strings allowed).
 - Suffix (when provided) must be non-empty.
-- Group must be registered in `groupedNodesCounter` before calling `addGroupNode` or `assignGroup`.
+- Group must be registered via `registerGroup(group)` before calling `addGroupNode` or `assignGroup`.
 - `rebuildGroupCaches` must be called after `rebuild()` to restore in-memory caches.
