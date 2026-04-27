@@ -50,7 +50,6 @@
  * - `getMeta returns null for nonexistent key`
  * - `metaNames returns all metadata keys`
  * - `clear removes all nodes edges and metadata`
- * - `close then operations throw AccessClosedStorageException`
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `complex IValue types survive property round-trip`
@@ -62,7 +61,6 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.NumVal
@@ -77,7 +75,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,10 +92,6 @@ internal class JgraphtConcurStorageImplTest {
         storage = JgraphtConcurStorageImpl()
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // -- addNode --
 
@@ -496,18 +489,6 @@ internal class JgraphtConcurStorageImplTest {
         assertTrue(storage.metaNames.isEmpty())
     }
 
-    // -- close --
-
-    @Test
-    fun `close then operations throw AccessClosedStorageException`() {
-        val n = storage.addNode()
-        storage.close()
-
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(n) }
-    }
 
     // -- transferTo --
 
@@ -524,7 +505,6 @@ internal class JgraphtConcurStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals(7.numVal, target.getMeta("version"))
-        target.close()
     }
 
     @Test
@@ -539,7 +519,6 @@ internal class JgraphtConcurStorageImplTest {
         val tEdge = target.edgeIDs.first()
         assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
         assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
-        target.close()
     }
 
     // -- complex values --

@@ -116,7 +116,6 @@ Node ownership is persisted lazily via a `__owners__` SetVal property on each st
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
-| `addEdge(src, dst, tag, label)` | Rejects if an edge exists between `(src, dst)` with a different tag; otherwise delegates to super | `src`, `dst`: NodeID; `tag`: String; `label`: Label | `E` | `EntityAlreadyExistException` if direction conflict |
 
 ---
 
@@ -126,19 +125,6 @@ Node ownership is persisted lazily via a `__owners__` SetVal property on each st
 |-----------|------------|
 | `EntityAlreadyExistException` | Adding a node/edge that already exists; adding a second edge between the same `(src, dst)` pair in `AbcSimpleGraph` |
 | `EntityNotExistException` | Adding an edge whose src/dst node is missing |
-| `AccessClosedStorageException` | Accessing storage after `close()` |
 
 Deletion of a non-existent entity is a no-op at the graph level.
 
----
-
-## Validation Rules
-
-### AbcMultipleGraph
-
-- Both src and dst nodes must exist before adding an edge
-- Edge lookups by `(src, dst, tag)` scan the source node's adjacency list in storage -- O(out-degree) per query
-
-### AbcSimpleGraph
-
-- At most one edge per directed `(src, dst)` pair of any type; `addEdge` rejects duplicates with `EntityAlreadyExistException`

@@ -23,7 +23,6 @@ internal class JgraphtPerformanceTest {
 
     @AfterTest
     fun cleanup() {
-        storages.forEach { runCatching { it.close() } }
         storages.clear()
     }
 
@@ -135,7 +134,6 @@ internal class JgraphtPerformanceTest {
                     benchmarkMs(warmup = 1, measured = 3) {
                         val s = createStorage(name)
                         populateGraph(s, n, epn)
-                        s.close()
                     }
                 }
             println(String.format("%-28s %14s %14s %14s", name, fmtMs(results[0]), fmtMs(results[1]), fmtMs(results[2])))
@@ -155,7 +153,6 @@ internal class JgraphtPerformanceTest {
             for (i in 0 until nodeCount) nodeIds.add(storage.addNode())
             val ops = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", name, fmt(ops)))
-            storage.close()
         }
     }
 
@@ -176,7 +173,6 @@ internal class JgraphtPerformanceTest {
                     storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
                 }
             println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
-            storage.close()
         }
     }
 
@@ -217,7 +213,6 @@ internal class JgraphtPerformanceTest {
             val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
             val deltaMB = (after - before) / (1024.0 * 1024.0)
             println(String.format("%-28s %14.1f", name, deltaMB))
-            storage.close()
         }
     }
 
@@ -235,7 +230,6 @@ internal class JgraphtPerformanceTest {
             val outOps = benchmarkOpsPerSec(queries) { i -> storage.getOutgoingEdges(nodeIds[i % nodeCount]) }
             val inOps = benchmarkOpsPerSec(queries) { i -> storage.getIncomingEdges(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s %14s", name, fmt(outOps), fmt(inOps)))
-            storage.close()
         }
     }
 }

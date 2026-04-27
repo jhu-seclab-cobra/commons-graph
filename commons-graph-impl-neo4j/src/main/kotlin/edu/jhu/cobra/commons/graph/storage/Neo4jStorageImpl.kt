@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.get
 import edu.jhu.cobra.commons.graph.utils.keys
@@ -43,7 +42,6 @@ class Neo4jStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
-    private var isClosed: Boolean = false
     private val metaProperties = HashMap<String, IValue>()
 
     private val managementService: DatabaseManagementService by lazy {
@@ -93,23 +91,15 @@ class Neo4jStorageImpl(
         }
     }
 
-    private fun <R> readTx(action: Transaction.() -> R): R {
-        ensureOpen()
-        return database.beginTx().use { tx -> tx.action() }
-    }
+    private fun <R> readTx(action: Transaction.() -> R): R =
+        database.beginTx().use { tx -> tx.action() }
 
-    private fun <R> writeTx(action: Transaction.() -> R): R {
-        ensureOpen()
-        return database.beginTx().use { tx ->
+    private fun <R> writeTx(action: Transaction.() -> R): R =
+        database.beginTx().use { tx ->
             val result = tx.action()
             tx.commit()
             result
         }
-    }
-
-    private fun ensureOpen() {
-        if (isClosed) throw AccessClosedStorageException()
-    }
 
     private fun Transaction.findNodeBySid(id: Int) =
         findNode(NODE_LABEL, SID, id.toLong())
@@ -248,21 +238,14 @@ class Neo4jStorageImpl(
         }
 
     override val metaNames: Set<String>
-        get() {
-            ensureOpen()
-            return metaProperties.keys.toSet()
-        }
+        get() = metaProperties.keys.toSet()
 
-    override fun getMeta(name: String): IValue? {
-        ensureOpen()
-        return metaProperties[name]
-    }
+    override fun getMeta(name: String): IValue? = metaProperties[name]
 
     override fun setMeta(
         name: String,
         value: IValue?,
     ) {
-        ensureOpen()
         if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
 
@@ -303,8 +286,9 @@ class Neo4jStorageImpl(
             idMap
         }
 
+    override fun flush() {}
+
     override fun close() {
-        if (!isClosed) managementService.shutdown()
-        isClosed = true
+        managementService.shutdown()
     }
 }

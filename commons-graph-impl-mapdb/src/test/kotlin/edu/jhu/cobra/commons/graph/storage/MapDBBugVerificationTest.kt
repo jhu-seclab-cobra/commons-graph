@@ -25,7 +25,6 @@ internal class MapDBBugVerificationTest {
             (outEdges as MutableSet<Int>).clear()
         } catch (_: UnsupportedOperationException) {
             // If this throws, the set is properly unmodifiable — no bug
-            storage.close()
             return
         }
 
@@ -35,6 +34,5 @@ internal class MapDBBugVerificationTest {
             1, outEdgesAfter.size,
             "Adjacency should still show 1 edge — but if mutable set was returned, it was corrupted to 0"
         )
-        storage.close()
     }
 }

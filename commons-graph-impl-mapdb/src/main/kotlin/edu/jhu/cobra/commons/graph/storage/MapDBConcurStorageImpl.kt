@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.EntityPropertyMap
 import edu.jhu.cobra.commons.value.IValue
@@ -21,7 +20,7 @@ import kotlin.concurrent.write
  */
 class MapDBConcurStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
-) : IStorage {
+) : IStorage, AutoCloseable {
     private val dbManager: DB = DBMaker.config().closeOnJvmShutdown().make()
 
     private val dbLock = ReentrantReadWriteLock()
@@ -40,35 +39,32 @@ class MapDBConcurStorageImpl(
 
     override fun close() = dbLock.write { if (!dbManager.isClosed()) dbManager.close() }
 
+    override fun flush() {}
+
     override val nodeIDs: Set<Int>
         get() =
             dbLock.read {
-                if (dbManager.isClosed()) throw AccessClosedStorageException()
                 nodeProperties.keys.toSet()
             }
 
     override val edgeIDs: Set<Int>
         get() =
             dbLock.read {
-                if (dbManager.isClosed()) throw AccessClosedStorageException()
                 edgeProperties.keys.toSet()
             }
 
     override fun containsNode(id: Int): Boolean =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeProperties.contains(id)
         }
 
     override fun containsEdge(id: Int): Boolean =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeProperties.contains(id)
         }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             val nodeId = nodeCounter++
             nodeProperties[nodeId] = properties
             outEdges[nodeId] = HashSet()
@@ -83,7 +79,6 @@ class MapDBConcurStorageImpl(
         properties: Map<String, IValue>,
     ): Int =
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (!nodeProperties.contains(src)) throw EntityNotExistException(src)
             if (!nodeProperties.contains(dst)) throw EntityNotExistException(dst)
             val id = edgeCounter++
@@ -98,13 +93,11 @@ class MapDBConcurStorageImpl(
 
     override fun getNodeProperties(id: Int): Map<String, IValue> =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeProperties[id]?.toMap() ?: throw EntityNotExistException(id)
         }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             edgeProperties[id]?.toMap() ?: throw EntityNotExistException(id)
         }
 
@@ -112,7 +105,6 @@ class MapDBConcurStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) = dbLock.write {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
         val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
         val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
         nodeProperties[id] = merged
@@ -122,7 +114,6 @@ class MapDBConcurStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) = dbLock.write {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
         val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
         val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
         edgeProperties[id] = merged
@@ -130,7 +121,6 @@ class MapDBConcurStorageImpl(
 
     override fun deleteNode(id: Int) {
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (!nodeProperties.contains(id)) throw EntityNotExistException(id)
 
             val incoming = getIncomingEdgesWithoutLock(id)
@@ -166,14 +156,12 @@ class MapDBConcurStorageImpl(
 
     override fun deleteEdge(id: Int) =
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (!edgeProperties.contains(id)) throw EntityNotExistException(id)
             deleteEdgeWithoutLock(id)
         }
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             val src = edgeSrcMap[id] ?: throw EntityNotExistException(id)
             val dst = edgeDstMap[id] ?: throw EntityNotExistException(id)
             val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
@@ -182,26 +170,22 @@ class MapDBConcurStorageImpl(
 
     override fun getIncomingEdges(id: Int): Set<Int> =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             getIncomingEdgesWithoutLock(id)
         }
 
     override fun getOutgoingEdges(id: Int): Set<Int> =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             getOutgoingEdgesWithoutLock(id)
         }
 
     override val metaNames: Set<String>
         get() =
             dbLock.read {
-                if (dbManager.isClosed()) throw AccessClosedStorageException()
                 metaProperties.keys.toSet()
             }
 
     override fun getMeta(name: String): IValue? =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             metaProperties[name]
         }
 
@@ -210,13 +194,11 @@ class MapDBConcurStorageImpl(
         value: IValue?,
     ): Unit =
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
     override fun clear() {
         dbLock.write {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             nodeCounter = 0
             edgeCounter = 0
             edgeProperties.clear()
@@ -232,7 +214,6 @@ class MapDBConcurStorageImpl(
 
     override fun transferTo(target: IStorage): Map<Int, Int> =
         dbLock.read {
-            if (dbManager.isClosed()) throw AccessClosedStorageException()
             val idMap = HashMap<Int, Int>()
             for (nodeId in nodeProperties.keys) {
                 idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)

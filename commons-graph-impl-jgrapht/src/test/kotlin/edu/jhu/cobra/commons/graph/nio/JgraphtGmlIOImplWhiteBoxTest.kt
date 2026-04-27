@@ -42,7 +42,6 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
 
     @AfterTest
     fun tearDown() {
-        srcStorage.close()
         tempFile.deleteIfExists()
     }
 
@@ -94,7 +93,6 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         assertFailsWith<IllegalArgumentException> {
             JgraphtGmlIOImpl.import(badPath, dstStorage)
         }
-        dstStorage.close()
     }
 
     @Test
@@ -103,7 +101,6 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         val dstStorage = JgraphtStorageImpl()
         val result = JgraphtGmlIOImpl.import(tempFile, dstStorage)
         assertSame(dstStorage, result)
-        dstStorage.close()
     }
 
     // -- round-trip --
@@ -115,7 +112,6 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         JgraphtGmlIOImpl.import(tempFile, dstStorage)
         assertEquals(0, dstStorage.nodeIDs.size)
         assertEquals(0, dstStorage.edgeIDs.size)
-        dstStorage.close()
     }
 
     @Test

@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.get
 import edu.jhu.cobra.commons.graph.utils.keys
@@ -25,8 +24,8 @@ import kotlin.io.path.notExists
  * Thread-safe [IStorage] using Neo4j 5.x embedded mode with zero in-memory ID mappings.
  *
  * All entity lookups go through Neo4j transactions and indexed properties,
- * protected by a [ReentrantReadWriteLock] for thread safety on mutable counters
- * and the closed flag. Node lookups use a schema index on `__sid__`; edge
+ * protected by a [ReentrantReadWriteLock] for thread safety on mutable counters.
+ * Node lookups use a schema index on `__sid__`; edge
  * lookups use a range index on `__sid__` via the single relationship type `_E`.
  *
  * For normal use cases without concurrent access, use [Neo4jStorageImpl] instead.
@@ -38,8 +37,6 @@ class Neo4jConcurStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
-    @Volatile
-    private var isClosed: Boolean = false
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
@@ -90,19 +87,15 @@ class Neo4jConcurStorageImpl(
         }
     }
 
-    private fun <R> readTx(action: Transaction.() -> R): R {
-        if (isClosed) throw AccessClosedStorageException()
-        return database.beginTx().use { tx -> tx.action() }
-    }
+    private fun <R> readTx(action: Transaction.() -> R): R =
+        database.beginTx().use { tx -> tx.action() }
 
-    private fun <R> writeTx(action: Transaction.() -> R): R {
-        if (isClosed) throw AccessClosedStorageException()
-        return database.beginTx().use { tx ->
+    private fun <R> writeTx(action: Transaction.() -> R): R =
+        database.beginTx().use { tx ->
             val result = tx.action()
             tx.commit()
             result
         }
-    }
 
     private fun Transaction.findNodeBySid(id: Int) =
         findNode(NODE_LABEL, SID, id.toLong())
@@ -272,13 +265,11 @@ class Neo4jConcurStorageImpl(
 
     override val metaNames: Set<String>
         get() = storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             metaProperties.keys.toSet()
         }
 
     override fun getMeta(name: String): IValue? =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             metaProperties[name]
         }
 
@@ -287,7 +278,6 @@ class Neo4jConcurStorageImpl(
         value: IValue?,
     ): Unit =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
@@ -305,7 +295,6 @@ class Neo4jConcurStorageImpl(
     override fun transferTo(target: IStorage): Map<Int, Int> =
         storageLock.read {
             readTx {
-                if (isClosed) throw AccessClosedStorageException()
                 val idMap = HashMap<Int, Int>()
                 for (node in findNodes(NODE_LABEL)) {
                     val oldId = (node.getProperty(SID) as Long).toInt()
@@ -333,10 +322,10 @@ class Neo4jConcurStorageImpl(
             }
         }
 
+    override fun flush() {}
+
     override fun close(): Unit =
         storageLock.write {
-            if (!isClosed) managementService.shutdown()
-            isClosed = true
+            managementService.shutdown()
         }
-
 }

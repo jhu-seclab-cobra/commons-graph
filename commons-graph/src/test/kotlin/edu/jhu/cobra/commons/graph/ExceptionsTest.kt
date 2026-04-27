@@ -10,7 +10,6 @@ import kotlin.test.assertTrue
  * - `EntityNotExistException with Int id contains id` — verifies Int constructor
  * - `EntityAlreadyExistException message contains id and already exists` — verifies message format
  * - `EntityAlreadyExistException with Int id contains id` — verifies Int constructor
- * - `AccessClosedStorageException message contains closed` — verifies message format
  * - `InvalidPropNameException message contains prop name and entity id` — verifies message format
  * - `FrozenLayerModificationException message contains entity id` — verifies message format
  * - `FrozenLayerModificationException with Int id contains id` — verifies Int constructor
@@ -47,13 +46,6 @@ internal class ExceptionsTest {
 
         assertTrue(ex.message!!.contains("7"))
         assertTrue(ex.message!!.contains("already exists"))
-    }
-
-    @Test
-    fun `AccessClosedStorageException message contains closed`() {
-        val ex = AccessClosedStorageException()
-
-        assertTrue(ex.message!!.contains("closed"))
     }
 
     @Test

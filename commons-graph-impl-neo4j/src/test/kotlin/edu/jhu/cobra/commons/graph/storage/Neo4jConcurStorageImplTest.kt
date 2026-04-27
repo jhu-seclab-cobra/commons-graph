@@ -24,7 +24,6 @@
  * - `setMeta stores and getMeta retrieves value`
  * - `getMeta returns null for nonexistent key`
  * - `clear removes all nodes edges and metadata`
- * - `close then operations throw AccessClosedStorageException`
  * - `transferTo copies nodes edges and metadata to target`
  * - `concurrent node additions produce correct total count`
  * - `concurrent read-write operations do not produce errors`
@@ -33,7 +32,6 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -57,7 +55,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 internal class Neo4jConcurStorageImplTest {
-    private lateinit var storage: IStorage
+    private lateinit var storage: Neo4jConcurStorageImpl
     private lateinit var graphDir: Path
 
     @BeforeTest
@@ -275,15 +273,6 @@ internal class Neo4jConcurStorageImplTest {
         assertTrue(storage.metaNames.isEmpty())
     }
 
-    // -- close --
-
-    @Test
-    fun `close then operations throw AccessClosedStorageException`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-    }
-
     // -- transferTo --
 
     @Test
@@ -299,7 +288,6 @@ internal class Neo4jConcurStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1", target.getMeta("version")?.core)
-        target.close()
     }
 
     // -- concurrency tests --

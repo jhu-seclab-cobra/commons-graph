@@ -5,7 +5,6 @@ import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,10 +58,6 @@ internal class AbcEntityTest {
         testNode.bind(storage, sid, "entity-test")
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // region IEntity get/set/contains/asMap/update
 

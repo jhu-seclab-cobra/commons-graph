@@ -8,17 +8,14 @@
  * - `setNodeProperties merges and null removes under write lock`
  * - `graphStructure updated correctly after addEdge and deleteEdge`
  * - `deleteNode cleans graphStructure for node`
- * - `close under write lock sets closed state`
  * - `double close does not throw`
  * - `clear under write lock empties all structures`
- * - `clear on closed storage throws AccessClosedStorageException`
  * - `meta operations under read write locks`
  * - `concurrent deleteNode does not deadlock`
  * - `no deadlock under mixed read write operations`
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
@@ -33,7 +30,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -142,15 +138,7 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
         assertTrue(storage.containsEdge(e13))
     }
 
-    // -- close under write lock --
-
-    @Test
-    fun `close under write lock sets closed state`() {
-        storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-    }
+    // -- close --
 
     @Test
     fun `double close does not throw`() {
@@ -170,14 +158,6 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
-    }
-
-    @Test
-    fun `clear on closed storage throws AccessClosedStorageException`() {
-        storage.close()
-        val fresh = MapDBConcurStorageImpl { memoryDB() }
-        fresh.close()
-        assertFailsWith<AccessClosedStorageException> { fresh.clear() }
     }
 
     // -- Metadata under locks --

@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import org.jgrapht.Graph
@@ -15,7 +14,6 @@ import kotlin.concurrent.write
  * For normal use cases, use [JgraphtStorageImpl] instead (about 20% quicker for basic operations).
  */
 class JgraphtConcurStorageImpl : IStorage {
-    private var isClosed: Boolean = false
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
@@ -34,34 +32,19 @@ class JgraphtConcurStorageImpl : IStorage {
     private val jgtGraph: Graph<String, String> = DirectedPseudograph(String::class.java)
 
     override val nodeIDs: Set<Int>
-        get() =
-            storageLock.read {
-                if (isClosed) throw AccessClosedStorageException()
-                nodeProperties.keys.toSet()
-            }
+        get() = storageLock.read { nodeProperties.keys.toSet() }
 
     override val edgeIDs: Set<Int>
-        get() =
-            storageLock.read {
-                if (isClosed) throw AccessClosedStorageException()
-                edgeProperties.keys.toSet()
-            }
+        get() = storageLock.read { edgeProperties.keys.toSet() }
 
     override fun containsNode(id: Int): Boolean =
-        storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
-            id in nodeProperties
-        }
+        storageLock.read { id in nodeProperties }
 
     override fun containsEdge(id: Int): Boolean =
-        storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
-            id in edgeProperties
-        }
+        storageLock.read { id in edgeProperties }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             val id = nodeCounter++
             val vertex = "v$id"
             jgtGraph.addVertex(vertex)
@@ -78,7 +61,6 @@ class JgraphtConcurStorageImpl : IStorage {
         properties: Map<String, IValue>,
     ): Int =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             if (src !in nodeProperties) throw EntityNotExistException(src)
             if (dst !in nodeProperties) throw EntityNotExistException(dst)
             val id = edgeCounter++
@@ -95,14 +77,12 @@ class JgraphtConcurStorageImpl : IStorage {
 
     override fun getNodeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             val props = nodeProperties[id] ?: throw EntityNotExistException(id)
             HashMap(props)
         }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             val props = edgeProperties[id] ?: throw EntityNotExistException(id)
             HashMap(props)
         }
@@ -111,7 +91,6 @@ class JgraphtConcurStorageImpl : IStorage {
         id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
-        if (isClosed) throw AccessClosedStorageException()
         val container = nodeProperties[id] ?: throw EntityNotExistException(id)
         properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
     }
@@ -120,14 +99,12 @@ class JgraphtConcurStorageImpl : IStorage {
         id: Int,
         properties: Map<String, IValue?>,
     ) = storageLock.write {
-        if (isClosed) throw AccessClosedStorageException()
         val container = edgeProperties[id] ?: throw EntityNotExistException(id)
         properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
     }
 
     override fun deleteNode(id: Int): Unit =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
             val vertex = intToVertex[id]!!
             val incoming = jgtGraph.incomingEdgesOf(vertex).toSet()
@@ -148,7 +125,6 @@ class JgraphtConcurStorageImpl : IStorage {
 
     override fun deleteEdge(id: Int): Unit =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
             val edgeStr = intToEdge[id]!!
             jgtGraph.removeEdge(edgeStr)
@@ -160,7 +136,6 @@ class JgraphtConcurStorageImpl : IStorage {
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeProperties) throw EntityNotExistException(id)
             val edgeStr = intToEdge[id]!!
             val src = vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
@@ -171,7 +146,6 @@ class JgraphtConcurStorageImpl : IStorage {
 
     override fun getIncomingEdges(id: Int): Set<Int> =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
             val vertex = intToVertex[id]!!
             val result = HashSet<Int>()
@@ -181,7 +155,6 @@ class JgraphtConcurStorageImpl : IStorage {
 
     override fun getOutgoingEdges(id: Int): Set<Int> =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in nodeProperties) throw EntityNotExistException(id)
             val vertex = intToVertex[id]!!
             val result = HashSet<Int>()
@@ -190,30 +163,23 @@ class JgraphtConcurStorageImpl : IStorage {
         }
 
     override val metaNames: Set<String>
-        get() =
-            storageLock.read {
-                if (isClosed) throw AccessClosedStorageException()
-                metaProperties.keys.toSet()
-            }
+        get() = storageLock.read { metaProperties.keys.toSet() }
 
     override fun getMeta(name: String): IValue? =
-        storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
-            metaProperties[name]
-        }
+        storageLock.read { metaProperties[name] }
 
     override fun setMeta(
         name: String,
         value: IValue?,
     ): Unit =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    override fun clear() {
+    override fun flush() {}
+
+    override fun clear(): Unit =
         storageLock.write {
-            if (isClosed) throw AccessClosedStorageException()
             jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
             jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
             intToVertex.clear()
@@ -227,11 +193,9 @@ class JgraphtConcurStorageImpl : IStorage {
             nodeCounter = 0
             edgeCounter = 0
         }
-    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> =
         storageLock.read {
-            if (isClosed) throw AccessClosedStorageException()
             val idMap = HashMap<Int, Int>()
             for (nodeId in nodeProperties.keys) {
                 idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
@@ -246,22 +210,5 @@ class JgraphtConcurStorageImpl : IStorage {
                 target.setMeta(name, metaProperties[name])
             }
             idMap
-        }
-
-    override fun close(): Unit =
-        storageLock.write {
-            if (!isClosed) {
-                jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
-                jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
-                intToVertex.clear()
-                vertexToInt.clear()
-                intToEdge.clear()
-                edgeToInt.clear()
-                edgeProperties.clear()
-                edgeTagMap.clear()
-                nodeProperties.clear()
-                metaProperties.clear()
-            }
-            isClosed = true
         }
 }

@@ -6,7 +6,6 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestSimpleGraph
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -36,10 +35,6 @@ internal class AbcSimpleGraphTest {
         graph = createTestSimpleGraph(storage)
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // region Single-edge-per-direction constraint
 

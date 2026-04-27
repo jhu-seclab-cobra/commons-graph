@@ -8,7 +8,6 @@ import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_4
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,10 +72,6 @@ internal class AbcMultipleGraphTest {
         graph = GraphTestUtils.TestMultipleGraph(storage)
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // region Node CRUD
 

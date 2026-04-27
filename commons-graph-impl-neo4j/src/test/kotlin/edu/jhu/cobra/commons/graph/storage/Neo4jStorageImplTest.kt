@@ -39,13 +39,11 @@
  * - `setMeta with null removes metadata entry`
  * - `getMeta returns null for nonexistent key`
  * - `clear removes all nodes edges and metadata`
- * - `close then operations throw AccessClosedStorageException`
  * - `transferTo copies nodes edges and metadata to target`
  * - `invalid property name throws InvalidPropNameException`
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.value.NumVal
@@ -64,7 +62,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 internal class Neo4jStorageImplTest {
-    private lateinit var storage: IStorage
+    private lateinit var storage: Neo4jStorageImpl
     private lateinit var tempDir: Path
 
     @BeforeTest
@@ -389,15 +387,6 @@ internal class Neo4jStorageImplTest {
         assertEquals(0, storage.edgeIDs.size)
     }
 
-    // -- close --
-
-    @Test
-    fun `close then operations throw AccessClosedStorageException`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-    }
-
     // -- transferTo --
 
     @Test
@@ -413,7 +402,6 @@ internal class Neo4jStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1", target.getMeta("version")?.core)
-        target.close()
     }
 
     // -- Neo4j-specific: reserved property name --

@@ -11,7 +11,6 @@
  * - `meta operations under lock`
  * - `setMeta null removes entry`
  * - `meta not persisted across storage instances`
- * - `close acquires write lock and sets isClosed`
  * - `clear empties all structures under write lock`
  * - `addEdge missing src throws EntityNotExistException`
  * - `deleteNode nonexistent throws EntityNotExistException`
@@ -31,12 +30,9 @@
  * - `getEdgeProperties nonexistent throws EntityNotExistException`
  * - `setNodeProperties nonexistent throws EntityNotExistException`
  * - `transferTo copies nodes edges and meta to target`
- * - `transferTo throws AccessClosedStorageException when closed`
- * - `double close does not throw`
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.value.NumVal
@@ -182,17 +178,6 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
         val reloaded = Neo4jConcurStorageImpl(graphDir)
         assertNull(reloaded.getMeta("key"))
         reloaded.close()
-    }
-
-    // -- Close under write lock --
-
-    @Test
-    fun `close acquires write lock and sets isClosed`() {
-        storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(-1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
     }
 
     // -- Clear under write lock --
@@ -429,20 +414,5 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("2", (target.getMeta("version") as StrVal).core)
-        target.close()
-    }
-
-    @Test
-    fun `transferTo throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.transferTo(NativeStorageImpl()) }
-    }
-
-    // -- double close --
-
-    @Test
-    fun `double close does not throw`() {
-        storage.close()
-        storage.close()
     }
 }

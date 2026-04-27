@@ -7,7 +7,6 @@ import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,10 +51,6 @@ internal class AbcNodeTest {
         node.bind(storage, sid, NODE_ID_1)
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // region Identity
 

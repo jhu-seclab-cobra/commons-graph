@@ -1,9 +1,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
-import java.io.Closeable
+import java.io.Flushable
 
 /**
  * Core interface for graph storage with auto-generated Int IDs.
@@ -17,7 +16,7 @@ import java.io.Closeable
  * @see NativeConcurStorageImpl
  */
 @Suppress("TooManyFunctions")
-interface IStorage : Closeable {
+interface IStorage : Flushable {
     // ============================================================================
     // NODE OPERATIONS
     // ============================================================================
@@ -25,7 +24,6 @@ interface IStorage : Closeable {
     /**
      * All node IDs currently in storage.
      *
-     * @throws AccessClosedStorageException If storage is closed.
      */
     val nodeIDs: Set<Int>
 
@@ -34,7 +32,6 @@ interface IStorage : Closeable {
      *
      * @param id The node ID.
      * @return True if the node exists.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun containsNode(id: Int): Boolean
 
@@ -43,7 +40,6 @@ interface IStorage : Closeable {
      *
      * @param properties Initial property map.
      * @return The auto-generated node ID.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun addNode(properties: Map<String, IValue> = emptyMap()): Int
 
@@ -52,7 +48,6 @@ interface IStorage : Closeable {
      *
      * @param id The node ID.
      * @return Property map.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun getNodeProperties(id: Int): Map<String, IValue>
@@ -66,7 +61,6 @@ interface IStorage : Closeable {
      * @param id The node ID.
      * @param name The property name.
      * @return The property value, or null if absent.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun getNodeProperty(
@@ -79,7 +73,6 @@ interface IStorage : Closeable {
      *
      * @param id The node ID.
      * @param properties Property updates.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun setNodeProperties(
@@ -91,7 +84,6 @@ interface IStorage : Closeable {
      * Deletes a node and all its incident edges.
      *
      * @param id The node ID.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun deleteNode(id: Int)
@@ -103,7 +95,6 @@ interface IStorage : Closeable {
     /**
      * All edge IDs currently in storage.
      *
-     * @throws AccessClosedStorageException If storage is closed.
      */
     val edgeIDs: Set<Int>
 
@@ -112,7 +103,6 @@ interface IStorage : Closeable {
      *
      * @param id The edge ID.
      * @return True if the edge exists.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun containsEdge(id: Int): Boolean
 
@@ -125,7 +115,6 @@ interface IStorage : Closeable {
      * @param properties Initial property map.
      * @return The auto-generated edge ID.
      * @throws EntityNotExistException If source or destination node does not exist.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun addEdge(
         src: Int,
@@ -152,7 +141,6 @@ interface IStorage : Closeable {
      *
      * @param id The edge ID.
      * @return The edge structure containing src, dst, and tag.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
     fun getEdgeStructure(id: Int): EdgeStructure
@@ -162,7 +150,6 @@ interface IStorage : Closeable {
      *
      * @param id The edge ID.
      * @return Property map.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
     fun getEdgeProperties(id: Int): Map<String, IValue>
@@ -176,7 +163,6 @@ interface IStorage : Closeable {
      * @param id The edge ID.
      * @param name The property name.
      * @return The property value, or null if absent.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
     fun getEdgeProperty(
@@ -189,7 +175,6 @@ interface IStorage : Closeable {
      *
      * @param id The edge ID.
      * @param properties Property updates.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
     fun setEdgeProperties(
@@ -201,7 +186,6 @@ interface IStorage : Closeable {
      * Deletes an edge from storage.
      *
      * @param id The edge ID.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If edge does not exist.
      */
     fun deleteEdge(id: Int)
@@ -215,7 +199,6 @@ interface IStorage : Closeable {
      *
      * @param id The node ID.
      * @return Set of incoming edge IDs.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun getIncomingEdges(id: Int): Set<Int>
@@ -225,7 +208,6 @@ interface IStorage : Closeable {
      *
      * @param id The node ID.
      * @return Set of outgoing edge IDs.
-     * @throws AccessClosedStorageException If storage is closed.
      * @throws EntityNotExistException If node does not exist.
      */
     fun getOutgoingEdges(id: Int): Set<Int>
@@ -237,7 +219,6 @@ interface IStorage : Closeable {
     /**
      * All metadata property names currently in storage.
      *
-     * @throws AccessClosedStorageException If storage is closed.
      */
     val metaNames: Set<String>
 
@@ -246,7 +227,6 @@ interface IStorage : Closeable {
      *
      * @param name The metadata property name.
      * @return The value, or null if not found.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun getMeta(name: String): IValue?
 
@@ -255,7 +235,6 @@ interface IStorage : Closeable {
      *
      * @param name The metadata property name.
      * @param value The value, or null to delete.
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun setMeta(
         name: String,
@@ -269,7 +248,6 @@ interface IStorage : Closeable {
     /**
      * Removes all nodes, edges, and metadata from storage.
      *
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun clear()
 

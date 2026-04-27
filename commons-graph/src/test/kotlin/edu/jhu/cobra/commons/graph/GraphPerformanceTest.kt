@@ -5,7 +5,6 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
 import edu.jhu.cobra.commons.graph.storage.NativeConcurStorageImpl
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -28,13 +27,6 @@ import kotlin.test.Test
  * Run with: ./gradlew :graph:test --tests "*.GraphPerformanceTest"
  */
 internal class GraphPerformanceTest {
-    private val closeables = mutableListOf<AutoCloseable>()
-
-    @AfterTest
-    fun tearDown() {
-        closeables.forEach { runCatching { it.close() } }
-        closeables.clear()
-    }
 
     private val storageNames: List<String> =
         run {
@@ -51,14 +43,12 @@ internal class GraphPerformanceTest {
                 "LayeredStorage" -> LayeredStorageImpl()
                 else -> throw IllegalArgumentException("Unknown: $name")
             }
-        closeables.add(storage)
         return storage
     }
 
     private fun createMultipleGraph(storageName: String): GraphTestUtils.TestMultipleGraphWithPoset {
         val s = createStorage(storageName)
         val ps = NativeStorageImpl()
-        closeables.add(ps)
         val g = GraphTestUtils.createTestMultipleGraph(s, ps)
         // graph does not need closing
         return g
@@ -67,7 +57,6 @@ internal class GraphPerformanceTest {
     private fun createSimpleGraph(storageName: String): AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
         val s = createStorage(storageName)
         val ps = NativeStorageImpl()
-        closeables.add(ps)
         val g = GraphTestUtils.createTestSimpleGraph(s, ps)
         // graph does not need closing
         return g

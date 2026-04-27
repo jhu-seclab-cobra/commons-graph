@@ -20,7 +20,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,10 +35,6 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
         storage = JgraphtConcurStorageImpl()
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // -- Defensive copy behavior --
 

@@ -1,13 +1,11 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,7 +64,6 @@ import kotlin.test.assertTrue
  *
  * Lifecycle:
  * - `clear removes frozen and active layers and resets layerCount` -- full clear
- * - `close prevents subsequent operations` -- lifecycle guard
  * - `addEdge between frozen src and active dst succeeds` -- cross-layer edge
  * - `addEdge between two frozen nodes succeeds` -- frozen endpoint edge
  *
@@ -112,30 +109,6 @@ import kotlin.test.assertTrue
  * - `MappedEdgeSet isEmpty returns true when local set empty` -- empty local
  * - `MappedEdgeSet iterator translates local IDs to global IDs` -- translation
  * - `MappedEdgeSet size reflects local set size` -- size delegation
- *
- * Closed storage -- ensureOpen for all methods:
- * - `edgeIDs throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `containsNode throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `containsEdge throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getNodeProperties throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getNodeProperty throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `setNodeProperties throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `deleteNode throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `addEdge throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getEdgeStructure throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getEdgeProperties throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getEdgeProperty throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `setEdgeProperties throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `deleteEdge throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getIncomingEdges throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getOutgoingEdges throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `metaNames throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `getMeta throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `setMeta throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `clear throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `freeze throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `clearActiveLayer throws AccessClosedStorageException when closed` -- lifecycle guard
- * - `close is idempotent` -- double close
  *
  * transferTo:
  * - `transferTo copies nodes and edges from both layers` -- frozen present
@@ -192,9 +165,6 @@ import kotlin.test.assertTrue
  *
  * clearActiveLayer:
  * - `clearActiveLayer preserves frozen layer data` -- frozen retained
- *
- * clear with frozen:
- * - `clear with frozen layer closes frozen storage` -- frozen close
  */
 internal class LayeredStorageImplTest {
     private lateinit var storage: LayeredStorageImpl
@@ -202,11 +172,6 @@ internal class LayeredStorageImplTest {
     @BeforeTest
     fun setUp() {
         storage = LayeredStorageImpl()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        storage.close()
     }
 
     // region Freeze contract
@@ -646,13 +611,6 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `close prevents subsequent operations`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-    }
-
-    @Test
     fun `addEdge between frozen src and active dst succeeds`() {
         val n1 = storage.addNode()
         storage.freeze()
@@ -1012,166 +970,6 @@ internal class LayeredStorageImplTest {
 
     // endregion
 
-    // region Closed storage -- ensureOpen for all methods
-
-    @Test
-    fun `edgeIDs throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-    }
-
-    @Test
-    fun `containsNode throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(0) }
-    }
-
-    @Test
-    fun `containsEdge throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(0) }
-    }
-
-    @Test
-    fun `getNodeProperties throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(node) }
-    }
-
-    @Test
-    fun `getNodeProperty throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperty(node, "k") }
-    }
-
-    @Test
-    fun `setNodeProperties throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(node, mapOf("k" to "v".strVal)) }
-    }
-
-    @Test
-    fun `deleteNode throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.deleteNode(node) }
-    }
-
-    @Test
-    fun `addEdge throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.addEdge(n1, n2, "rel") }
-    }
-
-    @Test
-    fun `getEdgeStructure throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeStructure(e) }
-    }
-
-    @Test
-    fun `getEdgeProperties throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(e) }
-    }
-
-    @Test
-    fun `getEdgeProperty throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperty(e, "k") }
-    }
-
-    @Test
-    fun `setEdgeProperties throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(e, mapOf("k" to "v".strVal)) }
-    }
-
-    @Test
-    fun `deleteEdge throws AccessClosedStorageException when closed`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel")
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(e) }
-    }
-
-    @Test
-    fun `getIncomingEdges throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getIncomingEdges(node) }
-    }
-
-    @Test
-    fun `getOutgoingEdges throws AccessClosedStorageException when closed`() {
-        val node = storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getOutgoingEdges(node) }
-    }
-
-    @Test
-    fun `metaNames throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
-    }
-
-    @Test
-    fun `getMeta throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.getMeta("k") }
-    }
-
-    @Test
-    fun `setMeta throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.setMeta("k", "v".strVal) }
-    }
-
-    @Test
-    fun `clear throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.clear() }
-    }
-
-    @Test
-    fun `freeze throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.freeze() }
-    }
-
-    @Test
-    fun `clearActiveLayer throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.clearActiveLayer() }
-    }
-
-    @Test
-    fun `close is idempotent`() {
-        storage.close()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-    }
-
-    // endregion
-
     // region transferTo
 
     @Test
@@ -1188,7 +986,6 @@ internal class LayeredStorageImplTest {
         assertEquals(2, target.edgeIDs.size)
         assertEquals("frozen_p", (target.getNodeProperty(nodeMap[n1]!!, "p") as StrVal).core)
         assertEquals("active_q", (target.getNodeProperty(nodeMap[n3]!!, "q") as StrVal).core)
-        target.close()
     }
 
     @Test
@@ -1200,7 +997,6 @@ internal class LayeredStorageImplTest {
         storage.transferTo(target)
         assertEquals("fm", (target.getMeta("frozen_meta") as StrVal).core)
         assertEquals("am", (target.getMeta("active_meta") as StrVal).core)
-        target.close()
     }
 
     // endregion
@@ -1500,22 +1296,6 @@ internal class LayeredStorageImplTest {
         // Active data gone
         assertFalse(storage.containsNode(n3))
         assertNull(storage.getMeta("active_m"))
-    }
-
-    // endregion
-
-    // region clear with frozen
-
-    @Test
-    fun `clear with frozen layer closes frozen storage`() {
-        storage.addNode()
-        storage.freeze()
-        storage.addNode()
-        storage.clear()
-        assertEquals(1, storage.layerCount)
-        assertTrue(storage.nodeIDs.isEmpty())
-        assertTrue(storage.edgeIDs.isEmpty())
-        assertTrue(storage.metaNames.isEmpty())
     }
 
     // endregion

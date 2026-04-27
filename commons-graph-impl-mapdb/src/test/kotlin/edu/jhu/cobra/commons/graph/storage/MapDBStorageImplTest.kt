@@ -53,7 +53,6 @@
  * - `getMeta returns null for nonexistent key`
  * - `metaNames returns all metadata keys`
  * - `clear removes all nodes edges and metadata`
- * - `close then operations throw AccessClosedStorageException`
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `transferTo preserves edge properties and tag`
@@ -62,7 +61,6 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.NumVal
@@ -91,7 +89,7 @@ internal class MapDBStorageImplTest {
 
     @AfterTest
     fun tearDown() {
-        storage.close()
+        (storage as AutoCloseable).close()
     }
 
     // -- addNode --
@@ -514,15 +512,6 @@ internal class MapDBStorageImplTest {
         assertEquals(0, storage.nodeIDs.size)
         assertEquals(0, storage.edgeIDs.size)
         assertTrue(storage.metaNames.isEmpty())
-    }
-
-    // -- close --
-
-    @Test
-    fun `close then operations throw AccessClosedStorageException`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
     }
 
     // -- transferTo --

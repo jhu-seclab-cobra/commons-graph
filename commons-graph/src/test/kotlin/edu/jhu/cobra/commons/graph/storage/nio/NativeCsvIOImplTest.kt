@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage.nio
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
@@ -52,7 +51,6 @@ import kotlin.test.assertTrue
  * - `export with node filter excludes filtered nodes` -- node filter predicate
  * - `export with edge filter excludes filtered edges` -- edge filter predicate
  * - `null property values round-trip as absent` -- null serialized as empty, deserialized as absent
- * - `import into closed storage throws` -- closed storage guard
  * - `writing same property names twice does not change header` -- nodeHeaders.addAll returns false
  * - `close without property writes skips header update` -- isNodeHeaderChanged=false path
  * - `import skips node property when deserialized value is null` -- null property skip in readNodes
@@ -75,7 +73,6 @@ internal class NativeCsvIOImplTest {
 
     @AfterTest
     fun tearDown() {
-        storage.close()
         if (tempDir.exists()) {
             tempDir.toFile().deleteRecursively()
         }
@@ -98,7 +95,6 @@ internal class NativeCsvIOImplTest {
         val target = roundTrip(storage)
 
         assertEquals(3, target.nodeIDs.size)
-        target.close()
     }
 
     @Test
@@ -113,7 +109,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(setOf("Alice", "Bob"), names)
         val alice = allProps.first { (it["name"] as? StrVal)?.core == "Alice" }
         assertEquals(30, (alice["age"] as NumVal).core)
-        target.close()
     }
 
     @Test
@@ -129,7 +124,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(3, target.nodeIDs.size)
         assertEquals(3, target.edgeIDs.size)
-        target.close()
     }
 
     @Test
@@ -146,7 +140,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(2, target.edgeIDs.size)
         val tags = target.edgeIDs.map { target.getEdgeStructure(it).tag }.toSet()
         assertEquals(setOf(StorageTestUtils.EDGE_TAG_1, StorageTestUtils.EDGE_TAG_2), tags)
-        target.close()
     }
 
     @Test
@@ -159,7 +152,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals("2.0", (target.getMeta("version") as StrVal).core)
         assertEquals(42, (target.getMeta("count") as NumVal).core)
-        target.close()
     }
 
     @Test
@@ -180,7 +172,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(25, (props["age"] as NumVal).core)
         assertEquals(1.5, (props["weight"] as NumVal).core)
         assertEquals(true, (props["active"] as BoolVal).core)
-        target.close()
     }
 
     @Test
@@ -199,7 +190,6 @@ internal class NativeCsvIOImplTest {
         assertEquals("a,b,c", (props["commas"] as StrVal).core)
         assertEquals("line1\nline2", (props["newline"] as StrVal).core)
         assertEquals("C:\\path\\file", (props["backslash"] as StrVal).core)
-        target.close()
     }
 
     @Test
@@ -208,7 +198,6 @@ internal class NativeCsvIOImplTest {
 
         assertTrue(target.nodeIDs.isEmpty())
         assertTrue(target.edgeIDs.isEmpty())
-        target.close()
     }
 
     @Test
@@ -221,7 +210,6 @@ internal class NativeCsvIOImplTest {
         var current: IStorage = storage
         for (i in 1..3) {
             val target = roundTrip(current)
-            if (current !== storage) (current as NativeStorageImpl).close()
             current = target
         }
 
@@ -233,7 +221,6 @@ internal class NativeCsvIOImplTest {
             .toSet()
         assertEquals(setOf("A", "B"), names)
         assertEquals("1", (current.getMeta("v") as StrVal).core)
-        (current as NativeStorageImpl).close()
     }
 
     // ========================================================================
@@ -249,7 +236,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("malformed_nodes").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         val nodesFile = dir.resolve("nodes.csv").toFile()
         val lines = nodesFile.readLines().toMutableList()
@@ -262,7 +248,6 @@ internal class NativeCsvIOImplTest {
         NativeCsvIOImpl.import(dir, target)
 
         assertEquals(3, target.nodeIDs.size)
-        target.close()
     }
 
     @Test
@@ -277,7 +262,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(2, target.edgeIDs.size)
-        target.close()
     }
 
     @Test
@@ -294,7 +278,6 @@ internal class NativeCsvIOImplTest {
         // so the parts.isEmpty() guard does not trigger. A node is created
         // for the empty-string ID, giving 3 nodes total.
         assertEquals(3, target.nodeIDs.size)
-        target.close()
     }
 
     // ========================================================================
@@ -310,7 +293,6 @@ internal class NativeCsvIOImplTest {
         assertFailsWith<IllegalArgumentException> {
             NativeCsvIOImpl.import(dir, target)
         }
-        target.close()
     }
 
     @Test
@@ -322,7 +304,6 @@ internal class NativeCsvIOImplTest {
         assertFailsWith<IllegalArgumentException> {
             NativeCsvIOImpl.import(dir, target)
         }
-        target.close()
     }
 
     @Test
@@ -336,7 +317,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(1, target.nodeIDs.size)
         assertTrue(target.metaNames.isEmpty())
-        target.close()
     }
 
     // ========================================================================
@@ -401,7 +381,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(1, target.nodeIDs.size)
         val name = (target.getNodeProperties(target.nodeIDs.first())["name"] as StrVal).core
         assertEquals("Keep", name)
-        target.close()
     }
 
     @Test
@@ -424,7 +403,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(1, target.edgeIDs.size)
         val tag = target.getEdgeStructure(target.edgeIDs.first()).tag
         assertEquals("keep", tag)
-        target.close()
     }
 
     // ========================================================================
@@ -443,25 +421,6 @@ internal class NativeCsvIOImplTest {
         val withoutProp = allProps.first { !it.containsKey("present") }
         assertEquals("yes", (withProp["present"] as StrVal).core)
         assertNull(withoutProp["present"])
-        target.close()
-    }
-
-    // ========================================================================
-    // Closed state
-    // ========================================================================
-
-    @Test
-    fun `import into closed storage throws`() {
-        val dir = tempDir.resolve("closed_target").createDirectories()
-        dir.resolve("nodes.csv").writeText("__nid__\n0\n")
-        dir.resolve("edges.csv").writeText("__eid__,__src__,__dst__,__tag__\n")
-
-        val target = NativeStorageImpl()
-        target.close()
-
-        assertFailsWith<AccessClosedStorageException> {
-            NativeCsvIOImpl.import(dir, target)
-        }
     }
 
     // ========================================================================
@@ -476,7 +435,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("same_headers").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         val target = NativeStorageImpl()
         NativeCsvIOImpl.import(dir, target)
@@ -487,7 +445,6 @@ internal class NativeCsvIOImplTest {
             .mapNotNull { (it["name"] as? StrVal)?.core }
             .toSet()
         assertEquals(setOf("Alice", "Bob"), names)
-        target.close()
     }
 
     @Test
@@ -499,14 +456,12 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("no_prop_headers").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         val target = NativeStorageImpl()
         NativeCsvIOImpl.import(dir, target)
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
-        target.close()
     }
 
     // ========================================================================
@@ -521,7 +476,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("null_node_prop").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Corrupt one property cell to empty string (deserializes to null)
         val nodesFile = dir.resolve("nodes.csv").toFile()
@@ -540,7 +494,6 @@ internal class NativeCsvIOImplTest {
         val propCounts = target.nodeIDs.map { target.getNodeProperties(it).size }.sorted()
         assertEquals(1, propCounts[0])
         assertEquals(2, propCounts[1])
-        target.close()
     }
 
     @Test
@@ -553,7 +506,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("short_edge_row").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Replace one edge data row with a row that has fewer than 4 columns
         val edgesFile = dir.resolve("edges.csv").toFile()
@@ -567,7 +519,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
-        target.close()
     }
 
     @Test
@@ -579,7 +530,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("null_edge_prop").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Corrupt the edge property cell to empty string
         val edgesFile = dir.resolve("edges.csv").toFile()
@@ -597,7 +547,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(1, target.edgeIDs.size)
         val edgeProps = target.getEdgeProperties(target.edgeIDs.first())
         assertFalse(edgeProps.containsKey("weight"))
-        target.close()
     }
 
     @Test
@@ -609,7 +558,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("short_meta_row").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Replace one meta data row with a row that has only one column
         val metaFile = dir.resolve("meta.csv").toFile()
@@ -624,7 +572,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(1, target.nodeIDs.size)
         // Only one of the two meta entries survives
         assertEquals(1, target.metaNames.size)
-        target.close()
     }
 
     @Test
@@ -634,7 +581,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("deleted_meta").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Delete the meta.csv file
         dir.resolve("meta.csv").toFile().delete()
@@ -644,7 +590,6 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(1, target.nodeIDs.size)
         assertTrue(target.metaNames.isEmpty())
-        target.close()
     }
 
     @Test
@@ -661,13 +606,11 @@ internal class NativeCsvIOImplTest {
         val baseline = NativeStorageImpl()
         NativeCsvIOImpl.import(dir1, baseline)
         assertEquals(2, baseline.metaNames.size)
-        baseline.close()
 
         // Now delete one meta entry and export again
         src.setMeta("removed", null)
         val dir2 = tempDir.resolve("meta_null_export").createDirectories()
         NativeCsvIOImpl.export(dir2, src)
-        src.close()
 
         val target = NativeStorageImpl()
         NativeCsvIOImpl.import(dir2, target)
@@ -675,7 +618,6 @@ internal class NativeCsvIOImplTest {
         assertEquals(1, target.metaNames.size)
         assertEquals("yes", (target.getMeta("kept") as StrVal).core)
         assertNull(target.getMeta("removed"))
-        target.close()
     }
 
     @Test
@@ -688,7 +630,6 @@ internal class NativeCsvIOImplTest {
 
         val dir = tempDir.resolve("no_prop_header").createDirectories()
         NativeCsvIOImpl.export(dir, src)
-        src.close()
 
         // Verify the CSV is valid and importable
         val target = NativeStorageImpl()
@@ -696,6 +637,5 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(2, target.nodeIDs.size)
         target.nodeIDs.forEach { assertTrue(target.getNodeProperties(it).isEmpty()) }
-        target.close()
     }
 }

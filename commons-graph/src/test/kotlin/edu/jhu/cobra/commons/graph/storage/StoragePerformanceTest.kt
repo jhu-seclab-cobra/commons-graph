@@ -2,7 +2,6 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -31,13 +30,6 @@ import kotlin.test.Test
  * Run with: ./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
  */
 internal class StoragePerformanceTest {
-    private val storages = mutableListOf<IStorage>()
-
-    @AfterTest
-    fun tearDown() {
-        storages.forEach { runCatching { it.close() } }
-        storages.clear()
-    }
 
     private val implNames: List<String> =
         run {
@@ -54,7 +46,6 @@ internal class StoragePerformanceTest {
                 "LayeredStorageImpl" -> LayeredStorageImpl()
                 else -> throw IllegalArgumentException("Unknown storage: $name")
             }
-        storages.add(storage)
         return storage
     }
 
@@ -155,7 +146,6 @@ internal class StoragePerformanceTest {
                     benchmarkMs(warmup = 1, measured = 3) {
                         val s = createStorage(name)
                         populateGraph(s, n, epn)
-                        s.close()
                     }
                 }
             println(
@@ -186,11 +176,10 @@ internal class StoragePerformanceTest {
                         warmup = 1,
                         measured = 3,
                         setup = {
-                            ref[0]?.let { runCatching { it.close() } }
                             ref[0] = createStorage(name)
                         },
                         operation = { i -> ref[0]!!.addNode(mapOf("idx" to i.numVal)) },
-                    ).also { ref[0]?.let { s -> runCatching { s.close() } } }
+                    )
                 }
             println(
                 String.format(
@@ -222,7 +211,6 @@ internal class StoragePerformanceTest {
                         warmup = 1,
                         measured = 3,
                         setup = {
-                            ref[0]?.let { runCatching { it.close() } }
                             ref[0] = createStorage(name)
                             nodeIds = IntArray(nodeCount) { ref[0]!!.addNode() }
                         },
@@ -231,7 +219,7 @@ internal class StoragePerformanceTest {
                             val dst = (i + 1) % nodeCount
                             ref[0]!!.addEdge(nodeIds[src], nodeIds[dst], "e$i", mapOf("w" to i.numVal))
                         },
-                    ).also { ref[0]?.let { s -> runCatching { s.close() } } }
+                    )
                 }
             println(
                 String.format(
@@ -261,7 +249,6 @@ internal class StoragePerformanceTest {
                     storage.containsNode(nodeIds[i % nodeCount])
                 }
             println(String.format("%-24s %14s", name, fmt(ops)))
-            storage.close()
         }
     }
 
@@ -288,7 +275,6 @@ internal class StoragePerformanceTest {
                     storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
                 }
             println(String.format("%-24s %14s %14s", name, fmt(readOps), fmt(writeOps)))
-            storage.close()
         }
     }
 
@@ -313,7 +299,6 @@ internal class StoragePerformanceTest {
                     storage.getIncomingEdges(nodeIds[i % nodeCount])
                 }
             println(String.format("%-24s %14s %14s", name, fmt(outOps), fmt(inOps)))
-            storage.close()
         }
     }
 
@@ -335,13 +320,11 @@ internal class StoragePerformanceTest {
                     warmup = 1,
                     measured = 3,
                     setup = {
-                        ref[0]?.let { runCatching { it.close() } }
                         ref[0] = createStorage(name)
                         nodeIds = populateGraph(ref[0]!!, nodeCount, edgesPerNode)
                     },
                     operation = { i -> ref[0]!!.deleteNode(nodeIds[i]) },
                 )
-            ref[0]?.let { runCatching { it.close() } }
             println(String.format("%-24s %14s", name, fmt(ops)))
         }
     }
@@ -366,7 +349,6 @@ internal class StoragePerformanceTest {
                         storage.containsNode(newNode)
                         storage.getOutgoingEdges(newNode)
                     }
-                    storage.close()
                 }
             println(String.format("%-24s %14s", name, fmtMs(ms)))
         }
@@ -409,7 +391,6 @@ internal class StoragePerformanceTest {
             val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
             val deltaMB = (after - before) / (1024.0 * 1024.0)
             println(String.format("%-28s %14.1f", name, deltaMB))
-            storage.close()
         }
     }
 
@@ -424,7 +405,6 @@ internal class StoragePerformanceTest {
 
         for (layers in layerCounts) {
             val storage = LayeredStorageImpl()
-            storages.add(storage)
             val allNodeIds = mutableListOf<Int>()
             for (layer in 0 until layers) {
                 for (i in 0 until nodesPerLayer) {
@@ -442,7 +422,6 @@ internal class StoragePerformanceTest {
                     storage.getNodeProperties(allNodeIds[i % totalNodes])
                 }
             println(String.format("%-16s %14s %14s", "$layers layers", fmt(containsOps), fmt(propsOps)))
-            storage.close()
         }
     }
 }

@@ -37,13 +37,6 @@ class InvalidPropNameException(
 ) : Exception("Invalid name $propName in entity $entityId.")
 
 /**
- * Thrown when an operation is attempted on a storage that has already been closed.
- *
- * @constructor Creates an exception for accessing closed storage.
- */
-class AccessClosedStorageException : IllegalStateException("Try to access closed graph storage")
-
-/**
  * Thrown when attempting to modify an entity that belongs to a frozen layer.
  *
  * Frozen layers are immutable; only entities in the active layer can be deleted.

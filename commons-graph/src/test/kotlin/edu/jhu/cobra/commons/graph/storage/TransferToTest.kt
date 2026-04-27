@@ -39,8 +39,6 @@ internal class TransferToTest {
         assertTrue(target.containsNode(idMap[n1]!!))
         assertTrue(target.containsNode(idMap[n2]!!))
         assertTrue(target.containsNode(idMap[n3]!!))
-        source.close()
-        target.close()
     }
 
     @Test
@@ -57,8 +55,6 @@ internal class TransferToTest {
         assertEquals(setOf("A", "B"), names)
         val nodeA = allProps.first { (it["name"] as? StrVal)?.core == "A" }
         assertEquals(1, (nodeA["age"] as NumVal).core)
-        source.close()
-        target.close()
     }
 
     @Test
@@ -77,8 +73,6 @@ internal class TransferToTest {
         assertEquals(idMap[n1], structure.src)
         assertEquals(idMap[n2], structure.dst)
         assertEquals("rel", structure.tag)
-        source.close()
-        target.close()
     }
 
     @Test
@@ -94,8 +88,6 @@ internal class TransferToTest {
         val edgeProps = target.getEdgeProperties(target.edgeIDs.first())
         assertEquals(1.5, (edgeProps["weight"] as NumVal).core)
         assertEquals("x", (edgeProps["label"] as StrVal).core)
-        source.close()
-        target.close()
     }
 
     @Test
@@ -110,8 +102,6 @@ internal class TransferToTest {
 
         assertEquals("1.0", (target.getMeta("version") as StrVal).core)
         assertEquals(42, (target.getMeta("count") as NumVal).core)
-        source.close()
-        target.close()
     }
 
     @Test
@@ -123,8 +113,6 @@ internal class TransferToTest {
         assertTrue(idMap.isEmpty())
         assertTrue(target.nodeIDs.isEmpty())
         assertTrue(target.edgeIDs.isEmpty())
-        source.close()
-        target.close()
     }
 
     @Test
@@ -141,7 +129,5 @@ internal class TransferToTest {
         assertTrue(source.containsNode(n2))
         assertTrue(source.containsEdge(e1))
         assertEquals("v", (source.getNodeProperties(n1)["k"] as StrVal).core)
-        source.close()
-        target.close()
     }
 }

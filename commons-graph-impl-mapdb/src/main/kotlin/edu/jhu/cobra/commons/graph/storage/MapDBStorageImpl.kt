@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.utils.EntityPropertyMap
 import edu.jhu.cobra.commons.value.IValue
@@ -19,7 +18,7 @@ import org.mapdb.DBMaker
  */
 class MapDBStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
-) : IStorage {
+) : IStorage, AutoCloseable {
     private val dbManager: DB =
         DBMaker
             .config()
@@ -40,38 +39,27 @@ class MapDBStorageImpl(
     private val outEdges = HashMap<Int, MutableSet<Int>>()
     private val inEdges = HashMap<Int, MutableSet<Int>>()
 
-    private fun ensureOpen() {
-        if (dbManager.isClosed()) throw AccessClosedStorageException()
-    }
-
     override fun close() {
         if (!dbManager.isClosed()) dbManager.close()
     }
 
+    override fun flush() {}
+
     override val nodeIDs: Set<Int>
-        get() {
-            ensureOpen()
-            return nodeProperties.keys.toSet()
-        }
+        get() = nodeProperties.keys.toSet()
 
     override val edgeIDs: Set<Int>
-        get() {
-            ensureOpen()
-            return edgeProperties.keys.toSet()
-        }
+        get() = edgeProperties.keys.toSet()
 
     override fun containsNode(id: Int): Boolean {
-        ensureOpen()
         return nodeProperties.contains(id)
     }
 
     override fun containsEdge(id: Int): Boolean {
-        ensureOpen()
         return edgeProperties.contains(id)
     }
 
     override fun addNode(properties: Map<String, IValue>): Int {
-        ensureOpen()
         val nodeId = nodeCounter++
         nodeProperties[nodeId] = properties
         outEdges[nodeId] = HashSet()
@@ -85,7 +73,6 @@ class MapDBStorageImpl(
         tag: String,
         properties: Map<String, IValue>,
     ): Int {
-        ensureOpen()
         if (!containsNode(src)) throw EntityNotExistException(src)
         if (!containsNode(dst)) throw EntityNotExistException(dst)
         val id = edgeCounter++
@@ -99,12 +86,10 @@ class MapDBStorageImpl(
     }
 
     override fun getNodeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
         return nodeProperties[id] ?: throw EntityNotExistException(id)
     }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
         return edgeProperties[id] ?: throw EntityNotExistException(id)
     }
 
@@ -112,7 +97,6 @@ class MapDBStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
         val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
         nodeProperties[id] = merged
@@ -122,14 +106,12 @@ class MapDBStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
         val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
         edgeProperties[id] = merged
     }
 
     override fun deleteNode(id: Int) {
-        ensureOpen()
         if (!containsNode(id)) throw EntityNotExistException(id)
         // Delete incident edges (copy sets to avoid concurrent modification)
         HashSet(inEdges[id] ?: emptySet()).forEach { deleteEdge(it) }
@@ -140,7 +122,6 @@ class MapDBStorageImpl(
     }
 
     override fun deleteEdge(id: Int) {
-        ensureOpen()
         if (!containsEdge(id)) throw EntityNotExistException(id)
         val src = edgeSrcMap.remove(id)!!
         val dst = edgeDstMap.remove(id)!!
@@ -151,7 +132,6 @@ class MapDBStorageImpl(
     }
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
-        ensureOpen()
         val src = edgeSrcMap[id] ?: throw EntityNotExistException(id)
         val dst = edgeDstMap[id] ?: throw EntityNotExistException(id)
         val tag = edgeTagMap[id] ?: throw EntityNotExistException(id)
@@ -159,25 +139,19 @@ class MapDBStorageImpl(
     }
 
     override fun getIncomingEdges(id: Int): Set<Int> {
-        ensureOpen()
         if (!containsNode(id)) throw EntityNotExistException(id)
         return inEdges[id]?.toSet() ?: emptySet()
     }
 
     override fun getOutgoingEdges(id: Int): Set<Int> {
-        ensureOpen()
         if (!containsNode(id)) throw EntityNotExistException(id)
         return outEdges[id]?.toSet() ?: emptySet()
     }
 
     override val metaNames: Set<String>
-        get() {
-            ensureOpen()
-            return metaProperties.keys.toSet()
-        }
+        get() = metaProperties.keys.toSet()
 
     override fun getMeta(name: String): IValue? {
-        ensureOpen()
         return metaProperties[name]
     }
 
@@ -185,12 +159,10 @@ class MapDBStorageImpl(
         name: String,
         value: IValue?,
     ) {
-        ensureOpen()
         if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
 
     override fun clear() {
-        ensureOpen()
         nodeCounter = 0
         edgeCounter = 0
         edgeProperties.clear()
@@ -204,7 +176,6 @@ class MapDBStorageImpl(
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
-        ensureOpen()
         val idMap = HashMap<Int, Int>()
         for (nodeId in nodeProperties.keys) {
             idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)

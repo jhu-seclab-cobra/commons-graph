@@ -29,12 +29,12 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 internal class MapDBPerformanceTest {
-    private val storages = mutableListOf<IStorage>()
+    private val closeables = mutableListOf<AutoCloseable>()
 
     @AfterTest
     fun cleanup() {
-        storages.forEach { runCatching { it.close() } }
-        storages.clear()
+        closeables.forEach { runCatching { it.close() } }
+        closeables.clear()
         tempDirs.forEach { runCatching { it.toFile().deleteRecursively() } }
         tempDirs.clear()
     }
@@ -57,7 +57,7 @@ internal class MapDBPerformanceTest {
         )
 
     private fun tracked(s: IStorage): IStorage {
-        storages.add(s)
+        if (s is AutoCloseable) closeables.add(s)
         return s
     }
 
@@ -142,7 +142,6 @@ internal class MapDBPerformanceTest {
                 benchmarkMs(warmup = 1, measured = 3) {
                     val s = tracked(cfg.factory())
                     populateGraph(s, nodeCount, edgesPerNode)
-                    s.close()
                 }
             println(String.format("%-28s %14s", cfg.label, fmtMs(ms)))
         }
@@ -162,7 +161,6 @@ internal class MapDBPerformanceTest {
             for (i in 0 until nodeCount) nodeIds.add(s.addNode())
             val ops = benchmarkOpsPerSec(lookups) { i -> s.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", cfg.label, fmt(ops)))
-            s.close()
         }
     }
 
@@ -184,7 +182,6 @@ internal class MapDBPerformanceTest {
                     s.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
                 }
             println(String.format("%-28s %14s %14s", cfg.label, fmt(readOps), fmt(writeOps)))
-            s.close()
         }
     }
 
@@ -292,7 +289,6 @@ internal class MapDBPerformanceTest {
                     if (cfg.hasDisk) String.format("%.1f", diskMB) else "—",
                 ),
             )
-            s.close()
         }
     }
 
@@ -311,7 +307,6 @@ internal class MapDBPerformanceTest {
             val outOps = benchmarkOpsPerSec(queries) { i -> s.getOutgoingEdges(nodeIds[i % nodeCount]) }
             val inOps = benchmarkOpsPerSec(queries) { i -> s.getIncomingEdges(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s %14s", cfg.label, fmt(outOps), fmt(inOps)))
-            s.close()
         }
     }
 }

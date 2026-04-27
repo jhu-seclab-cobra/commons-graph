@@ -13,13 +13,11 @@
  * - `deleteNode removes self loop edge`
  * - `clear succeeds on fresh storage`
  * - `clear succeeds after adding and clearing data`
- * - `close sets dbManager closed then operations throw`
  * - `double close does not throw`
  * - `memoryDB config creates working storage`
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
@@ -28,7 +26,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -188,24 +185,6 @@ internal class MapDBStorageImplWhiteBoxTest {
     // -- close --
 
     @Test
-    fun `close sets dbManager closed then operations throw`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(0, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(0, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteNode(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.deleteEdge(0) }
-        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
-        assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
-        assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
-    }
-
-    @Test
     fun `double close does not throw`() {
         storage.close()
         storage.close()
@@ -218,6 +197,5 @@ internal class MapDBStorageImplWhiteBoxTest {
         val memStorage = MapDBStorageImpl { memoryDB() }
         memStorage.addNode()
         assertEquals(1, memStorage.nodeIDs.size)
-        memStorage.close()
     }
 }

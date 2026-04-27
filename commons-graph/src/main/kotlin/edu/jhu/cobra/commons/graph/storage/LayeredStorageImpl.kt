@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
@@ -30,7 +29,6 @@ import java.util.Collections
 class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
-    private var closed = false
 
     // Global ID counters
     private var nodeCounter: Int = 0
@@ -56,9 +54,6 @@ class LayeredStorageImpl(
     // Cache for translated frozen edge structures (global IDs)
     private val frozenEdgeStructureCache = HashMap<Int, IStorage.EdgeStructure>()
 
-    private fun ensureOpen() {
-        if (closed) throw AccessClosedStorageException()
-    }
 
     private fun isActiveNode(id: Int): Boolean = id in activeOutEdges
 
@@ -75,7 +70,6 @@ class LayeredStorageImpl(
     val layerCount: Int get() = if (frozenLayer != null) 2 else 1
 
     fun freeze() {
-        ensureOpen()
         val merged = frozenLayerFactory()
         val frozen = frozenLayer
 
@@ -84,7 +78,6 @@ class LayeredStorageImpl(
         val (newEdgeG2L, newEdgeL2G) = freezeMergeEdges(frozen, merged, frozenOldToNewNode, newNodeG2L)
         freezeTransferMetadata(frozen, merged)
 
-        frozen?.close()
         swapFrozenLayer(merged, newNodeG2L, newNodeL2G, newEdgeG2L, newEdgeL2G)
         clearActiveLayer()
     }
@@ -204,10 +197,8 @@ class LayeredStorageImpl(
      * The frozen layer and its ID mappings remain intact, so subsequent
      * reads still resolve against frozen data.
      *
-     * @throws AccessClosedStorageException If storage is closed.
      */
     fun clearActiveLayer() {
-        ensureOpen()
         activeOutEdges.clear()
         activeInEdges.clear()
         activeEdgeEndpoints.clear()
@@ -223,20 +214,17 @@ class LayeredStorageImpl(
 
     override val nodeIDs: Set<Int>
         get() {
-            ensureOpen()
-            val frozenGlobalIds = frozenNodeGlobalToLocal.keys
+                val frozenGlobalIds = frozenNodeGlobalToLocal.keys
             if (activeOutEdges.isEmpty()) return frozenGlobalIds
             if (frozenGlobalIds.isEmpty()) return activeOutEdges.keys
             return UnionSet(frozenGlobalIds, activeOutEdges.keys)
         }
 
     override fun containsNode(id: Int): Boolean {
-        ensureOpen()
         return isActiveNode(id) || isFrozenNode(id)
     }
 
     override fun addNode(properties: Map<String, IValue>): Int {
-        ensureOpen()
         val id = nodeCounter++
         activeOutEdges[id] = HashSet()
         activeInEdges[id] = HashSet()
@@ -247,7 +235,6 @@ class LayeredStorageImpl(
     }
 
     override fun getNodeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
         val inActive = id in activeOutEdges
         val frozenLocalId = frozenNodeGlobalToLocal[id]
         if (!inActive && frozenLocalId == null) throw EntityNotExistException(id.toString())
@@ -261,7 +248,6 @@ class LayeredStorageImpl(
         id: Int,
         name: String,
     ): IValue? {
-        ensureOpen()
         val inActive = id in activeOutEdges
         val frozenLocalId = frozenNodeGlobalToLocal[id]
         if (!inActive && frozenLocalId == null) throw EntityNotExistException(id.toString())
@@ -276,14 +262,12 @@ class LayeredStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         if (!isActiveNode(id) && !isFrozenNode(id)) throw EntityNotExistException(id.toString())
         ensureNodeInActiveLayer(id)
         setActiveColumnarProperties(id, properties, activeNodeColumns)
     }
 
     override fun deleteNode(id: Int) {
-        ensureOpen()
         if (!isActiveNode(id)) {
             if (isFrozenNode(id)) throw FrozenLayerModificationException(id.toString())
             throw EntityNotExistException(id.toString())
@@ -303,15 +287,13 @@ class LayeredStorageImpl(
 
     override val edgeIDs: Set<Int>
         get() {
-            ensureOpen()
-            val frozenGlobalIds = frozenEdgeGlobalToLocal.keys
+                val frozenGlobalIds = frozenEdgeGlobalToLocal.keys
             if (activeEdgeEndpoints.isEmpty()) return frozenGlobalIds
             if (frozenGlobalIds.isEmpty()) return activeEdgeEndpoints.keys
             return UnionSet(frozenGlobalIds, activeEdgeEndpoints.keys)
         }
 
     override fun containsEdge(id: Int): Boolean {
-        ensureOpen()
         return isActiveEdge(id) || isFrozenEdge(id)
     }
 
@@ -321,7 +303,6 @@ class LayeredStorageImpl(
         tag: String,
         properties: Map<String, IValue>,
     ): Int {
-        ensureOpen()
         ensureNodeInActiveLayer(src)
         ensureNodeInActiveLayer(dst)
         val id = edgeCounter++
@@ -335,7 +316,6 @@ class LayeredStorageImpl(
     }
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
-        ensureOpen()
         activeEdgeEndpoints[id]?.let { return it }
         frozenEdgeStructureCache[id]?.let { return it }
         val frozenLocalId = frozenEdgeGlobalToLocal[id] ?: throw EntityNotExistException(id.toString())
@@ -351,7 +331,6 @@ class LayeredStorageImpl(
     }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
         val inActive = id in activeEdgeEndpoints
         val frozenLocalId = frozenEdgeGlobalToLocal[id]
         if (!inActive && frozenLocalId == null) throw EntityNotExistException(id.toString())
@@ -365,7 +344,6 @@ class LayeredStorageImpl(
         id: Int,
         name: String,
     ): IValue? {
-        ensureOpen()
         val inActive = id in activeEdgeEndpoints
         val frozenLocalId = frozenEdgeGlobalToLocal[id]
         if (!inActive && frozenLocalId == null) throw EntityNotExistException(id.toString())
@@ -380,7 +358,6 @@ class LayeredStorageImpl(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         if (!isActiveEdge(id) && !isFrozenEdge(id)) throw EntityNotExistException(id.toString())
         if (!isActiveEdge(id)) {
             // Promote frozen edge to active layer for writes
@@ -395,7 +372,6 @@ class LayeredStorageImpl(
     }
 
     override fun deleteEdge(id: Int) {
-        ensureOpen()
         if (!isActiveEdge(id)) {
             if (isFrozenEdge(id)) throw FrozenLayerModificationException(id.toString())
             throw EntityNotExistException(id.toString())
@@ -408,7 +384,6 @@ class LayeredStorageImpl(
     // ============================================================================
 
     override fun getIncomingEdges(id: Int): Set<Int> {
-        ensureOpen()
         val activeEdges = activeInEdges[id]
         val frozenLocalNodeId = frozenNodeGlobalToLocal[id]
         if (activeEdges == null && frozenLocalNodeId == null) throw EntityNotExistException(id.toString())
@@ -424,7 +399,6 @@ class LayeredStorageImpl(
     }
 
     override fun getOutgoingEdges(id: Int): Set<Int> {
-        ensureOpen()
         val activeEdges = activeOutEdges[id]
         val frozenLocalNodeId = frozenNodeGlobalToLocal[id]
         if (activeEdges == null && frozenLocalNodeId == null) throw EntityNotExistException(id.toString())
@@ -445,15 +419,13 @@ class LayeredStorageImpl(
 
     override val metaNames: Set<String>
         get() {
-            ensureOpen()
-            val frozenNames = frozenLayer?.metaNames ?: emptySet()
+                val frozenNames = frozenLayer?.metaNames ?: emptySet()
             if (activeMetaProperties.isEmpty()) return frozenNames
             if (frozenNames.isEmpty()) return activeMetaProperties.keys
             return UnionSet(frozenNames, activeMetaProperties.keys)
         }
 
     override fun getMeta(name: String): IValue? {
-        ensureOpen()
         activeMetaProperties[name]?.let { return it }
         return frozenLayer?.getMeta(name)
     }
@@ -462,7 +434,6 @@ class LayeredStorageImpl(
         name: String,
         value: IValue?,
     ) {
-        ensureOpen()
         if (value == null) activeMetaProperties.remove(name) else activeMetaProperties[name] = value
     }
 
@@ -471,8 +442,6 @@ class LayeredStorageImpl(
     // ============================================================================
 
     override fun clear() {
-        ensureOpen()
-        frozenLayer?.close()
         frozenLayer = null
         frozenNodeGlobalToLocal.clear()
         frozenNodeLocalToGlobal.clear()
@@ -490,7 +459,6 @@ class LayeredStorageImpl(
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
-        ensureOpen()
         val nodeIdMap = HashMap<Int, Int>()
         for (nodeId in nodeIDs) {
             val newId = target.addNode(getNodeProperties(nodeId))
@@ -508,12 +476,7 @@ class LayeredStorageImpl(
         return nodeIdMap
     }
 
-    override fun close() {
-        if (closed) return
-        frozenLayer?.close()
-        frozenLayer = null
-        closed = true
-    }
+    override fun flush() {}
 
     // ============================================================================
     // INTERNAL HELPERS

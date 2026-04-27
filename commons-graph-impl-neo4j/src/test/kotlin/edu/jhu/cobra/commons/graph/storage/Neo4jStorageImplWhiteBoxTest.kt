@@ -21,7 +21,6 @@
  * - `meta operations use in-memory map`
  * - `setMeta null removes entry`
  * - `meta not persisted across storage instances`
- * - `close sets isClosed and all operations throw`
  * - `clear empties node and edge caches and database`
  * - `addEdge missing src throws EntityNotExistException`
  * - `addEdge missing dst throws EntityNotExistException`
@@ -32,13 +31,11 @@
  * - `getOutgoingEdges nonexistent throws EntityNotExistException`
  * - `edge type stored as Neo4j RelationshipType`
  * - `transferTo copies all data`
- * - `transferTo throws AccessClosedStorageException when closed`
  * - `getEdgeStructure returns correct src dst and tag`
  * - `getEdgeStructure nonexistent throws EntityNotExistException`
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.value.NumVal
@@ -278,21 +275,6 @@ internal class Neo4jStorageImplWhiteBoxTest {
         reloaded.close()
     }
 
-    // -- close --
-
-    @Test
-    fun `close sets isClosed and all operations throw`() {
-        storage.addNode()
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(-1) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
-        assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
-        assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
-    }
-
     // -- clear --
 
     @Test
@@ -374,13 +356,6 @@ internal class Neo4jStorageImplWhiteBoxTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1", target.getMeta("version")?.core)
-        target.close()
-    }
-
-    @Test
-    fun `transferTo throws AccessClosedStorageException when closed`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.transferTo(NativeStorageImpl()) }
     }
 
     // -- getEdgeStructure --

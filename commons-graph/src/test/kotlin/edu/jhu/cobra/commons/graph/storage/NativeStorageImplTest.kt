@@ -1,12 +1,10 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NumVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -56,8 +54,6 @@ import kotlin.test.assertTrue
  * - `metaNames returns all metadata keys` -- metadata key enumeration
  * - `clear removes all nodes edges and metadata` -- full reset
  * - `transferTo copies all data and returns node ID mapping` -- cross-storage transfer
- * - `close prevents subsequent operations with AccessClosedStorageException` -- lifecycle guard
- * - `closed storage throws AccessClosedStorageException for all operations` -- all ensureOpen branches
  * - `ColumnViewMap isEmpty returns true when entity has no properties` -- empty ColumnViewMap
  * - `ColumnViewMap containsKey returns true for existing and false for absent` -- containsKey paths
  * - `ColumnViewMap get returns value for existing and null for absent` -- get hit and miss
@@ -72,11 +68,6 @@ internal class NativeStorageImplTest {
     @BeforeTest
     fun setUp() {
         storage = NativeStorageImpl()
-    }
-
-    @AfterTest
-    fun tearDown() {
-        storage.close()
     }
 
     // region Node CRUD
@@ -402,48 +393,6 @@ internal class NativeStorageImplTest {
         assertEquals(idMap[n1], structure.src)
         assertEquals(idMap[n2], structure.dst)
         assertEquals("1.0", (target.getMeta("version") as StrVal).core)
-        target.close()
-    }
-
-    @Test
-    fun `close prevents subsequent operations with AccessClosedStorageException`() {
-        storage.close()
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.clear() }
-    }
-
-    @Test
-    fun `closed storage throws AccessClosedStorageException for all operations`() {
-        val closed = NativeStorageImpl()
-        closed.close()
-
-        val operations: Map<String, () -> Unit> = mapOf(
-            "containsNode" to { closed.containsNode(0) },
-            "getNodeProperties" to { closed.getNodeProperties(0) },
-            "getNodeProperty" to { closed.getNodeProperty(0, "k") },
-            "setNodeProperties" to { closed.setNodeProperties(0, emptyMap()) },
-            "deleteNode" to { closed.deleteNode(0) },
-            "containsEdge" to { closed.containsEdge(0) },
-            "addEdge" to { closed.addEdge(0, 0, "t") },
-            "getEdgeStructure" to { closed.getEdgeStructure(0) },
-            "getEdgeProperties" to { closed.getEdgeProperties(0) },
-            "getEdgeProperty" to { closed.getEdgeProperty(0, "k") },
-            "setEdgeProperties" to { closed.setEdgeProperties(0, emptyMap()) },
-            "deleteEdge" to { closed.deleteEdge(0) },
-            "getIncomingEdges" to { closed.getIncomingEdges(0) },
-            "getOutgoingEdges" to { closed.getOutgoingEdges(0) },
-            "getMeta" to { closed.getMeta("k") },
-            "setMeta" to { closed.setMeta("k", "v".strVal) },
-            "metaNames" to { closed.metaNames },
-            "transferTo" to { closed.transferTo(NativeStorageImpl()) },
-            "edgeIDs" to { closed.edgeIDs },
-            "nodeIDs" to { closed.nodeIDs },
-        )
-
-        for ((name, op) in operations) {
-            assertFailsWith<AccessClosedStorageException>("$name did not throw") { op() }
-        }
     }
 
     // endregion

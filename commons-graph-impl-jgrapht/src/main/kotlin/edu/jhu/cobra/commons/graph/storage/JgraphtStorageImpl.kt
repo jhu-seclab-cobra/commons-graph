@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import org.jgrapht.Graph
@@ -16,7 +15,6 @@ import org.jgrapht.graph.DirectedPseudograph
 class JgraphtStorageImpl : IStorage {
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
-    private var isClosed: Boolean = false
 
     // Bidirectional mapping: external Int ID <-> JGraphT internal String vertex/edge
     private val intToVertex = HashMap<Int, String>()
@@ -30,34 +28,17 @@ class JgraphtStorageImpl : IStorage {
     private val jgtGraph: Graph<String, String> = DirectedPseudograph(String::class.java)
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
 
-    private fun ensureOpen() {
-        if (isClosed) throw AccessClosedStorageException()
-    }
-
     override val nodeIDs: Set<Int>
-        get() {
-            ensureOpen()
-            return nodeProperties.keys.toSet()
-        }
+        get() = nodeProperties.keys.toSet()
 
     override val edgeIDs: Set<Int>
-        get() {
-            ensureOpen()
-            return edgeProperties.keys.toSet()
-        }
+        get() = edgeProperties.keys.toSet()
 
-    override fun containsNode(id: Int): Boolean {
-        ensureOpen()
-        return id in nodeProperties
-    }
+    override fun containsNode(id: Int): Boolean = id in nodeProperties
 
-    override fun containsEdge(id: Int): Boolean {
-        ensureOpen()
-        return id in edgeProperties
-    }
+    override fun containsEdge(id: Int): Boolean = id in edgeProperties
 
     override fun addNode(properties: Map<String, IValue>): Int {
-        ensureOpen()
         val id = nodeCounter++
         val vertex = "v$id"
         jgtGraph.addVertex(vertex)
@@ -73,7 +54,6 @@ class JgraphtStorageImpl : IStorage {
         tag: String,
         properties: Map<String, IValue>,
     ): Int {
-        ensureOpen()
         if (src !in nodeProperties) throw EntityNotExistException(src)
         if (dst !in nodeProperties) throw EntityNotExistException(dst)
         val id = edgeCounter++
@@ -88,21 +68,16 @@ class JgraphtStorageImpl : IStorage {
         return id
     }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
-        return nodeProperties[id] ?: throw EntityNotExistException(id)
-    }
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
+        nodeProperties[id] ?: throw EntityNotExistException(id)
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        ensureOpen()
-        return edgeProperties[id] ?: throw EntityNotExistException(id)
-    }
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
+        edgeProperties[id] ?: throw EntityNotExistException(id)
 
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         val container = nodeProperties[id] ?: throw EntityNotExistException(id)
         properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
     }
@@ -111,13 +86,11 @@ class JgraphtStorageImpl : IStorage {
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ensureOpen()
         val container = edgeProperties[id] ?: throw EntityNotExistException(id)
         properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
     }
 
     override fun deleteNode(id: Int) {
-        ensureOpen()
         if (id !in nodeProperties) throw EntityNotExistException(id)
         val vertex = intToVertex[id]!!
         val incoming = jgtGraph.incomingEdgesOf(vertex).toSet()
@@ -137,7 +110,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun deleteEdge(id: Int) {
-        ensureOpen()
         if (id !in edgeProperties) throw EntityNotExistException(id)
         val edgeStr = intToEdge[id]!!
         jgtGraph.removeEdge(edgeStr)
@@ -148,7 +120,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
-        ensureOpen()
         if (id !in edgeProperties) throw EntityNotExistException(id)
         val edgeStr = intToEdge[id]!!
         val src = vertexToInt[jgtGraph.getEdgeSource(edgeStr)]!!
@@ -158,7 +129,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun getIncomingEdges(id: Int): Set<Int> {
-        ensureOpen()
         if (id !in nodeProperties) throw EntityNotExistException(id)
         val vertex = intToVertex[id]!!
         val result = HashSet<Int>()
@@ -167,7 +137,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun getOutgoingEdges(id: Int): Set<Int> {
-        ensureOpen()
         if (id !in nodeProperties) throw EntityNotExistException(id)
         val vertex = intToVertex[id]!!
         val result = HashSet<Int>()
@@ -176,26 +145,20 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override val metaNames: Set<String>
-        get() {
-            ensureOpen()
-            return metaProperties.keys.toSet()
-        }
+        get() = metaProperties.keys.toSet()
 
-    override fun getMeta(name: String): IValue? {
-        ensureOpen()
-        return metaProperties[name]
-    }
+    override fun getMeta(name: String): IValue? = metaProperties[name]
 
     override fun setMeta(
         name: String,
         value: IValue?,
     ) {
-        ensureOpen()
         if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
 
+    override fun flush() {}
+
     override fun clear() {
-        ensureOpen()
         jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
         jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
         intToVertex.clear()
@@ -211,7 +174,6 @@ class JgraphtStorageImpl : IStorage {
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
-        ensureOpen()
         val idMap = HashMap<Int, Int>()
         for (nodeId in nodeProperties.keys) {
             idMap[nodeId] = target.addNode(nodeProperties[nodeId]!!)
@@ -226,10 +188,5 @@ class JgraphtStorageImpl : IStorage {
             target.setMeta(name, metaProperties[name])
         }
         return idMap
-    }
-
-    override fun close() {
-        if (!isClosed) clear()
-        isClosed = true
     }
 }

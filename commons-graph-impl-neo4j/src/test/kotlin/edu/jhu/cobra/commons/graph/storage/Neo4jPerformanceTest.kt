@@ -28,7 +28,7 @@ import kotlin.test.Test
 
 internal class Neo4jPerformanceTest {
     private val tempDirs = mutableListOf<Path>()
-    private val storages = mutableListOf<IStorage>()
+    private val storages = mutableListOf<AutoCloseable>()
 
     @AfterTest
     fun cleanup() {
@@ -49,7 +49,7 @@ internal class Neo4jPerformanceTest {
                 "Neo4jConcurStorageImpl" -> Neo4jConcurStorageImpl(dir)
                 else -> throw IllegalArgumentException("Unknown: $name")
             }
-        storages.add(s)
+        storages.add(s as AutoCloseable)
         return s
     }
 
@@ -145,7 +145,6 @@ internal class Neo4jPerformanceTest {
                     benchmarkMs(warmup = 1, measured = 3) {
                         val s = createStorage(name)
                         populateGraph(s, n, epn)
-                        s.close()
                     }
                 }
             println(String.format("%-28s %14s %14s %14s", name, fmtMs(results[0]), fmtMs(results[1]), fmtMs(results[2])))
@@ -165,7 +164,6 @@ internal class Neo4jPerformanceTest {
             for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
             val ops = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", name, fmt(ops)))
-            storage.close()
         }
     }
 
@@ -186,7 +184,6 @@ internal class Neo4jPerformanceTest {
                     storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
                 }
             println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
-            storage.close()
         }
     }
 
@@ -215,7 +212,7 @@ internal class Neo4jPerformanceTest {
                     "Neo4jConcurStorageImpl" -> Neo4jConcurStorageImpl(dir)
                     else -> throw IllegalArgumentException("Unknown: $name")
                 }
-            storages.add(storage)
+            storages.add(storage as AutoCloseable)
 
             for (i in 0 until nodeCount) {
                 val props = (1..propsPerEntity).associate { "p$it" to "val_${i}_$it".strVal }
@@ -236,7 +233,7 @@ internal class Neo4jPerformanceTest {
             val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
             val heapDeltaMB = (after - before) / (1024.0 * 1024.0)
 
-            storage.close()
+            (storage as AutoCloseable).close()
             val diskBytes = Files.walk(dir).filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
             val diskMB = diskBytes / (1024.0 * 1024.0)
             println(String.format("%-28s %14.1f %14.1f", name, heapDeltaMB, diskMB))
@@ -257,7 +254,6 @@ internal class Neo4jPerformanceTest {
             val outOps = benchmarkOpsPerSec(queries) { i -> storage.getOutgoingEdges(nodeIds[i % nodeCount]) }
             val inOps = benchmarkOpsPerSec(queries) { i -> storage.getIncomingEdges(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s %14s", name, fmt(outOps), fmt(inOps)))
-            storage.close()
         }
     }
 }

@@ -53,8 +53,6 @@
  * - `getMeta returns null for nonexistent key`
  * - `metaNames returns all metadata keys`
  * - `clear removes all nodes edges and metadata`
- * - `clear on closed storage throws AccessClosedStorageException`
- * - `close then operations throw AccessClosedStorageException`
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `transferTo preserves edge properties and tag`
@@ -62,7 +60,6 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.NumVal
@@ -72,7 +69,6 @@ import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
 import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -89,10 +85,6 @@ internal class JgraphtStorageImplTest {
         storage = JgraphtStorageImpl()
     }
 
-    @AfterTest
-    fun tearDown() {
-        storage.close()
-    }
 
     // -- addNode --
 
@@ -516,39 +508,6 @@ internal class JgraphtStorageImplTest {
         assertTrue(storage.metaNames.isEmpty())
     }
 
-    @Test
-    fun `clear on closed storage throws AccessClosedStorageException`() {
-        storage.close()
-        val fresh = JgraphtStorageImpl()
-        fresh.close()
-        assertFailsWith<AccessClosedStorageException> { fresh.clear() }
-    }
-
-    // -- close --
-
-    @Test
-    fun `close then operations throw AccessClosedStorageException`() {
-        val n = storage.addNode()
-        val n2 = storage.addNode()
-        val e = storage.addEdge(n, n2, "rel")
-        storage.close()
-
-        assertFailsWith<AccessClosedStorageException> { storage.nodeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.edgeIDs }
-        assertFailsWith<AccessClosedStorageException> { storage.containsNode(n) }
-        assertFailsWith<AccessClosedStorageException> { storage.containsEdge(e) }
-        assertFailsWith<AccessClosedStorageException> { storage.addNode() }
-        assertFailsWith<AccessClosedStorageException> { storage.getNodeProperties(n) }
-        assertFailsWith<AccessClosedStorageException> { storage.setNodeProperties(n, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.getEdgeProperties(e) }
-        assertFailsWith<AccessClosedStorageException> { storage.setEdgeProperties(e, emptyMap()) }
-        assertFailsWith<AccessClosedStorageException> { storage.getIncomingEdges(n) }
-        assertFailsWith<AccessClosedStorageException> { storage.getOutgoingEdges(n) }
-        assertFailsWith<AccessClosedStorageException> { storage.metaNames }
-        assertFailsWith<AccessClosedStorageException> { storage.getMeta("x") }
-        assertFailsWith<AccessClosedStorageException> { storage.setMeta("x", "v".strVal) }
-    }
-
     // -- transferTo --
 
     @Test
@@ -564,7 +523,6 @@ internal class JgraphtStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1.0", (target.getMeta("version") as StrVal).core)
-        target.close()
     }
 
     @Test
@@ -579,7 +537,6 @@ internal class JgraphtStorageImplTest {
         val tEdge = target.edgeIDs.first()
         assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
         assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
-        target.close()
     }
 
     @Test
@@ -594,7 +551,6 @@ internal class JgraphtStorageImplTest {
         val tEdge = target.edgeIDs.first()
         assertEquals("typed", target.getEdgeStructure(tEdge).tag)
         assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as NumVal).core)
-        target.close()
     }
 
     // -- complex values --

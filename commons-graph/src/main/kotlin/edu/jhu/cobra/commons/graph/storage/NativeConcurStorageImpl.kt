@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.graph.AccessClosedStorageException
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -20,8 +19,6 @@ import kotlin.concurrent.withLock
  */
 @Suppress("TooManyFunctions")
 class NativeConcurStorageImpl : IStorage {
-    @Volatile
-    private var isClosed: Boolean = false
 
     private val lock = ReentrantReadWriteLock()
 
@@ -124,21 +121,13 @@ class NativeConcurStorageImpl : IStorage {
     // ============================================================================
 
     override val nodeIDs: Set<Int>
-        get() =
-            lock.readLock().withLock {
-                if (isClosed) throw AccessClosedStorageException()
-                java.util.Set.copyOf(outEdges.keys)
-            }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(outEdges.keys) }
 
     override fun containsNode(id: Int): Boolean =
-        lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
-            id in outEdges
-        }
+        lock.readLock().withLock { id in outEdges }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             val id = nodeCounter++
             outEdges[id] = AdjEntry()
             inEdges[id] = AdjEntry()
@@ -150,7 +139,6 @@ class NativeConcurStorageImpl : IStorage {
 
     override fun getNodeProperties(id: Int): Map<String, IValue> =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in outEdges) throw EntityNotExistException(id.toString())
             collectNodeProperties(id)
         }
@@ -160,7 +148,6 @@ class NativeConcurStorageImpl : IStorage {
         name: String,
     ): IValue? =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in outEdges) throw EntityNotExistException(id.toString())
             nodeColumns[name]?.get(id)
         }
@@ -169,14 +156,12 @@ class NativeConcurStorageImpl : IStorage {
         id: Int,
         properties: Map<String, IValue?>,
     ) = lock.writeLock().withLock {
-        if (isClosed) throw AccessClosedStorageException()
         if (id !in outEdges) throw EntityNotExistException(id.toString())
         setColumnarProperties(id, properties, nodeColumns)
     }
 
     override fun deleteNode(id: Int): Unit =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in outEdges) throw EntityNotExistException(id.toString())
             val outEdgeIds = outEdges[id]?.set?.toList() ?: emptyList()
             val inEdgeIds = inEdges[id]?.set?.toList() ?: emptyList()
@@ -192,17 +177,10 @@ class NativeConcurStorageImpl : IStorage {
     // ============================================================================
 
     override val edgeIDs: Set<Int>
-        get() =
-            lock.readLock().withLock {
-                if (isClosed) throw AccessClosedStorageException()
-                java.util.Set.copyOf(edgeEndpoints.keys)
-            }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(edgeEndpoints.keys) }
 
     override fun containsEdge(id: Int): Boolean =
-        lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
-            id in edgeEndpoints
-        }
+        lock.readLock().withLock { id in edgeEndpoints }
 
     override fun addEdge(
         src: Int,
@@ -211,7 +189,6 @@ class NativeConcurStorageImpl : IStorage {
         properties: Map<String, IValue>,
     ): Int =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (src !in outEdges) throw EntityNotExistException(src.toString())
             if (dst !in outEdges) throw EntityNotExistException(dst.toString())
             val id = edgeCounter++
@@ -226,13 +203,11 @@ class NativeConcurStorageImpl : IStorage {
 
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             edgeEndpoints[id] ?: throw EntityNotExistException(id.toString())
         }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             collectEdgeProperties(id)
         }
@@ -242,7 +217,6 @@ class NativeConcurStorageImpl : IStorage {
         name: String,
     ): IValue? =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             edgeColumns[name]?.get(id)
         }
@@ -251,14 +225,12 @@ class NativeConcurStorageImpl : IStorage {
         id: Int,
         properties: Map<String, IValue?>,
     ) = lock.writeLock().withLock {
-        if (isClosed) throw AccessClosedStorageException()
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
         setColumnarProperties(id, properties, edgeColumns)
     }
 
     override fun deleteEdge(id: Int): Unit =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
             deleteIncidentEdge(id)
         }
@@ -269,14 +241,12 @@ class NativeConcurStorageImpl : IStorage {
 
     override fun getIncomingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in outEdges) throw EntityNotExistException(id.toString())
             inEdges[id]?.snapshot() ?: emptySet()
         }
 
     override fun getOutgoingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (id !in outEdges) throw EntityNotExistException(id.toString())
             outEdges[id]?.snapshot() ?: emptySet()
         }
@@ -286,24 +256,16 @@ class NativeConcurStorageImpl : IStorage {
     // ============================================================================
 
     override val metaNames: Set<String>
-        get() =
-            lock.readLock().withLock {
-                if (isClosed) throw AccessClosedStorageException()
-                java.util.Set.copyOf(metaProperties.keys)
-            }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(metaProperties.keys) }
 
     override fun getMeta(name: String): IValue? =
-        lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
-            metaProperties[name]
-        }
+        lock.readLock().withLock { metaProperties[name] }
 
     override fun setMeta(
         name: String,
         value: IValue?,
     ): Unit =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
@@ -311,9 +273,10 @@ class NativeConcurStorageImpl : IStorage {
     // LIFECYCLE
     // ============================================================================
 
+    override fun flush() {}
+
     override fun clear(): Unit =
         lock.writeLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             outEdges.clear()
             inEdges.clear()
             edgeEndpoints.clear()
@@ -327,7 +290,6 @@ class NativeConcurStorageImpl : IStorage {
 
     override fun transferTo(target: IStorage): Map<Int, Int> =
         lock.readLock().withLock {
-            if (isClosed) throw AccessClosedStorageException()
             val nodeIdMap = HashMap<Int, Int>()
             for (nodeId in outEdges.keys) {
                 val newId = target.addNode(collectNodeProperties(nodeId))
@@ -342,11 +304,5 @@ class NativeConcurStorageImpl : IStorage {
                 target.setMeta(name, metaProperties[name])
             }
             nodeIdMap
-        }
-
-    override fun close(): Unit =
-        lock.writeLock().withLock {
-            if (!isClosed) clear()
-            isClosed = true
         }
 }
