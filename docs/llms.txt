@@ -40,7 +40,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 
 ## Labels
 
-- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `PosetTrait`, `TraitGroup` -- label hierarchy, edge visibility, node grouping.
+- [Labels & Poset](llms/label.md): `Label`, `IPoset`, `PosetTrait`, `TraitGroup` (deprecated) -- label hierarchy, edge visibility, node grouping.
 
 ## Optional
 

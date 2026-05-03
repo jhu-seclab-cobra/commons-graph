@@ -52,7 +52,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
 - Edges with no labels are visible only when no label filter is applied.
 
-### `TraitGroup<N, E>` (interface, extends `IGraph`)
+### `TraitGroup<N, E>` (interface, extends `IGraph`) — **(deprecated)**
 
 Group membership stored as node properties, not encoded in NodeID.
 
