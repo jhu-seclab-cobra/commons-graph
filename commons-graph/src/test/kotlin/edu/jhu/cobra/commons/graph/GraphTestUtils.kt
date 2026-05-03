@@ -1,8 +1,10 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.poset.IPoset
+import edu.jhu.cobra.commons.graph.poset.PosetDftImpl
+import edu.jhu.cobra.commons.graph.poset.PosetTrait
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.graph.traits.TraitPoset
 
 object GraphTestUtils {
     const val NODE_ID_1: NodeID = "node1"
@@ -38,12 +40,12 @@ object GraphTestUtils {
 
     class TestMultipleGraphWithPoset(
         graphStorage: IStorage,
-        override val posetStorage: IStorage = NativeStorageImpl(),
+        posetStorage: IStorage = NativeStorageImpl(),
     ) : AbcMultipleGraph<TestNode, TestEdge>(),
-        TraitPoset<TestNode, TestEdge> {
+        PosetTrait<TestNode, TestEdge> {
         override val storage: IStorage = graphStorage
         override val graphId: String = "TestMultiplePoset"
-        override val posetState = TraitPoset.PosetState()
+        override val poset: IPoset = PosetDftImpl(posetStorage)
 
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
@@ -51,12 +53,14 @@ object GraphTestUtils {
 
     class TestMultipleGraph(
         graphStorage: IStorage,
+        override val graphId: String = "TestMultiple",
     ) : AbcMultipleGraph<TestNode, TestEdge>() {
         override val storage: IStorage = graphStorage
-        override val graphId: String = "TestMultiple"
 
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
+
+        fun doRebuild() = rebuild()
     }
 
     fun createTestSimpleGraph(
@@ -66,12 +70,12 @@ object GraphTestUtils {
 
     class TestSimpleGraphWithPoset(
         graphStorage: IStorage,
-        override val posetStorage: IStorage = NativeStorageImpl(),
+        posetStorage: IStorage = NativeStorageImpl(),
     ) : AbcSimpleGraph<TestNode, TestEdge>(),
-        TraitPoset<TestNode, TestEdge> {
+        PosetTrait<TestNode, TestEdge> {
         override val storage: IStorage = graphStorage
         override val graphId: String = "TestSimplePoset"
-        override val posetState = TraitPoset.PosetState()
+        override val poset: IPoset = PosetDftImpl(posetStorage)
 
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()

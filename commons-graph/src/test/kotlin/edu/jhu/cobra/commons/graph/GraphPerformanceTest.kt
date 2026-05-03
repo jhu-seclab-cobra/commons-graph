@@ -234,10 +234,8 @@ internal class GraphPerformanceTest {
             populateMultipleGraph(g, nodeCount, edgesPerNode)
 
             val labels = (0 until labelCount).map { Label("L$it") }
-            with(g) {
-                for (i in 1 until labelCount) {
-                    labels[i].parents = mapOf("parent" to labels[i - 1])
-                }
+            for (i in 1 until labelCount) {
+                g.poset.setParents(labels[i], mapOf("parent" to labels[i - 1]))
             }
 
             val assignMs =

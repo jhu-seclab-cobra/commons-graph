@@ -1,11 +1,11 @@
-package edu.jhu.cobra.commons.graph.traits
+package edu.jhu.cobra.commons.graph.poset
 
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.AbcSimpleGraph
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.StrVal
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -17,25 +17,24 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Black-box tests for TraitPoset: IPoset implementation, label-filtered graph
- * operations, and edge visibility rules.
+ * Black-box tests for IPoset (label hierarchy) and PosetTrait (label-filtered graph operations).
  *
- * IPoset:
+ * IPoset (label hierarchy):
  * - `label parents set and get round-trips` — parent assignment
  * - `label parents setter replaces previous parents` — overwrite semantics
  * - `label parents getter returns empty when never set` — default state
  * - `label ancestors multi-level returns all` — transitive BFS
  * - `label ancestors on label with no parents returns empty` — boundary
- * - `label compareTo equal returns zero` — reflexive
- * - `label compareTo child vs parent returns negative` — ordering
- * - `label compareTo parent vs child returns positive` — ordering
- * - `label compareTo incomparable returns null` — no relation
- * - `label compareTo SUPREMUM greater than any` — sentinel
- * - `label compareTo INFIMUM less than any` — sentinel
- * - `label compareTo SUPREMUM vs INFIMUM` — extreme pair
+ * - `compare equal returns zero` — reflexive
+ * - `compare child vs parent returns negative` — ordering
+ * - `compare parent vs child returns positive` — ordering
+ * - `compare incomparable returns null` — no relation
+ * - `compare SUPREMUM greater than any` — sentinel
+ * - `compare INFIMUM less than any` — sentinel
+ * - `compare SUPREMUM vs INFIMUM` — extreme pair
  * - `allLabels includes INFIMUM and SUPREMUM` — sentinels present
  *
- * Label-aware edge operations:
+ * PosetTrait (label-aware edge operations):
  * - `addEdge with label assigns label` — basic assignment
  * - `addEdge with label existing edge adds label` — accumulation
  * - `addEdge with label same label twice is idempotent` — duplicate label
@@ -46,7 +45,7 @@ import kotlin.test.assertTrue
  * - `delEdge with label nonexistent edge is no-op` — no-op
  * - `delEdge with label not on edge retains edge` — non-matching
  *
- * Label-filtered traversal:
+ * PosetTrait (label-filtered traversal):
  * - `getOutgoingEdges with label filters visible edges` — outgoing filter
  * - `getIncomingEdges with label filters visible edges` — incoming filter
  * - `getChildren with label returns visible children` — node filter
@@ -58,22 +57,24 @@ import kotlin.test.assertTrue
  * - `query with label on edges without labels returns empty` — boundary
  * - `multi-level transitive visibility grandparent sees grandchild edges` — deep hierarchy
  * - `getOutgoingEdges with label on node with no edges returns empty` — boundary
- * - `queryCache survives parents setter during compareTo sequence` — B4 regression
+ * - `getOutgoingEdges with cond filters by edge predicate` — cond parameter
+ * - `getIncomingEdges with cond filters by edge predicate` — cond parameter
+ * - `INFIMUM label sees only INFIMUM-labeled edges` — INFIMUM visibility
+ * - `setParents with empty map removes all parents` — boundary
+ * - `allLabels includes user-registered labels` — registered labels
+ * - `getAncestors diamond DAG deduplicates shared ancestors` — DAG dedup
  *
  * Cache and branch coverage:
- * - `compareTo cache hit forward returns cached result` — line 112 cache hit
- * - `compareTo cache hit reverse returns negated cached result` — line 114 reverse cache hit
- * - `filterVisitable multiple visitable labels keeps only maximal` — line 145 size>1 path
- * - `addEdge with label on non-existent edge creates then labels` — line 161 null path
- * - `ensureCache already ready skips initialization` — cacheReady true early return
- * - `resolveLabelId unknown label returns null` — label not in cache
- * - `ensureLabelNode existing label returns cached ID` — label already in cache
- * - `doFilterVisitable edge with no labels returns empty` — empty labels set
- * - `doFilterVisitable allVisitable empty returns empty` — no labels match by
- * - `delEdge label on nonexistent edge is no-op` — getEdge returns null early return
+ * - `compare cache hit forward returns cached result` — cache hit
+ * - `compare cache hit reverse returns negated cached result` — reverse cache hit
+ * - `filterVisitable multiple visitable labels keeps only maximal` — size>1 path
+ * - `addEdge with label on non-existent edge creates then labels` — null path
  * - `label ancestors orphan edge in poset storage skips null intToLabel` — null parent label
+ *
+ * Regression:
+ * - `queryCache survives parents setter during compare sequence` — B4 regression
  */
-internal class TraitPosetTest {
+internal class PosetTraitTest {
 
     private class TestNode : AbcNode() {
         override val type: AbcNode.Type = object : AbcNode.Type { override val name = "TN" }
@@ -85,11 +86,11 @@ internal class TraitPosetTest {
 
     private class TestGraph :
         AbcSimpleGraph<TestNode, TestEdge>(),
-        TraitPoset<TestNode, TestEdge> {
+        PosetTrait<TestNode, TestEdge> {
         override val storage = NativeStorageImpl()
         override val graphId: String = "TestPoset"
-        override val posetStorage = NativeStorageImpl()
-        override val posetState = TraitPoset.PosetState()
+        val posetStorage = NativeStorageImpl()
+        override val poset: IPoset = PosetDftImpl(posetStorage)
         override fun newNodeObj() = TestNode()
         override fun newEdgeObj() = TestEdge()
     }
@@ -103,19 +104,18 @@ internal class TraitPosetTest {
 
     @AfterTest
     fun tearDown() {
-        // graph does not need closing
     }
 
-    // region IPoset
+    // region IPoset (label hierarchy)
 
     @Test
     fun `label parents set and get round-trips`() {
         val child = Label("child")
         val parent = Label("parent")
 
-        with(graph) { child.parents = mapOf("rel" to parent) }
+        graph.poset.setParents(child, mapOf("rel" to parent))
 
-        with(graph) { assertEquals(mapOf("rel" to parent), child.parents) }
+        assertEquals(mapOf("rel" to parent), graph.poset.getParents(child))
     }
 
     @Test
@@ -124,20 +124,16 @@ internal class TraitPosetTest {
         val p1 = Label("p1")
         val p2 = Label("p2")
 
-        with(graph) {
-            label.parents = mapOf("a" to p1)
-            label.parents = mapOf("b" to p2)
+        graph.poset.setParents(label, mapOf("a" to p1))
+        graph.poset.setParents(label, mapOf("b" to p2))
 
-            assertEquals(mapOf("b" to p2), label.parents)
-            assertFalse(label.parents.containsKey("a"))
-        }
+        assertEquals(mapOf("b" to p2), graph.poset.getParents(label))
+        assertFalse(graph.poset.getParents(label).containsKey("a"))
     }
 
     @Test
     fun `label parents getter returns empty when never set`() {
-        val label = Label("fresh")
-
-        with(graph) { assertTrue(label.parents.isEmpty()) }
+        assertTrue(graph.poset.getParents(Label("fresh")).isEmpty())
     }
 
     @Test
@@ -146,102 +142,79 @@ internal class TraitPosetTest {
         val p = Label("p")
         val c = Label("c")
 
-        with(graph) {
-            c.parents = mapOf("up" to p)
-            p.parents = mapOf("up" to gp)
-            val ancestors = c.ancestors.toSet()
-            assertTrue(p in ancestors)
-            assertTrue(gp in ancestors)
-        }
+        graph.poset.setParents(c, mapOf("up" to p))
+        graph.poset.setParents(p, mapOf("up" to gp))
+        val ancestors = graph.poset.getAncestors(c).toSet()
+        assertTrue(p in ancestors)
+        assertTrue(gp in ancestors)
     }
 
     @Test
     fun `label ancestors on label with no parents returns empty`() {
-        val label = Label("orphan")
-
-        with(graph) { assertEquals(0, label.ancestors.count()) }
+        assertEquals(0, graph.poset.getAncestors(Label("orphan")).count())
     }
 
     @Test
-    fun `label compareTo equal returns zero`() {
-        val label = Label("same")
-
-        with(graph) { assertEquals(0, label.compareTo(label)) }
+    fun `compare equal returns zero`() {
+        assertEquals(0, graph.poset.compare(Label("same"), Label("same")))
     }
 
     @Test
-    fun `label compareTo child vs parent returns negative`() {
+    fun `compare child vs parent returns negative`() {
         val parent = Label("parent")
         val child = Label("child")
+        graph.poset.setParents(child, mapOf("up" to parent))
 
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            val result = child.compareTo(parent)
-            assertNotNull(result)
-            assertTrue(result < 0)
-        }
+        val result = graph.poset.compare(child, parent)
+        assertNotNull(result)
+        assertTrue(result < 0)
     }
 
     @Test
-    fun `label compareTo parent vs child returns positive`() {
+    fun `compare parent vs child returns positive`() {
         val parent = Label("parent")
         val child = Label("child")
+        graph.poset.setParents(child, mapOf("up" to parent))
 
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            val result = parent.compareTo(child)
-            assertNotNull(result)
-            assertTrue(result > 0)
-        }
+        val result = graph.poset.compare(parent, child)
+        assertNotNull(result)
+        assertTrue(result > 0)
     }
 
     @Test
-    fun `label compareTo incomparable returns null`() {
-        val a = Label("a")
-        val b = Label("b")
-
-        with(graph) { assertNull(a.compareTo(b)) }
+    fun `compare incomparable returns null`() {
+        assertNull(graph.poset.compare(Label("a"), Label("b")))
     }
 
     @Test
-    fun `label compareTo SUPREMUM greater than any`() {
+    fun `compare SUPREMUM greater than any`() {
         val label = Label("any")
-
-        with(graph) {
-            assertEquals(1, Label.SUPREMUM.compareTo(label))
-            assertEquals(-1, label.compareTo(Label.SUPREMUM))
-        }
+        assertEquals(1, graph.poset.compare(Label.SUPREMUM, label))
+        assertEquals(-1, graph.poset.compare(label, Label.SUPREMUM))
     }
 
     @Test
-    fun `label compareTo INFIMUM less than any`() {
+    fun `compare INFIMUM less than any`() {
         val label = Label("any")
-
-        with(graph) {
-            assertEquals(-1, Label.INFIMUM.compareTo(label))
-            assertEquals(1, label.compareTo(Label.INFIMUM))
-        }
+        assertEquals(-1, graph.poset.compare(Label.INFIMUM, label))
+        assertEquals(1, graph.poset.compare(label, Label.INFIMUM))
     }
 
     @Test
-    fun `label compareTo SUPREMUM vs INFIMUM`() {
-        with(graph) {
-            assertEquals(1, Label.SUPREMUM.compareTo(Label.INFIMUM))
-            assertEquals(-1, Label.INFIMUM.compareTo(Label.SUPREMUM))
-        }
+    fun `compare SUPREMUM vs INFIMUM`() {
+        assertEquals(1, graph.poset.compare(Label.SUPREMUM, Label.INFIMUM))
+        assertEquals(-1, graph.poset.compare(Label.INFIMUM, Label.SUPREMUM))
     }
 
     @Test
     fun `allLabels includes INFIMUM and SUPREMUM`() {
-        with(graph) {
-            assertTrue(Label.INFIMUM in allLabels)
-            assertTrue(Label.SUPREMUM in allLabels)
-        }
+        assertTrue(Label.INFIMUM in graph.poset.allLabels)
+        assertTrue(Label.SUPREMUM in graph.poset.allLabels)
     }
 
     // endregion
 
-    // region Label-aware edge operations
+    // region PosetTrait (label-aware edge operations)
 
     @Test
     fun `addEdge with label assigns label`() {
@@ -347,19 +320,17 @@ internal class TraitPosetTest {
 
     // endregion
 
-    // region Label-filtered traversal
+    // region PosetTrait (label-filtered traversal)
 
     @Test
     fun `getOutgoingEdges with label filters visible edges`() {
         graph.addNode("a")
         graph.addNode("b")
         graph.addNode("c")
-        val l1 = Label("v1")
-        val l2 = Label("v2")
-        graph.addEdge("a", "b", "r1", l1)
-        graph.addEdge("a", "c", "r2", l2)
+        graph.addEdge("a", "b", "r1", Label("v1"))
+        graph.addEdge("a", "c", "r2", Label("v2"))
 
-        val edges = graph.getOutgoingEdges("a", l1).toList()
+        val edges = graph.getOutgoingEdges("a", Label("v1")).toList()
 
         assertEquals(1, edges.size)
         assertEquals("b", edges.first().dstNid)
@@ -440,7 +411,7 @@ internal class TraitPosetTest {
         graph.addNode("b")
         val parent = Label("parent")
         val child = Label("child")
-        with(graph) { child.parents = mapOf("up" to parent) }
+        graph.poset.setParents(child, mapOf("up" to parent))
         graph.addEdge("a", "b", "rel", child)
 
         val edges = graph.getOutgoingEdges("a", parent).toList()
@@ -475,10 +446,8 @@ internal class TraitPosetTest {
         val gp = Label("gp")
         val p = Label("p")
         val c = Label("c")
-        with(graph) {
-            c.parents = mapOf("up" to p)
-            p.parents = mapOf("up" to gp)
-        }
+        graph.poset.setParents(c, mapOf("up" to p))
+        graph.poset.setParents(p, mapOf("up" to gp))
         graph.addNode("a")
         graph.addNode("b")
         graph.addEdge("a", "b", "rel", c)
@@ -497,38 +466,121 @@ internal class TraitPosetTest {
         assertTrue(edges.isEmpty())
     }
 
+    @Test
+    fun `getOutgoingEdges with cond filters by edge predicate`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addNode("c")
+        val label = Label("v1")
+        val e1 = graph.addEdge("a", "b", "calls", label)
+        val e2 = graph.addEdge("a", "c", "data", label)
+
+        val edges = graph.getOutgoingEdges("a", label) { it.eTag == "calls" }.toList()
+
+        assertEquals(1, edges.size)
+        assertEquals("b", edges.first().dstNid)
+    }
+
+    @Test
+    fun `getIncomingEdges with cond filters by edge predicate`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addNode("c")
+        val label = Label("v1")
+        graph.addEdge("a", "c", "calls", label)
+        graph.addEdge("b", "c", "data", label)
+
+        val edges = graph.getIncomingEdges("c", label) { it.eTag == "calls" }.toList()
+
+        assertEquals(1, edges.size)
+        assertEquals("a", edges.first().srcNid)
+    }
+
+    @Test
+    fun `INFIMUM label sees only INFIMUM-labeled edges`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addNode("c")
+        graph.addEdge("a", "b", "r1", Label("v1"))
+        graph.addEdge("a", "c", "r2", Label.INFIMUM)
+
+        val edges = graph.getOutgoingEdges("a", Label.INFIMUM).toList()
+
+        assertEquals(1, edges.size)
+        assertEquals("c", edges.first().dstNid)
+    }
+
+    @Test
+    fun `setParents with empty map removes all parents`() {
+        val label = Label("child")
+        val parent = Label("parent")
+        graph.poset.setParents(label, mapOf("up" to parent))
+
+        graph.poset.setParents(label, emptyMap())
+
+        assertTrue(graph.poset.getParents(label).isEmpty())
+        assertEquals(0, graph.poset.getAncestors(label).count())
+    }
+
+    @Test
+    fun `allLabels includes user-registered labels`() {
+        val l1 = Label("alpha")
+        val l2 = Label("beta")
+        graph.poset.setParents(l1, mapOf("up" to l2))
+
+        val all = graph.poset.allLabels
+        assertTrue(l1 in all)
+        assertTrue(l2 in all)
+        assertTrue(Label.INFIMUM in all)
+        assertTrue(Label.SUPREMUM in all)
+    }
+
+    @Test
+    fun `getAncestors diamond DAG deduplicates shared ancestors`() {
+        val root = Label("root")
+        val left = Label("left")
+        val right = Label("right")
+        val child = Label("child")
+        graph.poset.setParents(child, mapOf("l" to left, "r" to right))
+        graph.poset.setParents(left, mapOf("up" to root))
+        graph.poset.setParents(right, mapOf("up" to root))
+
+        val ancestors = graph.poset.getAncestors(child).toList()
+
+        assertEquals(3, ancestors.size, "left, right, root — no duplicates")
+        assertTrue(left in ancestors)
+        assertTrue(right in ancestors)
+        assertTrue(root in ancestors)
+    }
+
     // endregion
 
     // region Cache and branch coverage
 
     @Test
-    fun `compareTo cache hit forward returns cached result`() {
+    fun `compare cache hit forward returns cached result`() {
         val parent = Label("parent")
         val child = Label("child")
+        graph.poset.setParents(child, mapOf("up" to parent))
 
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            val first = child.compareTo(parent)
-            val second = child.compareTo(parent)
-            assertEquals(first, second)
-            assertNotNull(second)
-            assertTrue(second < 0)
-        }
+        val first = graph.poset.compare(child, parent)
+        val second = graph.poset.compare(child, parent)
+        assertEquals(first, second)
+        assertNotNull(second)
+        assertTrue(second < 0)
     }
 
     @Test
-    fun `compareTo cache hit reverse returns negated cached result`() {
+    fun `compare cache hit reverse returns negated cached result`() {
         val parent = Label("parent")
         val child = Label("child")
+        graph.poset.setParents(child, mapOf("up" to parent))
 
-        with(graph) {
-            child.parents = mapOf("up" to parent)
-            val forward = child.compareTo(parent)
-            val reverse = parent.compareTo(child)
-            assertNotNull(forward)
-            assertNotNull(reverse)
-            assertEquals(-forward, reverse)
-        }
+        val forward = graph.poset.compare(child, parent)
+        val reverse = graph.poset.compare(parent, child)
+        assertNotNull(forward)
+        assertNotNull(reverse)
+        assertEquals(-forward, reverse)
     }
 
     @Test
@@ -536,10 +588,8 @@ internal class TraitPosetTest {
         val gp = Label("gp")
         val p = Label("p")
         val c = Label("c")
-        with(graph) {
-            c.parents = mapOf("up" to p)
-            p.parents = mapOf("up" to gp)
-        }
+        graph.poset.setParents(c, mapOf("up" to p))
+        graph.poset.setParents(p, mapOf("up" to gp))
         graph.addNode("a")
         graph.addNode("b")
         graph.addEdge("a", "b", "r1", p)
@@ -567,60 +617,6 @@ internal class TraitPosetTest {
     }
 
     @Test
-    fun `ensureCache already ready skips initialization`() {
-        with(graph) {
-            val first = allLabels
-            val second = allLabels
-            assertEquals(first, second)
-        }
-    }
-
-    @Test
-    fun `resolveLabelId unknown label returns null`() {
-        val result = graph.posetState.resolveLabelId(Label("nonexistent"), graph.posetStorage)
-
-        assertNull(result)
-    }
-
-    @Test
-    fun `ensureLabelNode existing label returns cached ID`() {
-        val label = Label("existing")
-        val firstId = graph.posetState.ensureLabelNode(label, graph.posetStorage)
-
-        val secondId = graph.posetState.ensureLabelNode(label, graph.posetStorage)
-
-        assertEquals(firstId, secondId)
-    }
-
-    @Test
-    fun `doFilterVisitable edge with no labels returns empty`() {
-        graph.addNode("a")
-        graph.addNode("b")
-        graph.addEdge("a", "b", "rel")
-
-        val edges = graph.doFilterVisitable(
-            graph.getOutgoingEdges("a"),
-            Label("v1"),
-        ).toList()
-
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
-    fun `doFilterVisitable allVisitable empty returns empty`() {
-        graph.addNode("a")
-        graph.addNode("b")
-        graph.addEdge("a", "b", "rel", Label("unrelated"))
-
-        val edges = graph.doFilterVisitable(
-            graph.getOutgoingEdges("a"),
-            Label("query"),
-        ).toList()
-
-        assertTrue(edges.isEmpty())
-    }
-
-    @Test
     fun `delEdge label on nonexistent edge is no-op`() {
         graph.addNode("a")
         graph.addNode("b")
@@ -633,16 +629,16 @@ internal class TraitPosetTest {
     @Test
     fun `label ancestors orphan edge in poset storage skips null intToLabel`() {
         val label = Label("root")
-        with(graph) { label.parents = mapOf("up" to Label("parent")) }
-        val parentId = graph.posetState.resolveLabelId(Label("parent"), graph.posetStorage)!!
+        graph.poset.setParents(label, mapOf("up" to Label("parent")))
         val orphanNodeId = graph.posetStorage.addNode()
+        val parentId = graph.posetStorage.nodeIDs.first { id ->
+            (graph.posetStorage.getNodeProperty(id, "label") as? StrVal)?.core == "parent"
+        }
         graph.posetStorage.addEdge(parentId, orphanNodeId, "orphan", emptyMap())
 
-        with(graph) {
-            val ancestors = label.ancestors.toList()
-            assertEquals(1, ancestors.size)
-            assertEquals(Label("parent"), ancestors.first())
-        }
+        val ancestors = graph.poset.getAncestors(label).toList()
+        assertEquals(1, ancestors.size)
+        assertEquals(Label("parent"), ancestors.first())
     }
 
     // endregion
@@ -650,20 +646,18 @@ internal class TraitPosetTest {
     // region Regression
 
     @Test
-    fun `queryCache survives parents setter during compareTo sequence`() {
+    fun `queryCache survives parents setter during compare sequence`() {
         val la = Label("A")
         val lb = Label("B")
         val lc = Label("C")
 
-        with(graph) {
-            la.parents = mapOf("p" to lb)
-            lb.parents = mapOf("p" to lc)
-            assertEquals(-1, la.compareTo(lc))
+        graph.poset.setParents(la, mapOf("p" to lb))
+        graph.poset.setParents(lb, mapOf("p" to lc))
+        assertEquals(-1, graph.poset.compare(la, lc))
 
-            la.parents = mapOf("p" to lb, "q" to lc)
+        graph.poset.setParents(la, mapOf("p" to lb, "q" to lc))
 
-            assertEquals(-1, la.compareTo(lc))
-        }
+        assertEquals(-1, graph.poset.compare(la, lc))
     }
 
     // endregion
