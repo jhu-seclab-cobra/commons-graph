@@ -10,7 +10,7 @@
 
 The storage layer is the **backend-agnostic directed property graph engine**. It manages nodes and edges identified by auto-generated `Int` IDs, per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), edge structural metadata (source, destination, tag), and graph-level metadata. It does not know about domain types (`Label`).
 
-`IStorage` uses auto-generated `Int` IDs. `addNode()` returns a new `Int` ID; `addEdge()` returns a new `Int` ID. This eliminates String hashing overhead on all internal lookups. The graph layer manages the `NodeID` (String) to storage `Int` mapping externally.
+`IStorage` uses auto-generated `Int` IDs. `addNode()` returns a new `Int` ID; `addEdge()` returns a new `Int` ID. The graph layer manages the `NodeID` (String) to storage `Int` mapping externally.
 
 `IStorage` extends `Flushable`. In-memory implementations (`NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`) implement `flush()` as a no-op. Persistent backends (MapDB, Neo4j) perform actual flush-to-disk. Resource lifecycle (file handles, database connections) is the concrete implementation's responsibility, not the `IStorage` contract.
 
@@ -100,16 +100,7 @@ interface IStorage : Flushable {
 
 **Deletion constraint:** Only active-layer entities can be deleted. Deleting a frozen-layer entity throws `FrozenLayerModificationException`.
 
-**Query resolution (properties -- overlay semantics):**
-1. Active layer -- if entity has the property, return it
-2. Frozen layer -- fallback
-
-For entities in both layers, active-layer values take precedence.
-
-**Query resolution (adjacency -- merge semantics):**
-- Edge sets merged from both layers. Frozen edge IDs translated to global IDs.
-
-**Write routing for cross-layer properties:** When property writes target a frozen-only entity, a shadow entry is created in the active layer. Same for edges.
+See `spec.md` for layered query resolution (property overlay, adjacency merge, cross-layer writes) and `model.md` for layered storage invariants.
 
 ---
 
@@ -121,29 +112,3 @@ For entities in both layers, active-layer values take precedence.
 | `FrozenLayerModificationException` | Deleting an entity from the frozen layer in `LayeredStorageImpl` |
 
 Deletion of a non-existent entity is a no-op at the graph level.
-
----
-
-## Validation Rules
-
-### NativeStorageImpl
-
-- `addEdge` rejects edges whose src or dst node does not exist with `EntityNotExistException`
-- Property access/modification on non-existent entities throws `EntityNotExistException`
-- `deleteNode` cascades -- all incident edges removed before the node is deleted
-
-### NativeConcurStorageImpl
-
-- Read operations acquire read lock; write operations acquire write lock
-- Adjacency snapshot invalidated on write; rebuilt lazily on next read
-
-### LayeredStorageImpl
-
-- `deleteNode` / `deleteEdge` throw `FrozenLayerModificationException` if entity is not in active layer
-- `freeze` fully merges all layer data before replacing old frozen layer
-- Property overlay: active layer values take precedence over frozen layer values for the same key
-- Adjacency merge: `getIncomingEdges` / `getOutgoingEdges` merge results from both layers
-- Property writes on frozen-layer entities create shadow entries in active layer
-- Layer count is always 1 or 2 due to merge-on-freeze
-- Global `Int` IDs are stable across freezes
-- All layer operations use standard `IStorage` interface methods on the frozen layer

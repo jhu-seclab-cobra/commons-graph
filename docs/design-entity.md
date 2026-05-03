@@ -8,11 +8,9 @@
 - **Exceptions**: `EntityNotExistException` raised by storage layer on missing entity
 - **Dependency roles**: Data holders: `InternalID` (typealias for `Int`), `NodeID` (typealias for `String`). Orchestrator: `AbcNode` / `AbcEdge` (bridge identity to storage-backed property access). Helpers: `AbcEntity` (property delegate utilities).
 
-The entity layer defines how graph elements are **identified** and how they **expose properties**. It does **not** store data -- it delegates all property reads and writes to the injected `IStorage`.
+The entity layer delegates all property reads and writes to the injected `IStorage`. It does **not** store data itself.
 
-`InternalID` is a `typealias` for `Int` -- the storage-generated opaque identifier for internal entities. `NodeID` is a `typealias` for `String` -- the user-provided node name. The graph layer maintains bidirectional `NodeID`-to-`Int` mapping; entities hold both a `storageId: Int` for storage operations and a user-facing ID (`nodeId` / `edgeId`).
-
-Edges are identified at the graph layer by `(src: NodeID, dst: NodeID, tag: String)` tuples, with a derived string form `"$src-$tag-$dst"`. At the storage layer, edges use auto-generated `Int` IDs.
+See `model.md` for entity identity rules, edge identity semantics, and existence conditions.
 
 ---
 

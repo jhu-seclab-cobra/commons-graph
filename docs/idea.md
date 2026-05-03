@@ -30,21 +30,14 @@ This module is the stable graph domain boundary, translating domain-level graph 
         v                                 v
 [Domain Coordinator]
   ├── Deterministic edge identity
-  ├── Node/edge wrapper caching
   └── Label visibility filtering
         |                                 |
         v                                 v
 [Store Contract: graph]         [Store Contract: label hierarchy]
-  (auto-generated integer IDs)      (auto-generated integer IDs)
         |                                 |
-        +--> Flat store (single-layer)    +--> Flat store (label DAG)
-        |       ├── [In-memory]
-        |       ├── [Persistent file-backed]
-        |       ├── [Algorithm-integrated]
-        |       └── [Embedded database]
+        +--> Flat store                   +--> Flat store (label DAG)
         |
         +--> Layered store (freeze-and-stack)
-                └── 1 frozen layer + 1 active layer
 ```
 
 **Core Concepts**
@@ -55,19 +48,19 @@ This module is the stable graph domain boundary, translating domain-level graph 
   - **Relationships:** Delegates to storage for persistence. Delegates to the label hierarchy for edge visibility filtering. Produces entities as query results.
 
 - **Node**
-  - **Definition:** A vertex in the graph, identified by a user-provided string identifier. Carries typed properties backed by storage.
-  - **Scope:** Owns property access for its entity. Does not own adjacency data or traversal logic.
-  - **Relationships:** Created and queried through the graph. Properties stored in the underlying storage.
+  - **Definition:** A vertex in the graph, identified by a user-provided string identifier. Carries typed properties.
+  - **Scope:** Owns its identity and property access. Does not own adjacency data or traversal logic.
+  - **Relationships:** Created and queried through the graph.
 
 - **Edge**
-  - **Definition:** A directed connection between two nodes, identified by source, destination, and tag. Carries typed properties and optional label association.
+  - **Definition:** A directed connection between two nodes, identified by source, destination, and tag. Carries typed properties.
   - **Scope:** Owns its structural metadata (source, destination, tag) and property access. Does not own adjacency indexing.
-  - **Relationships:** Created through the graph. Structural metadata resolved from storage on demand. Visibility governed by the label hierarchy.
+  - **Relationships:** Created through the graph. Visibility governed by the label hierarchy.
 
 - **Entity**
-  - **Definition:** A lightweight property-access wrapper backed by storage. Both nodes and edges are entities. Constructed empty and bound to storage and an identifier by the graph layer.
+  - **Definition:** The common abstraction for nodes and edges as property-carrying graph elements.
   - **Scope:** Owns typed property access. Does not own identity generation or lifecycle.
-  - **Relationships:** Bound to a storage instance. All properties in the entity namespace are user properties.
+  - **Relationships:** Both nodes and edges are entities. See `model.md` for identity and existence rules.
 
 - **Storage**
   - **Definition:** A generic directed property graph engine that manages nodes, edges, adjacency indices, and per-entity properties using auto-generated integer identifiers.
@@ -104,14 +97,13 @@ This module is the stable graph domain boundary, translating domain-level graph 
 
 **Internal Processing Flow**
 1. **Request normalization** — Domain service provides a valid node identifier and edge tuple, invokes a graph operation.
-2. **Graph-level contract checks** — Graph layer enforces existence, uniqueness, and variant rules.
-3. **Identity translation** — Graph layer maps string node identifiers to storage integer identifiers, generating new mappings for additions.
-4. **Store dispatch** — Graph layer passes integer identifiers to storage for node, edge, adjacency, and property operations.
-5. **Layer routing** (layered storage only) — Writes go to the active layer. Reads cascade from active to frozen. Deletes are restricted to the active layer.
-6. **Entity materialization** — Storage data wraps into typed entity views via cached wrapper objects. Property operations route through the entity to storage.
-7. **Label hierarchy dispatch** (label operations) — Label hierarchy queries route to the dedicated storage instance using label strings mapped to storage identifiers.
-8. **Freeze transition** (layered storage only) — On freeze, all layers merge into a single frozen store. The active layer is replaced with an empty store.
-9. **Result propagation** — Success returns typed domain outputs. Contract violations raise explicit domain exceptions.
+2. **Contract checks** — Graph layer enforces existence, uniqueness, and variant rules.
+3. **Identity translation** — Graph layer maps string node identifiers to storage integer identifiers.
+4. **Store dispatch** — Graph layer delegates to storage for node, edge, adjacency, and property operations.
+5. **Label hierarchy dispatch** (label operations) — Label hierarchy queries route to a dedicated storage instance.
+6. **Result propagation** — Success returns typed domain outputs. Contract violations raise domain exceptions.
+
+See `spec.md` for layered query resolution and entity materialization algorithms.
 
 ## 4. Scenarios
 

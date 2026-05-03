@@ -10,7 +10,9 @@
 - **Exceptions**: `IllegalArgumentException` raised on invalid group/suffix
 - **Dependency roles**: Orchestrator: `TraitGroup` (manages group metadata, delegates node creation to `IGraph`). Data holders: reserved node properties `__group__`, `__suffix__`.
 
-`TraitGroup` is an optional graph trait providing group membership management for nodes. Group membership is stored as **node properties** (`__group__`, `__suffix__`), not encoded in the NodeID. Per-group counters are persisted via **storage metadata** (`__group_counter_*`). The trait does **not** own NodeID generation — callers control IDs via `IGraph.addNode`, or use the convenience `addGroupNode` which generates an opaque ID internally.
+`TraitGroup` is an optional graph trait providing group membership management for nodes. The trait does **not** own NodeID generation — callers control IDs via `IGraph.addNode`, or use the convenience `addGroupNode` which generates an opaque ID internally.
+
+See `model.md` for group membership semantics and invariants. See `spec.md` for the ID generation algorithm.
 
 ---
 
@@ -39,9 +41,9 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
 }
 ```
 
-- `groupPrefix` -- string prefix for auto-generated NodeIDs (e.g., `"AST"`, `"ADG"`). Only used by `addGroupNode` for ID generation. Not encoded into group metadata.
-- `groupedNodesCounter` -- in-memory cache of per-group counters. Persisted to storage meta on every increment. Restored by `rebuildGroupCaches`.
-- `suffixIndex` -- in-memory cache mapping `(group, suffix)` pairs to NodeIDs for O(1) lookup. Rebuilt from node properties on `rebuildGroupCaches`.
+- `groupPrefix` -- string prefix for auto-generated NodeIDs (e.g., `"AST"`, `"ADG"`).
+- `groupedNodesCounter` -- per-group counters. Restored by `rebuildGroupCaches`.
+- `suffixIndex` -- maps `(group, suffix)` pairs to NodeIDs. Rebuilt by `rebuildGroupCaches`.
 
 **Methods:**
 
@@ -57,15 +59,7 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
 | `getGroupNodes(group)` | Returns all nodes whose `__group__` equals the given group. | `group` | `Sequence<N>` | -- |
 | `rebuildGroupCaches()` | Scans all nodes to restore `suffixIndex` and `groupedNodesCounter` from `__group__`/`__suffix__` properties and storage meta. Call after `rebuild()`. | -- | -- | -- |
 
-**Node ID Generation:**
-
-`addGroupNode` generates IDs as `{groupPrefix}_{globalCounter}` where `globalCounter` is a storage-meta-persisted monotonic integer. The ID is an opaque token — no group information is encoded.
-
-Callers needing custom IDs use `addNode(withID)` followed by `assignGroup(node, group, suffix)`.
-
-**Counter Persistence:**
-
-Per-group counters are written to storage meta (`__grp_cnt_<group>`) when auto-generated suffix is used (i.e., `suffix` parameter is null). Explicit suffix calls do not increment or persist the counter. `rebuildGroupCaches` restores counters from meta, so counters survive serialization/deserialization cycles. Global counter (`__grp_global_cnt__`) is incremented on every `addGroupNode` call for NodeID generation.
+See `spec.md` for the node ID generation algorithm and counter persistence details.
 
 ---
 
@@ -75,11 +69,5 @@ Per-group counters are written to storage meta (`__grp_cnt_<group>`) when auto-g
 |-----------|------------|
 | `IllegalArgumentException` | Group name empty; group not registered in `groupedNodesCounter`; suffix empty when explicitly provided; node has no `__group__` property (for `addGroupNode(sameGroupNode)`) |
 
----
 
-## Validation Rules
-
-- Group name must be non-empty. No character restrictions (arbitrary strings allowed).
-- Suffix (when provided) must be non-empty.
-- Group must be registered via `registerGroup(group)` before calling `addGroupNode` or `assignGroup`.
-- `rebuildGroupCaches` must be called after `rebuild()` to restore in-memory caches.
+See `model.md` for group invariants (non-empty names, suffix uniqueness, counter monotonicity).
