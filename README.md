@@ -96,7 +96,18 @@ graph.flush()
 
 ## Documentation
 
-- [Concepts and terminology](docs/idea.md) — domain model, identity scheme, layered storage, label hierarchy.
+- [Concepts and terminology](docs/idea.md) — problem, scope, data flow, scenarios.
+- [Domain model](docs/model.md) — entities, relations, state transitions, invariants.
+- [Design: entities](docs/design-entity.md) — IEntity, AbcNode, AbcEdge, property delegates.
+- [Design: graph](docs/design-graph.md) — IGraph, AbcMultipleGraph, AbcSimpleGraph.
+- [Design: storage](docs/design-storage.md) — IStorage and backend implementations.
+- [Design: labels](docs/design-label.md) — IPoset, PosetDftImpl, PosetTrait.
+- [Algorithms](docs/spec.md) — edge lookup, BFS, visibility filtering, layered queries.
+- [Full docs index](docs/index.md) — all documentation files.
+
+## For Agents
+
+Agent-consumable documentation index at `docs/llms.txt` (llmstxt.org format).
 
 ## Citation
 
