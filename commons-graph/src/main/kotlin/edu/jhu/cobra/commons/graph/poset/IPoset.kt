@@ -1,31 +1,34 @@
 package edu.jhu.cobra.commons.graph.poset
 
 /**
- * Contract for a label partial-order set (poset) controlling edge visibility.
+ * Contract for a label partial-order set (poset).
  *
- * Labels form a hierarchy through parent relationships. Visibility is determined
- * by comparing labels: an edge is visitable under label `by` if at least one of
- * its labels `l` satisfies `by == l` or `by > l` in the hierarchy.
+ * Labels form a hierarchy through parent relationships. Ordering is determined
+ * by ancestry: [compare] returns positive when [a] is an ancestor of [b],
+ * negative when [a] is a descendant, zero when equal, null when incomparable.
  *
  * [Label.INFIMUM] and [Label.SUPREMUM] are structural bounds and should not be assigned to edges.
  *
- * @see Label
+ * @see PosetDftImpl
  */
 interface IPoset {
+
     /** All labels registered in the poset, including [Label.INFIMUM] and [Label.SUPREMUM]. */
     val allLabels: Set<Label>
 
     /** Named parent labels forming the basis of a label's position in the poset. */
-    var Label.parents: Map<String, Label>
+    fun getParents(label: Label): Map<String, Label>
+
+    /** Sets the named parent labels for [label], replacing any previous parents. */
+    fun setParents(label: Label, parents: Map<String, Label>)
 
     /** All ancestor labels traversing upwards through the parent hierarchy. */
-    val Label.ancestors: Sequence<Label>
+    fun getAncestors(label: Label): Sequence<Label>
 
     /**
-     * Compares this label with another in the poset hierarchy.
+     * Compares two labels in the poset hierarchy.
      *
-     * @param other The label to compare against.
-     * @return Positive if this > other, negative if this < other, 0 if equal, null if incomparable.
+     * @return Positive if [a] > [b], negative if [a] < [b], 0 if equal, null if incomparable.
      */
-    fun Label.compareTo(other: Label): Int?
+    fun compare(a: Label, b: Label): Int?
 }

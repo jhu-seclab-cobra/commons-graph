@@ -5,7 +5,7 @@ package edu.jhu.cobra.commons.graph
  *
  * Edges are identified by their `(src, dst, tag)` triple.
  * Label-aware operations (visibility filtering, label assignment) are provided
- * by [AbcMultipleGraph], which combines this interface with [IPoset][edu.jhu.cobra.commons.graph.poset.IPoset].
+ * by [PosetTrait][edu.jhu.cobra.commons.graph.poset.PosetTrait].
  *
  * @param N The node type.
  * @param E The edge type.
