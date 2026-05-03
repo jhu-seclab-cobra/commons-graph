@@ -3,9 +3,9 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -112,9 +112,9 @@ internal class AbcNodeTest {
 
     @Test
     fun `set stores user property`() {
-        node["count"] = 42.numVal
+        node["count"] = 42.intVal
 
-        assertEquals(42, (node["count"] as NumVal).core)
+        assertEquals(42L, (node["count"] as IntVal).core)
     }
 
     @Test
@@ -142,21 +142,21 @@ internal class AbcNodeTest {
     @Test
     fun `asMap returns all user properties`() {
         node["a"] = "x".strVal
-        node["b"] = 1.numVal
+        node["b"] = 1.intVal
 
         val map = node.asMap()
 
         assertEquals(2, map.size)
         assertEquals("x", (map["a"] as StrVal).core)
-        assertEquals(1, (map["b"] as NumVal).core)
+        assertEquals(1L, (map["b"] as IntVal).core)
     }
 
     @Test
     fun `update sets multiple user properties`() {
-        node.update(mapOf("a" to "x".strVal, "b" to 2.numVal))
+        node.update(mapOf("a" to "x".strVal, "b" to 2.intVal))
 
         assertEquals("x", (node["a"] as StrVal).core)
-        assertEquals(2, (node["b"] as NumVal).core)
+        assertEquals(2L, (node["b"] as IntVal).core)
     }
 
     // endregion

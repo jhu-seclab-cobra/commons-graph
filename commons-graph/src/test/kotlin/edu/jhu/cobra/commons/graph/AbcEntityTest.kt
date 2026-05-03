@@ -1,9 +1,9 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -78,9 +78,9 @@ internal class AbcEntityTest {
 
     @Test
     fun `set stores value`() {
-        testNode["age"] = 30.numVal
+        testNode["age"] = 30.intVal
 
-        assertEquals(30, (testNode["age"] as NumVal).core)
+        assertEquals(30L, (testNode["age"] as IntVal).core)
     }
 
     @Test
@@ -113,13 +113,13 @@ internal class AbcEntityTest {
     @Test
     fun `asMap returns all properties as snapshot`() {
         testNode["a"] = "x".strVal
-        testNode["b"] = 1.numVal
+        testNode["b"] = 1.intVal
 
         val map = testNode.asMap()
 
         assertEquals(2, map.size)
         assertEquals("x", (map["a"] as StrVal).core)
-        assertEquals(1, (map["b"] as NumVal).core)
+        assertEquals(1L, (map["b"] as IntVal).core)
     }
 
     @Test
@@ -127,23 +127,23 @@ internal class AbcEntityTest {
         testNode.update(
             mapOf(
                 "name" to "alice".strVal,
-                "age" to 25.numVal,
+                "age" to 25.intVal,
             ),
         )
 
         assertEquals("alice", (testNode["name"] as StrVal).core)
-        assertEquals(25, (testNode["age"] as NumVal).core)
+        assertEquals(25L, (testNode["age"] as IntVal).core)
     }
 
     @Test
     fun `update null values remove properties`() {
         testNode["name"] = "alice".strVal
-        testNode["age"] = 25.numVal
+        testNode["age"] = 25.intVal
 
-        testNode.update(mapOf("name" to null, "age" to 30.numVal))
+        testNode.update(mapOf("name" to null, "age" to 30.intVal))
 
         assertNull(testNode["name"])
-        assertEquals(30, (testNode["age"] as NumVal).core)
+        assertEquals(30L, (testNode["age"] as IntVal).core)
     }
 
     @Test
@@ -184,7 +184,7 @@ internal class AbcEntityTest {
 
     @Test
     fun `getTypeProp returns null when type mismatches`() {
-        testNode["age"] = 25.numVal
+        testNode["age"] = 25.intVal
 
         val result: StrVal? = testNode.getTypeProp<StrVal>("age")
 
@@ -340,14 +340,14 @@ internal class AbcEntityTest {
     fun `EntityType delegate returns default when stored value is non-StrVal type`() {
         val sid = storage.addNode()
         val node = TypeNode().also { it.bind(storage, sid, "t") }
-        node["myKind"] = 42.numVal
+        node["myKind"] = 42.intVal
 
         assertEquals(Kind.SOURCE, node.namedKind)
     }
 
     @Test
     fun `getTypeProp returns null when property exists but wrong type`() {
-        testNode["count"] = 100.numVal
+        testNode["count"] = 100.intVal
 
         val result: StrVal? = testNode.getTypeProp("count")
 

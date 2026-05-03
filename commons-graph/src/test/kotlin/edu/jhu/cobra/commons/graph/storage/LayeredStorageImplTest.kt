@@ -2,9 +2,9 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -202,7 +202,7 @@ internal class LayeredStorageImplTest {
 
     @Test
     fun `global IDs remain stable across freezes`() {
-        val n1 = storage.addNode(mapOf("v" to 1.numVal))
+        val n1 = storage.addNode(mapOf("v" to 1.intVal))
         val n2 = storage.addNode()
         val e1 = storage.addEdge(n1, n2, "rel")
         storage.freeze()
@@ -210,14 +210,14 @@ internal class LayeredStorageImplTest {
         assertTrue(storage.containsNode(n1))
         assertTrue(storage.containsNode(n2))
         assertTrue(storage.containsEdge(e1))
-        assertEquals(1, (storage.getNodeProperties(n1)["v"] as NumVal).core)
+        assertEquals(1L, (storage.getNodeProperties(n1)["v"] as IntVal).core)
     }
 
     @Test
     fun `first freeze with no prior frozen layer preserves nodes and edges`() {
         val n1 = storage.addNode(mapOf("a" to "v1".strVal))
         val n2 = storage.addNode(mapOf("b" to "v2".strVal))
-        val e = storage.addEdge(n1, n2, "link", mapOf("w" to 5.numVal))
+        val e = storage.addEdge(n1, n2, "link", mapOf("w" to 5.intVal))
         assertEquals(1, storage.layerCount)
         storage.freeze()
         assertEquals(2, storage.layerCount)
@@ -226,7 +226,7 @@ internal class LayeredStorageImplTest {
         assertTrue(storage.containsEdge(e))
         assertEquals("v1", (storage.getNodeProperty(n1, "a") as StrVal).core)
         assertEquals("v2", (storage.getNodeProperty(n2, "b") as StrVal).core)
-        assertEquals(5, (storage.getEdgeProperty(e, "w") as NumVal).core)
+        assertEquals(5L, (storage.getEdgeProperty(e, "w") as IntVal).core)
         val structure = storage.getEdgeStructure(e)
         assertEquals(n1, structure.src)
         assertEquals(n2, structure.dst)
@@ -236,10 +236,10 @@ internal class LayeredStorageImplTest {
     @Test
     fun `first freeze transfers metadata when no prior frozen layer`() {
         storage.setMeta("key1", "val1".strVal)
-        storage.setMeta("key2", 42.numVal)
+        storage.setMeta("key2", 42.intVal)
         storage.freeze()
         assertEquals("val1", (storage.getMeta("key1") as StrVal).core)
-        assertEquals(42, (storage.getMeta("key2") as NumVal).core)
+        assertEquals(42L, (storage.getMeta("key2") as IntVal).core)
     }
 
     @Test
@@ -706,7 +706,7 @@ internal class LayeredStorageImplTest {
 
     @Test
     fun `ActiveColumnViewMap size delegates to entries`() {
-        val node = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val node = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         val props = storage.getNodeProperties(node)
         assertEquals(2, props.size)
     }

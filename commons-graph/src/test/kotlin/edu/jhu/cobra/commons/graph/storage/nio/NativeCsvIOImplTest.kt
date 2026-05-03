@@ -4,10 +4,12 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
 import edu.jhu.cobra.commons.value.BoolVal
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.FloatVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,7 +35,7 @@ import kotlin.test.assertTrue
  * - `round-trip preserves edge count and structure` -- edge structural fidelity
  * - `round-trip preserves edges and their tags` -- edge tag fidelity
  * - `round-trip preserves metadata` -- metadata fidelity
- * - `round-trip preserves mixed property types` -- type fidelity across StrVal, NumVal, BoolVal
+ * - `round-trip preserves mixed property types` -- type fidelity across StrVal, IntVal, FloatVal, BoolVal
  * - `round-trip preserves special characters in property values` -- CSV escaping
  * - `round-trip on empty storage produces empty target` -- empty boundary
  * - `multiple round-trips produce identical data` -- idempotent serialization
@@ -99,7 +101,7 @@ internal class NativeCsvIOImplTest {
 
     @Test
     fun `round-trip preserves node properties`() {
-        storage.addNode(mapOf("name" to "Alice".strVal, "age" to 30.numVal))
+        storage.addNode(mapOf("name" to "Alice".strVal, "age" to 30.intVal))
         storage.addNode(mapOf("name" to "Bob".strVal))
 
         val target = roundTrip(storage)
@@ -108,7 +110,7 @@ internal class NativeCsvIOImplTest {
         val names = allProps.mapNotNull { (it["name"] as? StrVal)?.core }.toSet()
         assertEquals(setOf("Alice", "Bob"), names)
         val alice = allProps.first { (it["name"] as? StrVal)?.core == "Alice" }
-        assertEquals(30, (alice["age"] as NumVal).core)
+        assertEquals(30L, (alice["age"] as IntVal).core)
     }
 
     @Test
@@ -146,12 +148,12 @@ internal class NativeCsvIOImplTest {
     fun `round-trip preserves metadata`() {
         storage.addNode()
         storage.setMeta("version", "2.0".strVal)
-        storage.setMeta("count", 42.numVal)
+        storage.setMeta("count", 42.intVal)
 
         val target = roundTrip(storage)
 
         assertEquals("2.0", (target.getMeta("version") as StrVal).core)
-        assertEquals(42, (target.getMeta("count") as NumVal).core)
+        assertEquals(42L, (target.getMeta("count") as IntVal).core)
     }
 
     @Test
@@ -159,8 +161,8 @@ internal class NativeCsvIOImplTest {
         storage.addNode(
             mapOf(
                 "name" to "Node1".strVal,
-                "age" to 25.numVal,
-                "weight" to 1.5.numVal,
+                "age" to 25.intVal,
+                "weight" to 1.5.floatVal,
                 "active" to true.boolVal,
             ),
         )
@@ -169,8 +171,8 @@ internal class NativeCsvIOImplTest {
 
         val props = target.getNodeProperties(target.nodeIDs.first())
         assertEquals("Node1", (props["name"] as StrVal).core)
-        assertEquals(25, (props["age"] as NumVal).core)
-        assertEquals(1.5, (props["weight"] as NumVal).core)
+        assertEquals(25L, (props["age"] as IntVal).core)
+        assertEquals(1.5, (props["weight"] as FloatVal).core)
         assertEquals(true, (props["active"] as BoolVal).core)
     }
 
@@ -471,8 +473,8 @@ internal class NativeCsvIOImplTest {
     @Test
     fun `import skips node property when deserialized value is null`() {
         val src = NativeStorageImpl()
-        src.addNode(mapOf("name" to "Alice".strVal, "age" to 30.numVal))
-        src.addNode(mapOf("name" to "Bob".strVal, "age" to 25.numVal))
+        src.addNode(mapOf("name" to "Alice".strVal, "age" to 30.intVal))
+        src.addNode(mapOf("name" to "Bob".strVal, "age" to 25.intVal))
 
         val dir = tempDir.resolve("null_node_prop").createDirectories()
         NativeCsvIOImpl.export(dir, src)
@@ -526,7 +528,7 @@ internal class NativeCsvIOImplTest {
         val src = NativeStorageImpl()
         val n1 = src.addNode()
         val n2 = src.addNode()
-        src.addEdge(n1, n2, "rel", mapOf("weight" to 5.numVal))
+        src.addEdge(n1, n2, "rel", mapOf("weight" to 5.intVal))
 
         val dir = tempDir.resolve("null_edge_prop").createDirectories()
         NativeCsvIOImpl.export(dir, src)

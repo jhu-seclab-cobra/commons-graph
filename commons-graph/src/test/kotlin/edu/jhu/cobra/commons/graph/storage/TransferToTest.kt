@@ -1,8 +1,10 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.FloatVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,7 +46,7 @@ internal class TransferToTest {
     @Test
     fun `transferTo preserves node properties in target`() {
         val source = NativeStorageImpl()
-        source.addNode(mapOf("name" to "A".strVal, "age" to 1.numVal))
+        source.addNode(mapOf("name" to "A".strVal, "age" to 1.intVal))
         source.addNode(mapOf("name" to "B".strVal))
 
         val target = NativeStorageImpl()
@@ -54,7 +56,7 @@ internal class TransferToTest {
         val names = allProps.mapNotNull { (it["name"] as? StrVal)?.core }.toSet()
         assertEquals(setOf("A", "B"), names)
         val nodeA = allProps.first { (it["name"] as? StrVal)?.core == "A" }
-        assertEquals(1, (nodeA["age"] as NumVal).core)
+        assertEquals(1L, (nodeA["age"] as IntVal).core)
     }
 
     @Test
@@ -80,13 +82,13 @@ internal class TransferToTest {
         val source = NativeStorageImpl()
         val n1 = source.addNode()
         val n2 = source.addNode()
-        source.addEdge(n1, n2, "rel", mapOf("weight" to 1.5.numVal, "label" to "x".strVal))
+        source.addEdge(n1, n2, "rel", mapOf("weight" to 1.5.floatVal, "label" to "x".strVal))
 
         val target = NativeStorageImpl()
         source.transferTo(target)
 
         val edgeProps = target.getEdgeProperties(target.edgeIDs.first())
-        assertEquals(1.5, (edgeProps["weight"] as NumVal).core)
+        assertEquals(1.5, (edgeProps["weight"] as FloatVal).core)
         assertEquals("x", (edgeProps["label"] as StrVal).core)
     }
 
@@ -95,13 +97,13 @@ internal class TransferToTest {
         val source = NativeStorageImpl()
         source.addNode()
         source.setMeta("version", "1.0".strVal)
-        source.setMeta("count", 42.numVal)
+        source.setMeta("count", 42.intVal)
 
         val target = NativeStorageImpl()
         source.transferTo(target)
 
         assertEquals("1.0", (target.getMeta("version") as StrVal).core)
-        assertEquals(42, (target.getMeta("count") as NumVal).core)
+        assertEquals(42L, (target.getMeta("count") as IntVal).core)
     }
 
     @Test

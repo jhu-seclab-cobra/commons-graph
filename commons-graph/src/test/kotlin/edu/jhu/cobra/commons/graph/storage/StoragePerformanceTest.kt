@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 
@@ -56,12 +56,12 @@ internal class StoragePerformanceTest {
     ): IntArray {
         val nodeIds =
             IntArray(nodeCount) { i ->
-                storage.addNode(mapOf("idx" to i.numVal))
+                storage.addNode(mapOf("idx" to i.intVal))
             }
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.numVal))
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.intVal))
             }
         }
         return nodeIds
@@ -178,7 +178,7 @@ internal class StoragePerformanceTest {
                         setup = {
                             ref[0] = createStorage(name)
                         },
-                        operation = { i -> ref[0]!!.addNode(mapOf("idx" to i.numVal)) },
+                        operation = { i -> ref[0]!!.addNode(mapOf("idx" to i.intVal)) },
                     )
                 }
             println(
@@ -217,7 +217,7 @@ internal class StoragePerformanceTest {
                         operation = { i ->
                             val src = i % nodeCount
                             val dst = (i + 1) % nodeCount
-                            ref[0]!!.addEdge(nodeIds[src], nodeIds[dst], "e$i", mapOf("w" to i.numVal))
+                            ref[0]!!.addEdge(nodeIds[src], nodeIds[dst], "e$i", mapOf("w" to i.intVal))
                         },
                     )
                 }
@@ -264,7 +264,7 @@ internal class StoragePerformanceTest {
             val storage = createStorage(name)
             val nodeIds =
                 IntArray(nodeCount) { i ->
-                    storage.addNode(mapOf("name" to "node$i".strVal, "idx" to i.numVal))
+                    storage.addNode(mapOf("name" to "node$i".strVal, "idx" to i.intVal))
                 }
             val readOps =
                 benchmarkOpsPerSec(opCount) { i ->
@@ -272,7 +272,7 @@ internal class StoragePerformanceTest {
                 }
             val writeOps =
                 benchmarkOpsPerSec(opCount) { i ->
-                    storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
+                    storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.intVal))
                 }
             println(String.format("%-24s %14s %14s", name, fmt(readOps), fmt(writeOps)))
         }
@@ -343,7 +343,7 @@ internal class StoragePerformanceTest {
                     val storage = createStorage(name)
                     val baseNode = storage.addNode()
                     for (i in 1..iterations) {
-                        val newNode = storage.addNode(mapOf("v" to i.numVal))
+                        val newNode = storage.addNode(mapOf("v" to i.intVal))
                         storage.addEdge(newNode, baseNode, "e$i")
                         storage.getNodeProperties(newNode)
                         storage.containsNode(newNode)
@@ -408,7 +408,7 @@ internal class StoragePerformanceTest {
             val allNodeIds = mutableListOf<Int>()
             for (layer in 0 until layers) {
                 for (i in 0 until nodesPerLayer) {
-                    allNodeIds.add(storage.addNode(mapOf("layer" to layer.numVal, "idx" to i.numVal)))
+                    allNodeIds.add(storage.addNode(mapOf("layer" to layer.intVal, "idx" to i.intVal)))
                 }
                 if (layer < layers - 1) storage.freeze()
             }

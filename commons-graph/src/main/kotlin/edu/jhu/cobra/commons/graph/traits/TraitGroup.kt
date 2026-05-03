@@ -6,11 +6,16 @@ import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
 import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.graph.NodeID
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 
+@Deprecated(
+    "TraitGroup mixes infrastructure (ID generation) with domain concerns (suffix-based lookup). " +
+        "Move auto-ID into AbcMultipleGraph/AbcSimpleGraph; move group/suffix indexing to domain modules. " +
+        "See commons-graph todo.md for migration plan.",
+)
 interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     companion object {
         const val PROP_GROUP = "__group__"
@@ -40,7 +45,7 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             suffix
         } else {
             val counter = groupedNodesCounter.compute(group) { _, v -> v!! + 1 }!!
-            storage.setMeta("$META_COUNTER_PREFIX$group", counter.numVal)
+            storage.setMeta("$META_COUNTER_PREFIX$group", counter.intVal)
             counter.toString()
         }
         val key = group to actualSuffix
@@ -54,9 +59,9 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         require(group.isNotEmpty()) { "Group name cannot be empty" }
         require(group in groupedNodesCounter) { "Group $group not registered" }
         require(suffix == null || suffix.isNotEmpty()) { "Suffix cannot be empty" }
-        val current = (storage.getMeta(META_GLOBAL_COUNTER) as? NumVal)?.toInt() ?: 0
+        val current = (storage.getMeta(META_GLOBAL_COUNTER) as? IntVal)?.core?.toInt() ?: 0
         val next = current + 1
-        storage.setMeta(META_GLOBAL_COUNTER, next.numVal)
+        storage.setMeta(META_GLOBAL_COUNTER, next.intVal)
         val nodeID = "${groupPrefix}_$next"
         val node = addNode(withID = nodeID)
         assignGroup(node, group, suffix)
@@ -93,7 +98,7 @@ interface TraitGroup<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             val group = (node[PROP_GROUP] as? StrVal)?.core ?: continue
             val suffix = (node[PROP_SUFFIX] as? StrVal)?.core ?: continue
             suffixIndex[group to suffix] = nodeID
-            val persisted = (storage.getMeta("$META_COUNTER_PREFIX$group") as? NumVal)?.toInt() ?: 0
+            val persisted = (storage.getMeta("$META_COUNTER_PREFIX$group") as? IntVal)?.core?.toInt() ?: 0
             groupedNodesCounter[group] = maxOf(groupedNodesCounter[group] ?: 0, persisted)
         }
     }

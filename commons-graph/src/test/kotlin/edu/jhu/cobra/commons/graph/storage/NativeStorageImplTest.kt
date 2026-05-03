@@ -1,9 +1,11 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.FloatVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -83,11 +85,11 @@ internal class NativeStorageImplTest {
 
     @Test
     fun `addNode with properties stores initial properties`() {
-        val props = mapOf("name" to "Alice".strVal, "age" to 30.numVal)
+        val props = mapOf("name" to "Alice".strVal, "age" to 30.intVal)
         val nodeId = storage.addNode(props)
         val retrieved = storage.getNodeProperties(nodeId)
         assertEquals("Alice", (retrieved["name"] as StrVal).core)
-        assertEquals(30, (retrieved["age"] as NumVal).core)
+        assertEquals(30L, (retrieved["age"] as IntVal).core)
     }
 
     @Test
@@ -182,8 +184,8 @@ internal class NativeStorageImplTest {
     fun `addEdge with properties stores initial properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("weight" to 5.numVal))
-        assertEquals(5, (storage.getEdgeProperties(edgeId)["weight"] as NumVal).core)
+        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("weight" to 5.intVal))
+        assertEquals(5L, (storage.getEdgeProperties(edgeId)["weight"] as IntVal).core)
     }
 
     @Test
@@ -237,18 +239,18 @@ internal class NativeStorageImplTest {
     fun `getEdgeProperties returns stored properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
         val props = storage.getEdgeProperties(edgeId)
         assertEquals(1, props.size)
-        assertEquals(1, (props["w"] as NumVal).core)
+        assertEquals(1L, (props["w"] as IntVal).core)
     }
 
     @Test
     fun `getEdgeProperty returns single property value`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.5.numVal))
-        assertEquals(1.5, (storage.getEdgeProperty(edgeId, "w") as NumVal).core)
+        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.5.floatVal))
+        assertEquals(1.5, (storage.getEdgeProperty(edgeId, "w") as FloatVal).core)
     }
 
     @Test
@@ -378,7 +380,7 @@ internal class NativeStorageImplTest {
     fun `transferTo copies all data and returns node ID mapping`() {
         val n1 = storage.addNode(mapOf("name" to "A".strVal))
         val n2 = storage.addNode(mapOf("name" to "B".strVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
         storage.setMeta("version", "1.0".strVal)
 
         val target = NativeStorageImpl()

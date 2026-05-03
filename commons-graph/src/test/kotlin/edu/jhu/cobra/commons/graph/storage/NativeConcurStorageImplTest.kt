@@ -1,9 +1,11 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.FloatVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -77,10 +79,10 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `addNode with properties stores initial properties`() {
-        val nodeId = storage.addNode(mapOf("name" to "A".strVal, "age" to 25.numVal))
+        val nodeId = storage.addNode(mapOf("name" to "A".strVal, "age" to 25.intVal))
         val props = storage.getNodeProperties(nodeId)
         assertEquals("A", (props["name"] as StrVal).core)
-        assertEquals(25, (props["age"] as NumVal).core)
+        assertEquals(25L, (props["age"] as IntVal).core)
     }
 
     @Test
@@ -190,16 +192,16 @@ internal class NativeConcurStorageImplTest {
     fun `getEdgeProperties returns stored properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
-        assertEquals(1, (storage.getEdgeProperties(edgeId)["w"] as NumVal).core)
+        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
+        assertEquals(1L, (storage.getEdgeProperties(edgeId)["w"] as IntVal).core)
     }
 
     @Test
     fun `getEdgeProperty returns single value or null for absent key`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.5.numVal))
-        assertEquals(1.5, (storage.getEdgeProperty(edgeId, "w") as NumVal).core)
+        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.5.floatVal))
+        assertEquals(1.5, (storage.getEdgeProperty(edgeId, "w") as FloatVal).core)
         assertNull(storage.getEdgeProperty(edgeId, "absent"))
     }
 
@@ -303,7 +305,7 @@ internal class NativeConcurStorageImplTest {
     fun `transferTo copies all data and returns node ID mapping`() {
         val n1 = storage.addNode(mapOf("name" to "A".strVal))
         val n2 = storage.addNode(mapOf("name" to "B".strVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
         storage.setMeta("version", "1.0".strVal)
 
         val target = NativeConcurStorageImpl()
@@ -370,7 +372,7 @@ internal class NativeConcurStorageImplTest {
             executor.submit {
                 try {
                     repeat(nodesPerThread) {
-                        storage.addNode(mapOf("thread" to t.numVal))
+                        storage.addNode(mapOf("thread" to t.intVal))
                     }
                 } catch (e: Exception) {
                     errors.add(e)
@@ -389,7 +391,7 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `concurrent read-write does not corrupt state`() {
-        val node = storage.addNode(mapOf("counter" to 0.numVal))
+        val node = storage.addNode(mapOf("counter" to 0.intVal))
         val threadCount = 4
         val opsPerThread = 200
         val executor = Executors.newFixedThreadPool(threadCount * 2)
@@ -400,8 +402,8 @@ internal class NativeConcurStorageImplTest {
             executor.submit {
                 try {
                     repeat(opsPerThread) {
-                        val current = storage.getNodeProperties(node)["counter"] as NumVal
-                        storage.setNodeProperties(node, mapOf("counter" to (current.core.toInt() + 1).numVal))
+                        val current = storage.getNodeProperties(node)["counter"] as IntVal
+                        storage.setNodeProperties(node, mapOf("counter" to (current.core.toInt() + 1).intVal))
                     }
                 } catch (e: Exception) {
                     errors.add(e)
@@ -415,7 +417,7 @@ internal class NativeConcurStorageImplTest {
             executor.submit {
                 try {
                     repeat(opsPerThread) {
-                        val value = storage.getNodeProperties(node)["counter"] as NumVal
+                        val value = storage.getNodeProperties(node)["counter"] as IntVal
                         assertTrue(value.core.toInt() >= 0)
                     }
                 } catch (e: Exception) {
@@ -430,7 +432,7 @@ internal class NativeConcurStorageImplTest {
         executor.shutdown()
 
         assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
-        val finalValue = (storage.getNodeProperties(node)["counter"] as NumVal).core.toInt()
+        val finalValue = (storage.getNodeProperties(node)["counter"] as IntVal).core.toInt()
         assertTrue(finalValue > 0)
     }
 

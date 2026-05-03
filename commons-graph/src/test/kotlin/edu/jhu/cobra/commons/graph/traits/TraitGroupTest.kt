@@ -1,8 +1,7 @@
 package edu.jhu.cobra.commons.graph.traits
 
 import edu.jhu.cobra.commons.graph.EntityAlreadyExistException
-import edu.jhu.cobra.commons.value.NumVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -417,8 +416,8 @@ internal class TraitGroupTest : AbcTraitGroupTest() {
 
         val node = graph.addGroupNode("items")
 
-        val counter = graph.storage.getMeta(TraitGroup.META_GLOBAL_COUNTER) as NumVal
-        assertEquals(1, counter.toInt())
+        val counter = graph.storage.getMeta(TraitGroup.META_GLOBAL_COUNTER) as IntVal
+        assertEquals(1L, counter.core)
         assertTrue(node.id.endsWith("_1"))
     }
 
@@ -429,8 +428,8 @@ internal class TraitGroupTest : AbcTraitGroupTest() {
 
         val node2 = graph.addGroupNode("items")
 
-        val counter = graph.storage.getMeta(TraitGroup.META_GLOBAL_COUNTER) as NumVal
-        assertEquals(2, counter.toInt())
+        val counter = graph.storage.getMeta(TraitGroup.META_GLOBAL_COUNTER) as IntVal
+        assertEquals(2L, counter.core)
         assertTrue(node2.id.endsWith("_2"))
     }
 

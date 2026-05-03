@@ -3,9 +3,11 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.GraphTestUtils.TestEdge
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.FloatVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -119,9 +121,9 @@ internal class AbcEdgeTest {
 
     @Test
     fun `get returns value for existing property`() {
-        edge["weight"] = 3.14.numVal
+        edge["weight"] = 3.14.floatVal
 
-        assertEquals(3.14, (edge["weight"] as NumVal).core)
+        assertEquals(3.14, (edge["weight"] as FloatVal).core)
     }
 
     @Test
@@ -148,7 +150,7 @@ internal class AbcEdgeTest {
 
     @Test
     fun `contains returns true for existing property`() {
-        edge["weight"] = 1.0.numVal
+        edge["weight"] = 1.0.floatVal
 
         assertTrue("weight" in edge)
     }
@@ -166,7 +168,7 @@ internal class AbcEdgeTest {
     @Test
     fun `asMap returns all properties`() {
         edge["a"] = "x".strVal
-        edge["b"] = 2.numVal
+        edge["b"] = 2.intVal
 
         val map = edge.asMap()
 
@@ -175,21 +177,21 @@ internal class AbcEdgeTest {
 
     @Test
     fun `update sets multiple properties`() {
-        edge.update(mapOf("a" to "x".strVal, "b" to 1.numVal))
+        edge.update(mapOf("a" to "x".strVal, "b" to 1.intVal))
 
         assertEquals("x", (edge["a"] as StrVal).core)
-        assertEquals(1, (edge["b"] as NumVal).core)
+        assertEquals(1L, (edge["b"] as IntVal).core)
     }
 
     @Test
     fun `update null values remove properties`() {
         edge["a"] = "x".strVal
-        edge["b"] = 1.numVal
+        edge["b"] = 1.intVal
 
-        edge.update(mapOf("a" to null, "b" to 2.numVal))
+        edge.update(mapOf("a" to null, "b" to 2.intVal))
 
         assertNull(edge["a"])
-        assertEquals(2, (edge["b"] as NumVal).core)
+        assertEquals(2L, (edge["b"] as IntVal).core)
     }
 
     // endregion
