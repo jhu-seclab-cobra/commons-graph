@@ -5,15 +5,13 @@
 ## Quick Start
 
 ```kotlin
-val graph = MyGraph(NativeStorageImpl(), NativeStorageImpl())
+val graph = MyGraph(NativeStorageImpl())
 val v1 = Label("v1")
 val v2 = Label("v2")
 
-with(graph) {
-    v2.parents = mapOf("base" to v1)
-    val edge = addEdge("a", "b", "calls", v1)
-    val visible = getOutgoingEdges("a", v2)
-}
+graph.poset.setParents(v2, mapOf("base" to v1))
+val edge = graph.addEdge("a", "b", "calls", v1)
+val visible = graph.getOutgoingEdges("a", v2)
 ```
 
 ## API
@@ -26,12 +24,26 @@ with(graph) {
 - **`Label.INFIMUM: Label`** -- Greatest lower bound. Below all labels in the poset.
 - **`Label.SUPREMUM: Label`** -- Least upper bound. Above all labels in the poset.
 
-### `IPoset` (interface, implemented by `AbcMultipleGraph`)
+### `IPoset` (interface)
 
 - **`val allLabels: Set<Label>`** -- All registered labels, including `INFIMUM` and `SUPREMUM`.
-- **`var Label.parents: Map<String, Label>`** -- Named parent labels. Setting replaces all parents. Reading returns current parents.
-- **`val Label.ancestors: Sequence<Label>`** -- All transitive ancestors through the parent hierarchy.
-- **`fun Label.compareTo(other: Label): Int?`** -- Compare in hierarchy. Positive if `this > other`, negative if `this < other`, `0` if equal, `null` if incomparable.
+- **`fun getParents(label: Label): Map<String, Label>`** -- Named parent labels.
+- **`fun setParents(label: Label, parents: Map<String, Label>)`** -- Replace all parents for a label.
+- **`fun getAncestors(label: Label): Sequence<Label>`** -- All transitive ancestors through the parent hierarchy.
+- **`fun compare(a: Label, b: Label): Int?`** -- Compare in hierarchy. Positive if `a > b`, negative if `a < b`, `0` if equal, `null` if incomparable.
+
+### `PosetTrait<N, E>` (interface, extends `IGraph`)
+
+Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+
+- **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge and assign label.
+- **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
+- **`fun getOutgoingEdges(of, label, cond): Sequence<E>`** -- Label-filtered outgoing edges.
+- **`fun getIncomingEdges(of, label, cond): Sequence<E>`** -- Label-filtered incoming edges.
+- **`fun getChildren(of, label, cond): Sequence<N>`** -- Nodes via label-filtered outgoing edges.
+- **`fun getParents(of, label, cond): Sequence<N>`** -- Nodes via label-filtered incoming edges.
+- **`fun getDescendants(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
+- **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 
 ### Edge Visibility Rules
 
@@ -57,9 +69,8 @@ Group membership stored as node properties, not encoded in NodeID.
 ## Gotchas
 
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
-- `Label.parents` setter replaces all parents. Merge with existing parents if appending: `label.parents = label.parents + mapOf("new" to parentLabel)`.
-- `Label.compareTo` returns `null` for incomparable labels. Always handle the `null` case.
-- `IPoset` operations require a `TraitPoset` receiver scope (`with(graph) { ... }`) because `parents`, `ancestors`, and `compareTo` are extension members on `Label`.
+- `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
+- `compare` returns `null` for incomparable labels. Always handle the `null` case.
 - `TraitGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
 - Group counters only increase. Deleting grouped nodes does not decrement the counter.
 - Call `rebuildGroupCaches()` after `rebuild()`. Without it, suffix index and counters are empty.

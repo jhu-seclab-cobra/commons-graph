@@ -2,13 +2,15 @@
 
 ## Design Overview
 
-- **Classes**: `Label`, `LabelID`, `IPoset`, `TraitPoset`
-- **Relationships**: `IPoset` defines the poset contract; `TraitPoset` implements `IPoset` and provides label-filtered graph operations as an optional mixin; `AbcEdge.labels` stores label assignments (see `design-entity.md`)
-- **Abstract**: `IPoset` (implemented by `TraitPoset`); `TraitPoset` (mixed in by concrete graph classes)
+- **Classes**: `Label`, `LabelID`, `IPoset`, `PosetDftImpl`, `PosetTrait`
+- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `AbcEdge.labels` stores label assignments (see `design-entity.md`)
+- **Abstract**: `IPoset` (implemented by `PosetDftImpl`); `PosetTrait` (mixed in by concrete graph classes)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
-- **Dependency roles**: Data holders: `Label`, `PosetState`. Orchestrator: `TraitPoset` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence).
+- **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation).
 
-The label system provides **label-based edge visibility** as an optional trait. The poset structure over `Label` values is defined by `IPoset`, label assignment to edges is a property on `AbcEdge`, and label-filtered graph traversal methods are provided by `TraitPoset`. Concrete graph classes opt in by mixing in `TraitPoset` and providing a `posetStorage: IStorage` instance. Labels stored as nodes in poset storage, parent relationships as edges (`child -> parent`, edge tag = relationship name).
+The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset`.
+
+See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec.md` for the visibility filtering algorithm.
 
 ---
 
@@ -33,33 +35,48 @@ value class Label(val core: LabelID) {
 }
 ```
 
-A `Label`'s ordering is not intrinsic -- it is defined by the poset structure. `INFIMUM` and `SUPREMUM` are special sentinel bounds and must not be assigned to edges.
+See `model.md` for label ordering and sentinel semantics.
 
 ---
 
 ### IPoset
 
-**Responsibility:** Contract for a label partial-order set (poset) controlling edge visibility.
+**Responsibility:** Contract for a pure label partial-order set (poset). No graph awareness.
 
 **Methods:**
 
 ```kotlin
 interface IPoset {
     val allLabels: Set<Label>
-    var Label.parents: Map<String, Label>
-    val Label.ancestors: Sequence<Label>
-    fun Label.compareTo(other: Label): Int?
+    fun getParents(label: Label): Map<String, Label>
+    fun setParents(label: Label, parents: Map<String, Label>)
+    fun getAncestors(label: Label): Sequence<Label>
+    fun compare(a: Label, b: Label): Int?
 }
 ```
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `allLabels` | All labels registered in the poset, including `INFIMUM` and `SUPREMUM` | -- | `Set<Label>` | -- |
-| `Label.parents` (get/set) | Reads/writes typed parent relationships for a label | -- | `Map<String, Label>` | -- |
-| `Label.ancestors` | All ancestor labels traversing upwards through parent hierarchy via BFS | -- | `Sequence<Label>` | -- |
-| `Label.compareTo(other)` | Compares two labels in the poset | `other`: Label | `Int?` -- 0 if equal, positive if this > other, negative if this < other, null if incomparable | -- |
+| `getParents(label)` | Named parent relationships for a label | `label` | `Map<String, Label>` | -- |
+| `setParents(label, parents)` | Replaces all parent relationships for a label | `label`; `parents` | -- | -- |
+| `getAncestors(label)` | All ancestor labels traversing upwards through parent hierarchy via BFS | `label` | `Sequence<Label>` | -- |
+| `compare(a, b)` | Compares two labels in the poset | `a`; `b` | `Int?` -- 0 if equal, positive if a > b, negative if a < b, null if incomparable | -- |
 
-All properties except `allLabels` are **member extensions** -- accessible only within a scope that provides an `IPoset` receiver.
+---
+
+### PosetDftImpl
+
+**Responsibility:** Default `IPoset` implementation backed by an `IStorage` for label DAG persistence. All caching state is private.
+
+**Constructor:** `PosetDftImpl(storage: IStorage)`
+
+The poset store uses auto-generated `Int` IDs:
+
+| Poset concept | IStorage mapping |
+|---------------|-------------------|
+| Label `L` | Node with property `"label"` = `L.core` as `StrVal` |
+| `setParents(L, mapOf("sub" to P))` | Edge from `L`'s node to `P`'s node, tag = `"sub"` |
 
 ---
 
@@ -71,29 +88,21 @@ All properties except `allLabels` are **member extensions** -- accessible only w
 var labels: Set<Label>
 ```
 
-Getting reads from a `ListVal` property named `"labels"` on the edge via storage, mapping each `StrVal` to `Label`. Setting overwrites the storage property. Callers (e.g., `TraitPoset.addEdge(src, dst, tag, label)`) are responsible for managing label assignments.
+Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, dst, tag, label)`) are responsible for managing label assignments.
 
 ---
 
-### TraitPoset (label integration)
+### PosetTrait (label-filtered graph operations)
 
-**Responsibility:** Optional trait implementing `IPoset` and label-filtered graph operations. Mixed in by concrete graph classes alongside `AbcMultipleGraph` or `AbcSimpleGraph`.
+**Responsibility:** Optional trait providing label-filtered graph operations. Mixed in by concrete graph classes alongside `AbcMultipleGraph` or `AbcSimpleGraph`. Combines `IGraph` with a pluggable `IPoset`.
 
 **State / Fields:**
 
 | Field | Type | Content |
 |-------|------|---------|
-| `posetStorage` | `IStorage` | Dedicated storage for label DAG |
-| `posetState` | `PosetState` | In-memory caches (labelIdCache, intToLabel, queryCache) |
+| `poset` | `IPoset` | Pluggable poset module for label hierarchy operations |
 
-The poset store uses auto-generated `Int` IDs:
-
-| Poset concept | IStorage mapping |
-|---------------|-------------------|
-| Label `L` | Node with property `"label"` = `L.core` as `StrVal` |
-| `L.parents = mapOf("sub" to P)` | Edge from `L`'s node to `P`'s node, tag = `"sub"` |
-
-**Label-filtered methods:**
+**Label-filtered methods (default implementations):**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -106,7 +115,7 @@ The poset store uses auto-generated `Int` IDs:
 | `getDescendants(of, label, cond)` | BFS via label-filtered edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
 | `getAncestors(of, label, cond)` | BFS via label-filtered edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
 
-**Edge visibility rule:** An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l || by > l`. Among all visitable labels, those covered by a higher visitable label are excluded.
+See `model.md` for the edge visibility rule and `spec.md` for the filtering algorithm.
 
 ---
 

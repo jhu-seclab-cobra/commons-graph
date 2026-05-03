@@ -15,13 +15,13 @@ class MyEdge : AbcEdge() {
 }
 class MyGraph(
     override val storage: IStorage,
-    override val posetStorage: IStorage,
-) : AbcMultipleGraph<MyNode, MyEdge>() {
+) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
+    override val poset: IPoset = PosetDftImpl(storage)
     override fun newNodeObj() = MyNode()
     override fun newEdgeObj() = MyEdge()
 }
 
-val graph = MyGraph(NativeStorageImpl(), NativeStorageImpl())
+val graph = MyGraph(NativeStorageImpl())
 val n1 = graph.addNode("a")
 val n2 = graph.addNode("b")
 val edge = graph.addEdge("a", "b", "calls")
@@ -51,12 +51,19 @@ graph.flush()
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`, `IPoset`, `Flushable`)
+### `AbcMultipleGraph<N, E>` (extends `IGraph`, `Flushable`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
-- **`abstract val posetStorage: IStorage`** -- Label hierarchy storage backend.
 - **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
 - **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
+- **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
+- **`flush()`** -- Persist node ownership to storage. Does not close the storage instances.
+
+### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
+
+Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+
+- **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
 - **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
 - **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
@@ -65,8 +72,6 @@ graph.flush()
 - **`getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered predecessors.
 - **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
 - **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
-- **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
-- **`flush()` -- Persist node ownership to storage. Does not close the storage instances.
 
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 
@@ -79,6 +84,6 @@ graph.flush()
 - `delNode` cascades to all incident edges. No orphan edges remain.
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
-- `close()` clears graph caches but does not call `storage.close()` or `posetStorage.close()`. Close storage separately.
+- `close()` clears graph caches but does not call `storage.close()`. Close storage separately.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.

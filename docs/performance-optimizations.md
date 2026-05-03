@@ -24,6 +24,7 @@ Optimization log for core module. Benchmarks in [performance.md](performance.md)
 | I19 | LayeredStorageImpl | Frozen edge structure cache | Eliminates repeated translation |
 | I20 | LayeredStorageImpl | ActiveColumnViewMap entries cache | Matches I14 pattern |
 | I21 | LayeredStorageImpl | Eliminate double HashMap lookups | One fewer lookup per query |
+| I22 | PosetDftImpl | DFS interval labeling for O(1) compare | Eliminates O(V²) queryCache; O(1) ancestor check; lazy rebuild on setParents |
 
 ## Evaluated & Rejected
 
@@ -39,6 +40,9 @@ Optimization log for core module. Benchmarks in [performance.md](performance.md)
 | P10-1 | Eclipse Collections IntObjectHashMap | -17% to -50% all metrics; memory -10% but constant-factor overhead worse than JDK HashMap |
 | P10-2 | Eclipse Collections IntHashSet | Not tested; P10-1 regression makes shared dependency unjustified |
 | P10-3 | filterVisitable O(V·H) maximal | -32% to -47% filteredQuery; ancestors BFS uncached, slower than queryCache-backed compareTo |
+| P11-2 | Eliminate Pair allocation in queryCache keys | Superseded by P11-1 (queryCache eliminated) |
+| P11-3 | doFilterVisitable avoid ArrayList\<Pair\> | -16% filteredQuery; toList() materialization slower than Pair approach |
+| P11-4 | setParents clears entire queryCache | Superseded by P11-1 (queryCache eliminated) |
 
 ---
 
@@ -67,3 +71,5 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 13. **Int boxing in HashMap\<Int, *\> costs ~30 MB at 120K nodes.**
 14. **queryCache makes O(V²) compareTo effectively O(V²·1).** Replacing with uncached BFS is slower despite better asymptotic complexity.
 15. **Eclipse Collections IntObjectHashMap slower than JDK HashMap<Int,*>.** JVM autoboxing cache (-128..127) + JIT inline caching make JDK HashMap competitive. Eclipse overhead in hash function and iteration outweighs boxing savings.
+16. **DFS interval labeling replaces queryCache with O(1) compare.** No measurable throughput change at 5 labels (cache was ~100% hit). Eliminates O(V²) memory for large label sets. Lazy rebuild on setParents vs full cache clear.
+17. **doFilterVisitable Pair\<E, Set\<Label\>\> is faster than toList() + filter.** Pair caches the label set read, avoiding double storage access. Removing Pair regresses 16%.

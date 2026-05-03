@@ -10,7 +10,7 @@
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
 
-`AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Edge lookups by `(src, dst, tag)` scan the source node's adjacency list in storage -- O(out-degree) per query.
+`AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. See `spec.md` for edge lookup and traversal algorithms.
 
 ---
 
@@ -67,7 +67,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 ### AbcMultipleGraph
 
-**Responsibility:** Canonical `IGraph` + `Flushable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `TraitPoset` when mixed in by concrete graph classes.
+**Responsibility:** Canonical `IGraph` + `Flushable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `PosetTrait` when mixed in by concrete graph classes.
 
 **State / Fields:**
 
@@ -83,7 +83,7 @@ AbcMultipleGraph
 
 **Shared Storage:**
 
-Multiple graph instances may share a single `IStorage`. Each graph maintains its own `nodeEntries` and `nodeByStorageId`. A node in storage can be registered by multiple graphs via `claimNode` — each graph holds its own typed view (`N`) of the same storage row, sharing all properties.
+Multiple graph instances may share a single `IStorage`. See `model.md` for shared-storage semantics and ownership invariants.
 
 **Node Operations:**
 
@@ -94,16 +94,11 @@ Multiple graph instances may share a single `IStorage`. Each graph maintains its
 
 **Edge Isolation:**
 
-All edge query methods (`getAllEdges`, `getOutgoingEdges`, `getIncomingEdges`, `getAncestors`, `getDescendants`) filter by `nodeByStorageId` membership — only edges whose both endpoints are registered in this graph are returned. Edges belonging to other graphs sharing the same storage are excluded.
+All edge query methods filter by this graph's node registry membership. See `model.md` for the edge isolation invariant.
 
-**Ownership Persistence (`__owners__`):**
+**Ownership Persistence:**
 
-Node ownership is persisted lazily via a `__owners__` SetVal property on each storage row.
-
-- `flush()` writes `graphId` into `__owners__` for every node in `nodeByStorageId`. Zero runtime overhead — ownership only persisted on explicit flush.
-- `rebuild()` restores nodes where `graphId` is in `__owners__`. When `__owners__` is absent (first run), falls back to restoring all nodes.
-
-**Flush contract:** `flush()` persists node ownership to storage. Does not release caches or close storage. Graph remains usable after flush.
+`flush()` persists node ownership to storage via a `__owners__` property. `rebuild()` restores nodes belonging to this graph. Graph remains usable after flush. See `spec.md` for the flush/rebuild algorithm.
 
 ---
 
