@@ -1,18 +1,24 @@
 package edu.jhu.cobra.commons.graph
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Black-box tests for all exception types: message content verification.
+ * Black-box tests for all exception types: message content verification and class hierarchy.
  *
  * - `EntityNotExistException message contains id and does not exist` — verifies message format
  * - `EntityNotExistException with Int id contains id` — verifies Int constructor
  * - `EntityAlreadyExistException message contains id and already exists` — verifies message format
  * - `EntityAlreadyExistException with Int id contains id` — verifies Int constructor
  * - `InvalidPropNameException message contains prop name and entity id` — verifies message format
+ * - `InvalidPropNameException with null entityId includes null in message` — verifies null path
  * - `FrozenLayerModificationException message contains entity id` — verifies message format
  * - `FrozenLayerModificationException with Int id contains id` — verifies Int constructor
+ * - `EntityNotExistException extends Exception` — verifies hierarchy
+ * - `EntityAlreadyExistException extends Exception` — verifies hierarchy
+ * - `InvalidPropNameException extends Exception` — verifies hierarchy
+ * - `FrozenLayerModificationException extends IllegalStateException` — verifies hierarchy
  */
 internal class ExceptionsTest {
 
@@ -69,4 +75,48 @@ internal class ExceptionsTest {
 
         assertTrue(ex.message!!.contains("99"))
     }
+
+    // region Null entityId
+
+    @Test
+    fun `InvalidPropNameException with null entityId includes null in message`() {
+        val ex = InvalidPropNameException("badProp", null)
+
+        assertTrue(ex.message!!.contains("badProp"))
+        assertTrue(ex.message!!.contains("null"))
+    }
+
+    // endregion
+
+    // region Class hierarchy
+
+    @Test
+    fun `EntityNotExistException extends Exception`() {
+        val ex: Throwable = EntityNotExistException("x")
+
+        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+    }
+
+    @Test
+    fun `EntityAlreadyExistException extends Exception`() {
+        val ex: Throwable = EntityAlreadyExistException("x")
+
+        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+    }
+
+    @Test
+    fun `InvalidPropNameException extends Exception`() {
+        val ex: Throwable = InvalidPropNameException("p", "e")
+
+        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+    }
+
+    @Test
+    fun `FrozenLayerModificationException extends IllegalStateException`() {
+        val ex: Throwable = FrozenLayerModificationException("x")
+
+        assertEquals("java.lang.IllegalStateException", ex::class.java.superclass.name)
+    }
+
+    // endregion
 }
