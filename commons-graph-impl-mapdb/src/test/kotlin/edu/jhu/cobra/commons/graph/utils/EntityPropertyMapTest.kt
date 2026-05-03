@@ -41,7 +41,7 @@ package edu.jhu.cobra.commons.graph.utils
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.boolVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import org.mapdb.DB
 import org.mapdb.DBMaker
@@ -79,7 +79,7 @@ internal class EntityPropertyMapTest {
         val entity = 1
         val props = mapOf(
             "name" to "Entity 1".strVal,
-            "count" to 42.numVal,
+            "count" to 42.intVal,
             "active" to true.boolVal,
         )
         assertNull(entityPropertyMap.put(entity, props))
@@ -492,7 +492,7 @@ internal class EntityPropertyMapTest {
                 1,
                 mapOf(
                     "name" to "Persistent".strVal,
-                    "count" to 123.numVal,
+                    "count" to 123.intVal,
                     "null" to NullVal,
                 ),
             )
@@ -505,7 +505,7 @@ internal class EntityPropertyMapTest {
             val props = map[1]
             assertNotNull(props)
             assertEquals("Persistent".strVal, props["name"])
-            assertEquals(123.numVal, props["count"])
+            assertEquals(123.intVal, props["count"])
             assertEquals(NullVal, props["null"])
             db.close()
         }

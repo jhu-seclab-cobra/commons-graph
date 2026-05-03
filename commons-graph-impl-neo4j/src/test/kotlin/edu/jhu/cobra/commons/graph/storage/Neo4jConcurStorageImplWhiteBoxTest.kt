@@ -35,9 +35,9 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -132,7 +132,7 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
     fun `init block loads existing nodes and edges from database`() {
         val n1 = storage.addNode(mapOf("data" to "d1".strVal))
         val n2 = storage.addNode(mapOf("data" to "d2".strVal))
-        val e = storage.addEdge(n1, n2, "link", mapOf("weight" to 1.numVal))
+        val e = storage.addEdge(n1, n2, "link", mapOf("weight" to 1.intVal))
         storage.close()
 
         val reloaded = Neo4jConcurStorageImpl(graphDir)
@@ -140,7 +140,7 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
         assertTrue(reloaded.containsNode(n2))
         assertTrue(reloaded.containsEdge(e))
         assertEquals("d1", (reloaded.getNodeProperties(n1)["data"] as StrVal).core)
-        assertEquals(1, (reloaded.getEdgeProperties(e)["weight"] as NumVal).core)
+        assertEquals(1, (reloaded.getEdgeProperties(e)["weight"] as IntVal).core)
         reloaded.close()
     }
 
@@ -257,7 +257,7 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `no deadlock under mixed read-write operations`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val node2 = storage.addNode()
         storage.addEdge(node1, node2, "e12")
 
@@ -275,7 +275,7 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
                         when (i % 4) {
                             0 -> storage.nodeIDs
                             1 -> storage.getNodeProperties(node1)
-                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.numVal))
+                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.intVal))
                             3 -> storage.getOutgoingEdges(node1)
                         }
                     }
@@ -313,8 +313,8 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        storage.setEdgeProperties(e, mapOf("weight" to 42.numVal))
-        assertEquals(42, (storage.getEdgeProperties(e)["weight"] as NumVal).core)
+        storage.setEdgeProperties(e, mapOf("weight" to 42.intVal))
+        assertEquals(42, (storage.getEdgeProperties(e)["weight"] as IntVal).core)
     }
 
     @Test
@@ -405,7 +405,7 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
     fun `transferTo copies nodes edges and meta to target`() {
         val n1 = storage.addNode(mapOf("label" to "A".strVal))
         val n2 = storage.addNode(mapOf("label" to "B".strVal))
-        storage.addEdge(n1, n2, "LINKS", mapOf("w" to 1.numVal))
+        storage.addEdge(n1, n2, "LINKS", mapOf("w" to 1.intVal))
         storage.setMeta("version", "2".strVal)
 
         val target = NativeStorageImpl()

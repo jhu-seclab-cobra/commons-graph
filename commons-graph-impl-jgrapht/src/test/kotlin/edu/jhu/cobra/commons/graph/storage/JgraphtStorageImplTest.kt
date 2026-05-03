@@ -62,12 +62,12 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NullVal
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
-import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -139,9 +139,9 @@ internal class JgraphtStorageImplTest {
 
     @Test
     fun `getNodeProperties returns stored properties`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to "x".strVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to "x".strVal))
         val props = storage.getNodeProperties(id)
-        assertEquals(1, (props["a"] as NumVal).core)
+        assertEquals(1, (props["a"] as IntVal).core)
         assertEquals("x", (props["b"] as StrVal).core)
     }
 
@@ -179,20 +179,20 @@ internal class JgraphtStorageImplTest {
 
     @Test
     fun `setNodeProperties updates existing and adds new properties`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal))
-        storage.setNodeProperties(id, mapOf("a" to 10.numVal, "b" to 20.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal))
+        storage.setNodeProperties(id, mapOf("a" to 10.intVal, "b" to 20.intVal))
         val props = storage.getNodeProperties(id)
-        assertEquals(10, (props["a"] as NumVal).core)
-        assertEquals(20, (props["b"] as NumVal).core)
+        assertEquals(10, (props["a"] as IntVal).core)
+        assertEquals(20, (props["b"] as IntVal).core)
     }
 
     @Test
     fun `setNodeProperties with null value removes that property`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(id, mapOf("a" to null))
         val props = storage.getNodeProperties(id)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
     }
 
     @Test
@@ -239,9 +239,9 @@ internal class JgraphtStorageImplTest {
     fun `addEdge with properties returns valid ID and stores properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 5.numVal))
+        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 5.intVal))
         assertTrue(storage.containsEdge(e))
-        assertEquals(5, (storage.getEdgeProperties(e)["w"] as NumVal).core)
+        assertEquals(5, (storage.getEdgeProperties(e)["w"] as IntVal).core)
     }
 
     @Test
@@ -339,8 +339,8 @@ internal class JgraphtStorageImplTest {
     fun `getEdgeProperty returns value for existing property`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
-        assertEquals(1, (storage.getEdgeProperty(e, "w") as NumVal).core)
+        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
+        assertEquals(1, (storage.getEdgeProperty(e, "w") as IntVal).core)
     }
 
     @Test
@@ -362,11 +362,11 @@ internal class JgraphtStorageImplTest {
     fun `setEdgeProperties updates existing and adds new properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("a" to 1.numVal))
-        storage.setEdgeProperties(e, mapOf("a" to 10.numVal, "b" to 20.numVal))
+        val e = storage.addEdge(n1, n2, "rel", mapOf("a" to 1.intVal))
+        storage.setEdgeProperties(e, mapOf("a" to 10.intVal, "b" to 20.intVal))
         val props = storage.getEdgeProperties(e)
-        assertEquals(10, (props["a"] as NumVal).core)
-        assertEquals(20, (props["b"] as NumVal).core)
+        assertEquals(10, (props["a"] as IntVal).core)
+        assertEquals(20, (props["b"] as IntVal).core)
     }
 
     @Test
@@ -382,7 +382,7 @@ internal class JgraphtStorageImplTest {
 
     @Test
     fun `setEdgeProperties throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.setEdgeProperties(-1, mapOf("k" to 1.numVal)) }
+        assertFailsWith<EntityNotExistException> { storage.setEdgeProperties(-1, mapOf("k" to 1.intVal)) }
     }
 
     // -- deleteEdge --
@@ -487,8 +487,8 @@ internal class JgraphtStorageImplTest {
 
     @Test
     fun `metaNames returns all metadata keys`() {
-        storage.setMeta("a", 1.numVal)
-        storage.setMeta("b", 2.numVal)
+        storage.setMeta("a", 1.intVal)
+        storage.setMeta("b", 2.intVal)
         assertEquals(setOf("a", "b"), storage.metaNames)
     }
 
@@ -514,7 +514,7 @@ internal class JgraphtStorageImplTest {
     fun `transferTo copies nodes edges and metadata to target`() {
         val n1 = storage.addNode(mapOf("name" to "A".strVal))
         val n2 = storage.addNode(mapOf("name" to "B".strVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.numVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
         storage.setMeta("version", "1.0".strVal)
 
         val target = JgraphtStorageImpl()
@@ -543,14 +543,14 @@ internal class JgraphtStorageImplTest {
     fun `transferTo preserves edge properties and tag`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        storage.addEdge(n1, n2, "typed", mapOf("score" to 99.numVal))
+        storage.addEdge(n1, n2, "typed", mapOf("score" to 99.intVal))
 
         val target = JgraphtStorageImpl()
         storage.transferTo(target)
 
         val tEdge = target.edgeIDs.first()
         assertEquals("typed", target.getEdgeStructure(tEdge).tag)
-        assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as NumVal).core)
+        assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as IntVal).core)
     }
 
     // -- complex values --
@@ -559,9 +559,9 @@ internal class JgraphtStorageImplTest {
     fun `complex IValue types survive property round-trip`() {
         val complexValue = mapOf(
             "str" to "test".strVal,
-            "num" to 42.numVal,
+            "num" to 42.intVal,
             "bool" to true.boolVal,
-            "list" to listOf(1.numVal, 2.numVal, 3.numVal).listVal,
+            "list" to listOf(1.intVal, 2.intVal, 3.intVal).listVal,
             "map" to mapOf("nested" to "value".strVal).mapVal,
         ).mapVal
 

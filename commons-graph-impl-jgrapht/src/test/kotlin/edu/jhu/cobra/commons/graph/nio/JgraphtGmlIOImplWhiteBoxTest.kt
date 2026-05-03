@@ -14,7 +14,7 @@
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.floatVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -118,7 +118,7 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
     fun `export with nodes and edges creates non-empty file`() {
         val n1 = srcStorage.addNode(mapOf("name" to "NodeAlpha".strVal))
         val n2 = srcStorage.addNode(mapOf("name" to "NodeBeta".strVal))
-        srcStorage.addEdge(n1, n2, "depends_on", mapOf("weight" to 1.5.numVal))
+        srcStorage.addEdge(n1, n2, "depends_on", mapOf("weight" to 1.5.floatVal))
 
         JgraphtGmlIOImpl.export(tempFile, srcStorage)
 

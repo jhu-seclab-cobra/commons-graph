@@ -46,9 +46,9 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -163,19 +163,19 @@ internal class Neo4jStorageImplTest {
     @Test
     fun `setNodeProperties updates existing and adds new properties`() {
         val id = storage.addNode(mapOf("a" to "v1".strVal))
-        storage.setNodeProperties(id, mapOf("a" to "updated".strVal, "b" to 42.numVal))
+        storage.setNodeProperties(id, mapOf("a" to "updated".strVal, "b" to 42.intVal))
         val props = storage.getNodeProperties(id)
         assertEquals("updated", (props["a"] as StrVal).core)
-        assertEquals(42, (props["b"] as NumVal).core)
+        assertEquals(42, (props["b"] as IntVal).core)
     }
 
     @Test
     fun `setNodeProperties with null value removes that property`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(id, mapOf("a" to null))
         val props = storage.getNodeProperties(id)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
     }
 
     @Test
@@ -293,8 +293,8 @@ internal class Neo4jStorageImplTest {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        storage.setEdgeProperties(e, mapOf("w" to 42.numVal))
-        assertEquals(42, (storage.getEdgeProperties(e)["w"] as NumVal).core)
+        storage.setEdgeProperties(e, mapOf("w" to 42.intVal))
+        assertEquals(42, (storage.getEdgeProperties(e)["w"] as IntVal).core)
     }
 
     @Test

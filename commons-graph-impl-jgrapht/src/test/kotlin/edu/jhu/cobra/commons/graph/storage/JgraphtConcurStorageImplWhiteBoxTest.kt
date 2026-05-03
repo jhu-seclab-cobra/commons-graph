@@ -12,8 +12,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NumVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -40,7 +40,7 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `getNodeProperties returns defensive copy not internal reference`() {
-        val node1 = storage.addNode(mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.intVal))
         val props1 = storage.getNodeProperties(node1)
         val props2 = storage.getNodeProperties(node1)
         assertNotSame(props1, props2)
@@ -60,13 +60,13 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `modifying returned properties does not affect internal state`() {
-        val node1 = storage.addNode(mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.intVal))
         val props = storage.getNodeProperties(node1) as MutableMap
-        props["a"] = 999.numVal
+        props["a"] = 999.intVal
         props["injected"] = "hack".strVal
 
         val actual = storage.getNodeProperties(node1)
-        assertEquals(1, (actual["a"] as NumVal).core)
+        assertEquals(1, (actual["a"] as IntVal).core)
         assertNull(actual["injected"])
     }
 
@@ -133,7 +133,7 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `no deadlock under mixed read-write operations`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val node2 = storage.addNode()
         storage.addEdge(node1, node2, "e12")
 
@@ -151,7 +151,7 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
                         when (i % 4) {
                             0 -> storage.nodeIDs
                             1 -> storage.getNodeProperties(node1)
-                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.numVal))
+                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.intVal))
                             3 -> storage.getOutgoingEdges(node1)
                         }
                     }

@@ -17,9 +17,9 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -77,7 +77,7 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `getNodeProperties returns copy not reference`() {
-        val n = storage.addNode(mapOf("a" to 1.numVal))
+        val n = storage.addNode(mapOf("a" to 1.intVal))
         val props1 = storage.getNodeProperties(n)
         val props2 = storage.getNodeProperties(n)
         assertEquals(props1, props2)
@@ -97,12 +97,12 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `setNodeProperties merges and null removes under write lock`() {
-        val n = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
-        storage.setNodeProperties(n, mapOf("a" to null, "c" to 3.numVal))
+        val n = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
+        storage.setNodeProperties(n, mapOf("a" to null, "c" to 3.intVal))
         val props = storage.getNodeProperties(n)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
-        assertEquals(3, (props["c"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
+        assertEquals(3, (props["c"] as IntVal).core)
     }
 
     // -- graphStructure consistency --
@@ -215,7 +215,7 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
 
     @Test
     fun `no deadlock under mixed read write operations`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val node2 = storage.addNode()
         storage.addEdge(node1, node2, "e12")
 
@@ -233,7 +233,7 @@ internal class MapDBConcurStorageImplWhiteBoxTest {
                         when (i % 4) {
                             0 -> storage.nodeIDs
                             1 -> storage.getNodeProperties(node1)
-                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.numVal))
+                            2 -> storage.setNodeProperties(node1, mapOf("counter" to i.intVal))
                             3 -> storage.getOutgoingEdges(node1)
                         }
                     }

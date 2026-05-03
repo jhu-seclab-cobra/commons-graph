@@ -2,7 +2,7 @@
  * Tests for [MapDbValSerializer] round-trip serialization of IValue types.
  *
  * - `serialize and deserialize StrVal`
- * - `serialize and deserialize NumVal`
+ * - `serialize and deserialize IntVal`
  * - `serialize and deserialize BoolVal and NullVal`
  * - `serialize and deserialize ListVal and MapVal`
  * - `serialize and deserialize nested complex values`
@@ -18,7 +18,7 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.NullVal
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import org.mapdb.DBMaker
 import org.mapdb.Serializer
@@ -39,10 +39,10 @@ internal class MapDbValSerializerTest {
     }
 
     @Test
-    fun `serialize and deserialize NumVal`() {
+    fun `serialize and deserialize IntVal`() {
         val db = DBMaker.memoryDB().make()
-        val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<NumVal>()).createOrOpen()
-        val value = NumVal(1234567890)
+        val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<IntVal>()).createOrOpen()
+        val value = IntVal(1234567890L)
         map["key"] = value
         assertEquals(value, map["key"])
         db.close()
@@ -65,8 +65,8 @@ internal class MapDbValSerializerTest {
     fun `serialize and deserialize ListVal and MapVal`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer()).createOrOpen()
-        val listVal = ListVal(listOf(StrVal("a"), NumVal(1), BoolVal(false)))
-        val mapVal = MapVal("k1" to StrVal("v1"), "k2" to NumVal(2))
+        val listVal = ListVal(listOf(StrVal("a"), IntVal(1L), BoolVal(false)))
+        val mapVal = MapVal("k1" to StrVal("v1"), "k2" to IntVal(2L))
         map["list"] = listVal
         map["map"] = mapVal
         assertEquals(listVal, map["list"])
@@ -80,7 +80,7 @@ internal class MapDbValSerializerTest {
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<IValue>()).createOrOpen()
         val nested = ListVal(
             listOf(
-                MapVal("a" to ListVal(listOf(NumVal(1), NullVal))),
+                MapVal("a" to ListVal(listOf(IntVal(1L), NullVal))),
                 BoolVal(true),
                 StrVal("deep"),
             ),
@@ -104,7 +104,7 @@ internal class MapDbValSerializerTest {
     fun `repeated serialize deserialize consistency`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<ListVal>()).createOrOpen()
-        val value = ListVal(listOf(StrVal("a"), NumVal(1), BoolVal(false)))
+        val value = ListVal(listOf(StrVal("a"), IntVal(1L), BoolVal(false)))
         map["key"] = value
         val first = map["key"]
         map["key"] = first
@@ -117,7 +117,7 @@ internal class MapDbValSerializerTest {
     fun `integration with MapDB hashSet`() {
         val db = DBMaker.memoryDB().make()
         val set = db.hashSet("test", MapDbValSerializer<ListVal>()).createOrOpen()
-        val v1 = ListVal(listOf(StrVal("a"), NumVal(1)))
+        val v1 = ListVal(listOf(StrVal("a"), IntVal(1L)))
         val v2 = ListVal(listOf(BoolVal(true), NullVal))
         set.add(v1)
         set.add(v2)
@@ -132,7 +132,7 @@ internal class MapDbValSerializerTest {
         val dbFile = tmpDir.resolve("test.db").toFile()
         val db = DBMaker.fileDB(dbFile).make()
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer()).createOrOpen()
-        val value = MapVal("a" to ListVal(listOf(NumVal(1), StrVal("test"))))
+        val value = MapVal("a" to ListVal(listOf(IntVal(1L), StrVal("test"))))
         map["key"] = value
         db.close()
 

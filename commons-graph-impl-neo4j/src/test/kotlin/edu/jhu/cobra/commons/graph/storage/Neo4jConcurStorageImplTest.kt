@@ -33,9 +33,9 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -106,10 +106,10 @@ internal class Neo4jConcurStorageImplTest {
 
     @Test
     fun `getNodeProperties returns stored properties`() {
-        val id = storage.addNode(mapOf("a" to "v1".strVal, "b" to 42.numVal))
+        val id = storage.addNode(mapOf("a" to "v1".strVal, "b" to 42.intVal))
         val props = storage.getNodeProperties(id)
         assertEquals("v1", (props["a"] as StrVal).core)
-        assertEquals(42, (props["b"] as NumVal).core)
+        assertEquals(42, (props["b"] as IntVal).core)
     }
 
     // -- getNodeProperty --
@@ -125,15 +125,15 @@ internal class Neo4jConcurStorageImplTest {
     @Test
     fun `setNodeProperties updates existing and adds new properties`() {
         val id = storage.addNode(mapOf("a" to "v1".strVal))
-        storage.setNodeProperties(id, mapOf("a" to "updated".strVal, "b" to 42.numVal))
+        storage.setNodeProperties(id, mapOf("a" to "updated".strVal, "b" to 42.intVal))
         val props = storage.getNodeProperties(id)
         assertEquals("updated", (props["a"] as StrVal).core)
-        assertEquals(42, (props["b"] as NumVal).core)
+        assertEquals(42, (props["b"] as IntVal).core)
     }
 
     @Test
     fun `setNodeProperties with null value removes that property`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(id, mapOf("a" to null))
         assertNull(storage.getNodeProperties(id)["a"])
     }
@@ -208,8 +208,8 @@ internal class Neo4jConcurStorageImplTest {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "rel")
-        storage.setEdgeProperties(e, mapOf("w" to 42.numVal))
-        assertEquals(42, (storage.getEdgeProperties(e)["w"] as NumVal).core)
+        storage.setEdgeProperties(e, mapOf("w" to 42.intVal))
+        assertEquals(42, (storage.getEdgeProperties(e)["w"] as IntVal).core)
     }
 
     // -- deleteEdge --
@@ -304,7 +304,7 @@ internal class Neo4jConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until nodesPerThread) {
-                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.numVal))
+                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.intVal))
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -322,7 +322,7 @@ internal class Neo4jConcurStorageImplTest {
 
     @Test
     fun `concurrent read-write operations do not produce errors`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val threadCount = 3
         val iterations = 10
         val executor = Executors.newFixedThreadPool(threadCount * 2)
@@ -333,8 +333,8 @@ internal class Neo4jConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until iterations) {
-                        val current = storage.getNodeProperties(node1)["counter"] as NumVal
-                        storage.setNodeProperties(node1, mapOf("counter" to (current.core.toInt() + 1).numVal))
+                        val current = storage.getNodeProperties(node1)["counter"] as IntVal
+                        storage.setNodeProperties(node1, mapOf("counter" to (current.core.toInt() + 1).intVal))
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -347,7 +347,7 @@ internal class Neo4jConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until iterations) {
-                        val value = storage.getNodeProperties(node1)["counter"] as NumVal
+                        val value = storage.getNodeProperties(node1)["counter"] as IntVal
                         assertTrue(value.core.toInt() >= 0)
                     }
                 } catch (e: Exception) {
@@ -365,7 +365,7 @@ internal class Neo4jConcurStorageImplTest {
 
     @Test
     fun `concurrent node deletion completes without errors`() {
-        val nodeIds = (0 until 20).map { storage.addNode(mapOf("index" to it.numVal)) }
+        val nodeIds = (0 until 20).map { storage.addNode(mapOf("index" to it.intVal)) }
         val oddNodes = nodeIds.filterIndexed { idx, _ -> idx % 2 == 1 }
 
         val startLatch = CountDownLatch(1)

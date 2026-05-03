@@ -63,12 +63,12 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.NullVal
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
-import edu.jhu.cobra.commons.value.numVal
 import edu.jhu.cobra.commons.value.strVal
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -146,9 +146,9 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `getNodeProperties returns stored properties`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to "x".strVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to "x".strVal))
         val props = storage.getNodeProperties(id)
-        assertEquals(1, (props["a"] as NumVal).core)
+        assertEquals(1, (props["a"] as IntVal).core)
         assertEquals("x", (props["b"] as StrVal).core)
     }
 
@@ -186,20 +186,20 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `setNodeProperties updates existing and adds new properties`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal))
-        storage.setNodeProperties(id, mapOf("a" to 10.numVal, "b" to 20.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal))
+        storage.setNodeProperties(id, mapOf("a" to 10.intVal, "b" to 20.intVal))
         val props = storage.getNodeProperties(id)
-        assertEquals(10, (props["a"] as NumVal).core)
-        assertEquals(20, (props["b"] as NumVal).core)
+        assertEquals(10, (props["a"] as IntVal).core)
+        assertEquals(20, (props["b"] as IntVal).core)
     }
 
     @Test
     fun `setNodeProperties with null value removes that property`() {
-        val id = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val id = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(id, mapOf("a" to null))
         val props = storage.getNodeProperties(id)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
     }
 
     @Test
@@ -245,9 +245,9 @@ internal class JgraphtConcurStorageImplTest {
     fun `addEdge with properties returns valid ID and stores properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 5.numVal))
+        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 5.intVal))
         assertTrue(storage.containsEdge(e))
-        assertEquals(5, (storage.getEdgeProperties(e)["w"] as NumVal).core)
+        assertEquals(5, (storage.getEdgeProperties(e)["w"] as IntVal).core)
     }
 
     @Test
@@ -337,8 +337,8 @@ internal class JgraphtConcurStorageImplTest {
     fun `getEdgeProperty returns value for existing property`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 42.numVal))
-        assertEquals(42, (storage.getEdgeProperty(e, "w") as NumVal).core)
+        val e = storage.addEdge(n1, n2, "rel", mapOf("w" to 42.intVal))
+        assertEquals(42, (storage.getEdgeProperty(e, "w") as IntVal).core)
     }
 
     @Test
@@ -360,11 +360,11 @@ internal class JgraphtConcurStorageImplTest {
     fun `setEdgeProperties updates existing and adds new properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        val e = storage.addEdge(n1, n2, "rel", mapOf("a" to 1.numVal))
-        storage.setEdgeProperties(e, mapOf("a" to 10.numVal, "b" to 20.numVal))
+        val e = storage.addEdge(n1, n2, "rel", mapOf("a" to 1.intVal))
+        storage.setEdgeProperties(e, mapOf("a" to 10.intVal, "b" to 20.intVal))
         val props = storage.getEdgeProperties(e)
-        assertEquals(10, (props["a"] as NumVal).core)
-        assertEquals(20, (props["b"] as NumVal).core)
+        assertEquals(10, (props["a"] as IntVal).core)
+        assertEquals(20, (props["b"] as IntVal).core)
     }
 
     @Test
@@ -380,7 +380,7 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `setEdgeProperties throws EntityNotExistException for missing edge`() {
-        assertFailsWith<EntityNotExistException> { storage.setEdgeProperties(-1, mapOf("k" to 1.numVal)) }
+        assertFailsWith<EntityNotExistException> { storage.setEdgeProperties(-1, mapOf("k" to 1.intVal)) }
     }
 
     // -- deleteEdge --
@@ -468,8 +468,8 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `metaNames returns all metadata keys`() {
-        storage.setMeta("a", 1.numVal)
-        storage.setMeta("b", 2.numVal)
+        storage.setMeta("a", 1.intVal)
+        storage.setMeta("b", 2.intVal)
         assertEquals(setOf("a", "b"), storage.metaNames)
     }
 
@@ -494,17 +494,17 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `transferTo copies nodes edges and metadata to target`() {
-        val n1 = storage.addNode(mapOf("a" to 1.numVal))
-        val n2 = storage.addNode(mapOf("b" to 2.numVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 3.numVal))
-        storage.setMeta("version", 7.numVal)
+        val n1 = storage.addNode(mapOf("a" to 1.intVal))
+        val n2 = storage.addNode(mapOf("b" to 2.intVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 3.intVal))
+        storage.setMeta("version", 7.intVal)
 
         val target = JgraphtStorageImpl()
         storage.transferTo(target)
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
-        assertEquals(7.numVal, target.getMeta("version"))
+        assertEquals(7.intVal, target.getMeta("version"))
     }
 
     @Test
@@ -527,9 +527,9 @@ internal class JgraphtConcurStorageImplTest {
     fun `complex IValue types survive property round-trip`() {
         val complexValue = mapOf(
             "str" to "test".strVal,
-            "num" to 42.numVal,
+            "num" to 42.intVal,
             "bool" to true.boolVal,
-            "list" to listOf(1.numVal, 2.numVal).listVal,
+            "list" to listOf(1.intVal, 2.intVal).listVal,
             "map" to mapOf("nested" to "value".strVal).mapVal,
         ).mapVal
 
@@ -553,7 +553,7 @@ internal class JgraphtConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until nodesPerThread) {
-                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.numVal))
+                        storage.addNode(mapOf("thread" to t.toString().strVal, "index" to i.intVal))
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -572,7 +572,7 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `concurrent read-write operations do not produce errors`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val threadCount = 5
         val iterations = 100
         val executor = Executors.newFixedThreadPool(threadCount * 2)
@@ -583,8 +583,8 @@ internal class JgraphtConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until iterations) {
-                        val current = storage.getNodeProperties(node1)["counter"] as NumVal
-                        storage.setNodeProperties(node1, mapOf("counter" to (current.core.toInt() + 1).numVal))
+                        val current = storage.getNodeProperties(node1)["counter"] as IntVal
+                        storage.setNodeProperties(node1, mapOf("counter" to (current.core.toInt() + 1).intVal))
                     }
                 } catch (e: Exception) {
                     errors.incrementAndGet()
@@ -597,7 +597,7 @@ internal class JgraphtConcurStorageImplTest {
             executor.submit {
                 try {
                     for (i in 0 until iterations) {
-                        val value = storage.getNodeProperties(node1)["counter"] as NumVal
+                        val value = storage.getNodeProperties(node1)["counter"] as IntVal
                         assertTrue(value.core.toInt() >= 0)
                     }
                 } catch (e: Exception) {
@@ -612,13 +612,13 @@ internal class JgraphtConcurStorageImplTest {
         executor.shutdown()
 
         assertEquals(0, errors.get())
-        val finalValue = (storage.getNodeProperties(node1)["counter"] as NumVal).core.toInt()
+        val finalValue = (storage.getNodeProperties(node1)["counter"] as IntVal).core.toInt()
         assertTrue(finalValue > 0)
     }
 
     @Test
     fun `concurrent node deletion completes without errors`() {
-        val nodeIds = (0 until 100).map { storage.addNode(mapOf("index" to it.numVal)) }
+        val nodeIds = (0 until 100).map { storage.addNode(mapOf("index" to it.intVal)) }
         val oddNodes = nodeIds.filterIndexed { idx, _ -> idx % 2 == 1 }
 
         val startLatch = CountDownLatch(1)
@@ -700,7 +700,7 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `lock contention under heavy read-write does not deadlock`() {
-        val node1 = storage.addNode(mapOf("counter" to 0.numVal))
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
         val readThreads = 20
         val writeThreads = 5
         val readOps = 1000
@@ -732,8 +732,8 @@ internal class JgraphtConcurStorageImplTest {
                 try {
                     repeat(writeOps) { i ->
                         try {
-                            val current = (storage.getNodeProperties(node1)["counter"] as? NumVal)?.core ?: 0
-                            storage.setNodeProperties(node1, mapOf("counter" to (current.toInt() + 1).numVal))
+                            val current = (storage.getNodeProperties(node1)["counter"] as? IntVal)?.core ?: 0
+                            storage.setNodeProperties(node1, mapOf("counter" to (current.toInt() + 1).intVal))
                             if (i % 10 == 0) {
                                 val tempId = storage.addNode(mapOf("temp" to true.boolVal))
                                 storage.deleteNode(tempId)

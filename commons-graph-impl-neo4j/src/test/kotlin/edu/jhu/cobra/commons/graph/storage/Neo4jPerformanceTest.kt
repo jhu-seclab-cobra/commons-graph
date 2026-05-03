@@ -17,7 +17,7 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -59,11 +59,11 @@ internal class Neo4jPerformanceTest {
         edgesPerNode: Int,
     ): List<Int> {
         val nodeIds = mutableListOf<Int>()
-        for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
+        for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.intVal)))
         for (i in 0 until nodeCount) {
             for (j in 1..edgesPerNode) {
                 val dst = (i + j) % nodeCount
-                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.numVal))
+                storage.addEdge(nodeIds[i], nodeIds[dst], "e$j", mapOf("w" to j.intVal))
             }
         }
         return nodeIds
@@ -161,7 +161,7 @@ internal class Neo4jPerformanceTest {
         for (name in implNames) {
             val storage = createStorage(name)
             val nodeIds = mutableListOf<Int>()
-            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.numVal)))
+            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("idx" to i.intVal)))
             val ops = benchmarkOpsPerSec(lookups) { i -> storage.containsNode(nodeIds[i % nodeCount]) }
             println(String.format("%-28s %14s", name, fmt(ops)))
         }
@@ -177,11 +177,11 @@ internal class Neo4jPerformanceTest {
         for (name in implNames) {
             val storage = createStorage(name)
             val nodeIds = mutableListOf<Int>()
-            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.numVal)))
+            for (i in 0 until nodeCount) nodeIds.add(storage.addNode(mapOf("v" to i.intVal)))
             val readOps = benchmarkOpsPerSec(count) { i -> storage.getNodeProperties(nodeIds[i % nodeCount]) }
             val writeOps =
                 benchmarkOpsPerSec(count) { i ->
-                    storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.numVal))
+                    storage.setNodeProperties(nodeIds[i % nodeCount], mapOf("v" to i.intVal))
                 }
             println(String.format("%-28s %14s %14s", name, fmt(readOps), fmt(writeOps)))
         }

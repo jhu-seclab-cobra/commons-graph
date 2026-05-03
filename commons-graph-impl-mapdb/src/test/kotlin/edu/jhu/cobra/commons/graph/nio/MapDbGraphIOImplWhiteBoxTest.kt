@@ -22,9 +22,9 @@
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.MapDBStorageImpl
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -88,7 +88,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
 
     @Test
     fun `export then import preserves nodes with properties`() {
-        srcStorage.addNode(mapOf("name" to "Node1".strVal, "count" to 10.numVal))
+        srcStorage.addNode(mapOf("name" to "Node1".strVal, "count" to 10.intVal))
         srcStorage.addNode(mapOf("name" to "Node2".strVal))
 
         MapDbGraphIOImpl.export(tempFile, srcStorage)
@@ -99,7 +99,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         val dstNodes = dstStorage.nodeIDs.toList()
         assertEquals(2, dstNodes.size)
         val allProps = dstNodes.map { dstStorage.getNodeProperties(it) }
-        assertTrue(allProps.any { (it["name"] as? StrVal)?.core == "Node1" && (it["count"] as? NumVal)?.core == 10 })
+        assertTrue(allProps.any { (it["name"] as? StrVal)?.core == "Node1" && (it["count"] as? IntVal)?.core == 10L })
         assertTrue(allProps.any { (it["name"] as? StrVal)?.core == "Node2" })
         dstStorage.close()
     }
@@ -108,7 +108,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
     fun `export then import preserves edges with properties`() {
         val n1 = srcStorage.addNode()
         val n2 = srcStorage.addNode()
-        srcStorage.addEdge(n1, n2, "connects", mapOf("weight" to 5.numVal))
+        srcStorage.addEdge(n1, n2, "connects", mapOf("weight" to 5.intVal))
 
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
@@ -117,7 +117,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
 
         assertEquals(1, dstStorage.edgeIDs.size)
         val importedEdge = dstStorage.edgeIDs.first()
-        assertEquals(5, (dstStorage.getEdgeProperties(importedEdge)["weight"] as NumVal).core)
+        assertEquals(5, (dstStorage.getEdgeProperties(importedEdge)["weight"] as IntVal).core)
         assertEquals("connects", dstStorage.getEdgeStructure(importedEdge).tag)
         dstStorage.close()
     }
@@ -177,7 +177,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
     fun `import adds edges with properties`() {
         val n1 = srcStorage.addNode()
         val n2 = srcStorage.addNode()
-        srcStorage.addEdge(n1, n2, "e", mapOf("weight" to 10.numVal))
+        srcStorage.addEdge(n1, n2, "e", mapOf("weight" to 10.intVal))
         MapDbGraphIOImpl.export(tempFile, srcStorage)
 
         val dstStorage = MapDBStorageImpl { memoryDB() }
@@ -186,7 +186,7 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         assertEquals(2, dstStorage.nodeIDs.size)
         assertEquals(1, dstStorage.edgeIDs.size)
         val importedEdge = dstStorage.edgeIDs.first()
-        assertEquals(10, (dstStorage.getEdgeProperties(importedEdge)["weight"] as NumVal).core)
+        assertEquals(10, (dstStorage.getEdgeProperties(importedEdge)["weight"] as IntVal).core)
         dstStorage.close()
     }
 

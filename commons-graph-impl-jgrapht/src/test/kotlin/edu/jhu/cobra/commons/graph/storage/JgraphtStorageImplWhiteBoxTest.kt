@@ -11,7 +11,7 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,7 +52,7 @@ internal class JgraphtStorageImplWhiteBoxTest {
 
     @Test
     fun `getNodeProperties returns mutable reference to internal map`() {
-        val node1 = storage.addNode(mapOf("a" to 1.numVal))
+        val node1 = storage.addNode(mapOf("a" to 1.intVal))
         val props = storage.getNodeProperties(node1)
         assertTrue(props is MutableMap)
     }

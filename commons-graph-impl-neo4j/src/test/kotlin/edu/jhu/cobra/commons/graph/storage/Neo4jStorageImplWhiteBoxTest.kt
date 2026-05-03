@@ -38,9 +38,9 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -157,7 +157,7 @@ internal class Neo4jStorageImplWhiteBoxTest {
     fun `init block loads existing nodes and edges from database`() {
         val n1 = storage.addNode(mapOf("data" to "d1".strVal))
         val n2 = storage.addNode(mapOf("data" to "d2".strVal))
-        val e = storage.addEdge(n1, n2, "link", mapOf("weight" to 1.numVal))
+        val e = storage.addEdge(n1, n2, "link", mapOf("weight" to 1.intVal))
         storage.close()
 
         val reloaded = Neo4jStorageImpl(graphDir)
@@ -165,7 +165,7 @@ internal class Neo4jStorageImplWhiteBoxTest {
         assertTrue(reloaded.containsNode(n2))
         assertTrue(reloaded.containsEdge(e))
         assertEquals("d1", (reloaded.getNodeProperties(n1)["data"] as StrVal).core)
-        assertEquals(1, (reloaded.getEdgeProperties(e)["weight"] as NumVal).core)
+        assertEquals(1, (reloaded.getEdgeProperties(e)["weight"] as IntVal).core)
         reloaded.close()
     }
 
@@ -213,11 +213,11 @@ internal class Neo4jStorageImplWhiteBoxTest {
 
     @Test
     fun `setNodeProperties with null removes property from Neo4j`() {
-        val n = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
+        val n = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(n, mapOf("a" to null))
         val props = storage.getNodeProperties(n)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
     }
 
     @Test

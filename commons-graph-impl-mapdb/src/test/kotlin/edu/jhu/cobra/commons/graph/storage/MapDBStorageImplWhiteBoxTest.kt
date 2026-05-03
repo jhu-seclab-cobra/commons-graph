@@ -18,9 +18,9 @@
  */
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.NumVal
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.numVal
+import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -114,12 +114,12 @@ internal class MapDBStorageImplWhiteBoxTest {
 
     @Test
     fun `setNodeProperties merges and null removes via filterValues`() {
-        val n = storage.addNode(mapOf("a" to 1.numVal, "b" to 2.numVal))
-        storage.setNodeProperties(n, mapOf("a" to null, "c" to 3.numVal))
+        val n = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
+        storage.setNodeProperties(n, mapOf("a" to null, "c" to 3.intVal))
         val props = storage.getNodeProperties(n)
         assertNull(props["a"])
-        assertEquals(2, (props["b"] as NumVal).core)
-        assertEquals(3, (props["c"] as NumVal).core)
+        assertEquals(2, (props["b"] as IntVal).core)
+        assertEquals(3, (props["c"] as IntVal).core)
     }
 
     @Test
