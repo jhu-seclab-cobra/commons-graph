@@ -79,7 +79,7 @@ graph.flush()
 | Type | Description |
 |------|-------------|
 | `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
-| `TraitGroup` | Node grouping with auto-ID generation. |
+| `TraitGroup` | **(deprecated)** Node grouping with auto-ID generation. |
 | `NodeID` | Typealias for `String`. User-facing node identifier. |
 
 **Exceptions**

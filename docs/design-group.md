@@ -1,5 +1,7 @@
 # Node Grouping Design
 
+> **DEPRECATED.** TraitGroup mixes infrastructure (ID generation) with domain concerns (suffix-based lookup). Auto-ID generation will move into AbcMultipleGraph/AbcSimpleGraph. Group/suffix indexing will move to domain modules (AST, ADG, PDG, CCG). See todo.md for migration plan.
+
 ## Design Overview
 
 - **Classes**: `TraitGroup`
