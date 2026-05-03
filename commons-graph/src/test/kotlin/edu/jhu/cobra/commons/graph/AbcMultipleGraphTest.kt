@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 /**
  * Black-box tests for AbcMultipleGraph: node/edge CRUD and structure queries.
- * Label-aware operations tested in TraitPosetTest.
+ * Label-aware operations tested in PosetTraitTest.
  *
  * - `addNode returns node with correct id` — verifies addNode output
  * - `addNode registers id in nodeIDs` — verifies nodeIDs updated
