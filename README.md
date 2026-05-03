@@ -29,9 +29,9 @@ dependencies {
 ## Usage
 
 ```kotlin
-val graph = object : AbcMultipleGraph<MyNode, MyEdge>() {
+val graph = object : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
     override val storage = NativeStorageImpl()
-    override val posetStorage = NativeStorageImpl()
+    override val poset: IPoset = PosetDftImpl(storage)
     override fun newNodeObj() = MyNode()
     override fun newEdgeObj() = MyEdge()
 }
@@ -52,13 +52,13 @@ graph.flush()
 |-----------|-------------|
 | `IGraph<N: AbcNode, E: AbcEdge>` | Domain graph contract. String `NodeID` identifiers. `addNode(withID)`, `addEdge(src, dst, tag)`, traversal queries. |
 | `IStorage` | Storage engine contract. Auto-generated `Int` IDs. `addNode(): Int`, `addEdge(src, dst, tag): Int`, adjacency, properties. |
-| `IPoset` | Label partial-order contract. Parents, ancestors, `compareTo`. |
+| `IPoset` | Label partial-order contract. `getParents`, `getAncestors`, `compare`. |
 
 **Abstract Classes**
 
 | Class | Description |
 |-------|-------------|
-| `AbcMultipleGraph` | Implements `IGraph` + `IPoset` + `Flushable`. Label-aware edges. Dual storage (graph + poset). |
+| `AbcMultipleGraph` | Implements `IGraph` + `Flushable`. Mix in `PosetTrait` for label-aware edges. |
 | `AbcSimpleGraph` | Extends `AbcMultipleGraph`. Enforces single edge per source-destination direction. |
 | `AbcNode` | Lightweight node wrapper. Bound to storage via `bind()`. |
 | `AbcEdge` | Lightweight edge wrapper. Resolves source, destination, tag lazily. |
@@ -79,6 +79,8 @@ graph.flush()
 | Type | Description |
 |------|-------------|
 | `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
+| `PosetTrait<N, E>` | Graph trait adding label-filtered operations via pluggable `IPoset`. |
+| `PosetDftImpl` | Default `IPoset` implementation with DFS interval labeling. |
 | `TraitGroup` | **(deprecated)** Node grouping with auto-ID generation. |
 | `NodeID` | Typealias for `String`. User-facing node identifier. |
 
