@@ -81,7 +81,6 @@ graph.flush()
 | `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
 | `PosetTrait<N, E>` | Graph trait adding label-filtered operations via pluggable `IPoset`. |
 | `PosetDftImpl` | Default `IPoset` implementation with DFS interval labeling. |
-| `TraitGroup` | **(deprecated)** Node grouping with auto-ID generation. |
 | `NodeID` | Typealias for `String`. User-facing node identifier. |
 
 **Exceptions**
