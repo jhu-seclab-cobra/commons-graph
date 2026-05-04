@@ -2,6 +2,18 @@
 
 ---
 
+## [x] Refactor: Replace NumVal with IntVal/FloatVal — DONE
+
+All `NumVal`/`.numVal` replaced with `IntVal`/`FloatVal` in TraitGroup source and 10 test files.
+
+---
+
+## [x] Refactor: Migrate TraitPoset to PosetTrait/PosetDftImpl — DONE
+
+`TraitPoset` mixin replaced with `PosetTrait` interface + `PosetDftImpl` composition. `PosetState` internalized into `PosetDftImpl`. Graph classes now hold `override val poset: IPoset = PosetDftImpl(storage)`.
+
+---
+
 ## [ ] Refactor: Remove TraitGroup
   Acceptance: `TraitGroup.kt` deleted; zero references; all domain modules use auto-ID from base graph classes
 
@@ -14,8 +26,7 @@ Replace `TraitGroup` trait with auto-ID generation in base graph classes. Move s
   - [ ] Persist counter to storage meta on increment; restore on `rebuild()`
   - [ ] Same for `AbcSimpleGraph`
   - [ ] Unit tests for auto-ID generation and persistence
-  - [ ] `./gradlew build` — compiles clean
-  - [ ] `./gradlew test` — all pass
+  - [ ] Quality gate
 
 ### [ ] 1.2 Migrate domain modules to auto-ID
   Depends on: 1.1
@@ -25,8 +36,7 @@ Replace `TraitGroup` trait with auto-ID generation in base graph classes. Move s
   - [ ] Replace `addGroupNode(group, suffix)` with domain-specific index + `addNode()`
   - [ ] Replace `getGroupNode(group, suffix)` with domain-specific index lookup
   - [ ] Replace `registerGroup` / `putIfAbsent` calls with nothing (auto-registration)
-  - [ ] `./gradlew build` — compiles clean
-  - [ ] `./gradlew test` — all pass
+  - [ ] Quality gate
 
 ### [ ] 1.3 Delete TraitGroup
   Depends on: 1.2
@@ -35,5 +45,4 @@ Replace `TraitGroup` trait with auto-ID generation in base graph classes. Move s
   - [ ] Delete `TraitGroupTest.kt` and `AbcTraitGroupTest.kt`
   - [ ] Remove `design-group.md` or replace with auto-ID documentation
   - [ ] Update `index.md` and `README.md`
-  - [ ] `./gradlew build` — compiles clean
-  - [ ] `./gradlew test` — all pass
+  - [ ] Quality gate
