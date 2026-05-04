@@ -4,9 +4,10 @@
 
 ### commons-value 0.1.0
 
-**[IValue]** Top-level value type interface; subtypes: `NullVal`, `StrVal`, `NumVal`, `ListVal`, `SetVal`, `MapVal`.
+**[IValue]** Top-level value type interface; subtypes: `NullVal`, `StrVal`, `IntVal`, `FloatVal`, `ListVal`, `SetVal`, `MapVal`.
 **[StrVal]** `StrVal(core: String)` / `"text".strVal` -- string value.
-**[NumVal]** `NumVal(core: Number)` / `42.numVal` -- numeric value (Int/Long/Float/Double interchangeable).
+**[IntVal]** `IntVal(core: Long)` / `42.intVal` -- integer value (Int/Long stored as Long).
+**[FloatVal]** `FloatVal(core: Double)` / `3.14.floatVal` -- floating-point value (Float/Double stored as Double).
 **[ListVal]** `ListVal(vararg vals)` / `listOf(v1, v2).listVal` -- ordered list value.
 **[SetVal]** Duplicate-free set value.
 **[MapVal]** Key-value mapping value; `add(key, value)` is mutable.

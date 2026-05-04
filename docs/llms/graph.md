@@ -25,7 +25,7 @@ val graph = MyGraph(NativeStorageImpl())
 val n1 = graph.addNode("a")
 val n2 = graph.addNode("b")
 val edge = graph.addEdge("a", "b", "calls")
-edge["weight"] = NumVal(5)
+edge["weight"] = IntVal(5)
 graph.flush()
 ```
 

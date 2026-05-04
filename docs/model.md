@@ -25,13 +25,6 @@ A marker controlling edge visibility. Wraps a string identifier.
 - `SUPREMUM`: least upper bound — above all labels in the poset. Structural bound only; never assigned to edges.
 - A label's ordering is not intrinsic — it is defined by the poset structure.
 
-### Group (deprecated)
-
-An orthogonal grouping of nodes. Membership stored as node properties, not encoded in `NodeID`.
-
-- Group name: arbitrary non-empty string.
-- Suffix: identifies a node within its group. Unique per `(group, suffix)` pair.
-
 ---
 
 ## Relations
@@ -42,7 +35,6 @@ An orthogonal grouping of nodes. Membership stored as node properties, not encod
 | Edge → Node (incoming) | Edge to Node | N:1 | Edge points to its destination node |
 | Edge → Label | Edge to Label | N:M | Edge is visible under assigned labels |
 | Label → Label (parent) | Child to Parent | N:M (named) | Parent relationship in the label hierarchy; each parent link has a name |
-| Node → Group | Node to Group | N:1 | Node belongs to at most one group |
 
 ---
 
@@ -83,8 +75,6 @@ An orthogonal grouping of nodes. Membership stored as node properties, not encod
 - Label hierarchy is a DAG. No cycles in parent relationships.
 - Layer count is always 1 (active only) or 2 (active + one frozen). Merge-on-freeze maintains this bound.
 - Storage integer IDs are stable across freeze operations.
-- Per-group counters are monotonically increasing. Deleting grouped nodes does not decrement counters.
-- Suffix is unique within a group. Adding a duplicate `(group, suffix)` is rejected.
 
 ---
 

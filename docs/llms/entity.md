@@ -12,8 +12,8 @@ val hasColor = "color" in node
 val allProps = node.asMap()
 
 val edge = graph.addEdge("a", "b", "calls")
-edge["weight"] = NumVal(10)
-edge.update(mapOf("weight" to NumVal(20), "stale" to null))
+edge["weight"] = IntVal(10)
+edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 ```
 
 ## API
@@ -58,7 +58,7 @@ class MyNode : AbcNode() {
     enum class MyType : AbcNode.Type { FUNC, CLASS }
     override var type: MyType by EntityType(default = MyType.FUNC)
     var name: StrVal by EntityProperty(default = StrVal())
-    var optData: NumVal? by EntityProperty()
+    var optData: IntVal? by EntityProperty()
 }
 ```
 

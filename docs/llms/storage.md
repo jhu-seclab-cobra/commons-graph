@@ -9,7 +9,7 @@ val storage = NativeStorageImpl()
 val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
 val nodeB = storage.addNode()
 val edgeId = storage.addEdge(nodeA, nodeB, "calls")
-storage.setEdgeProperties(edgeId, mapOf("weight" to NumVal(5)))
+storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 storage.close()
 ```
 

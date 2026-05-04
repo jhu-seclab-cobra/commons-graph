@@ -1,6 +1,6 @@
 # Labels & Poset
 
-> Label hierarchy (partial order set) for edge visibility control, plus node grouping trait.
+> Label hierarchy (partial order set) for edge visibility control.
 
 ## Quick Start
 
@@ -52,27 +52,8 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
 - Edges with no labels are visible only when no label filter is applied.
 
-### `TraitGroup<N, E>` (interface, extends `IGraph`) — **(deprecated)**
-
-Group membership stored as node properties, not encoded in NodeID.
-
-- **`val groupPrefix: String`** -- Prefix for auto-generated node IDs (e.g., `"AST"`, `"ADG"`).
-- **`fun assignGroup(node: N, group: String, suffix: String? = null)`** -- Assign an existing node to a group. Sets `__group__` and `__suffix__` properties.
-- **`fun addGroupNode(group: String, suffix: String? = null): N`** -- Create a node with an opaque auto-generated ID and assign it to the group.
-- **`fun addGroupNode(sameGroupNode: AbcNode, suffix: String? = null): N`** -- Create a node in the same group as an existing node.
-- **`fun getGroupNode(group: String, suffix: String): N?`** -- Retrieve a node by group and suffix.
-- **`fun getGroupName(node: AbcNode): String?`** -- Read `__group__` property. Returns `null` if node has no group.
-- **`fun getGroupSuffix(node: AbcNode): String?`** -- Read `__suffix__` property.
-- **`fun getGroupNodes(group: String): Sequence<N>`** -- All nodes in a group.
-- **`fun rebuildGroupCaches()`** -- Restore in-memory caches from node properties and storage meta. Call after `rebuild()`.
-
 ## Gotchas
 
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
-- `TraitGroup.addGroupNode` requires the group to be pre-registered in `groupedNodesCounter`. Add the group key before calling.
-- Group counters only increase. Deleting grouped nodes does not decrement the counter.
-- Call `rebuildGroupCaches()` after `rebuild()`. Without it, suffix index and counters are empty.
-- Nodes created via `addNode(withID)` have no group. Call `assignGroup` to add them to a group.
-- No character restrictions on group names (arbitrary strings allowed).

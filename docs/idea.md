@@ -14,7 +14,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
 - **Connections:** Upstream services -> graph domain contract + label hierarchy contract -> graph store contract -> backend implementations and layered storage composers.
 
 **Scope Boundaries**
-- **Owned:** Graph domain vocabulary, entity identity model, graph and store contracts, layered storage composition, node grouping, label partial-order framework, metadata contract, import/export contract.
+- **Owned:** Graph domain vocabulary, entity identity model, graph and store contracts, layered storage composition, label partial-order framework, metadata contract, import/export contract.
 - **Not Owned:** Backend-specific tuning, graph algorithm libraries, database lifecycle operations, external deployment concerns.
 
 ## 2. Concepts
@@ -77,11 +77,6 @@ This module is the stable graph domain boundary, translating domain-level graph 
   - **Scope:** Owns label ordering, ancestor traversal, and comparability. Does not own label identity or edge association.
   - **Relationships:** Backed by a dedicated storage instance. Queried by the graph layer for edge visibility filtering. Labels represent context paths, and the partial order reflects containment rather than simple string prefix.
 
-- **Node Group**
-  - **Definition:** An orthogonal domain ability that groups nodes and provides automatic identifier generation within groups.
-  - **Scope:** Owns grouping membership and group-scoped identifier generation. Does not redefine entity identity.
-  - **Relationships:** Layered on top of the graph and storage contracts.
-
 - **Layered Storage**
   - **Definition:** A composition of one frozen storage instance plus one mutable active layer into a unified storage view. Supports phase-based analysis where completed phases become read-only.
   - **Scope:** Owns layer lifecycle, freeze transitions, query routing, and merge operations. Deletion restricted to the active layer. Query depth bounded to two layers (active + one frozen).
@@ -93,7 +88,6 @@ This module is the stable graph domain boundary, translating domain-level graph 
 - **With upstream modules:** Inputs are valid string node identifiers, edge tuples, and property names. Outputs are graph and entity views or explicit domain exceptions.
 - **With storage implementations:** Storage preserves node and edge semantics, enforces existence constraints, and exposes deterministic adjacency and property behavior. Storage operates on auto-generated integer identifiers with no domain type awareness.
 - **With layered storage composers:** Flat storage instances serve as building blocks. Composers manage layer lifecycle, freeze transitions, and query routing through the standard storage contract.
-- **With node group modules:** Grouping reuses graph and storage invariants without redefining entity identity semantics.
 
 **Internal Processing Flow**
 1. **Request normalization** — Domain service provides a valid node identifier and edge tuple, invokes a graph operation.
