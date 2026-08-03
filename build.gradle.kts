@@ -40,7 +40,6 @@ subprojects {
     configure<KotlinJvmProjectExtension> {
         jvmToolchain {
             languageVersion.set(JavaLanguageVersion.of(jvmVersion))
-            vendor.set(JvmVendorSpec.ADOPTIUM)
         }
     }
 
