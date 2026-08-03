@@ -29,7 +29,6 @@ import java.util.Collections
 class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
-
     // Global ID counters
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
@@ -53,7 +52,6 @@ class LayeredStorageImpl(
 
     // Cache for translated frozen edge structures (global IDs)
     private val frozenEdgeStructureCache = HashMap<Int, IStorage.EdgeStructure>()
-
 
     private fun isActiveNode(id: Int): Boolean = id in activeOutEdges
 
@@ -214,15 +212,13 @@ class LayeredStorageImpl(
 
     override val nodeIDs: Set<Int>
         get() {
-                val frozenGlobalIds = frozenNodeGlobalToLocal.keys
+            val frozenGlobalIds = frozenNodeGlobalToLocal.keys
             if (activeOutEdges.isEmpty()) return frozenGlobalIds
             if (frozenGlobalIds.isEmpty()) return activeOutEdges.keys
             return UnionSet(frozenGlobalIds, activeOutEdges.keys)
         }
 
-    override fun containsNode(id: Int): Boolean {
-        return isActiveNode(id) || isFrozenNode(id)
-    }
+    override fun containsNode(id: Int): Boolean = isActiveNode(id) || isFrozenNode(id)
 
     override fun addNode(properties: Map<String, IValue>): Int {
         val id = nodeCounter++
@@ -287,15 +283,13 @@ class LayeredStorageImpl(
 
     override val edgeIDs: Set<Int>
         get() {
-                val frozenGlobalIds = frozenEdgeGlobalToLocal.keys
+            val frozenGlobalIds = frozenEdgeGlobalToLocal.keys
             if (activeEdgeEndpoints.isEmpty()) return frozenGlobalIds
             if (frozenGlobalIds.isEmpty()) return activeEdgeEndpoints.keys
             return UnionSet(frozenGlobalIds, activeEdgeEndpoints.keys)
         }
 
-    override fun containsEdge(id: Int): Boolean {
-        return isActiveEdge(id) || isFrozenEdge(id)
-    }
+    override fun containsEdge(id: Int): Boolean = isActiveEdge(id) || isFrozenEdge(id)
 
     override fun addEdge(
         src: Int,
@@ -419,7 +413,7 @@ class LayeredStorageImpl(
 
     override val metaNames: Set<String>
         get() {
-                val frozenNames = frozenLayer?.metaNames ?: emptySet()
+            val frozenNames = frozenLayer?.metaNames ?: emptySet()
             if (activeMetaProperties.isEmpty()) return frozenNames
             if (frozenNames.isEmpty()) return activeMetaProperties.keys
             return UnionSet(frozenNames, activeMetaProperties.keys)
@@ -476,7 +470,9 @@ class LayeredStorageImpl(
         return nodeIdMap
     }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     // ============================================================================
     // INTERNAL HELPERS

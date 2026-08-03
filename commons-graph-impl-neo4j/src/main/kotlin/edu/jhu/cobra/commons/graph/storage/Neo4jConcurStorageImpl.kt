@@ -9,8 +9,6 @@ import org.neo4j.configuration.GraphDatabaseSettings
 import org.neo4j.dbms.api.DatabaseManagementService
 import org.neo4j.dbms.api.DatabaseManagementServiceBuilder
 import org.neo4j.graphdb.Direction
-import org.neo4j.graphdb.Label
-import org.neo4j.graphdb.RelationshipType
 import org.neo4j.graphdb.Transaction
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -53,7 +51,11 @@ class Neo4jConcurStorageImpl(
         db.beginTx().use { tx ->
             val schema = tx.schema()
             if (schema.indexes.none { it.isNodeIndex && SID in it.propertyKeys }) {
-                schema.indexFor(NODE_LABEL).on(SID).withName("idx_node_sid").create()
+                schema
+                    .indexFor(NODE_LABEL)
+                    .on(SID)
+                    .withName("idx_node_sid")
+                    .create()
             }
             tx.commit()
         }
@@ -87,8 +89,7 @@ class Neo4jConcurStorageImpl(
         }
     }
 
-    private fun <R> readTx(action: Transaction.() -> R): R =
-        database.beginTx().use { tx -> tx.action() }
+    private fun <R> readTx(action: Transaction.() -> R): R = database.beginTx().use { tx -> tx.action() }
 
     private fun <R> writeTx(action: Transaction.() -> R): R =
         database.beginTx().use { tx ->
@@ -97,33 +98,33 @@ class Neo4jConcurStorageImpl(
             result
         }
 
-    private fun Transaction.findNodeBySid(id: Int) =
-        findNode(NODE_LABEL, SID, id.toLong())
+    private fun Transaction.findNodeBySid(id: Int) = findNode(NODE_LABEL, SID, id.toLong())
 
-    private fun Transaction.findEdgeBySid(id: Int) =
-        findRelationship(EDGE_TYPE, SID, id.toLong())
+    private fun Transaction.findEdgeBySid(id: Int) = findRelationship(EDGE_TYPE, SID, id.toLong())
 
     override val nodeIDs: Set<Int>
-        get() = storageLock.read {
-            readTx {
-                val ids = mutableSetOf<Int>()
-                for (node in findNodes(NODE_LABEL)) {
-                    ids.add((node.getProperty(SID) as Long).toInt())
+        get() =
+            storageLock.read {
+                readTx {
+                    val ids = mutableSetOf<Int>()
+                    for (node in findNodes(NODE_LABEL)) {
+                        ids.add((node.getProperty(SID) as Long).toInt())
+                    }
+                    ids
                 }
-                ids
             }
-        }
 
     override val edgeIDs: Set<Int>
-        get() = storageLock.read {
-            readTx {
-                val ids = mutableSetOf<Int>()
-                for (rel in findRelationships(EDGE_TYPE)) {
-                    ids.add((rel.getProperty(SID) as Long).toInt())
+        get() =
+            storageLock.read {
+                readTx {
+                    val ids = mutableSetOf<Int>()
+                    for (rel in findRelationships(EDGE_TYPE)) {
+                        ids.add((rel.getProperty(SID) as Long).toInt())
+                    }
+                    ids
                 }
-                ids
             }
-        }
 
     override fun containsNode(id: Int): Boolean =
         storageLock.read {
@@ -247,7 +248,8 @@ class Neo4jConcurStorageImpl(
         storageLock.read {
             readTx {
                 val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-                node.getRelationships(Direction.INCOMING)
+                node
+                    .getRelationships(Direction.INCOMING)
                     .map { (it.getProperty(SID) as Long).toInt() }
                     .toSet()
             }
@@ -257,16 +259,18 @@ class Neo4jConcurStorageImpl(
         storageLock.read {
             readTx {
                 val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-                node.getRelationships(Direction.OUTGOING)
+                node
+                    .getRelationships(Direction.OUTGOING)
                     .map { (it.getProperty(SID) as Long).toInt() }
                     .toSet()
             }
         }
 
     override val metaNames: Set<String>
-        get() = storageLock.read {
-            metaProperties.keys.toSet()
-        }
+        get() =
+            storageLock.read {
+                metaProperties.keys.toSet()
+            }
 
     override fun getMeta(name: String): IValue? =
         storageLock.read {
@@ -295,26 +299,8 @@ class Neo4jConcurStorageImpl(
     override fun transferTo(target: IStorage): Map<Int, Int> =
         storageLock.read {
             readTx {
-                val idMap = HashMap<Int, Int>()
-                for (node in findNodes(NODE_LABEL)) {
-                    val oldId = (node.getProperty(SID) as Long).toInt()
-                    val props = node.keys.associateWith { key ->
-                        requireNotNull(node[key]) { "Property '$key' on node $oldId has corrupted data" }
-                    }
-                    idMap[oldId] = target.addNode(props)
-                }
-                for (rel in findRelationships(EDGE_TYPE)) {
-                    val src = (rel.startNode.getProperty(SID) as Long).toInt()
-                    val dst = (rel.endNode.getProperty(SID) as Long).toInt()
-                    val tag = rel.getProperty(TAG) as String
-                    val relSid = (rel.getProperty(SID) as Long).toInt()
-                    val props = rel.keys.associateWith { key ->
-                        requireNotNull(rel[key]) { "Property '$key' on edge $relSid has corrupted data" }
-                    }
-                    val newSrc = idMap.getValue(src)
-                    val newDst = idMap.getValue(dst)
-                    target.addEdge(newSrc, newDst, tag, props)
-                }
+                val idMap = copyNodesTo(target)
+                copyEdgesTo(target, idMap)
                 for (name in metaProperties.keys) {
                     target.setMeta(name, metaProperties[name])
                 }
@@ -322,7 +308,39 @@ class Neo4jConcurStorageImpl(
             }
         }
 
-    override fun flush() {}
+    private fun Transaction.copyNodesTo(target: IStorage): HashMap<Int, Int> {
+        val idMap = HashMap<Int, Int>()
+        for (node in findNodes(NODE_LABEL)) {
+            val oldId = (node.getProperty(SID) as Long).toInt()
+            val props =
+                node.keys.associateWith { key ->
+                    requireNotNull(node[key]) { "Property '$key' on node $oldId has corrupted data" }
+                }
+            idMap[oldId] = target.addNode(props)
+        }
+        return idMap
+    }
+
+    private fun Transaction.copyEdgesTo(
+        target: IStorage,
+        idMap: Map<Int, Int>,
+    ) {
+        for (rel in findRelationships(EDGE_TYPE)) {
+            val src = (rel.startNode.getProperty(SID) as Long).toInt()
+            val dst = (rel.endNode.getProperty(SID) as Long).toInt()
+            val tag = rel.getProperty(TAG) as String
+            val relSid = (rel.getProperty(SID) as Long).toInt()
+            val props =
+                rel.keys.associateWith { key ->
+                    requireNotNull(rel[key]) { "Property '$key' on edge $relSid has corrupted data" }
+                }
+            target.addEdge(idMap.getValue(src), idMap.getValue(dst), tag, props)
+        }
+    }
+
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun close(): Unit =
         storageLock.write {

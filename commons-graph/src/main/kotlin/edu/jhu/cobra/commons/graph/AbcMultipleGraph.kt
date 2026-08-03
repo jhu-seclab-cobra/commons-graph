@@ -191,8 +191,7 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             .filter { edgeId ->
                 val s = storage.getEdgeStructure(edgeId)
                 s.src in nodeByStorageId && s.dst in nodeByStorageId
-            }
-            .map { cachedEdge(it) }
+            }.map { cachedEdge(it) }
             .filter(doSatisfy)
 
     // endregion
@@ -201,7 +200,8 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getOutgoingEdges(of: NodeID): Sequence<E> {
         val entry = nodeEntries[of] ?: return emptySequence()
-        return storage.getOutgoingEdges(entry.storageId)
+        return storage
+            .getOutgoingEdges(entry.storageId)
             .asSequence()
             .filter { storage.getEdgeStructure(it).dst in nodeByStorageId }
             .map { cachedEdge(it) }
@@ -209,7 +209,8 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getIncomingEdges(of: NodeID): Sequence<E> {
         val entry = nodeEntries[of] ?: return emptySequence()
-        return storage.getIncomingEdges(entry.storageId)
+        return storage
+            .getIncomingEdges(entry.storageId)
             .asSequence()
             .filter { storage.getEdgeStructure(it).src in nodeByStorageId }
             .map { cachedEdge(it) }
@@ -281,9 +282,10 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         nodeByStorageId.clear()
         edgeCache.clear()
         for (storageId in storage.nodeIDs) {
-            val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal ?: continue
+            val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
             val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
-            if (owners != null && !owners.contains(StrVal(graphId))) continue
+            val ownedByThis = owners == null || owners.contains(StrVal(graphId))
+            if (nodeIdVal == null || !ownedByThis) continue
             val nodeId: NodeID = nodeIdVal.core
             val entry = NodeEntry<N>(nodeId, storageId, null)
             nodeEntries[nodeId] = entry
@@ -299,10 +301,9 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
                     val updated = SetVal(existing.core + StrVal(graphId))
                     storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to updated))
                 }
-            } catch (e: Exception) {
+            } catch (e: EntityNotExistException) {
                 logger.log(Level.WARNING, "flush: failed to write PROP_OWNERS for storageId=$storageId", e)
             }
         }
     }
-
 }

@@ -20,7 +20,8 @@ import kotlin.concurrent.write
  */
 class MapDBConcurStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
-) : IStorage, AutoCloseable {
+) : IStorage,
+    AutoCloseable {
     private val dbManager: DB = DBMaker.config().closeOnJvmShutdown().make()
 
     private val dbLock = ReentrantReadWriteLock()
@@ -39,7 +40,9 @@ class MapDBConcurStorageImpl(
 
     override fun close() = dbLock.write { if (!dbManager.isClosed()) dbManager.close() }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override val nodeIDs: Set<Int>
         get() =

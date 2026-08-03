@@ -68,11 +68,9 @@ class JgraphtStorageImpl : IStorage {
         return id
     }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> =
-        nodeProperties[id] ?: throw EntityNotExistException(id)
+    override fun getNodeProperties(id: Int): Map<String, IValue> = nodeProperties[id] ?: throw EntityNotExistException(id)
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> =
-        edgeProperties[id] ?: throw EntityNotExistException(id)
+    override fun getEdgeProperties(id: Int): Map<String, IValue> = edgeProperties[id] ?: throw EntityNotExistException(id)
 
     override fun setNodeProperties(
         id: Int,
@@ -156,7 +154,9 @@ class JgraphtStorageImpl : IStorage {
         if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun clear() {
         jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())

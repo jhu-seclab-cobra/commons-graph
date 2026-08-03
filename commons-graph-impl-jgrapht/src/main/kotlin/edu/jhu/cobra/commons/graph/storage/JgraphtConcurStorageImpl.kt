@@ -37,11 +37,9 @@ class JgraphtConcurStorageImpl : IStorage {
     override val edgeIDs: Set<Int>
         get() = storageLock.read { edgeProperties.keys.toSet() }
 
-    override fun containsNode(id: Int): Boolean =
-        storageLock.read { id in nodeProperties }
+    override fun containsNode(id: Int): Boolean = storageLock.read { id in nodeProperties }
 
-    override fun containsEdge(id: Int): Boolean =
-        storageLock.read { id in edgeProperties }
+    override fun containsEdge(id: Int): Boolean = storageLock.read { id in edgeProperties }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         storageLock.write {
@@ -165,8 +163,7 @@ class JgraphtConcurStorageImpl : IStorage {
     override val metaNames: Set<String>
         get() = storageLock.read { metaProperties.keys.toSet() }
 
-    override fun getMeta(name: String): IValue? =
-        storageLock.read { metaProperties[name] }
+    override fun getMeta(name: String): IValue? = storageLock.read { metaProperties[name] }
 
     override fun setMeta(
         name: String,
@@ -176,7 +173,9 @@ class JgraphtConcurStorageImpl : IStorage {
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun clear(): Unit =
         storageLock.write {

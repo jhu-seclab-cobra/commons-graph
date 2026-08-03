@@ -54,7 +54,11 @@ class Neo4jStorageImpl(
         db.beginTx().use { tx ->
             val schema = tx.schema()
             if (schema.indexes.none { it.isNodeIndex && SID in it.propertyKeys }) {
-                schema.indexFor(NODE_LABEL).on(SID).withName("idx_node_sid").create()
+                schema
+                    .indexFor(NODE_LABEL)
+                    .on(SID)
+                    .withName("idx_node_sid")
+                    .create()
             }
             tx.commit()
         }
@@ -91,8 +95,7 @@ class Neo4jStorageImpl(
         }
     }
 
-    private fun <R> readTx(action: Transaction.() -> R): R =
-        database.beginTx().use { tx -> tx.action() }
+    private fun <R> readTx(action: Transaction.() -> R): R = database.beginTx().use { tx -> tx.action() }
 
     private fun <R> writeTx(action: Transaction.() -> R): R =
         database.beginTx().use { tx ->
@@ -101,35 +104,33 @@ class Neo4jStorageImpl(
             result
         }
 
-    private fun Transaction.findNodeBySid(id: Int) =
-        findNode(NODE_LABEL, SID, id.toLong())
+    private fun Transaction.findNodeBySid(id: Int) = findNode(NODE_LABEL, SID, id.toLong())
 
-    private fun Transaction.findEdgeBySid(id: Int) =
-        findRelationship(EDGE_TYPE, SID, id.toLong())
+    private fun Transaction.findEdgeBySid(id: Int) = findRelationship(EDGE_TYPE, SID, id.toLong())
 
     override val nodeIDs: Set<Int>
-        get() = readTx {
-            val ids = mutableSetOf<Int>()
-            for (node in findNodes(NODE_LABEL)) {
-                ids.add((node.getProperty(SID) as Long).toInt())
+        get() =
+            readTx {
+                val ids = mutableSetOf<Int>()
+                for (node in findNodes(NODE_LABEL)) {
+                    ids.add((node.getProperty(SID) as Long).toInt())
+                }
+                ids
             }
-            ids
-        }
 
     override val edgeIDs: Set<Int>
-        get() = readTx {
-            val ids = mutableSetOf<Int>()
-            for (rel in findRelationships(EDGE_TYPE)) {
-                ids.add((rel.getProperty(SID) as Long).toInt())
+        get() =
+            readTx {
+                val ids = mutableSetOf<Int>()
+                for (rel in findRelationships(EDGE_TYPE)) {
+                    ids.add((rel.getProperty(SID) as Long).toInt())
+                }
+                ids
             }
-            ids
-        }
 
-    override fun containsNode(id: Int): Boolean =
-        readTx { findNodeBySid(id) != null }
+    override fun containsNode(id: Int): Boolean = readTx { findNodeBySid(id) != null }
 
-    override fun containsEdge(id: Int): Boolean =
-        readTx { findEdgeBySid(id) != null }
+    override fun containsEdge(id: Int): Boolean = readTx { findEdgeBySid(id) != null }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         writeTx {
@@ -224,7 +225,8 @@ class Neo4jStorageImpl(
     override fun getIncomingEdges(id: Int): Set<Int> =
         readTx {
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-            node.getRelationships(Direction.INCOMING)
+            node
+                .getRelationships(Direction.INCOMING)
                 .map { (it.getProperty(SID) as Long).toInt() }
                 .toSet()
         }
@@ -232,7 +234,8 @@ class Neo4jStorageImpl(
     override fun getOutgoingEdges(id: Int): Set<Int> =
         readTx {
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-            node.getRelationships(Direction.OUTGOING)
+            node
+                .getRelationships(Direction.OUTGOING)
                 .map { (it.getProperty(SID) as Long).toInt() }
                 .toSet()
         }
@@ -263,9 +266,10 @@ class Neo4jStorageImpl(
             val idMap = HashMap<Int, Int>()
             for (node in findNodes(NODE_LABEL)) {
                 val oldId = (node.getProperty(SID) as Long).toInt()
-                val props = node.keys.associateWith { key ->
-                    requireNotNull(node[key]) { "Property '$key' on node $oldId has corrupted data" }
-                }
+                val props =
+                    node.keys.associateWith { key ->
+                        requireNotNull(node[key]) { "Property '$key' on node $oldId has corrupted data" }
+                    }
                 idMap[oldId] = target.addNode(props)
             }
             for (rel in findRelationships(EDGE_TYPE)) {
@@ -273,9 +277,10 @@ class Neo4jStorageImpl(
                 val dst = (rel.endNode.getProperty(SID) as Long).toInt()
                 val tag = rel.getProperty(TAG) as String
                 val relSid = (rel.getProperty(SID) as Long).toInt()
-                val props = rel.keys.associateWith { key ->
-                    requireNotNull(rel[key]) { "Property '$key' on edge $relSid has corrupted data" }
-                }
+                val props =
+                    rel.keys.associateWith { key ->
+                        requireNotNull(rel[key]) { "Property '$key' on edge $relSid has corrupted data" }
+                    }
                 val newSrc = idMap.getValue(src)
                 val newDst = idMap.getValue(dst)
                 target.addEdge(newSrc, newDst, tag, props)
@@ -286,7 +291,9 @@ class Neo4jStorageImpl(
             idMap
         }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun close() {
         managementService.shutdown()

@@ -19,7 +19,6 @@ import kotlin.concurrent.withLock
  */
 @Suppress("TooManyFunctions")
 class NativeConcurStorageImpl : IStorage {
-
     private val lock = ReentrantReadWriteLock()
 
     // Auto-increment counters (protected by write lock)
@@ -123,8 +122,7 @@ class NativeConcurStorageImpl : IStorage {
     override val nodeIDs: Set<Int>
         get() = lock.readLock().withLock { java.util.Set.copyOf(outEdges.keys) }
 
-    override fun containsNode(id: Int): Boolean =
-        lock.readLock().withLock { id in outEdges }
+    override fun containsNode(id: Int): Boolean = lock.readLock().withLock { id in outEdges }
 
     override fun addNode(properties: Map<String, IValue>): Int =
         lock.writeLock().withLock {
@@ -179,8 +177,7 @@ class NativeConcurStorageImpl : IStorage {
     override val edgeIDs: Set<Int>
         get() = lock.readLock().withLock { java.util.Set.copyOf(edgeEndpoints.keys) }
 
-    override fun containsEdge(id: Int): Boolean =
-        lock.readLock().withLock { id in edgeEndpoints }
+    override fun containsEdge(id: Int): Boolean = lock.readLock().withLock { id in edgeEndpoints }
 
     override fun addEdge(
         src: Int,
@@ -258,8 +255,7 @@ class NativeConcurStorageImpl : IStorage {
     override val metaNames: Set<String>
         get() = lock.readLock().withLock { java.util.Set.copyOf(metaProperties.keys) }
 
-    override fun getMeta(name: String): IValue? =
-        lock.readLock().withLock { metaProperties[name] }
+    override fun getMeta(name: String): IValue? = lock.readLock().withLock { metaProperties[name] }
 
     override fun setMeta(
         name: String,
@@ -273,7 +269,9 @@ class NativeConcurStorageImpl : IStorage {
     // LIFECYCLE
     // ============================================================================
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun clear(): Unit =
         lock.writeLock().withLock {

@@ -12,7 +12,6 @@ package edu.jhu.cobra.commons.graph.poset
  * @see PosetDftImpl
  */
 interface IPoset {
-
     /** All labels registered in the poset, including [Label.INFIMUM] and [Label.SUPREMUM]. */
     val allLabels: Set<Label>
 
@@ -20,7 +19,10 @@ interface IPoset {
     fun getParents(label: Label): Map<String, Label>
 
     /** Sets the named parent labels for [label], replacing any previous parents. */
-    fun setParents(label: Label, parents: Map<String, Label>)
+    fun setParents(
+        label: Label,
+        parents: Map<String, Label>,
+    )
 
     /** All ancestor labels traversing upwards through the parent hierarchy. */
     fun getAncestors(label: Label): Sequence<Label>
@@ -30,5 +32,8 @@ interface IPoset {
      *
      * @return Positive if [a] > [b], negative if [a] < [b], 0 if equal, null if incomparable.
      */
-    fun compare(a: Label, b: Label): Int?
+    fun compare(
+        a: Label,
+        b: Label,
+    ): Int?
 }

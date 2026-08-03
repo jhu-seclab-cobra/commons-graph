@@ -128,18 +128,17 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             fixedPrefix: String,
         ) {
             require(!isClosed) { "The file is closed" }
+            val headerSequence =
+                if (fixedPrefix.isEmpty()) {
+                    header.asSequence()
+                } else {
+                    sequenceOf(fixedPrefix) + header.asSequence()
+                }
+            val newFirstLine = headerSequence.map { escape(it) }.joinToString(CSV_DELIMITER)
             val tempFile = File.createTempFile("tmp", ".txt")
             try {
                 file.bufferedReader().use { reader ->
                     tempFile.bufferedWriter().use { writer ->
-                        val headerSequence =
-                            if (fixedPrefix.isEmpty()) {
-                                header.asSequence()
-                            } else {
-                                sequenceOf(fixedPrefix) + header.asSequence()
-                            }
-                        val fmtHeader = headerSequence.map { escape(it) }
-                        val newFirstLine = fmtHeader.joinToString(CSV_DELIMITER)
                         writer.appendLine(newFirstLine)
                         reader.readLine()
                         reader.forEachLine(writer::appendLine)
@@ -188,6 +187,19 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             return DftCharBufferSerializerImpl.deserialize(charBuffer)
         }
 
+        private fun decodeProps(
+            cells: List<String>,
+            headers: List<String>,
+            offset: Int,
+        ): HashMap<String, IValue> {
+            val props = HashMap<String, IValue>()
+            for (i in headers.indices) {
+                val value = cells.getOrNull(i + offset)?.let { deserialize(it) } ?: continue
+                props[headers[i]] = value
+            }
+            return props
+        }
+
         fun readNodes(): Iterator<NodeRecord> =
             iterator {
                 val nodeReader = nodeFile.bufferedReader()
@@ -202,13 +214,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                         if (parts.isEmpty()) continue
                         val unescaped = parts.map { unescape(it) }
                         val nodeId = unescaped[0]
-                        val props = HashMap<String, IValue>()
-                        for (i in propHeaders.indices) {
-                            val raw = unescaped.getOrNull(i + 1) ?: continue
-                            val value = deserialize(raw) ?: continue
-                            props[propHeaders[i]] = value
-                        }
-                        yield(NodeRecord(nodeId, props))
+                        yield(NodeRecord(nodeId, decodeProps(unescaped, propHeaders, offset = 1)))
                     }
                 } finally {
                     nodeReader.close()
@@ -232,13 +238,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                         val src = unescaped[1]
                         val dst = unescaped[2]
                         val tag = unescaped[3]
-                        val props = HashMap<String, IValue>()
-                        for (i in propHeaders.indices) {
-                            val raw = unescaped.getOrNull(i + 4) ?: continue
-                            val value = deserialize(raw) ?: continue
-                            props[propHeaders[i]] = value
-                        }
-                        yield(EdgeRecord(edgeId, src, dst, tag, props))
+                        yield(EdgeRecord(edgeId, src, dst, tag, decodeProps(unescaped, propHeaders, offset = 4)))
                     }
                 } finally {
                     edgeReader.close()
@@ -253,11 +253,8 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                     reader.readLine()
                     for (line in reader.lineSequence()) {
                         val parts = line.split(CSV_DELIMITER_REGEX, limit = 2)
-                        if (parts.size < 2) continue
-                        val name = unescape(parts[0])
-                        val rawValue = unescape(parts[1])
-                        val value = deserialize(rawValue) ?: continue
-                        yield(name to value)
+                        val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) } ?: continue
+                        yield(unescape(parts[0]) to value)
                     }
                 } finally {
                     reader.close()
@@ -321,12 +318,14 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 nodeStringToInt[nodeId] = storageId
             }
             reader.readEdges().forEach { record ->
-                val srcInt = requireNotNull(nodeStringToInt[record.src]) {
-                    "Edge references unknown source node '${record.src}'"
-                }
-                val dstInt = requireNotNull(nodeStringToInt[record.dst]) {
-                    "Edge references unknown destination node '${record.dst}'"
-                }
+                val srcInt =
+                    requireNotNull(nodeStringToInt[record.src]) {
+                        "Edge references unknown source node '${record.src}'"
+                    }
+                val dstInt =
+                    requireNotNull(nodeStringToInt[record.dst]) {
+                        "Edge references unknown destination node '${record.dst}'"
+                    }
                 into.addEdge(srcInt, dstInt, record.tag, record.properties)
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }

@@ -17,7 +17,6 @@ import java.util.Collections
  */
 @Suppress("TooManyFunctions")
 class NativeStorageImpl : IStorage {
-
     // Auto-increment counters
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
@@ -116,8 +115,7 @@ class NativeStorageImpl : IStorage {
         return id
     }
 
-    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
-        edgeEndpoints[id] ?: throw EntityNotExistException(id.toString())
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure = edgeEndpoints[id] ?: throw EntityNotExistException(id.toString())
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
@@ -189,7 +187,9 @@ class NativeStorageImpl : IStorage {
     // LIFECYCLE
     // ============================================================================
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override fun clear() {
         outEdges.clear()

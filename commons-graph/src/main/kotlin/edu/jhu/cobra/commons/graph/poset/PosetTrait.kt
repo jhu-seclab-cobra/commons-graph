@@ -16,41 +16,68 @@ import edu.jhu.cobra.commons.graph.NodeID
  * @see IPoset
  */
 interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
-
     /** The pluggable poset module for label hierarchy operations. */
     val poset: IPoset
 
-    fun addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E {
+    fun addEdge(
+        src: NodeID,
+        dst: NodeID,
+        tag: String,
+        label: Label,
+    ): E {
         val existing = getEdge(src, dst, tag)
         val edge = existing ?: addEdge(src, dst, tag)
         edge.labels = edge.labels + label
         return edge
     }
 
-    fun delEdge(src: NodeID, dst: NodeID, tag: String, label: Label) {
+    fun delEdge(
+        src: NodeID,
+        dst: NodeID,
+        tag: String,
+        label: Label,
+    ) {
         val edge = getEdge(src, dst, tag) ?: return
         val remaining = edge.labels - label
         edge.labels = remaining
         if (remaining.isEmpty()) delEdge(src, dst, tag)
     }
 
-    fun getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E> {
+    fun getOutgoingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<E> {
         if (label == Label.SUPREMUM) return getOutgoingEdges(of).filter(cond)
         return doFilterVisitable(getOutgoingEdges(of).filter(cond), label)
     }
 
-    fun getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E> {
+    fun getIncomingEdges(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<E> {
         if (label == Label.SUPREMUM) return getIncomingEdges(of).filter(cond)
         return doFilterVisitable(getIncomingEdges(of).filter(cond), label)
     }
 
-    fun getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N> =
-        getOutgoingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.dstNid) }
+    fun getChildren(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N> = getOutgoingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.dstNid) }
 
-    fun getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N> =
-        getIncomingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.srcNid) }
+    fun getParents(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N> = getIncomingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.srcNid) }
 
-    fun getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N> =
+    fun getDescendants(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
             val queue = ArrayDeque<NodeID>().apply { add(of) }
@@ -65,7 +92,11 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             }
         }
 
-    fun getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N> =
+    fun getAncestors(
+        of: NodeID,
+        label: Label,
+        cond: (E) -> Boolean = { true },
+    ): Sequence<N> =
         sequence {
             val visited = mutableSetOf<NodeID>()
             val queue = ArrayDeque<NodeID>().apply { add(of) }
@@ -80,29 +111,36 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             }
         }
 
-    private fun doFilterVisitable(edges: Sequence<E>, by: Label): Sequence<E> {
+    private fun covers(
+        by: Label,
+        label: Label,
+    ): Boolean = by == label || poset.compare(by, label)?.let { it > 0 } == true
+
+    private fun doFilterVisitable(
+        edges: Sequence<E>,
+        by: Label,
+    ): Sequence<E> {
         val edgesWithLabels = ArrayList<Pair<E, Set<Label>>>()
         val allVisitable = HashSet<Label>()
         for (e in edges) {
             val labels = e.labels
             edgesWithLabels.add(e to labels)
-            for (l in labels) {
-                if (by == l || poset.compare(by, l)?.let { it > 0 } == true) {
-                    allVisitable.add(l)
-                }
-            }
+            labels.filterTo(allVisitable) { covers(by, it) }
         }
         if (allVisitable.size <= 1) {
-            return edgesWithLabels.asSequence()
+            return edgesWithLabels
+                .asSequence()
                 .filter { (_, labels) -> labels.any { it in allVisitable } }
                 .map { it.first }
         }
-        val allNotCovered = allVisitable.filterTo(HashSet()) { cur ->
-            allVisitable.none { other ->
-                other != cur && poset.compare(other, cur)?.let { it > 0 } == true
+        val allNotCovered =
+            allVisitable.filterTo(HashSet()) { cur ->
+                allVisitable.none { other ->
+                    other != cur && poset.compare(other, cur)?.let { it > 0 } == true
+                }
             }
-        }
-        return edgesWithLabels.asSequence()
+        return edgesWithLabels
+            .asSequence()
             .filter { (_, labels) -> labels.any { it in allNotCovered } }
             .map { it.first }
     }

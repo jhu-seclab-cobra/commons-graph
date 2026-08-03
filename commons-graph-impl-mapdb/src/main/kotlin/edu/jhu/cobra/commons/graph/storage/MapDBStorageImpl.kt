@@ -18,7 +18,8 @@ import org.mapdb.DBMaker
  */
 class MapDBStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
-) : IStorage, AutoCloseable {
+) : IStorage,
+    AutoCloseable {
     private val dbManager: DB =
         DBMaker
             .config()
@@ -43,7 +44,9 @@ class MapDBStorageImpl(
         if (!dbManager.isClosed()) dbManager.close()
     }
 
-    override fun flush() {}
+    override fun flush() {
+        // No buffered writes; mutations are applied immediately.
+    }
 
     override val nodeIDs: Set<Int>
         get() = nodeProperties.keys.toSet()
@@ -51,13 +54,9 @@ class MapDBStorageImpl(
     override val edgeIDs: Set<Int>
         get() = edgeProperties.keys.toSet()
 
-    override fun containsNode(id: Int): Boolean {
-        return nodeProperties.contains(id)
-    }
+    override fun containsNode(id: Int): Boolean = nodeProperties.contains(id)
 
-    override fun containsEdge(id: Int): Boolean {
-        return edgeProperties.contains(id)
-    }
+    override fun containsEdge(id: Int): Boolean = edgeProperties.contains(id)
 
     override fun addNode(properties: Map<String, IValue>): Int {
         val nodeId = nodeCounter++
@@ -85,13 +84,9 @@ class MapDBStorageImpl(
         return id
     }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> {
-        return nodeProperties[id] ?: throw EntityNotExistException(id)
-    }
+    override fun getNodeProperties(id: Int): Map<String, IValue> = nodeProperties[id] ?: throw EntityNotExistException(id)
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        return edgeProperties[id] ?: throw EntityNotExistException(id)
-    }
+    override fun getEdgeProperties(id: Int): Map<String, IValue> = edgeProperties[id] ?: throw EntityNotExistException(id)
 
     override fun setNodeProperties(
         id: Int,
@@ -151,9 +146,7 @@ class MapDBStorageImpl(
     override val metaNames: Set<String>
         get() = metaProperties.keys.toSet()
 
-    override fun getMeta(name: String): IValue? {
-        return metaProperties[name]
-    }
+    override fun getMeta(name: String): IValue? = metaProperties[name]
 
     override fun setMeta(
         name: String,
