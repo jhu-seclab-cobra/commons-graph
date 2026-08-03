@@ -21,7 +21,6 @@ import kotlin.test.assertTrue
  * - `FrozenLayerModificationException extends IllegalStateException` — verifies hierarchy
  */
 internal class ExceptionsTest {
-
     @Test
     fun `EntityNotExistException message contains id and does not exist`() {
         val ex = EntityNotExistException("missing-node")

@@ -9,13 +9,12 @@ import kotlin.test.assertEquals
  * - `getOutgoingEdges returns mutable internal set` — caller mutation corrupts adjacency index
  */
 internal class MapDBBugVerificationTest {
-
     @Test
     fun `getOutgoingEdges returns mutable internal set - caller can corrupt adjacency`() {
         val storage = MapDBStorageImpl()
         val nodeA = storage.addNode()
         val nodeB = storage.addNode()
-        val edgeId = storage.addEdge(nodeA, nodeB, "tag")
+        storage.addEdge(nodeA, nodeB, "tag")
 
         val outEdges = storage.getOutgoingEdges(nodeA)
         assertEquals(1, outEdges.size, "Should have 1 outgoing edge")
@@ -31,8 +30,9 @@ internal class MapDBBugVerificationTest {
         // If we got here, the set was mutable and we corrupted the index
         val outEdgesAfter = storage.getOutgoingEdges(nodeA)
         assertEquals(
-            1, outEdgesAfter.size,
-            "Adjacency should still show 1 edge — but if mutable set was returned, it was corrupted to 0"
+            1,
+            outEdgesAfter.size,
+            "Adjacency should still show 1 edge — but if mutable set was returned, it was corrupted to 0",
         )
     }
 }

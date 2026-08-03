@@ -15,6 +15,7 @@
  * - `benchmark memory and disk footprint`
  * - `benchmark edge query`
  */
+
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.intVal
@@ -80,7 +81,7 @@ internal class Neo4jPerformanceTest {
         measured: Int = MEASURED,
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (_w in 0 until warmup) {
+        repeat(warmup) {
             for (i in 0 until ops) op(i)
         }
         val samples = DoubleArray(measured)
@@ -100,7 +101,7 @@ internal class Neo4jPerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (_w in 0 until warmup) block()
+        repeat(warmup) { block() }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
@@ -234,7 +235,12 @@ internal class Neo4jPerformanceTest {
             val heapDeltaMB = (after - before) / (1024.0 * 1024.0)
 
             (storage as AutoCloseable).close()
-            val diskBytes = Files.walk(dir).filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum()
+            val diskBytes =
+                Files
+                    .walk(dir)
+                    .filter { it.isRegularFile() }
+                    .mapToLong { it.fileSize() }
+                    .sum()
             val diskMB = diskBytes / (1024.0 * 1024.0)
             println(String.format("%-28s %14.1f %14.1f", name, heapDeltaMB, diskMB))
         }

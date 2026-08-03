@@ -72,7 +72,9 @@ internal class AbcMultipleGraphSharedStorageTest {
     @Test
     fun `claimNode shares properties with original graph`() {
         val original = graphA.addNode(NODE_ID_1)
-        original["color"] = edu.jhu.cobra.commons.value.StrVal("red")
+        original["color"] =
+            edu.jhu.cobra.commons.value
+                .StrVal("red")
 
         val claimed = graphB.claimNode(original)
 
@@ -123,8 +125,9 @@ internal class AbcMultipleGraphSharedStorageTest {
         graphA.flush()
 
         val sid = storage.nodeIDs.first()
-        val owners = storage.getNodeProperty(sid, AbcMultipleGraph.PROP_OWNERS)
-            as edu.jhu.cobra.commons.value.SetVal
+        val owners =
+            storage.getNodeProperty(sid, AbcMultipleGraph.PROP_OWNERS)
+                as edu.jhu.cobra.commons.value.SetVal
         val ownerList = owners.core.map { (it as edu.jhu.cobra.commons.value.StrVal).core }
         assertEquals(1, ownerList.count { it == graphA.graphId })
     }

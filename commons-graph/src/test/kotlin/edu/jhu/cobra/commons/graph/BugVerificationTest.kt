@@ -19,7 +19,6 @@ import kotlin.test.assertTrue
  * - `nullable EntityProperty delegate set null should remove property` — B3 null propagation
  */
 internal class BugVerificationTest {
-
     @Test
     fun `AbcNode hashCode equals contract - same id different storageId`() {
         val storage1 = NativeStorageImpl()
@@ -48,7 +47,10 @@ internal class BugVerificationTest {
     }
 
     class NullableTestNode : AbcNode() {
-        override val type = object : AbcNode.Type { override val name = "NullableTest" }
+        override val type =
+            object : AbcNode.Type {
+                override val name = "NullableTest"
+            }
         var optProp: IValue? by EntityProperty<IValue>("opt_prop")
     }
 

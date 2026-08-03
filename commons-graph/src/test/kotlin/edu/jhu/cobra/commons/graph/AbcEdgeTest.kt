@@ -60,7 +60,6 @@ internal class AbcEdgeTest {
         edge.bind(storage, eid, "srcNode", "dstNode", "calls")
     }
 
-
     // region Identity
 
     @Test

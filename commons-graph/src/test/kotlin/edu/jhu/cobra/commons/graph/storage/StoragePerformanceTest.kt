@@ -1,3 +1,5 @@
+@file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
+
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.intVal
@@ -30,7 +32,6 @@ import kotlin.test.Test
  * Run with: ./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests --rerun
  */
 internal class StoragePerformanceTest {
-
     private val implNames: List<String> =
         run {
             val all = listOf("NativeStorageImpl", "NativeConcurStorageImpl", "LayeredStorageImpl")
@@ -79,7 +80,7 @@ internal class StoragePerformanceTest {
         setup: () -> Unit = {},
         crossinline operation: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) {
+        repeat(warmup) {
             setup()
             for (i in 0 until ops) operation(i)
         }
@@ -101,7 +102,7 @@ internal class StoragePerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (w in 0 until warmup) block()
+        repeat(warmup) { block() }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()

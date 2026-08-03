@@ -35,7 +35,6 @@ internal class JgraphtConcurStorageImplWhiteBoxTest {
         storage = JgraphtConcurStorageImpl()
     }
 
-
     // -- Defensive copy behavior --
 
     @Test

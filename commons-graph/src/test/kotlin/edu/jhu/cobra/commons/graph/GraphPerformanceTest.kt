@@ -1,3 +1,5 @@
+@file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
+
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.poset.Label
@@ -27,7 +29,6 @@ import kotlin.test.Test
  * Run with: ./gradlew :graph:test --tests "*.GraphPerformanceTest"
  */
 internal class GraphPerformanceTest {
-
     private val storageNames: List<String> =
         run {
             val all = listOf("NativeStorage", "NativeConcurStorage", "LayeredStorage")
@@ -90,7 +91,7 @@ internal class GraphPerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (w in 0 until warmup) block()
+        repeat(warmup) { block() }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
@@ -108,7 +109,7 @@ internal class GraphPerformanceTest {
         measured: Int = MEASURED,
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (w in 0 until warmup) {
+        repeat(warmup) {
             for (i in 0 until ops) op(i)
         }
         val samples = DoubleArray(measured)

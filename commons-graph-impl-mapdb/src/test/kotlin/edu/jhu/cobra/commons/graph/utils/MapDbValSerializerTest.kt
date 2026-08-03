@@ -15,10 +15,10 @@ package edu.jhu.cobra.commons.graph.utils
 
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.IValue
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.NullVal
-import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import org.mapdb.DBMaker
 import org.mapdb.Serializer
@@ -78,13 +78,14 @@ internal class MapDbValSerializerTest {
     fun `serialize and deserialize nested complex values`() {
         val db = DBMaker.memoryDB().make()
         val map = db.hashMap("test", Serializer.STRING, MapDbValSerializer<IValue>()).createOrOpen()
-        val nested = ListVal(
-            listOf(
-                MapVal("a" to ListVal(listOf(IntVal(1L), NullVal))),
-                BoolVal(true),
-                StrVal("deep"),
-            ),
-        )
+        val nested =
+            ListVal(
+                listOf(
+                    MapVal("a" to ListVal(listOf(IntVal(1L), NullVal))),
+                    BoolVal(true),
+                    StrVal("deep"),
+                ),
+            )
         map["nested"] = nested
         assertEquals(nested, map["nested"])
         db.close()

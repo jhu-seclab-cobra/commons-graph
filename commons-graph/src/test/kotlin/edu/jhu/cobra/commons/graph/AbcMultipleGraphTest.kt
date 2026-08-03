@@ -72,7 +72,6 @@ internal class AbcMultipleGraphTest {
         graph = GraphTestUtils.TestMultipleGraph(storage)
     }
 
-
     // region Node CRUD
 
     @Test

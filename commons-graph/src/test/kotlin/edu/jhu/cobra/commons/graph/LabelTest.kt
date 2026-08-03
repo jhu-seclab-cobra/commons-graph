@@ -19,7 +19,6 @@ import kotlin.test.assertNotEquals
  * - `INFIMUM and SUPREMUM are distinct` — verifies sentinels differ
  */
 internal class LabelTest {
-
     @Test
     fun `Label created from string exposes core`() {
         val label = Label("test")

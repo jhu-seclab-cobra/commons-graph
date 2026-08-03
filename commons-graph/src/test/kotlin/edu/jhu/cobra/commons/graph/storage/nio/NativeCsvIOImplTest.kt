@@ -210,17 +210,17 @@ internal class NativeCsvIOImplTest {
         storage.setMeta("v", "1".strVal)
 
         var current: IStorage = storage
-        for (i in 1..3) {
-            val target = roundTrip(current)
-            current = target
+        repeat(3) {
+            current = roundTrip(current)
         }
 
         assertEquals(2, current.nodeIDs.size)
         assertEquals(1, current.edgeIDs.size)
-        val names = current.nodeIDs
-            .map { current.getNodeProperties(it) }
-            .mapNotNull { (it["name"] as? StrVal)?.core }
-            .toSet()
+        val names =
+            current.nodeIDs
+                .map { current.getNodeProperties(it) }
+                .mapNotNull { (it["name"] as? StrVal)?.core }
+                .toSet()
         assertEquals(setOf("A", "B"), names)
         assertEquals("1", (current.getMeta("v") as StrVal).core)
     }
@@ -392,8 +392,8 @@ internal class NativeCsvIOImplTest {
         val n1 = storage.addNode(mapOf("name" to "A".strVal))
         val n2 = storage.addNode(mapOf("name" to "B".strVal))
         val n3 = storage.addNode(mapOf("name" to "C".strVal))
-        val e1 = storage.addEdge(n1, n3, "keep")
-        val e2 = storage.addEdge(n3, n1, "drop")
+        storage.addEdge(n1, n3, "keep")
+        storage.addEdge(n3, n1, "drop")
 
         val exportPath = tempDir.resolve("filtered_edges")
         NativeCsvIOImpl.export(exportPath, storage) { it != n2 }
@@ -442,10 +442,11 @@ internal class NativeCsvIOImplTest {
         NativeCsvIOImpl.import(dir, target)
 
         assertEquals(2, target.nodeIDs.size)
-        val names = target.nodeIDs
-            .map { target.getNodeProperties(it) }
-            .mapNotNull { (it["name"] as? StrVal)?.core }
-            .toSet()
+        val names =
+            target.nodeIDs
+                .map { target.getNodeProperties(it) }
+                .mapNotNull { (it["name"] as? StrVal)?.core }
+                .toSet()
         assertEquals(setOf("Alice", "Bob"), names)
     }
 

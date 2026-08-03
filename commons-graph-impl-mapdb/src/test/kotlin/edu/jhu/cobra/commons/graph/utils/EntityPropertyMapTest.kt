@@ -77,11 +77,12 @@ internal class EntityPropertyMapTest {
     @Test
     fun `basic put and get operations`() {
         val entity = 1
-        val props = mapOf(
-            "name" to "Entity 1".strVal,
-            "count" to 42.intVal,
-            "active" to true.boolVal,
-        )
+        val props =
+            mapOf(
+                "name" to "Entity 1".strVal,
+                "count" to 42.intVal,
+                "active" to true.boolVal,
+            )
         assertNull(entityPropertyMap.put(entity, props))
         assertEquals<Map<String, IValue>>(props, entityPropertyMap[entity]!!)
     }
@@ -148,12 +149,13 @@ internal class EntityPropertyMapTest {
     @Test
     fun `edge cases for property names and values`() {
         val entity = 1
-        val edgeCases = mapOf(
-            "" to "Empty key".strVal,
-            "!@#\$%^&*()" to "Special chars".strVal,
-            "a:b" to "Colon in key".strVal,
-            "key with spaces" to "Spaces in key".strVal,
-        )
+        val edgeCases =
+            mapOf(
+                "" to "Empty key".strVal,
+                "!@#\$%^&*()" to "Special chars".strVal,
+                "a:b" to "Colon in key".strVal,
+                "key with spaces" to "Spaces in key".strVal,
+            )
         entityPropertyMap.put(entity, edgeCases)
         val retrieved = entityPropertyMap[entity]
         edgeCases.forEach { (key, value) ->
@@ -164,11 +166,12 @@ internal class EntityPropertyMapTest {
     @Test
     fun `null and empty value handling`() {
         val entity = 1
-        val props = mapOf(
-            "nullValue" to NullVal,
-            "emptyString" to "".strVal,
-            "normalValue" to "normal".strVal,
-        )
+        val props =
+            mapOf(
+                "nullValue" to NullVal,
+                "emptyString" to "".strVal,
+                "normalValue" to "normal".strVal,
+            )
         entityPropertyMap.put(entity, props)
         val retrieved = entityPropertyMap[entity]
         assertEquals(NullVal, retrieved?.get("nullValue"))
@@ -198,11 +201,12 @@ internal class EntityPropertyMapTest {
 
     @Test
     fun `bulk operations`() {
-        val entities = mapOf(
-            1 to mapOf("name" to "Entity 1".strVal),
-            2 to mapOf("name" to "Entity 2".strVal),
-            3 to mapOf("name" to "Entity 3".strVal),
-        )
+        val entities =
+            mapOf(
+                1 to mapOf("name" to "Entity 1".strVal),
+                2 to mapOf("name" to "Entity 2".strVal),
+                3 to mapOf("name" to "Entity 3".strVal),
+            )
         entityPropertyMap.putAll(entities)
         assertEquals(3, entityPropertyMap.size)
         entities.forEach { (entity, props) ->
@@ -212,10 +216,11 @@ internal class EntityPropertyMapTest {
 
     @Test
     fun `collection view operations`() {
-        val entities = mapOf(
-            1 to mapOf("name" to "Entity 1".strVal),
-            2 to mapOf("name" to "Entity 2".strVal),
-        )
+        val entities =
+            mapOf(
+                1 to mapOf("name" to "Entity 1".strVal),
+                2 to mapOf("name" to "Entity 2".strVal),
+            )
         entityPropertyMap.putAll(entities)
 
         assertEquals(2, entityPropertyMap.keys.size)
@@ -278,11 +283,13 @@ internal class EntityPropertyMapTest {
         entityPropertyMap.put(1, mapOf("a" to "1".strVal))
         val pm = entityPropertyMap[1]!!
         val entries = pm.entries
-        val newEntry = object : MutableMap.MutableEntry<String, IValue> {
-            override val key = "b"
-            override val value = "2".strVal
-            override fun setValue(newValue: IValue) = "2".strVal
-        }
+        val newEntry =
+            object : MutableMap.MutableEntry<String, IValue> {
+                override val key = "b"
+                override val value = "2".strVal
+
+                override fun setValue(newValue: IValue) = "2".strVal
+            }
         assertTrue(entries.add(newEntry))
         assertTrue(pm.containsKey("b"))
     }
@@ -417,11 +424,13 @@ internal class EntityPropertyMapTest {
 
     @Test
     fun `entity map entries add inserts new entity`() {
-        val entry = object : MutableMap.MutableEntry<Int, Map<String, IValue>> {
-            override val key = 5
-            override val value = mapOf("x" to "v".strVal)
-            override fun setValue(newValue: Map<String, IValue>) = value
-        }
+        val entry =
+            object : MutableMap.MutableEntry<Int, Map<String, IValue>> {
+                override val key = 5
+                override val value = mapOf("x" to "v".strVal)
+
+                override fun setValue(newValue: Map<String, IValue>) = value
+            }
         entityPropertyMap.entries.add(entry)
         assertTrue(entityPropertyMap.containsKey(5))
         assertEquals("v".strVal, entityPropertyMap[5]!!["x"])

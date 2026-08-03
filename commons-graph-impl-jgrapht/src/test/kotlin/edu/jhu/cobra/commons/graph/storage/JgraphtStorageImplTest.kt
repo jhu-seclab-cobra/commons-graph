@@ -61,8 +61,8 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.intVal
@@ -84,7 +84,6 @@ internal class JgraphtStorageImplTest {
     fun setUp() {
         storage = JgraphtStorageImpl()
     }
-
 
     // -- addNode --
 
@@ -557,13 +556,14 @@ internal class JgraphtStorageImplTest {
 
     @Test
     fun `complex IValue types survive property round-trip`() {
-        val complexValue = mapOf(
-            "str" to "test".strVal,
-            "num" to 42.intVal,
-            "bool" to true.boolVal,
-            "list" to listOf(1.intVal, 2.intVal, 3.intVal).listVal,
-            "map" to mapOf("nested" to "value".strVal).mapVal,
-        ).mapVal
+        val complexValue =
+            mapOf(
+                "str" to "test".strVal,
+                "num" to 42.intVal,
+                "bool" to true.boolVal,
+                "list" to listOf(1.intVal, 2.intVal, 3.intVal).listVal,
+                "map" to mapOf("nested" to "value".strVal).mapVal,
+            ).mapVal
 
         val id = storage.addNode(mapOf("complex" to complexValue, "null" to NullVal))
         val props = storage.getNodeProperties(id)

@@ -26,7 +26,6 @@ internal class JgraphtStorageImplWhiteBoxTest {
         storage = JgraphtStorageImpl()
     }
 
-
     // -- LinkedHashMap insertion order preservation --
 
     @Test

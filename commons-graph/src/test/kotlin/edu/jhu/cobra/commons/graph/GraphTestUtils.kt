@@ -48,6 +48,7 @@ object GraphTestUtils {
         override val poset: IPoset = PosetDftImpl(posetStorage)
 
         override fun newNodeObj() = TestNode()
+
         override fun newEdgeObj() = TestEdge()
     }
 
@@ -58,6 +59,7 @@ object GraphTestUtils {
         override val storage: IStorage = graphStorage
 
         override fun newNodeObj() = TestNode()
+
         override fun newEdgeObj() = TestEdge()
 
         fun doRebuild() = rebuild()
@@ -78,6 +80,7 @@ object GraphTestUtils {
         override val poset: IPoset = PosetDftImpl(posetStorage)
 
         override fun newNodeObj() = TestNode()
+
         override fun newEdgeObj() = TestEdge()
     }
 
@@ -88,6 +91,7 @@ object GraphTestUtils {
         override val graphId: String = "TestSimple"
 
         override fun newNodeObj() = TestNode()
+
         override fun newEdgeObj() = TestEdge()
     }
 }

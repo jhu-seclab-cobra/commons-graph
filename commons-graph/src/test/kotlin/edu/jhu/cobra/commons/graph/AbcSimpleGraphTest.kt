@@ -35,7 +35,6 @@ internal class AbcSimpleGraphTest {
         graph = createTestSimpleGraph(storage)
     }
 
-
     // region Single-edge-per-direction constraint
 
     @Test

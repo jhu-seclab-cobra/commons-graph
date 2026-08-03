@@ -23,7 +23,6 @@ import kotlin.test.assertTrue
  * - `transferTo does not modify source storage` -- non-destructive copy
  */
 internal class TransferToTest {
-
     @Test
     fun `transferTo returns map from source node IDs to target node IDs`() {
         val source = NativeStorageImpl()

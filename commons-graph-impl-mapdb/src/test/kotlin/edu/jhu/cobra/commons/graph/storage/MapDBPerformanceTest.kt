@@ -1,3 +1,5 @@
+@file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
+
 /**
  * Performance benchmarks for MapDB-based IStorage implementations.
  *
@@ -16,6 +18,7 @@
  * - `benchmark memory footprint across configs`
  * - `benchmark edge query across configs`
  */
+
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.intVal
@@ -84,7 +87,7 @@ internal class MapDBPerformanceTest {
         setup: () -> Unit = {},
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (_w in 0 until warmup) {
+        repeat(warmup) {
             setup()
             for (i in 0 until ops) op(i)
         }
@@ -106,7 +109,7 @@ internal class MapDBPerformanceTest {
         measured: Int = 3,
         crossinline block: () -> Unit,
     ): Double {
-        for (_w in 0 until warmup) block()
+        repeat(warmup) { block() }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()
@@ -193,7 +196,11 @@ internal class MapDBPerformanceTest {
     }
 
     private fun diskSizeMB(dir: Path): Double =
-        Files.walk(dir).filter { it.isRegularFile() }.mapToLong { it.fileSize() }.sum() / (1024.0 * 1024.0)
+        Files
+            .walk(dir)
+            .filter { it.isRegularFile() }
+            .mapToLong { it.fileSize() }
+            .sum() / (1024.0 * 1024.0)
 
     private fun populateWithProps(
         storage: IStorage,

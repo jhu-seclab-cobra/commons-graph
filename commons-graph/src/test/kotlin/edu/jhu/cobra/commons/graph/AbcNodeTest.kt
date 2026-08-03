@@ -51,7 +51,6 @@ internal class AbcNodeTest {
         node.bind(storage, sid, NODE_ID_1)
     }
 
-
     // region Identity
 
     @Test

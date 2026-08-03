@@ -58,7 +58,6 @@ internal class AbcEntityTest {
         testNode.bind(storage, sid, "entity-test")
     }
 
-
     // region IEntity get/set/contains/asMap/update
 
     @Test
@@ -161,9 +160,10 @@ internal class AbcEntityTest {
 
     @Test
     fun `IEntity Type exposes name`() {
-        val type = object : IEntity.Type {
-            override val name = "CustomType"
-        }
+        val type =
+            object : IEntity.Type {
+                override val name = "CustomType"
+            }
 
         assertEquals("CustomType", type.name)
     }
@@ -203,9 +203,10 @@ internal class AbcEntityTest {
     // region EntityProperty delegate
 
     private class PropNode : AbcNode() {
-        override val type: AbcNode.Type = object : AbcNode.Type {
-            override val name = "PropNode"
-        }
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "PropNode"
+            }
         var label: StrVal by EntityProperty(default = "default".strVal)
         var custom: StrVal by EntityProperty("customKey", default = "d".strVal)
         var opt: StrVal? by EntityProperty()
@@ -278,9 +279,10 @@ internal class AbcEntityTest {
     }
 
     private class TypeNode : AbcNode() {
-        override val type: AbcNode.Type = object : AbcNode.Type {
-            override val name = "TypeNode"
-        }
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "TypeNode"
+            }
         var kind: Kind by EntityType(default = Kind.SOURCE)
         var namedKind: Kind by EntityType("myKind", default = Kind.SOURCE)
     }

@@ -1,3 +1,5 @@
+@file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
+
 /**
  * Performance benchmarks for JGraphT-based IStorage implementations at scale.
  *
@@ -11,6 +13,7 @@
  * - `benchmark memory footprint`
  * - `benchmark edge query on large graph`
  */
+
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.intVal
@@ -67,7 +70,7 @@ internal class JgraphtPerformanceTest {
         setup: () -> Unit = {},
         crossinline op: (Int) -> Unit,
     ): Double {
-        for (_w in 0 until warmup) {
+        repeat(warmup) {
             setup()
             for (i in 0 until ops) op(i)
         }
@@ -89,7 +92,7 @@ internal class JgraphtPerformanceTest {
         measured: Int = MEASURED,
         crossinline block: () -> Unit,
     ): Double {
-        for (_w in 0 until warmup) block()
+        repeat(warmup) { block() }
         val samples = DoubleArray(measured)
         for (r in 0 until measured) {
             System.gc()

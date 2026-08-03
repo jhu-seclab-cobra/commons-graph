@@ -6,7 +6,6 @@ import edu.jhu.cobra.commons.graph.AbcSimpleGraph
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.StrVal
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -75,13 +74,18 @@ import kotlin.test.assertTrue
  * - `queryCache survives parents setter during compare sequence` — B4 regression
  */
 internal class PosetTraitTest {
-
     private class TestNode : AbcNode() {
-        override val type: AbcNode.Type = object : AbcNode.Type { override val name = "TN" }
+        override val type: AbcNode.Type =
+            object : AbcNode.Type {
+                override val name = "TN"
+            }
     }
 
     private class TestEdge : AbcEdge() {
-        override val type: AbcEdge.Type = object : AbcEdge.Type { override val name = "TE" }
+        override val type: AbcEdge.Type =
+            object : AbcEdge.Type {
+                override val name = "TE"
+            }
     }
 
     private class TestGraph :
@@ -91,7 +95,9 @@ internal class PosetTraitTest {
         override val graphId: String = "TestPoset"
         val posetStorage = NativeStorageImpl()
         override val poset: IPoset = PosetDftImpl(posetStorage)
+
         override fun newNodeObj() = TestNode()
+
         override fun newEdgeObj() = TestEdge()
     }
 
@@ -100,10 +106,6 @@ internal class PosetTraitTest {
     @BeforeTest
     fun setUp() {
         graph = TestGraph()
-    }
-
-    @AfterTest
-    fun tearDown() {
     }
 
     // region IPoset (label hierarchy)
@@ -472,8 +474,8 @@ internal class PosetTraitTest {
         graph.addNode("b")
         graph.addNode("c")
         val label = Label("v1")
-        val e1 = graph.addEdge("a", "b", "calls", label)
-        val e2 = graph.addEdge("a", "c", "data", label)
+        graph.addEdge("a", "b", "calls", label)
+        graph.addEdge("a", "c", "data", label)
 
         val edges = graph.getOutgoingEdges("a", label) { it.eTag == "calls" }.toList()
 
@@ -631,9 +633,10 @@ internal class PosetTraitTest {
         val label = Label("root")
         graph.poset.setParents(label, mapOf("up" to Label("parent")))
         val orphanNodeId = graph.posetStorage.addNode()
-        val parentId = graph.posetStorage.nodeIDs.first { id ->
-            (graph.posetStorage.getNodeProperty(id, "label") as? StrVal)?.core == "parent"
-        }
+        val parentId =
+            graph.posetStorage.nodeIDs.first { id ->
+                (graph.posetStorage.getNodeProperty(id, "label") as? StrVal)?.core == "parent"
+            }
         graph.posetStorage.addEdge(parentId, orphanNodeId, "orphan", emptyMap())
 
         val ancestors = graph.poset.getAncestors(label).toList()
