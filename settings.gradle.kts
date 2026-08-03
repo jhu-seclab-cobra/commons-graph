@@ -4,15 +4,9 @@ plugins {
 
 rootProject.name = "commons-graph"
 
-// Only include commons-value when building standalone (not as a composite build).
-// When included by a parent project, the parent is responsible for providing commons-value.
-if (gradle.parent == null) {
-    includeBuild("extern/commons-value") {
-        dependencySubstitution {
-            substitute(module("com.github.jhu-seclab-cobra:commons-value")).using(project(":jhu-seclab-cobra-commons-value"))
-        }
-    }
-}
+// No vendored checkouts. Standalone builds resolve commons-value from
+// JitPack at the version in gradle/libs.versions.toml. Under a composite,
+// the including root substitutes it with its own vendored build.
 
 include(
     "jhu-seclab-cobra-commons-graph",
