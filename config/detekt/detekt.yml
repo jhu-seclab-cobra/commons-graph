@@ -1,0 +1,67 @@
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    threshold: 30
+    excludes:
+      - "**/*Test.kt"
+      - "**/*Tests.kt"
+  LargeClass:
+    threshold: 600
+    excludes:
+      - "**/*Test.kt"
+      - "**/*Tests.kt"
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 8
+  ComplexCondition:
+    threshold: 4
+  CyclomaticComplexMethod:
+    threshold: 15
+  TooManyFunctions:
+    thresholdInFiles: 20
+    thresholdInClasses: 25
+    thresholdInInterfaces: 20
+    excludes:
+      - "**/*Test.kt"
+      - "**/*Tests.kt"
+
+style:
+  MagicNumber:
+    active: false
+  MaxLineLength:
+    maxLineLength: 140
+  WildcardImport:
+    active: false
+  ReturnCount:
+    max: 8
+  UnusedPrivateMember:
+    active: true
+
+naming:
+  FunctionNaming:
+    excludes:
+      - "**/*Test.kt"
+      - "**/*Tests.kt"
+  ConstructorParameterNaming:
+    active: true
+  TopLevelPropertyNaming:
+    constantPattern: "[A-Z][_A-Z0-9]*"
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames:
+      - "Exception"
+      - "RuntimeException"
+      - "Throwable"
+  SwallowedException:
+    active: true
+    excludes:
+      - "**/*Test.kt"
+      - "**/*Tests.kt"
+
+performance:
+  SpreadOperator:
+    active: false
