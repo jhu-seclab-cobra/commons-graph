@@ -40,6 +40,8 @@ import kotlin.test.assertTrue
  * - `EntityType delegate returns default when unset` — verifies enum type default
  * - `EntityType delegate set and get round-trips` — verifies enum type write-read
  * - `EntityType delegate custom name uses custom storage key` — verifies optName mapping
+ * - `EntityType delegate auto name uses entity class prefix` — verifies auto-generated key is
+ *   prefixed with the entity class name, not the anonymous delegate class
  * - `EntityType delegate returns default on unknown stored value` — verifies fallback for bad data
  * - `EntityProperty nullable delegate returns null when storage value is null` — nullable delegate null in storage
  * - `EntityType delegate returns default when stored value is non-StrVal type` — wrong type in storage
@@ -313,6 +315,16 @@ internal class AbcEntityTest {
         node.namedKind = Kind.SINK
 
         assertEquals("SINK", (node["myKind"] as? StrVal)?.core)
+    }
+
+    @Test
+    fun `EntityType delegate auto name uses entity class prefix`() {
+        val sid = storage.addNode()
+        val node = TypeNode().also { it.bind(storage, sid, "t") }
+
+        node.kind = Kind.SINK
+
+        assertEquals("SINK", (node["typenode_kind"] as? StrVal)?.core)
     }
 
     @Test

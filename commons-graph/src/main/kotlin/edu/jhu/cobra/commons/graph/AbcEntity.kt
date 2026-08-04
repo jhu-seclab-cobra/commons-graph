@@ -89,7 +89,9 @@ sealed class AbcEntity : IEntity {
         optName: String? = null,
         default: T,
     ) = object : ReadWriteProperty<IEntity, T> {
-        private val propPrefix by lazy { this::class.java.simpleName.lowercase() }
+        // The enclosing entity's class names the prefix; the delegate itself is an
+        // anonymous class whose simpleName is empty.
+        private val propPrefix = this@AbcEntity::class.java.simpleName.lowercase()
         private val enumTypeMap by lazy { T::class.java.enumConstants.associateBy { it.name } }
 
         override fun getValue(
