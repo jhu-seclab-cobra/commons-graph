@@ -55,3 +55,6 @@ kover/
 # === Ignore any other unwanted files ===
 # (add more patterns as needed)
 .*
+# Task docs are local-only
+todo.md
+*todo*.md
