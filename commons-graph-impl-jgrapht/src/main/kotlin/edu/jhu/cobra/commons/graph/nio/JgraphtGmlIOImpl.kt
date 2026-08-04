@@ -30,7 +30,10 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
 
     override fun isValidFile(file: Path): Boolean {
         if (file.notExists() || !file.isRegularFile()) return false
-        return file.fileSize() > 0 && "text" in Files.probeContentType(file)
+        // probeContentType returns null when the platform cannot identify the type
+        // (macOS has no mapping for .gml); only a positively non-text type vetoes.
+        val contentType: String? = Files.probeContentType(file)
+        return file.fileSize() > 0 && (contentType == null || "text" in contentType)
     }
 
     @Suppress("LongMethod")
@@ -39,7 +42,7 @@ object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         from: IStorage,
         predicate: EntityFilter,
     ): Path {
-        require(dstFile.notExists() || dstFile.fileSize() != 0L) { "File $dstFile already exists" }
+        require(dstFile.notExists() || dstFile.fileSize() == 0L) { "File $dstFile already exists" }
         val exporter = GmlExporter<Int, Int>()
         val nodeList = from.nodeIDs.filter(predicate).toList()
         exporter.setVertexAttributeProvider { index: Int ->

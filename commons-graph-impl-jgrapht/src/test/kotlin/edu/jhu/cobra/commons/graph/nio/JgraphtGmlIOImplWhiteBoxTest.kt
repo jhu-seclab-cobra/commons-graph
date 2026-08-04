@@ -4,7 +4,10 @@
  * - `isValidFile returns false for nonexistent file`
  * - `isValidFile returns false for empty file`
  * - `isValidFile returns false for directory`
+ * - `isValidFile returns true for exported gml file` — unknown content type does not veto
  * - `export creates file at destination path`
+ * - `export throws when destination file is non-empty`
+ * - `export accepts existing empty file`
  * - `export returns destination path`
  * - `import requires file to exist`
  * - `import returns target storage`
@@ -67,7 +70,31 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         Files.deleteIfExists(dir)
     }
 
+    @Test
+    fun `isValidFile returns true for exported gml file`() {
+        srcStorage.addNode()
+        JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        assertTrue(JgraphtGmlIOImpl.isValidFile(tempFile))
+    }
+
     // -- export --
+
+    @Test
+    fun `export throws when destination file is non-empty`() {
+        Files.writeString(tempFile, "existing content")
+        assertFailsWith<IllegalArgumentException> {
+            JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        }
+    }
+
+    @Test
+    fun `export accepts existing empty file`() {
+        Files.createFile(tempFile)
+        srcStorage.addNode()
+        val result = JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        assertEquals(tempFile, result)
+        assertTrue(Files.size(tempFile) > 0)
+    }
 
     @Test
     fun `export creates file at destination path`() {
