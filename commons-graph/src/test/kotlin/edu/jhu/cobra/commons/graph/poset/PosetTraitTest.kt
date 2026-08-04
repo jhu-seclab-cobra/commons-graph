@@ -254,9 +254,10 @@ internal class PosetTraitTest {
         graph.poset.setParents(a, mapOf("up" to b))
         graph.poset.setParents(b, mapOf("up" to a))
 
-        val exception = assertFailsWith<IllegalStateException> {
-            graph.poset.compare(a, b)
-        }
+        val exception =
+            assertFailsWith<IllegalStateException> {
+                graph.poset.compare(a, b)
+            }
         assertTrue("cyc" in exception.message.orEmpty())
     }
 
