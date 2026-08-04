@@ -37,6 +37,8 @@ import kotlin.test.assertTrue
  * - `round-trip preserves metadata` -- metadata fidelity
  * - `round-trip preserves mixed property types` -- type fidelity across StrVal, IntVal, FloatVal, BoolVal
  * - `round-trip preserves special characters in property values` -- CSV escaping
+ * - `round-trip preserves property value ending in backslash` -- escaped trailing backslash
+ *   must not hide the following delimiter
  * - `round-trip on empty storage produces empty target` -- empty boundary
  * - `multiple round-trips produce identical data` -- idempotent serialization
  * - `import skips node rows with fewer columns than headers` -- malformed node CSV tolerance
@@ -192,6 +194,26 @@ internal class NativeCsvIOImplTest {
         assertEquals("a,b,c", (props["commas"] as StrVal).core)
         assertEquals("line1\nline2", (props["newline"] as StrVal).core)
         assertEquals("C:\\path\\file", (props["backslash"] as StrVal).core)
+    }
+
+    @Test
+    fun `round-trip preserves property value ending in backslash`() {
+        // First node pins "trailing" as the first property column, so the
+        // second node's backslash-terminated cell is followed by a delimiter.
+        storage.addNode(mapOf("trailing" to "plain".strVal))
+        val nodeId =
+            storage.addNode(
+                mapOf(
+                    "trailing" to "tail\\".strVal,
+                    "next" to "value".strVal,
+                ),
+            )
+
+        val target = roundTrip(storage)
+
+        val props = target.getNodeProperties(nodeId)
+        assertEquals("tail\\", (props["trailing"] as StrVal).core)
+        assertEquals("value", (props["next"] as StrVal).core)
     }
 
     @Test

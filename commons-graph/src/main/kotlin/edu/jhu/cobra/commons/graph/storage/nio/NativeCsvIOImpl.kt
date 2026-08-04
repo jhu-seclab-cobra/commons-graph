@@ -25,7 +25,7 @@ import kotlin.io.path.notExists
  */
 object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private const val CSV_DELIMITER = ","
-    private val CSV_DELIMITER_REGEX = Regex("(?<!\\\\)$CSV_DELIMITER")
+    private val CSV_DELIMITER_CHAR: Char = CSV_DELIMITER.single()
     private val escapeMap =
         mapOf(
             "\\" to "\\\\",
@@ -49,6 +49,38 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private fun escape(value: String): String = value.replace(escapeRegex) { r -> escapeMap[r.value] ?: r.value }
 
     private fun unescape(value: String): String = value.replace(unescapeRegex) { r -> unescapeMap[r.value] ?: r.value }
+
+    /**
+     * Splits an escaped CSV line on unescaped delimiters.
+     *
+     * A delimiter is unescaped when preceded by an even number of backslashes;
+     * an odd count means the delimiter itself is escaped (`\,`). A lookbehind
+     * regex cannot express this: a cell ending in an escaped backslash (`\\`)
+     * would hide the following delimiter.
+     *
+     * @param limit maximum number of cells; 0 means unlimited. Once reached,
+     * the remainder of the line becomes the last cell verbatim.
+     */
+    private fun splitCsvLine(
+        line: String,
+        limit: Int = 0,
+    ): List<String> {
+        val cells = mutableListOf<String>()
+        val current = StringBuilder()
+        var backslashCount = 0
+        for (char in line) {
+            val isDelimiter = char == CSV_DELIMITER_CHAR && backslashCount % 2 == 0
+            if (isDelimiter && (limit <= 0 || cells.size < limit - 1)) {
+                cells.add(current.toString())
+                current.setLength(0)
+            } else {
+                current.append(char)
+            }
+            backslashCount = if (char == '\\') backslashCount + 1 else 0
+        }
+        cells.add(current.toString())
+        return cells
+    }
 
     private class CsvWriter(
         path: Path,
@@ -205,12 +237,12 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 val nodeReader = nodeFile.bufferedReader()
                 try {
                     val rawHeaderString = nodeReader.readLine() ?: ""
-                    val rawHeader = rawHeaderString.split(CSV_DELIMITER_REGEX)
+                    val rawHeader = splitCsvLine(rawHeaderString)
                     val fullHeader = rawHeader.map { unescape(it) }
                     // First column is __nid__ (structural)
                     val propHeaders = fullHeader.drop(1)
                     for (line in nodeReader.lineSequence()) {
-                        val parts = line.split(CSV_DELIMITER_REGEX)
+                        val parts = splitCsvLine(line)
                         if (parts.isEmpty()) continue
                         val unescaped = parts.map { unescape(it) }
                         val nodeId = unescaped[0]
@@ -225,13 +257,13 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             iterator {
                 val edgeReader = edgeFile.bufferedReader()
                 try {
-                    val rawHeader = edgeReader.readLine().split(CSV_DELIMITER_REGEX)
+                    val rawHeader = splitCsvLine(edgeReader.readLine())
                     val edgeHeader = rawHeader.map { unescape(it) }
                     // First 4 columns are eid, src, dst, tag
                     val propHeaders = edgeHeader.drop(4)
                     for (line in edgeReader.lineSequence()) {
                         require(!isClosed) { "The edge file is closed" }
-                        val parts = line.split(CSV_DELIMITER_REGEX)
+                        val parts = splitCsvLine(line)
                         if (parts.size < 4) continue
                         val unescaped = parts.map { unescape(it) }
                         val edgeId = unescaped[0]
@@ -252,7 +284,7 @@ object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
                 try {
                     reader.readLine()
                     for (line in reader.lineSequence()) {
-                        val parts = line.split(CSV_DELIMITER_REGEX, limit = 2)
+                        val parts = splitCsvLine(line, limit = 2)
                         val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) } ?: continue
                         yield(unescape(parts[0]) to value)
                     }
