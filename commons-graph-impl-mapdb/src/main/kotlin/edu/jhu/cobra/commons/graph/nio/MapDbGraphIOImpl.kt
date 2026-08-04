@@ -98,8 +98,8 @@ object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
                 val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? IntVal)?.core?.toInt() ?: return@forEach
                 val oldDst = (props.remove(EDGE_DST_KEY) as? IntVal)?.core?.toInt() ?: return@forEach
                 val tag = (props.remove(EDGE_TAG_KEY) as? StrVal)?.core ?: return@forEach
-                val src = nodeIdMapping[oldSrc] ?: oldSrc
-                val dst = nodeIdMapping[oldDst] ?: oldDst
+                val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
+                val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
                 if (!predicate(src)) return@forEach
                 val propsMap: Map<String, IValue> = props.core.toMap()
                 into.addEdge(src, dst, tag, propsMap)

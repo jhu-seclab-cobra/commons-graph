@@ -13,6 +13,7 @@
  * - `import adds nodes with properties`
  * - `import adds edges with properties`
  * - `import creates src and dst nodes for edges`
+ * - `import throws when edge references missing node` — no silent reattachment to raw IDs
  * - `export with node predicate filters nodes and edges`
  * - `import with predicate filters imported entities`
  * - `export and import empty storage`
@@ -22,10 +23,15 @@
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.MapDBStorageImpl
+import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
+import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.intVal
+import edu.jhu.cobra.commons.value.mapVal
 import edu.jhu.cobra.commons.value.strVal
+import org.mapdb.DBMaker
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -203,6 +209,33 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         assertEquals(2, dstStorage.nodeIDs.size)
         assertEquals(1, dstStorage.edgeIDs.size)
         dstStorage.close()
+    }
+
+    @Test
+    fun `import throws when edge references missing node`() {
+        val db = DBMaker.fileDB(tempFile.toFile()).make()
+        val serializer = MapDbValSerializer<MapVal>()
+        db.indexTreeList("nodes", serializer).create().add(
+            mapOf<String, IValue>("_nid" to IntVal(5)).mapVal,
+        )
+        db.indexTreeList("edges", serializer).create().add(
+            mapOf<String, IValue>(
+                "_esrc" to IntVal(5),
+                "_edst" to IntVal(7),
+                "_etag" to StrVal("e"),
+            ).mapVal,
+        )
+        db.close()
+
+        val dstStorage = MapDBStorageImpl { memoryDB() }
+        repeat(8) { dstStorage.addNode() }
+        try {
+            assertFailsWith<IllegalStateException> {
+                MapDbGraphIOImpl.import(tempFile, dstStorage)
+            }
+        } finally {
+            dstStorage.close()
+        }
     }
 
     // -- Export with predicate filtering --
