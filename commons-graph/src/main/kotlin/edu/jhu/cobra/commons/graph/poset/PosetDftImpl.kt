@@ -7,8 +7,10 @@ import edu.jhu.cobra.commons.value.strVal
 /**
  * Default [IPoset] implementation backed by an [IStorage] for label DAG persistence.
  *
- * Uses DFS interval labeling for O(1) ancestor checks on tree-structured posets.
- * For DAGs with multiple parents, falls back to multi-root DFS with k intervals.
+ * Ancestor queries use a memoized ancestor-closure table, correct on arbitrary
+ * DAGs including labels with multiple parents. The table is built lazily on the
+ * first query and discarded on any parent mutation. A cycle in the hierarchy is
+ * detected during the build and rejected.
  * All caching state is private. Consumers interact only through the [IPoset] interface.
  *
  * @param storage The storage instance for label DAG persistence.
@@ -20,9 +22,7 @@ class PosetDftImpl(
     private val intToLabel = HashMap<Int, String>()
     private var cacheReady = false
 
-    private var dfsIn = IntArray(0)
-    private var dfsOut = IntArray(0)
-    private var dfsReady = false
+    private var ancestorClosure: Map<Int, Set<Int>>? = null
 
     private fun ensureCache() {
         if (cacheReady) return
@@ -49,63 +49,41 @@ class PosetDftImpl(
         return storageId
     }
 
-    private fun ensureDfs() {
-        if (dfsReady) return
+    private fun ensureClosure(): Map<Int, Set<Int>> {
+        ancestorClosure?.let { return it }
         ensureCache()
-        if (labelIdCache.isEmpty()) {
-            dfsReady = true
-            return
+        val closure = HashMap<Int, Set<Int>>()
+        val onPath = HashSet<Int>()
+        for (nodeId in intToLabel.keys) {
+            computeAncestors(nodeId, closure, onPath)
         }
-        val maxId = intToLabel.keys.max() + 1
-        dfsIn = IntArray(maxId) { -1 }
-        dfsOut = IntArray(maxId) { -1 }
-        // Edges go child→parent (outgoing). Roots have no outgoing edges (no parents).
-        val roots = intToLabel.keys.filter { storage.getOutgoingEdges(it).isEmpty() }
-        computeDfsIntervals(roots)
-        dfsReady = true
+        ancestorClosure = closure
+        return closure
     }
 
-    private fun computeDfsIntervals(roots: List<Int>) {
-        var clock = 0
-        val visited = HashSet<Int>()
-        val stack = ArrayDeque<Pair<Int, Boolean>>()
-        for (root in roots) {
-            stack.addLast(root to false)
-        }
-        while (stack.isNotEmpty()) {
-            val (nodeId, returning) = stack.removeLast()
-            when {
-                returning -> dfsOut[nodeId] = clock++
-                visited.add(nodeId) -> {
-                    dfsIn[nodeId] = clock++
-                    stack.addLast(nodeId to true)
-                    pushUnvisitedChildren(nodeId, visited, stack)
-                }
-            }
-        }
-    }
-
-    private fun pushUnvisitedChildren(
+    private fun computeAncestors(
         nodeId: Int,
-        visited: Set<Int>,
-        stack: ArrayDeque<Pair<Int, Boolean>>,
-    ) {
-        // Traverse incoming edges = children in the hierarchy (child→parent edges point TO us)
-        for (edgeId in storage.getIncomingEdges(nodeId)) {
-            val child = storage.getEdgeStructure(edgeId).src
-            if (child !in visited) stack.addLast(child to false)
+        closure: MutableMap<Int, Set<Int>>,
+        onPath: MutableSet<Int>,
+    ): Set<Int> {
+        closure[nodeId]?.let { return it }
+        check(onPath.add(nodeId)) { "Label hierarchy cycle through '${intToLabel[nodeId]}'" }
+        val ancestors = HashSet<Int>()
+        // Edges go child→parent (outgoing): each parent plus its own ancestors.
+        for (edgeId in storage.getOutgoingEdges(nodeId)) {
+            val parentInt = storage.getEdgeStructure(edgeId).dst
+            ancestors.add(parentInt)
+            ancestors.addAll(computeAncestors(parentInt, closure, onPath))
         }
+        onPath.remove(nodeId)
+        closure[nodeId] = ancestors
+        return ancestors
     }
 
     private fun isAncestor(
         ancestorId: Int,
         descendantId: Int,
-    ): Boolean {
-        ensureDfs()
-        if (ancestorId >= dfsIn.size || descendantId >= dfsIn.size) return false
-        if (dfsIn[ancestorId] < 0 || dfsIn[descendantId] < 0) return false
-        return dfsIn[ancestorId] <= dfsIn[descendantId] && dfsOut[descendantId] <= dfsOut[ancestorId]
-    }
+    ): Boolean = ancestorId in ensureClosure().getValue(descendantId)
 
     override val allLabels: Set<Label>
         get() {
@@ -137,7 +115,7 @@ class PosetDftImpl(
             val parentInt = ensureLabelNode(parentLabel)
             storage.addEdge(storageId, parentInt, name, emptyMap())
         }
-        dfsReady = false
+        ancestorClosure = null
     }
 
     override fun getAncestors(label: Label): Sequence<Label> =

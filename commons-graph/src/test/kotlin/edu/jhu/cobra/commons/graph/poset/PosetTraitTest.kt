@@ -32,6 +32,10 @@ import kotlin.test.assertTrue
  * - `compare INFIMUM less than any` — sentinel
  * - `compare SUPREMUM vs INFIMUM` — extreme pair
  * - `allLabels includes INFIMUM and SUPREMUM` — sentinels present
+ * - `compare recognizes every parent as ancestor in a multi-parent DAG` — DAG multi-parent ancestry
+ * - `compare recognizes shared grandparent through both diamond paths` — diamond reachability
+ * - `compare throws on cyclic hierarchy naming a cycle label` — cycle rejection
+ * - `compare reflects hierarchy change after setParents` — closure invalidation
  *
  * PosetTrait (label-aware edge operations):
  * - `addEdge with label assigns label` — basic assignment
@@ -212,6 +216,62 @@ internal class PosetTraitTest {
     fun `allLabels includes INFIMUM and SUPREMUM`() {
         assertTrue(Label.INFIMUM in graph.poset.allLabels)
         assertTrue(Label.SUPREMUM in graph.poset.allLabels)
+    }
+
+    @Test
+    fun `compare recognizes every parent as ancestor in a multi-parent DAG`() {
+        val child = Label("child")
+        val left = Label("left")
+        val right = Label("right")
+        graph.poset.setParents(child, mapOf("l" to left, "r" to right))
+
+        assertEquals(1, graph.poset.compare(left, child))
+        assertEquals(1, graph.poset.compare(right, child))
+        assertEquals(-1, graph.poset.compare(child, left))
+        assertEquals(-1, graph.poset.compare(child, right))
+    }
+
+    @Test
+    fun `compare recognizes shared grandparent through both diamond paths`() {
+        val top = Label("top")
+        val left = Label("left")
+        val right = Label("right")
+        val bottom = Label("bottom")
+        graph.poset.setParents(left, mapOf("up" to top))
+        graph.poset.setParents(right, mapOf("up" to top))
+        graph.poset.setParents(bottom, mapOf("l" to left, "r" to right))
+
+        assertEquals(1, graph.poset.compare(top, bottom))
+        assertEquals(1, graph.poset.compare(left, bottom))
+        assertEquals(1, graph.poset.compare(right, bottom))
+        assertNull(graph.poset.compare(left, right))
+    }
+
+    @Test
+    fun `compare throws on cyclic hierarchy naming a cycle label`() {
+        val a = Label("cycA")
+        val b = Label("cycB")
+        graph.poset.setParents(a, mapOf("up" to b))
+        graph.poset.setParents(b, mapOf("up" to a))
+
+        val exception = assertFailsWith<IllegalStateException> {
+            graph.poset.compare(a, b)
+        }
+        assertTrue("cyc" in exception.message.orEmpty())
+    }
+
+    @Test
+    fun `compare reflects hierarchy change after setParents`() {
+        val child = Label("movable")
+        val oldParent = Label("oldParent")
+        val newParent = Label("newParent")
+        graph.poset.setParents(child, mapOf("up" to oldParent))
+        assertEquals(1, graph.poset.compare(oldParent, child))
+
+        graph.poset.setParents(child, mapOf("up" to newParent))
+
+        assertEquals(1, graph.poset.compare(newParent, child))
+        assertNull(graph.poset.compare(oldParent, child))
     }
 
     // endregion

@@ -24,7 +24,7 @@ Optimization log for core module. Benchmarks in [performance.md](performance.md)
 | I19 | LayeredStorageImpl | Frozen edge structure cache | Eliminates repeated translation |
 | I20 | LayeredStorageImpl | ActiveColumnViewMap entries cache | Matches I14 pattern |
 | I21 | LayeredStorageImpl | Eliminate double HashMap lookups | One fewer lookup per query |
-| I22 | PosetDftImpl | DFS interval labeling for O(1) compare | Eliminates O(V²) queryCache; O(1) ancestor check; lazy rebuild on setParents |
+| I22 | PosetDftImpl | Memoized ancestor closure for O(1) compare | O(1) ancestor check; lazy rebuild on setParents; DAG-correct (spec-poset.md) |
 
 ## Evaluated & Rejected
 
@@ -71,5 +71,5 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 13. **Int boxing in HashMap\<Int, *\> costs ~30 MB at 120K nodes.**
 14. **queryCache makes O(V²) compareTo effectively O(V²·1).** Replacing with uncached BFS is slower despite better asymptotic complexity.
 15. **Eclipse Collections IntObjectHashMap slower than JDK HashMap<Int,*>.** JVM autoboxing cache (-128..127) + JIT inline caching make JDK HashMap competitive. Eclipse overhead in hash function and iteration outweighs boxing savings.
-16. **DFS interval labeling replaces queryCache with O(1) compare.** No measurable throughput change at 5 labels (cache was ~100% hit). Eliminates O(V²) memory for large label sets. Lazy rebuild on setParents vs full cache clear.
+16. **Memoized ancestor closure replaces queryCache with O(1) compare.** No measurable throughput change at 5 labels (cache was ~100% hit). Lazy rebuild on setParents vs full cache clear. Originally DFS interval labeling; replaced by the ancestor closure because interval containment is wrong on multi-parent DAGs (spec-poset.md).
 17. **doFilterVisitable Pair\<E, Set\<Label\>\> is faster than toList() + filter.** Pair caches the label set read, avoiding double storage access. Removing Pair regresses 16%.
