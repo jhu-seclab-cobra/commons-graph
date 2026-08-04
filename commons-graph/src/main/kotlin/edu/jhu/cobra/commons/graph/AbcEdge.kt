@@ -21,30 +21,30 @@ import edu.jhu.cobra.commons.value.listVal
  * @see AbcEntity
  * @see IEntity
  */
-abstract class AbcEdge : AbcEntity() {
+public abstract class AbcEdge : AbcEntity() {
     /**
      * Represents the type information for an edge.
      */
-    interface Type : IEntity.Type
+    public interface Type : IEntity.Type
 
     /** Backing storage, injected by the graph layer via [bind]. */
     protected lateinit var storage: IStorage
         private set
 
     /** The storage-internal Int ID, injected by the graph layer via [bind]. */
-    var storageId: Int = -1
+    public var storageId: Int = -1
         internal set
 
     /** Source node ID, injected at bind time. */
-    lateinit var srcNid: NodeID
+    public lateinit var srcNid: NodeID
         internal set
 
     /** Destination node ID, injected at bind time. */
-    lateinit var dstNid: NodeID
+    public lateinit var dstNid: NodeID
         internal set
 
     /** Edge tag name, injected at bind time. */
-    lateinit var eTag: String
+    public lateinit var eTag: String
         internal set
 
     /**
@@ -75,7 +75,7 @@ abstract class AbcEdge : AbcEntity() {
      *
      * @return Set of labels currently assigned.
      */
-    var labels: Set<Label>
+    public var labels: Set<Label>
         get() {
             val raw = storage.getEdgeProperty(storageId, "labels") as? ListVal ?: return emptySet()
             return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }

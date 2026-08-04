@@ -16,7 +16,7 @@ import java.util.Collections
  * @see NativeConcurStorageImpl
  */
 @Suppress("TooManyFunctions")
-class NativeStorageImpl : IStorage {
+public class NativeStorageImpl : IStorage {
     // Auto-increment counters
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0

@@ -38,7 +38,7 @@ internal val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
  * @param graphPath The file path where the Neo4j database will be stored.
  */
 @Suppress("TooManyFunctions")
-class Neo4jStorageImpl(
+public class Neo4jStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
@@ -181,24 +181,26 @@ class Neo4jStorageImpl(
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = writeTx {
-        val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-        for ((name, value) in properties) {
-            if (value != null) node[name] = value else node.removeProperty(name)
+    ): Unit =
+        writeTx {
+            val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
+            for ((name, value) in properties) {
+                if (value != null) node[name] = value else node.removeProperty(name)
+            }
         }
-    }
 
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = writeTx {
-        val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
-        for ((name, value) in properties) {
-            if (value != null) edge[name] = value else edge.removeProperty(name)
+    ): Unit =
+        writeTx {
+            val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
+            for ((name, value) in properties) {
+                if (value != null) edge[name] = value else edge.removeProperty(name)
+            }
         }
-    }
 
-    override fun deleteNode(id: Int) =
+    override fun deleteNode(id: Int): Unit =
         writeTx {
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
             for (edge in node.relationships) {
@@ -252,7 +254,7 @@ class Neo4jStorageImpl(
         if (value == null) metaProperties.remove(name) else metaProperties[name] = value
     }
 
-    override fun clear() =
+    override fun clear(): Unit =
         writeTx {
             for (rel in findRelationships(EDGE_TYPE)) rel.delete()
             for (node in findNodes(NODE_LABEL)) node.delete()

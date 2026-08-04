@@ -7,7 +7,7 @@ package edu.jhu.cobra.commons.graph
  * @param N The node type.
  * @param E The edge type.
  */
-abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGraph<N, E>() {
+public abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGraph<N, E>() {
     override fun addEdge(
         src: NodeID,
         dst: NodeID,

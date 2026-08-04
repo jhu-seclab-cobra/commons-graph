@@ -22,7 +22,7 @@ import kotlin.io.path.fileSize
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
-object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
+public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_ATTR = "nid"
     private const val EDGE_SRC_ATTR = "esrc"
     private const val EDGE_DST_ATTR = "edst"

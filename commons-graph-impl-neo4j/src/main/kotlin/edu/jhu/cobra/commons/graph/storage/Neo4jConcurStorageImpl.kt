@@ -31,7 +31,7 @@ import kotlin.io.path.notExists
  * @param graphPath The file path where the Neo4j database will be stored.
  */
 @Suppress("TooManyFunctions")
-class Neo4jConcurStorageImpl(
+public class Neo4jConcurStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
@@ -193,28 +193,30 @@ class Neo4jConcurStorageImpl(
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = storageLock.write {
-        writeTx {
-            val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
-            for ((name, value) in properties) {
-                if (value != null) node[name] = value else node.removeProperty(name)
+    ): Unit =
+        storageLock.write {
+            writeTx {
+                val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
+                for ((name, value) in properties) {
+                    if (value != null) node[name] = value else node.removeProperty(name)
+                }
             }
         }
-    }
 
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = storageLock.write {
-        writeTx {
-            val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
-            for ((name, value) in properties) {
-                if (value != null) edge[name] = value else edge.removeProperty(name)
+    ): Unit =
+        storageLock.write {
+            writeTx {
+                val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
+                for ((name, value) in properties) {
+                    if (value != null) edge[name] = value else edge.removeProperty(name)
+                }
             }
         }
-    }
 
-    override fun deleteNode(id: Int) =
+    override fun deleteNode(id: Int): Unit =
         storageLock.write {
             writeTx {
                 val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
@@ -285,7 +287,7 @@ class Neo4jConcurStorageImpl(
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    override fun clear() =
+    override fun clear(): Unit =
         storageLock.write {
             writeTx {
                 for (rel in findRelationships(EDGE_TYPE)) rel.delete()

@@ -8,10 +8,10 @@ import org.mapdb.DataOutput2
 import org.mapdb.Serializer
 import java.io.Serializable
 
-class MapDbIDSerializer :
+public class MapDbIDSerializer :
     Serializer<Int>,
     Serializable {
-    companion object {
+    public companion object {
         private const val serialVersionUID: Long = 1L
     }
 

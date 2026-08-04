@@ -17,12 +17,12 @@ import kotlin.reflect.KClass
  *
  * @property core The underlying serializer used to convert [T] objects to and from byte arrays.
  */
-class MapDbValSerializer<T : IValue>(
+public class MapDbValSerializer<T : IValue>(
     private val core: IValSerializer<ByteArray> = DftByteArraySerializerImpl,
     private var valueType: KClass<out T>? = null,
 ) : Serializer<T>,
     Serializable {
-    companion object {
+    public companion object {
         private const val serialVersionUID: Long = 1L
     }
 
@@ -44,7 +44,7 @@ class MapDbValSerializer<T : IValue>(
     override fun serialize(
         out: DataOutput2,
         value: T,
-    ) = delegator.serialize(out, core.serialize(value = value))
+    ): Unit = delegator.serialize(out, core.serialize(value = value))
 
     /**
      * Deserializes a byte array back into an [T] object.

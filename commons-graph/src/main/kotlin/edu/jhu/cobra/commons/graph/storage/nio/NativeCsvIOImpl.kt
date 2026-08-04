@@ -23,7 +23,7 @@ import kotlin.io.path.notExists
  * Node CSV format: __nid__ structural column + property columns.
  * Edge CSV format: __eid__, __src__, __dst__, __type__ structural columns + property columns.
  */
-object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
+public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     private const val CSV_DELIMITER = ","
     private val CSV_DELIMITER_CHAR: Char = CSV_DELIMITER.single()
     private val escapeMap =

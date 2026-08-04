@@ -13,7 +13,7 @@ import kotlin.concurrent.write
  * Please notice that there are performance overheads for the concurrency features.
  * For normal use cases, use [JgraphtStorageImpl] instead (about 20% quicker for basic operations).
  */
-class JgraphtConcurStorageImpl : IStorage {
+public class JgraphtConcurStorageImpl : IStorage {
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
@@ -88,18 +88,20 @@ class JgraphtConcurStorageImpl : IStorage {
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = storageLock.write {
-        val container = nodeProperties[id] ?: throw EntityNotExistException(id)
-        properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
-    }
+    ): Unit =
+        storageLock.write {
+            val container = nodeProperties[id] ?: throw EntityNotExistException(id)
+            properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
+        }
 
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = storageLock.write {
-        val container = edgeProperties[id] ?: throw EntityNotExistException(id)
-        properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
-    }
+    ): Unit =
+        storageLock.write {
+            val container = edgeProperties[id] ?: throw EntityNotExistException(id)
+            properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
+        }
 
     override fun deleteNode(id: Int): Unit =
         storageLock.write {

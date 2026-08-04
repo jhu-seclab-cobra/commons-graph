@@ -23,18 +23,18 @@ import java.util.logging.Logger
  * @param E The type of edges in the graph, must extend [AbcEdge].
  */
 @Suppress("TooManyFunctions")
-abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
+public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     IGraph<N, E>,
     Flushable {
-    companion object {
+    public companion object {
         internal const val PROP_NODE_ID = "__nid__"
         internal const val PROP_OWNERS = "__owners__"
         private val logger: Logger = Logger.getLogger(AbcMultipleGraph::class.java.name)
     }
 
-    abstract val storage: IStorage
+    public abstract val storage: IStorage
 
-    abstract val graphId: String
+    public abstract val graphId: String
 
     private class NodeEntry<N>(
         val nodeId: NodeID,
@@ -237,12 +237,12 @@ abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ) = bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }
+    ): Sequence<N> = bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }
 
     override fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ) = bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }
+    ): Sequence<N> = bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }
 
     private fun bfsTraversal(
         of: NodeID,

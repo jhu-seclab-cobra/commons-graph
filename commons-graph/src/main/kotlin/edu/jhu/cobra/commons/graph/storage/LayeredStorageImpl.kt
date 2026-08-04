@@ -26,7 +26,7 @@ import java.util.Collections
  * @see FrozenLayerModificationException
  */
 @Suppress("TooManyFunctions")
-class LayeredStorageImpl(
+public class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
     // Global ID counters
@@ -65,9 +65,9 @@ class LayeredStorageImpl(
     // LAYERED STORAGE API
     // ============================================================================
 
-    val layerCount: Int get() = if (frozenLayer != null) 2 else 1
+    public val layerCount: Int get() = if (frozenLayer != null) 2 else 1
 
-    fun freeze() {
+    public fun freeze() {
         val merged = frozenLayerFactory()
         val frozen = frozenLayer
 
@@ -196,7 +196,7 @@ class LayeredStorageImpl(
      * reads still resolve against frozen data.
      *
      */
-    fun clearActiveLayer() {
+    public fun clearActiveLayer() {
         activeOutEdges.clear()
         activeInEdges.clear()
         activeEdgeEndpoints.clear()

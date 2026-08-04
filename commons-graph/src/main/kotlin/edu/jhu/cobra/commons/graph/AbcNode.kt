@@ -7,7 +7,7 @@ import edu.jhu.cobra.commons.value.IValue
 /**
  * User-provided node identifier.
  */
-typealias NodeID = String
+public typealias NodeID = String
 
 /**
  * Abstract base class for graph nodes with storage-backed property management.
@@ -24,22 +24,22 @@ typealias NodeID = String
  * @see AbcEntity
  * @see IEntity
  */
-abstract class AbcNode : AbcEntity() {
+public abstract class AbcNode : AbcEntity() {
     /**
      * Represents the type information for a node.
      */
-    interface Type : IEntity.Type
+    public interface Type : IEntity.Type
 
     /** Backing storage, injected by the graph layer via [bind]. */
     protected lateinit var storage: IStorage
         private set
 
     /** The storage-internal Int ID, injected by the graph layer via [bind]. */
-    var storageId: Int = -1
+    public var storageId: Int = -1
         internal set
 
     /** The user-provided node ID, injected by the graph layer via [bind]. */
-    lateinit var nodeId: NodeID
+    public lateinit var nodeId: NodeID
         internal set
 
     /**
@@ -75,7 +75,7 @@ abstract class AbcNode : AbcEntity() {
      * @param target The storage to compare.
      * @return True if storage matches, false otherwise.
      */
-    fun doUseStorage(target: IStorage): Boolean = target == storage
+    public fun doUseStorage(target: IStorage): Boolean = target == storage
 
     override fun get(name: String): IValue? {
         if (name == PROP_NODE_ID) return null

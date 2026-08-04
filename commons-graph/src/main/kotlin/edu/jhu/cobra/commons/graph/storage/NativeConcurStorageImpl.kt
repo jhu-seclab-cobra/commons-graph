@@ -18,7 +18,7 @@ import kotlin.concurrent.withLock
  * @see NativeStorageImpl
  */
 @Suppress("TooManyFunctions")
-class NativeConcurStorageImpl : IStorage {
+public class NativeConcurStorageImpl : IStorage {
     private val lock = ReentrantReadWriteLock()
 
     // Auto-increment counters (protected by write lock)
@@ -153,10 +153,11 @@ class NativeConcurStorageImpl : IStorage {
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = lock.writeLock().withLock {
-        if (id !in outEdges) throw EntityNotExistException(id.toString())
-        setColumnarProperties(id, properties, nodeColumns)
-    }
+    ): Unit =
+        lock.writeLock().withLock {
+            if (id !in outEdges) throw EntityNotExistException(id.toString())
+            setColumnarProperties(id, properties, nodeColumns)
+        }
 
     override fun deleteNode(id: Int): Unit =
         lock.writeLock().withLock {
@@ -221,10 +222,11 @@ class NativeConcurStorageImpl : IStorage {
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = lock.writeLock().withLock {
-        if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-        setColumnarProperties(id, properties, edgeColumns)
-    }
+    ): Unit =
+        lock.writeLock().withLock {
+            if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
+            setColumnarProperties(id, properties, edgeColumns)
+        }
 
     override fun deleteEdge(id: Int): Unit =
         lock.writeLock().withLock {

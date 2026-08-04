@@ -15,11 +15,11 @@ import edu.jhu.cobra.commons.graph.NodeID
  * @param E The edge type.
  * @see IPoset
  */
-interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
+public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     /** The pluggable poset module for label hierarchy operations. */
-    val poset: IPoset
+    public val poset: IPoset
 
-    fun addEdge(
+    public fun addEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
@@ -31,7 +31,7 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         return edge
     }
 
-    fun delEdge(
+    public fun delEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
@@ -43,7 +43,7 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         if (remaining.isEmpty()) delEdge(src, dst, tag)
     }
 
-    fun getOutgoingEdges(
+    public fun getOutgoingEdges(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },
@@ -52,7 +52,7 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         return doFilterVisitable(getOutgoingEdges(of).filter(cond), label)
     }
 
-    fun getIncomingEdges(
+    public fun getIncomingEdges(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },
@@ -61,19 +61,19 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         return doFilterVisitable(getIncomingEdges(of).filter(cond), label)
     }
 
-    fun getChildren(
+    public fun getChildren(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },
     ): Sequence<N> = getOutgoingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.dstNid) }
 
-    fun getParents(
+    public fun getParents(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },
     ): Sequence<N> = getIncomingEdges(of, label, cond).mapNotNull { getNode(whoseID = it.srcNid) }
 
-    fun getDescendants(
+    public fun getDescendants(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },
@@ -92,7 +92,7 @@ interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             }
         }
 
-    fun getAncestors(
+    public fun getAncestors(
         of: NodeID,
         label: Label,
         cond: (E) -> Boolean = { true },

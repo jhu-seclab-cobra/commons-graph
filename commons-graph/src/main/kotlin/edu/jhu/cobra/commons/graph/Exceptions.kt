@@ -6,10 +6,10 @@ package edu.jhu.cobra.commons.graph
  * @constructor Creates an exception for a missing entity.
  * @param id The ID of the entity that was not found.
  */
-class EntityNotExistException(
+public class EntityNotExistException(
     id: String,
 ) : Exception("Entity ID $id does not exist.") {
-    constructor(id: Int) : this(id.toString())
+    public constructor(id: Int) : this(id.toString())
 }
 
 /**
@@ -18,10 +18,10 @@ class EntityNotExistException(
  * @constructor Creates an exception for an existing entity.
  * @param id The ID of the entity that already exists.
  */
-class EntityAlreadyExistException(
+public class EntityAlreadyExistException(
     id: String,
 ) : Exception("Entity ID $id already exists.") {
-    constructor(id: Int) : this(id.toString())
+    public constructor(id: Int) : this(id.toString())
 }
 
 /**
@@ -31,7 +31,7 @@ class EntityAlreadyExistException(
  * @param propName The invalid property name.
  * @param entityId The entity ID, or null if not applicable.
  */
-class InvalidPropNameException(
+public class InvalidPropNameException(
     propName: String,
     entityId: String?,
 ) : Exception("Invalid name $propName in entity $entityId.")
@@ -44,8 +44,8 @@ class InvalidPropNameException(
  * @constructor Creates an exception for a frozen-layer modification attempt.
  * @param id The ID of the entity in the frozen layer.
  */
-class FrozenLayerModificationException(
+public class FrozenLayerModificationException(
     id: String,
 ) : IllegalStateException("Cannot modify frozen-layer entity: $id") {
-    constructor(id: Int) : this(id.toString())
+    public constructor(id: Int) : this(id.toString())
 }

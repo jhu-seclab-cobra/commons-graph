@@ -15,7 +15,7 @@ import edu.jhu.cobra.commons.value.strVal
  *
  * @param storage The storage instance for label DAG persistence.
  */
-class PosetDftImpl(
+public class PosetDftImpl(
     private val storage: IStorage,
 ) : IPoset {
     private val labelIdCache = HashMap<String, Int>()

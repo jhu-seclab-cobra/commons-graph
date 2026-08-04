@@ -16,7 +16,7 @@ import org.mapdb.DBMaker
  * @param config Configuration function for initializing the MapDB database.
  *              Defaults to a temporary file-based off-heap configuration.
  */
-class MapDBStorageImpl(
+public class MapDBStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
 ) : IStorage,
     AutoCloseable {

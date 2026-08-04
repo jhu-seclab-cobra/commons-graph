@@ -18,7 +18,7 @@ import kotlin.concurrent.write
  * @param config Configuration function for initializing the MapDB database.
  *              Defaults to a temporary file-based off-heap configuration.
  */
-class MapDBConcurStorageImpl(
+public class MapDBConcurStorageImpl(
     config: DBMaker.() -> DBMaker.Maker = { tempFileDB().fileMmapEnableIfSupported() },
 ) : IStorage,
     AutoCloseable {
@@ -38,7 +38,7 @@ class MapDBConcurStorageImpl(
     private val outEdges = HashMap<Int, MutableSet<Int>>()
     private val inEdges = HashMap<Int, MutableSet<Int>>()
 
-    override fun close() = dbLock.write { if (!dbManager.isClosed()) dbManager.close() }
+    override fun close(): Unit = dbLock.write { if (!dbManager.isClosed()) dbManager.close() }
 
     override fun flush() {
         // No buffered writes; mutations are applied immediately.
@@ -107,20 +107,22 @@ class MapDBConcurStorageImpl(
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = dbLock.write {
-        val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
-        val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
-        nodeProperties[id] = merged
-    }
+    ): Unit =
+        dbLock.write {
+            val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
+            val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
+            nodeProperties[id] = merged
+        }
 
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) = dbLock.write {
-        val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
-        val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
-        edgeProperties[id] = merged
-    }
+    ): Unit =
+        dbLock.write {
+            val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
+            val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
+            edgeProperties[id] = merged
+        }
 
     override fun deleteNode(id: Int) {
         dbLock.write {
@@ -157,7 +159,7 @@ class MapDBConcurStorageImpl(
         edgeProperties.remove(id)
     }
 
-    override fun deleteEdge(id: Int) =
+    override fun deleteEdge(id: Int): Unit =
         dbLock.write {
             if (!edgeProperties.contains(id)) throw EntityNotExistException(id)
             deleteEdgeWithoutLock(id)

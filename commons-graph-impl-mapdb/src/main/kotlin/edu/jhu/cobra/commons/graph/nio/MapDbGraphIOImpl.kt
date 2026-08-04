@@ -23,7 +23,7 @@ import kotlin.io.path.notExists
  * Implementation of [IStorageExporter] and [IStorageImporter] using MapDB for graph data persistence.
  * Provides functionality to export and import graph data between [IStorage] and MapDB files.
  */
-object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
+public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_KEY = "_nid"
     private const val EDGE_SRC_KEY = "_esrc"
     private const val EDGE_DST_KEY = "_edst"

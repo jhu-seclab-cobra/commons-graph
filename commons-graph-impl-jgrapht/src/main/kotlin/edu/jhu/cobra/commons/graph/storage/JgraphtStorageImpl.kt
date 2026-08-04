@@ -12,7 +12,7 @@ import org.jgrapht.graph.DirectedPseudograph
  * Internally uses JGraphT String-based vertices/edges, with a bidirectional mapping layer
  * between external Int IDs and internal JGraphT String IDs.
  */
-class JgraphtStorageImpl : IStorage {
+public class JgraphtStorageImpl : IStorage {
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 

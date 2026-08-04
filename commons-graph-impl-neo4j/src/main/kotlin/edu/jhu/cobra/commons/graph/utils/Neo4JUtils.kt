@@ -15,14 +15,14 @@ private fun Entity.setProp(
 private inline fun <reified T : IValue> Entity.getProp(byName: String): T? =
     (getProperty(byName, null) as? ByteArray)?.let(DftByteArraySerializerImpl::deserialize) as? T
 
-val Entity.keys: Collection<String>
+public val Entity.keys: Collection<String>
     get() =
         this.propertyKeys.filter { it !in RESERVED_PROPS }.distinct()
 
-operator fun Entity.set(
+public operator fun Entity.set(
     byName: String,
     newVal: IValue,
-) = if (byName in RESERVED_PROPS) throw InvalidPropNameException(byName, null) else this.setProp(byName, newVal)
+): Unit = if (byName in RESERVED_PROPS) throw InvalidPropNameException(byName, null) else this.setProp(byName, newVal)
 
-operator fun Entity.get(byName: String): IValue? =
+public operator fun Entity.get(byName: String): IValue? =
     if (byName in RESERVED_PROPS) throw InvalidPropNameException(byName, null) else getProp(byName)

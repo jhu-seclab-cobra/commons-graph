@@ -16,7 +16,7 @@ import java.io.Flushable
  * @see NativeConcurStorageImpl
  */
 @Suppress("TooManyFunctions")
-interface IStorage : Flushable {
+public interface IStorage : Flushable {
     // ============================================================================
     // NODE OPERATIONS
     // ============================================================================
@@ -25,7 +25,7 @@ interface IStorage : Flushable {
      * All node IDs currently in storage.
      *
      */
-    val nodeIDs: Set<Int>
+    public val nodeIDs: Set<Int>
 
     /**
      * Checks if a node exists.
@@ -33,7 +33,7 @@ interface IStorage : Flushable {
      * @param id The node ID.
      * @return True if the node exists.
      */
-    fun containsNode(id: Int): Boolean
+    public fun containsNode(id: Int): Boolean
 
     /**
      * Adds a node with the given properties.
@@ -41,7 +41,7 @@ interface IStorage : Flushable {
      * @param properties Initial property map.
      * @return The auto-generated node ID.
      */
-    fun addNode(properties: Map<String, IValue> = emptyMap()): Int
+    public fun addNode(properties: Map<String, IValue> = emptyMap()): Int
 
     /**
      * Returns all properties of a node.
@@ -50,7 +50,7 @@ interface IStorage : Flushable {
      * @return Property map.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun getNodeProperties(id: Int): Map<String, IValue>
+    public fun getNodeProperties(id: Int): Map<String, IValue>
 
     /**
      * Returns a single property value of a node.
@@ -63,7 +63,7 @@ interface IStorage : Flushable {
      * @return The property value, or null if absent.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun getNodeProperty(
+    public fun getNodeProperty(
         id: Int,
         name: String,
     ): IValue? = getNodeProperties(id)[name]
@@ -75,7 +75,7 @@ interface IStorage : Flushable {
      * @param properties Property updates.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun setNodeProperties(
+    public fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
     )
@@ -86,7 +86,7 @@ interface IStorage : Flushable {
      * @param id The node ID.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun deleteNode(id: Int)
+    public fun deleteNode(id: Int)
 
     // ============================================================================
     // EDGE OPERATIONS
@@ -96,7 +96,7 @@ interface IStorage : Flushable {
      * All edge IDs currently in storage.
      *
      */
-    val edgeIDs: Set<Int>
+    public val edgeIDs: Set<Int>
 
     /**
      * Checks if an edge exists.
@@ -104,7 +104,7 @@ interface IStorage : Flushable {
      * @param id The edge ID.
      * @return True if the edge exists.
      */
-    fun containsEdge(id: Int): Boolean
+    public fun containsEdge(id: Int): Boolean
 
     /**
      * Adds an edge between two existing nodes.
@@ -116,7 +116,7 @@ interface IStorage : Flushable {
      * @return The auto-generated edge ID.
      * @throws EntityNotExistException If source or destination node does not exist.
      */
-    fun addEdge(
+    public fun addEdge(
         src: Int,
         dst: Int,
         tag: String,
@@ -130,7 +130,7 @@ interface IStorage : Flushable {
      * @property dst The destination node ID.
      * @property tag The edge tag name.
      */
-    data class EdgeStructure(
+    public data class EdgeStructure(
         val src: Int,
         val dst: Int,
         val tag: String,
@@ -143,7 +143,7 @@ interface IStorage : Flushable {
      * @return The edge structure containing src, dst, and tag.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeStructure(id: Int): EdgeStructure
+    public fun getEdgeStructure(id: Int): EdgeStructure
 
     /**
      * Returns all properties of an edge.
@@ -152,7 +152,7 @@ interface IStorage : Flushable {
      * @return Property map.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeProperties(id: Int): Map<String, IValue>
+    public fun getEdgeProperties(id: Int): Map<String, IValue>
 
     /**
      * Returns a single property value of an edge.
@@ -165,7 +165,7 @@ interface IStorage : Flushable {
      * @return The property value, or null if absent.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun getEdgeProperty(
+    public fun getEdgeProperty(
         id: Int,
         name: String,
     ): IValue? = getEdgeProperties(id)[name]
@@ -177,7 +177,7 @@ interface IStorage : Flushable {
      * @param properties Property updates.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun setEdgeProperties(
+    public fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
     )
@@ -188,7 +188,7 @@ interface IStorage : Flushable {
      * @param id The edge ID.
      * @throws EntityNotExistException If edge does not exist.
      */
-    fun deleteEdge(id: Int)
+    public fun deleteEdge(id: Int)
 
     // ============================================================================
     // ADJACENCY QUERIES
@@ -201,7 +201,7 @@ interface IStorage : Flushable {
      * @return Set of incoming edge IDs.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun getIncomingEdges(id: Int): Set<Int>
+    public fun getIncomingEdges(id: Int): Set<Int>
 
     /**
      * Returns all outgoing edge IDs from a node.
@@ -210,7 +210,7 @@ interface IStorage : Flushable {
      * @return Set of outgoing edge IDs.
      * @throws EntityNotExistException If node does not exist.
      */
-    fun getOutgoingEdges(id: Int): Set<Int>
+    public fun getOutgoingEdges(id: Int): Set<Int>
 
     // ============================================================================
     // METADATA OPERATIONS
@@ -220,7 +220,7 @@ interface IStorage : Flushable {
      * All metadata property names currently in storage.
      *
      */
-    val metaNames: Set<String>
+    public val metaNames: Set<String>
 
     /**
      * Returns a metadata value by name.
@@ -228,7 +228,7 @@ interface IStorage : Flushable {
      * @param name The metadata property name.
      * @return The value, or null if not found.
      */
-    fun getMeta(name: String): IValue?
+    public fun getMeta(name: String): IValue?
 
     /**
      * Sets a metadata value. Passing null deletes the property.
@@ -236,7 +236,7 @@ interface IStorage : Flushable {
      * @param name The metadata property name.
      * @param value The value, or null to delete.
      */
-    fun setMeta(
+    public fun setMeta(
         name: String,
         value: IValue?,
     )
@@ -249,7 +249,7 @@ interface IStorage : Flushable {
      * Removes all nodes, edges, and metadata from storage.
      *
      */
-    fun clear()
+    public fun clear()
 
     /**
      * Transfers all data (nodes, edges, metadata) into [target].
@@ -260,5 +260,5 @@ interface IStorage : Flushable {
      * @param target The destination storage.
      * @return Node ID mapping from this storage's IDs to target storage's IDs.
      */
-    fun transferTo(target: IStorage): Map<Int, Int>
+    public fun transferTo(target: IStorage): Map<Int, Int>
 }

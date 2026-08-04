@@ -6,9 +6,9 @@ import java.nio.file.Path
 /**
  * Filter function for selecting entities in storage based on their Int ID.
  */
-typealias EntityFilter = (Int) -> Boolean
+public typealias EntityFilter = (Int) -> Boolean
 
-interface IStorageExporter {
+public interface IStorageExporter {
     /**
      * Exports data from an [IStorage] object to a destination file specified by [dstFile].
      *
@@ -18,7 +18,7 @@ interface IStorageExporter {
      *                  By default, all entities will be exported.
      * @return The path to the exported file.
      */
-    fun export(
+    public fun export(
         dstFile: Path,
         from: IStorage,
         predicate: EntityFilter = { true },
