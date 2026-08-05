@@ -107,13 +107,13 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val (id, propName) = nidAndName.first to nidAndName.second
             if (propName == "ID") return@addVertexAttributeConsumer
             if (id !in nodesCache) nodesCache[id] = mutableMapOf()
-            nodesCache[id]!![propName] = prop.toValue ?: return@addVertexAttributeConsumer
+            nodesCache.getValue(id)[propName] = prop.toValue ?: return@addVertexAttributeConsumer
         }
         val edgeCache = mutableMapOf<Int, MutableMap<String, IValue>>()
         importer.addEdgeAttributeConsumer { eidAndName, prop ->
             val (id, propName) = eidAndName.first to eidAndName.second
             if (id !in edgeCache) edgeCache[id] = mutableMapOf()
-            edgeCache[id]!![propName] = prop.toValue ?: return@addEdgeAttributeConsumer
+            edgeCache.getValue(id)[propName] = prop.toValue ?: return@addEdgeAttributeConsumer
         }
         val vGraph = DirectedPseudograph<Int, Int>(Int::class.java)
         vGraph.vertexSupplier = SupplierUtil.createIntegerSupplier()
