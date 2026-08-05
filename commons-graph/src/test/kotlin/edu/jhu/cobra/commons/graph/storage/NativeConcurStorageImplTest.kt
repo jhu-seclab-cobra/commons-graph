@@ -94,7 +94,7 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `nodeIDs returns all added node IDs`() {
-        val (n1, n2, n3) = StorageTestUtils.addTestNodes(storage)
+        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
         assertEquals(setOf(n1, n2, n3), storage.nodeIDs)
     }
 
@@ -171,9 +171,9 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `edgeIDs returns all added edge IDs`() {
-        val (n1, n2, n3) = StorageTestUtils.addTestNodes(storage)
-        val e1 = storage.addEdge(n1, n2, StorageTestUtils.EDGE_TAG_1)
-        val e2 = storage.addEdge(n2, n3, StorageTestUtils.EDGE_TAG_2)
+        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
+        val e1 = storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
+        val e2 = storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
         assertEquals(setOf(e1, e2), storage.edgeIDs)
     }
 
@@ -238,7 +238,7 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `getIncomingEdges returns edges targeting node`() {
-        val (n1, n2, n3) = StorageTestUtils.addTestNodes(storage)
+        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
         val e1 = storage.addEdge(n1, n3, "a")
         val e2 = storage.addEdge(n2, n3, "b")
         assertEquals(setOf(e1, e2), storage.getIncomingEdges(n3))
@@ -246,7 +246,7 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `getOutgoingEdges returns edges originating from node`() {
-        val (n1, n2, n3) = StorageTestUtils.addTestNodes(storage)
+        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
         val e1 = storage.addEdge(n1, n2, "a")
         val e2 = storage.addEdge(n1, n3, "b")
         assertEquals(setOf(e1, e2), storage.getOutgoingEdges(n1))
@@ -324,9 +324,9 @@ internal class NativeConcurStorageImplTest {
 
     @Test
     fun `concurrent reads do not deadlock`() {
-        val (n1, n2, n3) = StorageTestUtils.addTestNodes(storage)
-        storage.addEdge(n1, n2, StorageTestUtils.EDGE_TAG_1)
-        storage.addEdge(n2, n3, StorageTestUtils.EDGE_TAG_2)
+        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
+        storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
+        storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
 
         val threadCount = 10
         val opsPerThread = 500

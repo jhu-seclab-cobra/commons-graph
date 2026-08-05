@@ -50,13 +50,13 @@ import kotlin.test.assertTrue
  */
 internal class AbcEntityTest {
     private lateinit var storage: NativeStorageImpl
-    private lateinit var testNode: GraphTestUtils.TestNode
+    private lateinit var testNode: GraphFixtures.TestNode
 
     @BeforeTest
     fun setUp() {
         storage = NativeStorageImpl()
         val sid = storage.addNode()
-        testNode = GraphTestUtils.TestNode()
+        testNode = GraphFixtures.TestNode()
         testNode.bind(storage, sid, "entity-test")
     }
 

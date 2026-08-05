@@ -47,18 +47,18 @@ internal class GraphPerformanceTest {
         return storage
     }
 
-    private fun createMultipleGraph(storageName: String): GraphTestUtils.TestMultipleGraphWithPoset {
+    private fun createMultipleGraph(storageName: String): GraphFixtures.TestMultipleGraphWithPoset {
         val s = createStorage(storageName)
         val ps = NativeStorageImpl()
-        val g = GraphTestUtils.createTestMultipleGraph(s, ps)
+        val g = GraphFixtures.createTestMultipleGraph(s, ps)
         // graph does not need closing
         return g
     }
 
-    private fun createSimpleGraph(storageName: String): AbcSimpleGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge> {
+    private fun createSimpleGraph(storageName: String): AbcSimpleGraph<GraphFixtures.TestNode, GraphFixtures.TestEdge> {
         val s = createStorage(storageName)
         val ps = NativeStorageImpl()
-        val g = GraphTestUtils.createTestSimpleGraph(s, ps)
+        val g = GraphFixtures.createTestSimpleGraph(s, ps)
         // graph does not need closing
         return g
     }
@@ -68,7 +68,7 @@ internal class GraphPerformanceTest {
     private fun nodeId(i: Int): NodeID = nodeIdPool[i]
 
     private fun populateMultipleGraph(
-        graph: IGraph<GraphTestUtils.TestNode, GraphTestUtils.TestEdge>,
+        graph: IGraph<GraphFixtures.TestNode, GraphFixtures.TestEdge>,
         nodeCount: Int,
         edgesPerNode: Int,
     ) {

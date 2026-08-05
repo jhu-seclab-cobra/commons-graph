@@ -1,9 +1,9 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
-import edu.jhu.cobra.commons.graph.GraphTestUtils.createTestSimpleGraph
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
+import edu.jhu.cobra.commons.graph.GraphFixtures.createTestSimpleGraph
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.BeforeTest
@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
  * - `addEdge with label different tag throws EntityAlreadyExistException` — verifies direction conflict
  */
 internal class AbcSimpleGraphTest {
-    private lateinit var graph: GraphTestUtils.TestSimpleGraphWithPoset
+    private lateinit var graph: GraphFixtures.TestSimpleGraphWithPoset
     private lateinit var storage: NativeStorageImpl
 
     @BeforeTest

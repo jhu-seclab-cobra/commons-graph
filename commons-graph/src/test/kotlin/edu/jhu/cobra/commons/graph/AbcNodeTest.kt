@@ -1,7 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.TestNode
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal

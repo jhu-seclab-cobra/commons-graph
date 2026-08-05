@@ -1,12 +1,12 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_2
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_3
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_4
+import edu.jhu.cobra.commons.graph.GraphFixtures.EDGE_TAG_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.EDGE_TAG_2
+import edu.jhu.cobra.commons.graph.GraphFixtures.EDGE_TAG_3
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_4
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -61,15 +61,16 @@ import kotlin.test.assertTrue
  * - `getAncestors linear chain returns all` — verifies BFS traversal
  * - `getAncestors with edge condition stops at filtered` — verifies edgeCond
  * - `getAncestors cycle terminates without duplicates` — verifies cycle handling
+ * - `flush throws when a cached node is missing from storage` — verifies fail-fast flush guarantee
  */
 internal class AbcMultipleGraphTest {
-    private lateinit var graph: GraphTestUtils.TestMultipleGraph
+    private lateinit var graph: GraphFixtures.TestMultipleGraph
     private lateinit var storage: NativeStorageImpl
 
     @BeforeTest
     fun setUp() {
         storage = NativeStorageImpl()
-        graph = GraphTestUtils.TestMultipleGraph(storage)
+        graph = GraphFixtures.TestMultipleGraph(storage)
     }
 
     // region Node CRUD
@@ -503,6 +504,19 @@ internal class AbcMultipleGraphTest {
 
         assertTrue(ancestors.any { it.id == NODE_ID_2 })
         assertEquals(ancestors.distinctBy { it.id }.size, ancestors.size)
+    }
+
+    // endregion
+
+    // region Flush guarantees
+
+    @Test
+    fun `flush throws when a cached node is missing from storage`() {
+        graph.addNode(NODE_ID_1)
+        val storageId = storage.nodeIDs.single()
+        storage.deleteNode(storageId)
+
+        assertFailsWith<EntityNotExistException> { graph.flush() }
     }
 
     // endregion

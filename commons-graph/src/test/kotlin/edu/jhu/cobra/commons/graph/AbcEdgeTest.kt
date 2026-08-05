@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.TestEdge
+import edu.jhu.cobra.commons.graph.GraphFixtures.TestEdge
 import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.FloatVal
