@@ -1,4 +1,4 @@
-package edu.jhu.cobra.commons.graph.utils
+package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.value.IValue
@@ -26,3 +26,9 @@ public operator fun Entity.set(
 
 public operator fun Entity.get(byName: String): IValue? =
     if (byName in RESERVED_PROPS) throw InvalidPropNameException(byName, null) else getProp(byName)
+
+/** Snapshots all non-reserved properties of this entity as a name-to-value map. */
+internal fun Entity.propertyEntries(): Map<String, IValue> =
+    keys.associateWith { name ->
+        requireNotNull(this[name]) { "Property '$name' has corrupted data" }
+    }
