@@ -13,10 +13,19 @@
  * - `import returns target storage`
  * - `export and import empty storage round-trip`
  * - `export with nodes and edges creates non-empty file`
+ * - `import with node filter excludes node and its edges` — node predicate skips the node
+ *   and every edge referencing it
+ * - `export with node filter skips edges of filtered nodes` — no NPE on dangling edges
+ * - `import decodes short serialized attribute values` — 5-char frames such as `True:` survive
+ * - `import throws on corrupt serialized attribute value` — known type tag with broken payload
+ *
+ * Import tests that need entity attributes use handcrafted GML: the bundled jgrapht 1.4.0
+ * GmlExporter has no custom-attribute parameters and exports labels only.
  */
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
+import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.floatVal
 import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
@@ -154,5 +163,84 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         assertTrue(content.contains("graph"))
         assertTrue(content.contains("node"))
         assertTrue(content.contains("edge"))
+    }
+
+    // -- filtering --
+
+    @Test
+    fun `import with node filter excludes node and its edges`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [ id 1 nid "Str:1:0" name "Str:1:a" ]
+              node [ id 2 nid "Str:1:1" name "Str:1:b" ]
+              node [ id 3 nid "Str:1:2" name "Str:1:c" ]
+              edge [ source 1 target 2 esrc "Str:1:0" edst "Str:1:1" etype "Str:4:keep" ]
+              edge [ source 1 target 3 esrc "Str:1:0" edst "Str:1:2" etype "Str:8:dangling" ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        JgraphtGmlIOImpl.import(tempFile, dstStorage) { it != 2 }
+
+        assertEquals(2, dstStorage.nodeIDs.size)
+        assertEquals(1, dstStorage.edgeIDs.size)
+        assertEquals("keep", dstStorage.getEdgeStructure(dstStorage.edgeIDs.single()).tag)
+    }
+
+    @Test
+    fun `export with node filter skips edges of filtered nodes`() {
+        val n1 = srcStorage.addNode(mapOf("name" to "a".strVal))
+        val n2 = srcStorage.addNode(mapOf("name" to "b".strVal))
+        srcStorage.addEdge(n1, n2, "dangling")
+
+        JgraphtGmlIOImpl.export(tempFile, srcStorage) { it != n2 }
+
+        val content = Files.readString(tempFile)
+        assertEquals(1, Regex("""node\s*\[""").findAll(content).count())
+        assertFalse(content.contains("edge"))
+    }
+
+    // -- attribute value decoding --
+
+    @Test
+    fun `import decodes short serialized attribute values`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [ id 1 nid "Str:1:0" flag "True:" ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        JgraphtGmlIOImpl.import(tempFile, dstStorage)
+
+        val imported = dstStorage.nodeIDs.single()
+        assertEquals(BoolVal.T, dstStorage.getNodeProperty(imported, "flag"))
+    }
+
+    @Test
+    fun `import throws on corrupt serialized attribute value`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [
+                id 0
+                nid "Str:1:0"
+                bad "IntV:"
+              ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        assertFailsWith<IllegalArgumentException> {
+            JgraphtGmlIOImpl.import(tempFile, dstStorage)
+        }
     }
 }
