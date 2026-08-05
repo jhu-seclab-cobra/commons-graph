@@ -1,14 +1,29 @@
 package edu.jhu.cobra.commons.graph
 
 /**
+ * Base type for all graph-layer failures.
+ *
+ * Callers that treat any graph failure uniformly catch [GraphException];
+ * callers reacting to one condition catch the concrete subtype.
+ *
+ * @param message Human-readable failure description.
+ * @param cause The underlying cause, or null when the failure originates in the graph layer.
+ */
+public abstract class GraphException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+/**
  * Thrown when an entity with the given ID does not exist.
  *
  * @constructor Creates an exception for a missing entity.
- * @param id The ID of the entity that was not found.
+ * @param entityId The ID of the entity that was not found.
+ * @property entityId The ID of the entity that was not found.
  */
 public class EntityNotExistException(
-    id: String,
-) : Exception("Entity ID $id does not exist.") {
+    public val entityId: String,
+) : GraphException("Entity ID $entityId does not exist.") {
     public constructor(id: Int) : this(id.toString())
 }
 
@@ -16,11 +31,12 @@ public class EntityNotExistException(
  * Thrown when an entity with the given ID already exists.
  *
  * @constructor Creates an exception for an existing entity.
- * @param id The ID of the entity that already exists.
+ * @param entityId The ID of the entity that already exists.
+ * @property entityId The ID of the entity that already exists.
  */
 public class EntityAlreadyExistException(
-    id: String,
-) : Exception("Entity ID $id already exists.") {
+    public val entityId: String,
+) : GraphException("Entity ID $entityId already exists.") {
     public constructor(id: Int) : this(id.toString())
 }
 
@@ -30,11 +46,13 @@ public class EntityAlreadyExistException(
  * @constructor Creates an exception for an invalid property name.
  * @param propName The invalid property name.
  * @param entityId The entity ID, or null if not applicable.
+ * @property propName The invalid property name.
+ * @property entityId The entity ID, or null if not applicable.
  */
 public class InvalidPropNameException(
-    propName: String,
-    entityId: String?,
-) : Exception("Invalid name $propName in entity $entityId.")
+    public val propName: String,
+    public val entityId: String?,
+) : GraphException("Invalid name $propName in entity $entityId.")
 
 /**
  * Thrown when attempting to modify an entity that belongs to a frozen layer.
@@ -42,10 +60,11 @@ public class InvalidPropNameException(
  * Frozen layers are immutable; only entities in the active layer can be deleted.
  *
  * @constructor Creates an exception for a frozen-layer modification attempt.
- * @param id The ID of the entity in the frozen layer.
+ * @param entityId The ID of the entity in the frozen layer.
+ * @property entityId The ID of the entity in the frozen layer.
  */
 public class FrozenLayerModificationException(
-    id: String,
-) : IllegalStateException("Cannot modify frozen-layer entity: $id") {
+    public val entityId: String,
+) : GraphException("Cannot modify frozen-layer entity: $entityId") {
     public constructor(id: Int) : this(id.toString())
 }

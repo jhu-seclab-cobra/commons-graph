@@ -15,10 +15,10 @@ import kotlin.test.assertTrue
  * - `InvalidPropNameException with null entityId includes null in message` — verifies null path
  * - `FrozenLayerModificationException message contains entity id` — verifies message format
  * - `FrozenLayerModificationException with Int id contains id` — verifies Int constructor
- * - `EntityNotExistException extends Exception` — verifies hierarchy
- * - `EntityAlreadyExistException extends Exception` — verifies hierarchy
- * - `InvalidPropNameException extends Exception` — verifies hierarchy
- * - `FrozenLayerModificationException extends IllegalStateException` — verifies hierarchy
+ * - `EntityNotExistException extends GraphException` — verifies hierarchy
+ * - `EntityAlreadyExistException extends GraphException` — verifies hierarchy
+ * - `InvalidPropNameException extends GraphException` — verifies hierarchy
+ * - `FrozenLayerModificationException extends GraphException` — verifies hierarchy
  */
 internal class ExceptionsTest {
     @Test
@@ -90,31 +90,31 @@ internal class ExceptionsTest {
     // region Class hierarchy
 
     @Test
-    fun `EntityNotExistException extends Exception`() {
+    fun `EntityNotExistException extends GraphException`() {
         val ex: Throwable = EntityNotExistException("x")
 
-        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+        assertEquals("edu.jhu.cobra.commons.graph.GraphException", ex::class.java.superclass.name)
     }
 
     @Test
-    fun `EntityAlreadyExistException extends Exception`() {
+    fun `EntityAlreadyExistException extends GraphException`() {
         val ex: Throwable = EntityAlreadyExistException("x")
 
-        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+        assertEquals("edu.jhu.cobra.commons.graph.GraphException", ex::class.java.superclass.name)
     }
 
     @Test
-    fun `InvalidPropNameException extends Exception`() {
+    fun `InvalidPropNameException extends GraphException`() {
         val ex: Throwable = InvalidPropNameException("p", "e")
 
-        assertEquals("java.lang.Exception", ex::class.java.superclass.name)
+        assertEquals("edu.jhu.cobra.commons.graph.GraphException", ex::class.java.superclass.name)
     }
 
     @Test
-    fun `FrozenLayerModificationException extends IllegalStateException`() {
+    fun `FrozenLayerModificationException extends GraphException`() {
         val ex: Throwable = FrozenLayerModificationException("x")
 
-        assertEquals("java.lang.IllegalStateException", ex::class.java.superclass.name)
+        assertEquals("edu.jhu.cobra.commons.graph.GraphException", ex::class.java.superclass.name)
     }
 
     // endregion
