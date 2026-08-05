@@ -4,9 +4,11 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
+import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.Closeable
 import java.io.File
+import java.io.IOException
 import java.nio.file.Path
 import kotlin.io.path.bufferedReader
 import kotlin.io.path.bufferedWriter
@@ -199,7 +201,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         }
     }
 
-    private class CsvReader(
+    internal class CsvReader(
         path: Path,
     ) : Closeable {
         private var isClosed: Boolean = false
@@ -208,10 +210,32 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         private val edgeFile = path.resolve("edges.csv")
         private val metaFile = path.resolve(META_FILE)
 
+        private val openReaders = mutableListOf<BufferedReader>()
+        private val nodeReader: BufferedReader
+        private val edgeReader: BufferedReader
+        private val metaReader: BufferedReader?
+
         init {
             require(nodeFile.exists() && nodeFile.fileSize() > 0) { "File $nodeFile is empty" }
             require(edgeFile.exists() && edgeFile.fileSize() > 0) { "File $edgeFile is empty" }
+            try {
+                nodeReader = openReader(nodeFile)
+                edgeReader = openReader(edgeFile)
+                metaReader = if (metaFile.exists()) openReader(metaFile) else null
+            } catch (e: IOException) {
+                close()
+                throw e
+            }
         }
+
+        private fun openReader(file: Path): BufferedReader = file.bufferedReader().also(openReaders::add)
+
+        private fun readLineOrNull(reader: BufferedReader): String? {
+            check(!isClosed) { "CsvReader is closed" }
+            return reader.readLine()
+        }
+
+        private fun remainingLines(reader: BufferedReader): Sequence<String> = generateSequence { readLineOrNull(reader) }
 
         private fun deserialize(strValue: String): IValue? {
             if (strValue == "") return null
@@ -234,67 +258,52 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
 
         fun readNodes(): Iterator<NodeRecord> =
             iterator {
-                val nodeReader = nodeFile.bufferedReader()
-                try {
-                    val rawHeaderString = nodeReader.readLine() ?: ""
-                    val rawHeader = splitCsvLine(rawHeaderString)
-                    val fullHeader = rawHeader.map { unescape(it) }
-                    // First column is __nid__ (structural)
-                    val propHeaders = fullHeader.drop(1)
-                    for (line in nodeReader.lineSequence()) {
-                        val parts = splitCsvLine(line)
-                        if (parts.isEmpty()) continue
-                        val unescaped = parts.map { unescape(it) }
-                        val nodeId = unescaped[0]
-                        yield(NodeRecord(nodeId, decodeProps(unescaped, propHeaders, offset = 1)))
-                    }
-                } finally {
-                    nodeReader.close()
+                val rawHeaderString = readLineOrNull(nodeReader) ?: ""
+                val fullHeader = splitCsvLine(rawHeaderString).map { unescape(it) }
+                // First column is __nid__ (structural)
+                val propHeaders = fullHeader.drop(1)
+                for (line in remainingLines(nodeReader)) {
+                    val parts = splitCsvLine(line)
+                    if (parts.isEmpty()) continue
+                    val unescaped = parts.map { unescape(it) }
+                    val nodeId = unescaped[0]
+                    yield(NodeRecord(nodeId, decodeProps(unescaped, propHeaders, offset = 1)))
                 }
             }
 
         fun readEdges(): Iterator<EdgeRecord> =
             iterator {
-                val edgeReader = edgeFile.bufferedReader()
-                try {
-                    val rawHeader = splitCsvLine(edgeReader.readLine())
-                    val edgeHeader = rawHeader.map { unescape(it) }
-                    // First 4 columns are eid, src, dst, tag
-                    val propHeaders = edgeHeader.drop(4)
-                    for (line in edgeReader.lineSequence()) {
-                        require(!isClosed) { "The edge file is closed" }
-                        val parts = splitCsvLine(line)
-                        if (parts.size < 4) continue
-                        val unescaped = parts.map { unescape(it) }
-                        val edgeId = unescaped[0]
-                        val src = unescaped[1]
-                        val dst = unescaped[2]
-                        val tag = unescaped[3]
-                        yield(EdgeRecord(edgeId, src, dst, tag, decodeProps(unescaped, propHeaders, offset = 4)))
-                    }
-                } finally {
-                    edgeReader.close()
+                val rawHeaderString = readLineOrNull(edgeReader) ?: ""
+                val edgeHeader = splitCsvLine(rawHeaderString).map { unescape(it) }
+                // First 4 columns are eid, src, dst, tag
+                val propHeaders = edgeHeader.drop(4)
+                for (line in remainingLines(edgeReader)) {
+                    val parts = splitCsvLine(line)
+                    if (parts.size < 4) continue
+                    val unescaped = parts.map { unescape(it) }
+                    val edgeId = unescaped[0]
+                    val src = unescaped[1]
+                    val dst = unescaped[2]
+                    val tag = unescaped[3]
+                    yield(EdgeRecord(edgeId, src, dst, tag, decodeProps(unescaped, propHeaders, offset = 4)))
                 }
             }
 
         fun readMeta(): Iterator<Pair<String, IValue>> =
             iterator {
-                if (!metaFile.exists()) return@iterator
-                val reader = metaFile.bufferedReader()
-                try {
-                    reader.readLine()
-                    for (line in reader.lineSequence()) {
-                        val parts = splitCsvLine(line, limit = 2)
-                        val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) } ?: continue
-                        yield(unescape(parts[0]) to value)
-                    }
-                } finally {
-                    reader.close()
+                val reader = metaReader ?: return@iterator
+                readLineOrNull(reader)
+                for (line in remainingLines(reader)) {
+                    val parts = splitCsvLine(line, limit = 2)
+                    val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) } ?: continue
+                    yield(unescape(parts[0]) to value)
                 }
             }
 
         override fun close() {
+            if (isClosed) return
             isClosed = true
+            openReaders.forEach { reader -> reader.close() }
         }
     }
 
@@ -345,11 +354,18 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): IStorage {
         CsvReader(path = srcFile).use { reader ->
             val nodeStringToInt = HashMap<String, Int>()
+            val filteredNodeIds = HashSet<String>()
             reader.readNodes().forEach { (nodeId, props) ->
+                if (isFilteredOut(nodeId, predicate)) {
+                    filteredNodeIds.add(nodeId)
+                    return@forEach
+                }
                 val storageId = into.addNode(props)
                 nodeStringToInt[nodeId] = storageId
             }
             reader.readEdges().forEach { record ->
+                if (isFilteredOut(record.edgeId, predicate)) return@forEach
+                if (record.src in filteredNodeIds || record.dst in filteredNodeIds) return@forEach
                 val srcInt =
                     requireNotNull(nodeStringToInt[record.src]) {
                         "Edge references unknown source node '${record.src}'"
@@ -363,5 +379,18 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
         return into
+    }
+
+    /**
+     * Applies the [EntityFilter] to a CSV entity ID column. The filter operates on the
+     * original storage Int IDs; an ID that does not parse as Int (hand-edited CSV) has no
+     * original Int identity and is never filtered.
+     */
+    private fun isFilteredOut(
+        entityId: String,
+        predicate: EntityFilter,
+    ): Boolean {
+        val originalId = entityId.toIntOrNull() ?: return false
+        return !predicate(originalId)
     }
 }

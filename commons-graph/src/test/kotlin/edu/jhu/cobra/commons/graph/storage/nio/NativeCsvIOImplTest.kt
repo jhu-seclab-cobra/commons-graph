@@ -64,6 +64,12 @@ import kotlin.test.assertTrue
  * - `import succeeds when meta file does not exist` -- metaFile.exists() false path in readMeta
  * - `export skips metadata entry when getMeta returns null` -- null meta value skip in export
  * - `export with no property nodes produces empty-prefix node header` -- fixedPrefix.isEmpty() true
+ * - `csv reader close stops partially consumed iterations` -- close() closes the underlying readers,
+ *   so abandoned partial iterations hold no open handle
+ * - `csv reader read after close throws` -- reads on a closed reader fail
+ * - `import with node filter excludes node and its edges` -- node predicate skips the node and
+ *   every edge referencing it
+ * - `import with edge filter excludes edge but keeps nodes` -- edge predicate skips only the edge
  */
 internal class NativeCsvIOImplTest {
     private lateinit var tempDir: Path
@@ -662,5 +668,83 @@ internal class NativeCsvIOImplTest {
 
         assertEquals(2, target.nodeIDs.size)
         target.nodeIDs.forEach { assertTrue(target.getNodeProperties(it).isEmpty()) }
+    }
+
+    // -- CsvReader lifecycle (C5.1) --
+
+    @Test
+    fun `csv reader close stops partially consumed iterations`() {
+        val n1 = storage.addNode(mapOf("p" to "a".strVal))
+        val n2 = storage.addNode(mapOf("p" to "b".strVal))
+        storage.addEdge(n1, n2, "t1")
+        storage.addEdge(n2, n1, "t2")
+        storage.setMeta("m1", "1".strVal)
+        storage.setMeta("m2", "2".strVal)
+        val dir = tempDir.resolve("reader_close_partial").createDirectories()
+        NativeCsvIOImpl.export(dir, storage)
+
+        val reader = NativeCsvIOImpl.CsvReader(dir)
+        val nodes = reader.readNodes()
+        val edges = reader.readEdges()
+        val meta = reader.readMeta()
+        nodes.next()
+        edges.next()
+        meta.next()
+        reader.close()
+        assertFailsWith<IllegalStateException> { nodes.next() }
+        assertFailsWith<IllegalStateException> { edges.next() }
+        assertFailsWith<IllegalStateException> { meta.next() }
+    }
+
+    @Test
+    fun `csv reader read after close throws`() {
+        storage.addNode(mapOf("p" to "a".strVal))
+        val dir = tempDir.resolve("reader_read_after_close").createDirectories()
+        NativeCsvIOImpl.export(dir, storage)
+
+        val reader = NativeCsvIOImpl.CsvReader(dir)
+        reader.close()
+        assertFailsWith<IllegalStateException> { reader.readNodes().next() }
+    }
+
+    // -- Import filtering (C5.3) --
+
+    @Test
+    fun `import with node filter excludes node and its edges`() {
+        val n1 = storage.addNode(mapOf("name" to "a".strVal))
+        val n2 = storage.addNode(mapOf("name" to "b".strVal))
+        val n3 = storage.addNode(mapOf("name" to "c".strVal))
+        storage.addEdge(n1, n2, "keep")
+        storage.addEdge(n1, n3, "dangling")
+        val dir = tempDir.resolve("import_node_filter").createDirectories()
+        NativeCsvIOImpl.export(dir, storage)
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(dir, target) { it != n3 }
+
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        assertEquals("keep", target.getEdgeStructure(target.edgeIDs.single()).tag)
+    }
+
+    @Test
+    fun `import with edge filter excludes edge but keeps nodes`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val n3 = storage.addNode()
+        storage.addEdge(n1, n2, "a")
+        storage.addEdge(n2, n3, "b")
+        storage.addEdge(n3, n1, "c")
+        val dropped = storage.addEdge(n1, n3, "drop")
+        val dir = tempDir.resolve("import_edge_filter").createDirectories()
+        NativeCsvIOImpl.export(dir, storage)
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(dir, target) { it != dropped }
+
+        assertEquals(3, target.nodeIDs.size)
+        assertEquals(3, target.edgeIDs.size)
+        val tags = target.edgeIDs.map { target.getEdgeStructure(it).tag }.toSet()
+        assertEquals(setOf("a", "b", "c"), tags)
     }
 }
