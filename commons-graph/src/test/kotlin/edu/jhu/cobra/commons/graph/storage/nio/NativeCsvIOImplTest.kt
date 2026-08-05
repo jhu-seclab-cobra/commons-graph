@@ -2,7 +2,7 @@ package edu.jhu.cobra.commons.graph.storage.nio
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.graph.storage.StorageTestUtils
+import edu.jhu.cobra.commons.graph.storage.StorageFixtures
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.FloatVal
 import edu.jhu.cobra.commons.value.IntVal
@@ -126,9 +126,9 @@ internal class NativeCsvIOImplTest {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val n3 = storage.addNode()
-        storage.addEdge(n1, n2, StorageTestUtils.EDGE_TAG_1)
-        storage.addEdge(n2, n3, StorageTestUtils.EDGE_TAG_2)
-        storage.addEdge(n1, n3, StorageTestUtils.EDGE_TAG_3)
+        storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
+        storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
+        storage.addEdge(n1, n3, StorageFixtures.EDGE_TAG_3)
 
         val target = roundTrip(storage)
 
@@ -141,15 +141,15 @@ internal class NativeCsvIOImplTest {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val n3 = storage.addNode()
-        storage.addEdge(n1, n2, StorageTestUtils.EDGE_TAG_1)
-        storage.addEdge(n2, n3, StorageTestUtils.EDGE_TAG_2)
+        storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
+        storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
 
         val target = roundTrip(storage)
 
         assertEquals(3, target.nodeIDs.size)
         assertEquals(2, target.edgeIDs.size)
         val tags = target.edgeIDs.map { target.getEdgeStructure(it).tag }.toSet()
-        assertEquals(setOf(StorageTestUtils.EDGE_TAG_1, StorageTestUtils.EDGE_TAG_2), tags)
+        assertEquals(setOf(StorageFixtures.EDGE_TAG_1, StorageFixtures.EDGE_TAG_2), tags)
     }
 
     @Test
@@ -683,7 +683,7 @@ internal class NativeCsvIOImplTest {
         val dir = tempDir.resolve("reader_close_partial").createDirectories()
         NativeCsvIOImpl.export(dir, storage)
 
-        val reader = NativeCsvIOImpl.CsvReader(dir)
+        val reader = NativeCsvReader(dir)
         val nodes = reader.readNodes()
         val edges = reader.readEdges()
         val meta = reader.readMeta()
@@ -702,7 +702,7 @@ internal class NativeCsvIOImplTest {
         val dir = tempDir.resolve("reader_read_after_close").createDirectories()
         NativeCsvIOImpl.export(dir, storage)
 
-        val reader = NativeCsvIOImpl.CsvReader(dir)
+        val reader = NativeCsvReader(dir)
         reader.close()
         assertFailsWith<IllegalStateException> { reader.readNodes().next() }
     }
