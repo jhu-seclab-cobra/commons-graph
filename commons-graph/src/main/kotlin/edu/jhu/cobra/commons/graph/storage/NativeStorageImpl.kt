@@ -74,7 +74,7 @@ public class NativeStorageImpl : IStorage {
         properties: Map<String, IValue?>,
     ) {
         if (id !in outEdges) throw EntityNotExistException(id.toString())
-        setColumnarProperties(id, properties, nodeColumns)
+        ColumnarProperties.setColumnarProperties(id, properties, nodeColumns)
     }
 
     override fun deleteNode(id: Int) {
@@ -85,7 +85,7 @@ public class NativeStorageImpl : IStorage {
         for (eid in inEdgeIds) deleteIncidentEdge(eid)
         outEdges.remove(id)
         inEdges.remove(id)
-        removeEntityFromColumns(id, nodeColumns)
+        ColumnarProperties.removeEntityFromColumns(id, nodeColumns)
     }
 
     // ============================================================================
@@ -135,14 +135,14 @@ public class NativeStorageImpl : IStorage {
         properties: Map<String, IValue?>,
     ) {
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-        setColumnarProperties(id, properties, edgeColumns)
+        ColumnarProperties.setColumnarProperties(id, properties, edgeColumns)
     }
 
     override fun deleteEdge(id: Int) {
         val edge = edgeEndpoints.remove(id) ?: throw EntityNotExistException(id.toString())
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
-        removeEntityFromColumns(id, edgeColumns)
+        ColumnarProperties.removeEntityFromColumns(id, edgeColumns)
     }
 
     private fun deleteIncidentEdge(eid: Int) {
@@ -150,7 +150,7 @@ public class NativeStorageImpl : IStorage {
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
         edgeEndpoints.remove(eid)
-        removeEntityFromColumns(eid, edgeColumns)
+        ColumnarProperties.removeEntityFromColumns(eid, edgeColumns)
     }
 
     // ============================================================================
@@ -209,8 +209,8 @@ public class NativeStorageImpl : IStorage {
             nodeIdMap[nodeId] = newId
         }
         for ((edgeId, ep) in edgeEndpoints) {
-            val newSrc = nodeIdMap[ep.src]!!
-            val newDst = nodeIdMap[ep.dst]!!
+            val newSrc = nodeIdMap.getValue(ep.src)
+            val newDst = nodeIdMap.getValue(ep.dst)
             target.addEdge(newSrc, newDst, ep.tag, getEdgeProperties(edgeId))
         }
         for (name in metaProperties.keys) {
@@ -218,21 +218,6 @@ public class NativeStorageImpl : IStorage {
         }
         return nodeIdMap
     }
-
-    // ============================================================================
-    // INTERNAL HELPERS
-    // ============================================================================
-
-    private fun removeEntityFromColumns(
-        id: Int,
-        columns: HashMap<String, HashMap<Int, IValue>>,
-    ) = ColumnarUtils.removeEntityFromColumns(id, columns)
-
-    private fun setColumnarProperties(
-        id: Int,
-        properties: Map<String, IValue?>,
-        columns: HashMap<String, HashMap<Int, IValue>>,
-    ) = ColumnarUtils.setColumnarProperties(id, properties, columns)
 
     private class ColumnViewMap(
         private val entityId: Int,
@@ -258,7 +243,7 @@ public class NativeStorageImpl : IStorage {
         override val size: Int get() = entries.size
 
         override fun isEmpty(): Boolean {
-            if (cachedEntries != null) return cachedEntries!!.isEmpty()
+            cachedEntries?.let { return it.isEmpty() }
             for (col in columns.values) {
                 if (col.containsKey(entityId)) return false
             }

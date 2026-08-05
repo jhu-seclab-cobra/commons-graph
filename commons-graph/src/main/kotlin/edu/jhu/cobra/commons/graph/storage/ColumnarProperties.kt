@@ -7,7 +7,7 @@ import edu.jhu.cobra.commons.value.IValue
  * [NativeConcurStorageImpl]. All functions are pure operations on the
  * column maps passed as arguments.
  */
-internal object ColumnarUtils {
+internal object ColumnarProperties {
     /**
      * Removes all property entries for [id] across every column.
      * Drops empty columns to avoid unbounded key accumulation.
@@ -22,6 +22,19 @@ internal object ColumnarUtils {
             col.remove(id)
             if (col.isEmpty()) colIter.remove()
         }
+    }
+
+    /** Snapshots all properties of entity [id] across every column into a plain map. */
+    fun collectProperties(
+        id: Int,
+        columns: HashMap<String, HashMap<Int, IValue>>,
+    ): Map<String, IValue> {
+        val result = HashMap<String, IValue>()
+        for ((colName, col) in columns) {
+            val value = col[id] ?: continue
+            result[colName] = value
+        }
+        return result
     }
 
     /**

@@ -78,41 +78,22 @@ public class NativeConcurStorageImpl : IStorage {
     // Internal helpers (callers must hold appropriate lock)
     private fun internKey(key: String): String = keyPool.getOrPut(key) { key }
 
-    private fun collectNodeProperties(id: Int): Map<String, IValue> {
-        val result = HashMap<String, IValue>()
-        for ((colName, col) in nodeColumns) {
-            val v = col[id] ?: continue
-            result[colName] = v
-        }
-        return result
-    }
+    private fun collectNodeProperties(id: Int): Map<String, IValue> = ColumnarProperties.collectProperties(id, nodeColumns)
 
-    private fun collectEdgeProperties(id: Int): Map<String, IValue> {
-        val result = HashMap<String, IValue>()
-        for ((colName, col) in edgeColumns) {
-            val v = col[id] ?: continue
-            result[colName] = v
-        }
-        return result
-    }
-
-    private fun removeEntityFromColumns(
-        id: Int,
-        columns: HashMap<String, HashMap<Int, IValue>>,
-    ) = ColumnarUtils.removeEntityFromColumns(id, columns)
+    private fun collectEdgeProperties(id: Int): Map<String, IValue> = ColumnarProperties.collectProperties(id, edgeColumns)
 
     private fun setColumnarProperties(
         id: Int,
         properties: Map<String, IValue?>,
         columns: HashMap<String, HashMap<Int, IValue>>,
-    ) = ColumnarUtils.setColumnarProperties(id, properties, columns, ::internKey)
+    ) = ColumnarProperties.setColumnarProperties(id, properties, columns, ::internKey)
 
     private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
         edgeEndpoints.remove(eid)
-        removeEntityFromColumns(eid, edgeColumns)
+        ColumnarProperties.removeEntityFromColumns(eid, edgeColumns)
     }
 
     // ============================================================================
@@ -168,7 +149,7 @@ public class NativeConcurStorageImpl : IStorage {
             for (eid in inEdgeIds) deleteIncidentEdge(eid)
             outEdges.remove(id)
             inEdges.remove(id)
-            removeEntityFromColumns(id, nodeColumns)
+            ColumnarProperties.removeEntityFromColumns(id, nodeColumns)
         }
 
     // ============================================================================
@@ -191,8 +172,8 @@ public class NativeConcurStorageImpl : IStorage {
             if (dst !in outEdges) throw EntityNotExistException(dst.toString())
             val id = edgeCounter++
             edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
-            outEdges[src]!!.add(id)
-            inEdges[dst]!!.add(id)
+            outEdges.getValue(src).add(id)
+            inEdges.getValue(dst).add(id)
             for ((key, value) in properties) {
                 edgeColumns.getOrPut(internKey(key)) { HashMap() }[id] = value
             }
@@ -296,8 +277,8 @@ public class NativeConcurStorageImpl : IStorage {
                 nodeIdMap[nodeId] = newId
             }
             for ((edgeId, ep) in edgeEndpoints) {
-                val newSrc = nodeIdMap[ep.src]!!
-                val newDst = nodeIdMap[ep.dst]!!
+                val newSrc = nodeIdMap.getValue(ep.src)
+                val newDst = nodeIdMap.getValue(ep.dst)
                 target.addEdge(newSrc, newDst, ep.tag, collectEdgeProperties(edgeId))
             }
             for (name in metaProperties.keys) {
