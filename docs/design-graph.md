@@ -5,8 +5,8 @@
 - **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`
 - **Relationships**: `AbcMultipleGraph` implements `IGraph` and `Flushable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
-- **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `AccessClosedStorageException` raised on storage access after close
-- **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property).
+- **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; both extend `GraphException`
+- **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property); `GraphEntityCache` (internal — NodeID↔Int index and soft-referenced entity wrappers).
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
 

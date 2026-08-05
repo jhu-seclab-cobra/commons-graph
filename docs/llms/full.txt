@@ -46,11 +46,9 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 
 - [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.
 
-
 ---
 
 # Referenced Documents
-
 
 ## Source: llms/graph.md
 
@@ -144,9 +142,7 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.
 
-
 ---
-
 
 ## Source: llms/storage.md
 
@@ -162,7 +158,6 @@ val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
 val nodeB = storage.addNode()
 val edgeId = storage.addEdge(nodeA, nodeB, "calls")
 storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
-storage.close()
 ```
 
 ## API
@@ -171,7 +166,7 @@ storage.close()
 
 #### Node Operations
 
-- **`val nodeIDs: Set<Int>`** -- All node IDs. Raises `AccessClosedStorageException` if closed.
+- **`val nodeIDs: Set<Int>`** -- All node IDs.
 - **`containsNode(id: Int): Boolean`** -- Check node existence.
 - **`addNode(properties: Map<String, IValue> = emptyMap()): Int`** -- Create node, return auto-generated ID.
 - **`getNodeProperties(id: Int): Map<String, IValue>`** -- All properties. Raises `EntityNotExistException` if absent.
@@ -205,7 +200,7 @@ storage.close()
 
 - **`clear()`** -- Remove all nodes, edges, and metadata.
 - **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. Returns node ID mapping (source to target).
-- **`close()`** -- Release resources. All operations raise `AccessClosedStorageException` after close.
+- Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
 
 ### Implementations
 
@@ -229,6 +224,7 @@ storage.close()
 
 ## Gotchas
 
+- All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
 - `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
 - `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs.
 - `deleteNode` cascades to all incident edges in the same storage.
@@ -237,9 +233,7 @@ storage.close()
 - `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
 - `NativeConcurStorageImpl` returns snapshot copies from adjacency queries. Mutations after retrieval do not affect the snapshot.
 
-
 ---
-
 
 ## Source: llms/entity.md
 
@@ -316,9 +310,7 @@ class MyNode : AbcNode() {
 - `EntityProperty` nullable delegate propagates `null` to `IEntity.set(name, null)`, which removes the property.
 - Property reads and writes go directly to storage. No local caching in the entity object.
 
-
 ---
-
 
 ## Source: llms/label.md
 
@@ -382,6 +374,4 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 
-
 ---
-

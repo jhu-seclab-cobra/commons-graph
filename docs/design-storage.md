@@ -3,10 +3,10 @@
 ## Design Overview
 
 - **Classes**: `IStorage`, `IStorage.EdgeStructure`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes an inline active layer + at most one frozen `IStorage` layer)
-- **Abstract**: `IStorage` (implemented by all storage types)
-- **Exceptions**: `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting entities from frozen layer
-- **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (layers active + frozen storage).
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes an internal `ActiveLayer` + at most one `FrozenLayer` wrapping a frozen `IStorage`)
+- **Abstract**: `IStorage` (implemented by all storage types); per-backend bases `AbcJgraphtStorage`, `AbcMapDBStorage`, `AbcNeo4jStorage` (each extended by a plain and a concurrent subclass)
+- **Exceptions**: `GraphException` (abstract base for all graph-layer failures); `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting entities from frozen layer
+- **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (composes internal `ActiveLayer` + at most one `FrozenLayer`). Helpers: `ColumnarProperties` (internal — pure operations on columnar property maps).
 
 The storage layer is the **backend-agnostic directed property graph engine**. It manages nodes and edges identified by auto-generated `Int` IDs, per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), edge structural metadata (source, destination, tag), and graph-level metadata. It does not know about domain types (`Label`).
 
@@ -102,15 +102,41 @@ interface IStorage : Flushable {
 
 **Deletion constraint:** Only active-layer entities can be deleted. Deleting a frozen-layer entity throws `FrozenLayerModificationException`.
 
+**Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ActiveColumnViewMap`, `LazyMergedMap`, `MappedEdgeSet`, `UnionSet`) implement cross-layer property overlay and adjacency union without copying.
+
 See `spec.md` for layered query resolution (property overlay, adjacency merge, cross-layer writes) and `model.md` for layered storage invariants.
+
+---
+
+### Backend base classes
+
+Each backend module folds its plain and concurrent implementations into one abstract base holding the full engine; subclasses supply only the guard strategy:
+
+| Base | Module | Subclasses |
+|------|--------|-----------|
+| `AbcJgraphtStorage` | `commons-graph-impl-jgrapht` | `JgraphtStorageImpl`, `JgraphtConcurStorageImpl` |
+| `AbcMapDBStorage` | `commons-graph-impl-mapdb` | `MapDBStorageImpl`, `MapDBConcurStorageImpl` |
+| `AbcNeo4jStorage` | `commons-graph-impl-neo4j` | `Neo4jStorageImpl`, `Neo4jConcurStorageImpl` |
+
+Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through; concurrent subclasses guard with a `ReentrantReadWriteLock`. The native pair (`NativeStorageImpl`, `NativeConcurStorageImpl`) is intentionally not folded: the two differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
+
+---
+
+### CSV export/import (`storage.nio`)
+
+`NativeCsvIOImpl` (public object) exposes `isValidFile`/`export`/`import`; the CSV format constants and escaping live in internal `NativeCsvFormat`, streaming write in internal `NativeCsvWriter`, streaming read in internal `NativeCsvReader` (with `NodeRecord`/`EdgeRecord` data holders).
 
 ---
 
 ## Exception / Error Types
 
+All graph-layer exceptions extend the abstract base `GraphException` (extends `Exception`, carries optional `cause`). Callers catch `GraphException` for uniform handling or a concrete subtype for one condition. Third-party backend exceptions are mapped to these domain types at the module boundary.
+
 | Exception | When raised |
 |-----------|------------|
 | `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src/dst |
+| `EntityAlreadyExistException` | Adding a node/edge whose ID already exists |
+| `InvalidPropNameException` | Using a reserved property name on an entity |
 | `FrozenLayerModificationException` | Deleting an entity from the frozen layer in `LayeredStorageImpl` |
 
 Deletion of a non-existent entity is a no-op at the graph level.

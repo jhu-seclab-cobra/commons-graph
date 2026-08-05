@@ -10,7 +10,6 @@ val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
 val nodeB = storage.addNode()
 val edgeId = storage.addEdge(nodeA, nodeB, "calls")
 storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
-storage.close()
 ```
 
 ## API
@@ -19,7 +18,7 @@ storage.close()
 
 #### Node Operations
 
-- **`val nodeIDs: Set<Int>`** -- All node IDs. Raises `AccessClosedStorageException` if closed.
+- **`val nodeIDs: Set<Int>`** -- All node IDs.
 - **`containsNode(id: Int): Boolean`** -- Check node existence.
 - **`addNode(properties: Map<String, IValue> = emptyMap()): Int`** -- Create node, return auto-generated ID.
 - **`getNodeProperties(id: Int): Map<String, IValue>`** -- All properties. Raises `EntityNotExistException` if absent.
@@ -53,7 +52,7 @@ storage.close()
 
 - **`clear()`** -- Remove all nodes, edges, and metadata.
 - **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. Returns node ID mapping (source to target).
-- **`close()`** -- Release resources. All operations raise `AccessClosedStorageException` after close.
+- Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
 
 ### Implementations
 
@@ -77,6 +76,7 @@ storage.close()
 
 ## Gotchas
 
+- All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
 - `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
 - `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs.
 - `deleteNode` cascades to all incident edges in the same storage.

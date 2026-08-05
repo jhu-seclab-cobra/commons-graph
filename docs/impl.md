@@ -69,4 +69,4 @@
 
 - Neo4j `org.neo4j.graphdb.Label` is a node classification interface (schema indexing), unrelated to commons-graph `Label` value class.
 - `MapDbValSerializer<T>` bridges `DftByteArraySerializerImpl` and MapDB `Serializer`.
-- `Neo4JUtils` extension: `Entity.keys` filters reserved properties (`__meta_id__`, `__sid__`, `__tag__`); `Entity[name]` throws `InvalidPropNameException` for reserved names.
+- `Neo4jEntityProperties` extensions: `Entity.keys` filters reserved properties (`__meta_id__`, `__sid__`, `__tag__`); `Entity[name]` throws `InvalidPropNameException` for reserved names.
