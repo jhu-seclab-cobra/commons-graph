@@ -60,6 +60,7 @@
 - Neo4j `clear()` must delete relationships before nodes.
 - Neo4j property values serialized to `ByteArray` via `DftByteArraySerializerImpl`.
 - Neo4j internal `__sid__` property stores IStorage Int ID as `Long`; schema indexes on `__sid__` enable indexed lookups.
+- Neo4j storage meta lives on one node labeled `_M` with marker property `__meta_id__`; found via `findNode(META_LABEL, META_ID, 0L)`; excluded from `nodeIDs` because entity queries use label `_N`.
 - `EXPORT_VERTEX_LABELS` / `EXPORT_EDGE_LABELS` must be explicitly set to `true` for GML export.
 - `closeOnJvmShutdown()` is a safety net; call `close()` explicitly as primary path.
 - Use `lazy` for Neo4j DB initialization to avoid constructor blocking.
@@ -68,4 +69,4 @@
 
 - Neo4j `org.neo4j.graphdb.Label` is a node classification interface (schema indexing), unrelated to commons-graph `Label` value class.
 - `MapDbValSerializer<T>` bridges `DftByteArraySerializerImpl` and MapDB `Serializer`.
-- `Neo4JUtils` extension: `Entity.keys` filters reserved properties (`__sid__`, `__tag__`); `Entity[name]` throws `InvalidPropNameException` for reserved names.
+- `Neo4JUtils` extension: `Entity.keys` filters reserved properties (`__meta_id__`, `__sid__`, `__tag__`); `Entity[name]` throws `InvalidPropNameException` for reserved names.

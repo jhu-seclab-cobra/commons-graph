@@ -14,6 +14,8 @@ The storage layer is the **backend-agnostic directed property graph engine**. It
 
 `IStorage` extends `Flushable`. In-memory implementations (`NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`) implement `flush()` as a no-op. Persistent backends (MapDB, Neo4j) perform actual flush-to-disk. Resource lifecycle (file handles, database connections) is the concrete implementation's responsibility, not the `IStorage` contract.
 
+Persistent backends persist graph-level metadata with the same lifetime as entity data: metadata written via `setMeta` is recoverable after close and reopen of the same storage path. MapDB stores metadata in a dedicated map inside the database file. Neo4j stores metadata on a single dedicated meta node (label `_M`) identified by the reserved marker property `__meta_id__`; the meta node carries meta entries as its properties, never appears in `nodeIDs` (entity nodes use label `_N`), and is deleted by `clear()`.
+
 ---
 
 ## Class / Type Specifications
