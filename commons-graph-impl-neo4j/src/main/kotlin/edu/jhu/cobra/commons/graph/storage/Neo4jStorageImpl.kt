@@ -10,6 +10,7 @@ import org.neo4j.dbms.api.DatabaseManagementService
 import org.neo4j.dbms.api.DatabaseManagementServiceBuilder
 import org.neo4j.graphdb.Direction
 import org.neo4j.graphdb.Label
+import org.neo4j.graphdb.Node
 import org.neo4j.graphdb.RelationshipType
 import org.neo4j.graphdb.Transaction
 import java.nio.file.Path
@@ -21,6 +22,22 @@ internal const val SID = "__sid__"
 internal const val TAG = "__tag__"
 internal val NODE_LABEL: Label = Label.label("_N")
 internal val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
+
+// Storage meta lives on a single dedicated node outside NODE_LABEL, so it
+// persists across reopen without appearing in nodeIDs. The node is identified
+// by the reserved marker property META_ID.
+internal const val META_ID = "__meta_id__"
+internal val META_LABEL: Label = Label.label("_M")
+
+internal fun Transaction.findMetaNode(): Node? = findNode(META_LABEL, META_ID, 0L)
+
+internal fun Transaction.findOrCreateMetaNode(): Node =
+    findMetaNode() ?: createNode(META_LABEL).also { node -> node.setProperty(META_ID, 0L) }
+
+internal fun Node.metaEntries(): Map<String, IValue> =
+    keys.associateWith { name ->
+        requireNotNull(this[name]) { "Meta property '$name' has corrupted data" }
+    }
 
 /**
  * Non-concurrent [IStorage] using Neo4j 5.x embedded mode with zero in-memory ID mappings.
@@ -42,8 +59,6 @@ public class Neo4jStorageImpl(
     private val graphPath: Path,
 ) : IStorage,
     AutoCloseable {
-    private val metaProperties = HashMap<String, IValue>()
-
     private val managementService: DatabaseManagementService by lazy {
         if (graphPath.notExists()) graphPath.createDirectories()
         DatabaseManagementServiceBuilder(graphPath).build()
@@ -243,22 +258,23 @@ public class Neo4jStorageImpl(
         }
 
     override val metaNames: Set<String>
-        get() = metaProperties.keys.toSet()
+        get() = readTx { findMetaNode()?.keys?.toSet() ?: emptySet() }
 
-    override fun getMeta(name: String): IValue? = metaProperties[name]
+    override fun getMeta(name: String): IValue? = readTx { findMetaNode()?.get(name) }
 
     override fun setMeta(
         name: String,
         value: IValue?,
-    ) {
-        if (value == null) metaProperties.remove(name) else metaProperties[name] = value
-    }
+    ): Unit =
+        writeTx {
+            if (value == null) findMetaNode()?.removeProperty(name) else findOrCreateMetaNode()[name] = value
+        }
 
     override fun clear(): Unit =
         writeTx {
             for (rel in findRelationships(EDGE_TYPE)) rel.delete()
             for (node in findNodes(NODE_LABEL)) node.delete()
-            metaProperties.clear()
+            findMetaNode()?.delete()
             nodeCounter = 0
             edgeCounter = 0
         }
@@ -287,9 +303,7 @@ public class Neo4jStorageImpl(
                 val newDst = idMap.getValue(dst)
                 target.addEdge(newSrc, newDst, tag, props)
             }
-            for (name in metaProperties.keys) {
-                target.setMeta(name, metaProperties[name])
-            }
+            findMetaNode()?.metaEntries()?.forEach { (name, value) -> target.setMeta(name, value) }
             idMap
         }
 

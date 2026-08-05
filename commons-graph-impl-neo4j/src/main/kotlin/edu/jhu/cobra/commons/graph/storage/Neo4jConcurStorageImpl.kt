@@ -39,7 +39,6 @@ public class Neo4jConcurStorageImpl(
     private var edgeCounter: Int = 0
 
     private val storageLock = ReentrantReadWriteLock()
-    private val metaProperties = HashMap<String, IValue>()
 
     private val managementService: DatabaseManagementService by lazy {
         if (graphPath.notExists()) graphPath.createDirectories()
@@ -271,12 +270,12 @@ public class Neo4jConcurStorageImpl(
     override val metaNames: Set<String>
         get() =
             storageLock.read {
-                metaProperties.keys.toSet()
+                readTx { findMetaNode()?.keys?.toSet() ?: emptySet() }
             }
 
     override fun getMeta(name: String): IValue? =
         storageLock.read {
-            metaProperties[name]
+            readTx { findMetaNode()?.get(name) }
         }
 
     override fun setMeta(
@@ -284,7 +283,9 @@ public class Neo4jConcurStorageImpl(
         value: IValue?,
     ): Unit =
         storageLock.write {
-            if (value == null) metaProperties.remove(name) else metaProperties[name] = value
+            writeTx {
+                if (value == null) findMetaNode()?.removeProperty(name) else findOrCreateMetaNode()[name] = value
+            }
         }
 
     override fun clear(): Unit =
@@ -292,7 +293,7 @@ public class Neo4jConcurStorageImpl(
             writeTx {
                 for (rel in findRelationships(EDGE_TYPE)) rel.delete()
                 for (node in findNodes(NODE_LABEL)) node.delete()
-                metaProperties.clear()
+                findMetaNode()?.delete()
                 nodeCounter = 0
                 edgeCounter = 0
             }
@@ -303,9 +304,7 @@ public class Neo4jConcurStorageImpl(
             readTx {
                 val idMap = copyNodesTo(target)
                 copyEdgesTo(target, idMap)
-                for (name in metaProperties.keys) {
-                    target.setMeta(name, metaProperties[name])
-                }
+                findMetaNode()?.metaEntries()?.forEach { (name, value) -> target.setMeta(name, value) }
                 idMap
             }
         }

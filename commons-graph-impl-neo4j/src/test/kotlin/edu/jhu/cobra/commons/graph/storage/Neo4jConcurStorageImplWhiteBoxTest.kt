@@ -10,7 +10,8 @@
  * - `getNodeProperties excludes META_ID property`
  * - `meta operations under lock`
  * - `setMeta null removes entry`
- * - `meta not persisted across storage instances`
+ * - `meta persists across storage instances` — meta survives close and reopen via the meta node
+ * - `meta node does not appear as graph node` — meta storage never leaks into nodeIDs
  * - `clear empties all structures under write lock`
  * - `addEdge missing src throws EntityNotExistException`
  * - `deleteNode nonexistent throws EntityNotExistException`
@@ -172,12 +173,19 @@ internal class Neo4jConcurStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `meta not persisted across storage instances`() {
+    fun `meta persists across storage instances`() {
         storage.setMeta("key", "val".strVal)
         storage.close()
         val reloaded = Neo4jConcurStorageImpl(graphDir)
-        assertNull(reloaded.getMeta("key"))
+        assertEquals("val".strVal, reloaded.getMeta("key"))
+        assertTrue("key" in reloaded.metaNames)
         reloaded.close()
+    }
+
+    @Test
+    fun `meta node does not appear as graph node`() {
+        storage.setMeta("key", "val".strVal)
+        assertTrue(storage.nodeIDs.isEmpty())
     }
 
     // -- Clear under write lock --

@@ -18,9 +18,10 @@
  * - `setEdgeProperties with null removes property from Neo4j`
  * - `self loop edge appears in both incoming and outgoing`
  * - `deleteNode removes self loop edge from cache`
- * - `meta operations use in-memory map`
+ * - `meta operations round-trip`
  * - `setMeta null removes entry`
- * - `meta not persisted across storage instances`
+ * - `meta persists across storage instances` — meta survives close and reopen via the meta node
+ * - `meta node does not appear as graph node` — meta storage never leaks into nodeIDs
  * - `clear empties node and edge caches and database`
  * - `addEdge missing src throws EntityNotExistException`
  * - `addEdge missing dst throws EntityNotExistException`
@@ -249,10 +250,10 @@ internal class Neo4jStorageImplWhiteBoxTest {
         assertFalse(storage.containsEdge(selfEdge))
     }
 
-    // -- Metadata stored in-memory --
+    // -- Metadata persisted on the meta node --
 
     @Test
-    fun `meta operations use in-memory map`() {
+    fun `meta operations round-trip`() {
         storage.setMeta("version", "1.0".strVal)
         assertEquals("1.0", (storage.getMeta("version") as StrVal).core)
         assertTrue("version" in storage.metaNames)
@@ -267,12 +268,19 @@ internal class Neo4jStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `meta not persisted across storage instances`() {
+    fun `meta persists across storage instances`() {
         storage.setMeta("key", "val".strVal)
         storage.close()
         val reloaded = Neo4jStorageImpl(graphDir)
-        assertNull(reloaded.getMeta("key"))
+        assertEquals("val".strVal, reloaded.getMeta("key"))
+        assertTrue("key" in reloaded.metaNames)
         reloaded.close()
+    }
+
+    @Test
+    fun `meta node does not appear as graph node`() {
+        storage.setMeta("key", "val".strVal)
+        assertTrue(storage.nodeIDs.isEmpty())
     }
 
     // -- clear --
