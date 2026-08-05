@@ -1,11 +1,11 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.EDGE_TAG_2
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_1
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_2
-import edu.jhu.cobra.commons.graph.GraphTestUtils.NODE_ID_3
-import edu.jhu.cobra.commons.graph.GraphTestUtils.TestMultipleGraph
+import edu.jhu.cobra.commons.graph.GraphFixtures.EDGE_TAG_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.EDGE_TAG_2
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
+import edu.jhu.cobra.commons.graph.GraphFixtures.TestMultipleGraph
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.BeforeTest
 import kotlin.test.Test
