@@ -45,7 +45,11 @@ internal class EntityPropertyMap(
         private inner class Entry(
             override val key: String,
         ) : MutableMap.MutableEntry<String, IValue> {
-            override val value get() = this@PropertyMap[key] ?: NullVal
+            // A missing backing value means the key vanished between iteration and access;
+            // surfacing it as NullVal would mask the desync as a stored value.
+            override val value get() =
+                this@PropertyMap[key]
+                    ?: throw NoSuchElementException("Property '$key' of entity $eid no longer exists")
 
             override fun setValue(newValue: IValue) = this@PropertyMap.set(key, newValue).let { newValue }
         }

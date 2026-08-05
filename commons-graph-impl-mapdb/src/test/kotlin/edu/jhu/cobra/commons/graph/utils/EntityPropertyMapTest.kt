@@ -24,6 +24,7 @@
  * - `property map keys removeAll and retainAll`
  * - `property map keys retainAll keeps specified`
  * - `property map entry setValue updates property`
+ * - `property map entry value throws when key vanishes after iteration`
  * - `entity map entries iterator traverses all entities`
  * - `entity map entries iterator remove deletes entity`
  * - `entity map entries iterator throws NoSuchElementException at end`
@@ -375,6 +376,15 @@ internal class EntityPropertyMapTest {
         val entry = pm.entries.first()
         entry.setValue("new".strVal)
         assertEquals("new".strVal, pm["a"])
+    }
+
+    @Test
+    fun `property map entry value throws when key vanishes after iteration`() {
+        entityPropertyMap.put(1, mapOf("gone" to "v".strVal))
+        val pm = entityPropertyMap[1]!!
+        val entry = pm.entries.first()
+        pm.remove("gone")
+        assertFailsWith<NoSuchElementException> { entry.value }
     }
 
     // -- EntityPropertyMap entries coverage --
