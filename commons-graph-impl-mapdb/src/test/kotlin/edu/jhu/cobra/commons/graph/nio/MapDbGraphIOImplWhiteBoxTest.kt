@@ -19,11 +19,13 @@
  * - `export and import empty storage`
  * - `node properties preserved through serialization`
  * - `edge properties and type preserved through serialization`
+ * - `export then import preserves storage meta` — meta round-trip per design-storage.md
+ * - `import skips edges whose endpoint was filtered out` — endpoint filter, no error on skipped node
  */
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.MapDBStorageImpl
-import edu.jhu.cobra.commons.graph.utils.MapDbValSerializer
+import edu.jhu.cobra.commons.graph.storage.MapDbValSerializer
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.MapVal
@@ -321,6 +323,40 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         val importedEdge = dstStorage.edgeIDs.first()
         assertEquals("test", (dstStorage.getEdgeProperties(importedEdge)["data"] as StrVal).core)
         assertEquals("type-with-special_chars", dstStorage.getEdgeStructure(importedEdge).tag)
+        dstStorage.close()
+    }
+
+    // -- Meta round-trip (design-storage.md: meta has the same lifetime as entity data) --
+
+    @Test
+    fun `export then import preserves storage meta`() {
+        srcStorage.setMeta("version", "1.2.3".strVal)
+        srcStorage.setMeta("count", 42.intVal)
+        MapDbGraphIOImpl.export(tempFile, srcStorage)
+
+        val dstStorage = MapDBStorageImpl { memoryDB() }
+        MapDbGraphIOImpl.import(tempFile, dstStorage)
+
+        assertEquals(setOf("version", "count"), dstStorage.metaNames)
+        assertEquals("1.2.3", (dstStorage.getMeta("version") as StrVal).core)
+        assertEquals(42, (dstStorage.getMeta("count") as IntVal).core.toInt())
+        dstStorage.close()
+    }
+
+    // -- Import predicate on original IDs; edges follow their endpoints --
+
+    @Test
+    fun `import skips edges whose endpoint was filtered out`() {
+        val n1 = srcStorage.addNode(mapOf("type" to "a".strVal))
+        val n2 = srcStorage.addNode(mapOf("type" to "b".strVal))
+        srcStorage.addEdge(n1, n2, "link")
+        MapDbGraphIOImpl.export(tempFile, srcStorage)
+
+        val dstStorage = MapDBStorageImpl { memoryDB() }
+        MapDbGraphIOImpl.import(tempFile, dstStorage) { entity -> entity == n1 }
+
+        assertEquals(1, dstStorage.nodeIDs.size)
+        assertEquals(0, dstStorage.edgeIDs.size)
         dstStorage.close()
     }
 }
