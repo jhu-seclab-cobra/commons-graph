@@ -177,6 +177,7 @@ public class LayeredStorageImpl(
         edgeG2L: HashMap<Int, Int>,
         edgeL2G: HashMap<Int, Int>,
     ) {
+        closeFrozenLayer()
         frozenLayer = merged
         frozenNodeGlobalToLocal.clear()
         frozenNodeGlobalToLocal.putAll(nodeG2L)
@@ -436,6 +437,7 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override fun clear() {
+        closeFrozenLayer()
         frozenLayer = null
         frozenNodeGlobalToLocal.clear()
         frozenNodeLocalToGlobal.clear()
@@ -477,6 +479,12 @@ public class LayeredStorageImpl(
     // ============================================================================
     // INTERNAL HELPERS
     // ============================================================================
+
+    // Frozen layers produced by the factory may hold external resources (file-backed storages);
+    // discarding one without closing leaks its handle.
+    private fun closeFrozenLayer() {
+        (frozenLayer as? AutoCloseable)?.close()
+    }
 
     private fun ensureNodeInActiveLayer(id: Int) {
         if (isActiveNode(id)) return

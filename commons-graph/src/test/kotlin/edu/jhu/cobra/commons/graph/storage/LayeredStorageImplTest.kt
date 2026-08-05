@@ -165,6 +165,10 @@ import kotlin.test.assertTrue
  *
  * clearActiveLayer:
  * - `clearActiveLayer preserves frozen layer data` -- frozen retained
+ *
+ * Frozen layer resource release:
+ * - `freeze closes previous closeable frozen layer` -- swap closes replaced layer
+ * - `clear closes closeable frozen layer` -- clear closes discarded layer
  */
 internal class LayeredStorageImplTest {
     private lateinit var storage: LayeredStorageImpl
@@ -1296,6 +1300,45 @@ internal class LayeredStorageImplTest {
         // Active data gone
         assertFalse(storage.containsNode(n3))
         assertNull(storage.getMeta("active_m"))
+    }
+
+    // endregion
+
+    // region Frozen layer resource release
+
+    private class CloseRecordingStorage(
+        private val delegate: IStorage = NativeStorageImpl(),
+    ) : IStorage by delegate,
+        AutoCloseable {
+        var isClosed: Boolean = false
+            private set
+
+        override fun close() {
+            isClosed = true
+        }
+    }
+
+    @Test
+    fun `freeze closes previous closeable frozen layer`() {
+        val created = mutableListOf<CloseRecordingStorage>()
+        val layered = LayeredStorageImpl { CloseRecordingStorage().also(created::add) }
+        layered.addNode()
+        layered.freeze()
+        layered.addNode()
+        layered.freeze()
+        assertEquals(2, created.size)
+        assertTrue(created[0].isClosed)
+        assertFalse(created[1].isClosed)
+    }
+
+    @Test
+    fun `clear closes closeable frozen layer`() {
+        val created = mutableListOf<CloseRecordingStorage>()
+        val layered = LayeredStorageImpl { CloseRecordingStorage().also(created::add) }
+        layered.addNode()
+        layered.freeze()
+        layered.clear()
+        assertTrue(created.single().isClosed)
     }
 
     // endregion
