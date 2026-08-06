@@ -2,9 +2,7 @@
 
 > Backend-agnostic directed property graph library for Kotlin/JVM with pluggable storage and label-based edge visibility.
 
-commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally. Abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and label hierarchy (poset) for edge visibility control.
-
-Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.graph.storage`. Labels: `edu.jhu.cobra.commons.graph.poset`. Traits: `edu.jhu.cobra.commons.graph.traits`.
+commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally; abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and the label hierarchy (poset) for edge visibility control. Packages: `edu.jhu.cobra.commons.graph` (root), `edu.jhu.cobra.commons.graph.storage` (storage backends), `edu.jhu.cobra.commons.graph.poset` (labels, `IPoset`, `PosetTrait`).
 
 ## Instructions for Agents
 
@@ -46,6 +44,7 @@ Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.gra
 
 - [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.
 
+
 ---
 
 # Referenced Documents
@@ -70,6 +69,7 @@ class MyEdge : AbcEdge() {
 class MyGraph(
     override val storage: IStorage,
 ) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
+    override val graphId = "myGraph"
     override val poset: IPoset = PosetDftImpl(storage)
     override fun newNodeObj() = MyNode()
     override fun newEdgeObj() = MyEdge()
@@ -138,7 +138,6 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - `delNode` cascades to all incident edges. No orphan edges remain.
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
-- `close()` clears graph caches but does not call `storage.close()`. Close storage separately.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.
 
@@ -365,7 +364,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 
 - An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy.
 - `Label.SUPREMUM` disables label filtering -- all edges pass.
-- `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
+- `Label.INFIMUM` is below all labels -- as a query label it matches no labeled edge.
 - Edges with no labels are visible only when no label filter is applied.
 
 ## Gotchas
@@ -375,3 +374,4 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 
 ---
+

@@ -2,9 +2,7 @@
 
 > Backend-agnostic directed property graph library for Kotlin/JVM with pluggable storage and label-based edge visibility.
 
-commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally. Abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and label hierarchy (poset) for edge visibility control.
-
-Package root: `edu.jhu.cobra.commons.graph`. Storage: `edu.jhu.cobra.commons.graph.storage`. Labels: `edu.jhu.cobra.commons.graph.poset`. Traits: `edu.jhu.cobra.commons.graph.traits`.
+commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally; abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and the label hierarchy (poset) for edge visibility control. Packages: `edu.jhu.cobra.commons.graph` (root), `edu.jhu.cobra.commons.graph.storage` (storage backends), `edu.jhu.cobra.commons.graph.poset` (labels, `IPoset`, `PosetTrait`).
 
 ## Instructions for Agents
 

@@ -1,9 +1,7 @@
 # Algorithm Specification — Poset Ancestor Query
 
-Replaces DFS interval labeling in the label hierarchy. Interval containment is
-correct only for trees: in a DAG a label reachable through two parents receives
-one interval, so containment tests against the other parent report false
-negatives.
+Ancestor queries in the label hierarchy resolve through a memoized ancestor
+closure, correct on arbitrary DAGs.
 
 ## Ancestor Closure (DAG reachability)
 
@@ -66,7 +64,9 @@ node.
 
 ### Rejected alternatives
 
-- **DFS interval labeling** (current): O(1) query but correct only on trees.
+- **DFS interval labeling**: O(1) query but correct only on trees — in a DAG a
+  label reachable through two parents receives one interval, so containment
+  tests against the other parent report false negatives.
 - **Per-query BFS**: correct, no invalidation state, but O(V + E) on the hot
   visibility-filtering path.
 - **Multi-interval labeling**: correct on DAGs, but interval-set size is

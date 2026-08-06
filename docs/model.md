@@ -44,21 +44,22 @@ A marker controlling edge visibility. Wraps a string identifier.
 
 | State | Trigger | Guard | Target |
 |-------|---------|-------|--------|
-| Empty | `addNode` | ID not taken | Has nodes |
-| Has nodes | `addEdge` | src and dst exist | Has edges |
-| Has edges | `delNode` | node exists | Edges cascade-deleted; may return to Empty |
-| Any | `delEdge` | -- | Edge removed (no-op if absent) |
-| Any | `delNode` | -- | Node and incident edges removed (no-op if absent) |
+| Empty | add node | identifier not taken | Has nodes |
+| Has nodes | add edge | source and destination exist | Has edges |
+| Has edges | delete node | node exists | Edges cascade-deleted; may return to Empty |
+| Any | delete edge | -- | Edge removed (no-op if absent) |
+| Any | delete node | -- | Node and incident edges removed (no-op if absent) |
 
 ### Layered storage lifecycle
 
 | State | Trigger | Guard | Target |
 |-------|---------|-------|--------|
-| Active only (1 layer) | `freeze` | -- | Active + frozen (2 layers) |
-| Active + frozen (2 layers) | `freeze` | -- | Active + frozen (2 layers); old frozen merged with active into new frozen |
+| Active only (1 layer) | freeze | -- | Active + frozen (2 layers) |
+| Active + frozen (2 layers) | freeze | -- | Active + frozen (2 layers); old frozen merged with active into new frozen |
 | Any | write operation | -- | Targets active layer only |
 | Any | read operation | -- | Cascades: active first, then frozen |
-| Active + frozen | delete | Entity in active layer | Entity deleted |
+| Active + frozen | delete | Entity in active layer only | Entity deleted |
+| Active + frozen | delete | Entity in active layer shadows a frozen entity | Active overlay removed; reads revert to the frozen snapshot |
 | Active + frozen | delete | Entity in frozen layer only | Rejected |
 
 ---

@@ -77,8 +77,7 @@ AbcMultipleGraph
 +-- abstract graphId: String                <- graph identifier for ownership tracking
 +-- newNodeObj(): N                         <- subclass entity factory (protected abstract)
 +-- newEdgeObj(): E                         <- subclass entity factory (protected abstract)
-+-- nodeEntries: Map<NodeID, NodeEntry>     <- NodeID → storageId mapping (private)
-+-- nodeByStorageId: Map<Int, NodeEntry>    <- storageId → NodeEntry mapping (private)
++-- cache: GraphEntityCache<N, E>           <- NodeID↔Int index + entity wrappers (private)
 ```
 
 **Shared Storage:**

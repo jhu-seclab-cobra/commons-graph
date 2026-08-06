@@ -2,7 +2,7 @@
 
 | File | Content |
 |------|---------|
-| [idea.md](idea.md) | Concept document — problem, scope, terminology, data flow, scenarios |
+| [concept.md](concept.md) | Concept document — problem, scope, terminology, data flow, scenarios |
 | [model.md](model.md) | Domain model — entity identity, relations, state, invariants |
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
 | [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph |
@@ -11,7 +11,6 @@
 | [spec.md](spec.md) | Algorithms — edge lookup, BFS, visibility filtering, layered queries |
 | [spec-poset.md](spec-poset.md) | Poset ancestor query — DAG-correct ancestor closure |
 | [impl.md](impl.md) | Library APIs — commons-value, JGraphT, MapDB, Neo4j |
-| [todo.md](todo.md) | Tasks |
 | [performance.md](performance.md) | Core module benchmarks — NativeStorage, LayeredStorage, graph-level |
 | [performance-optimizations.md](performance-optimizations.md) | Optimization log — completed, rejected, candidates, insights |
 | [performance-jgrapht.md](performance-jgrapht.md) | JGraphT module benchmarks |
@@ -19,5 +18,4 @@
 | [performance-neo4j.md](performance-neo4j.md) | Neo4j module benchmarks |
 | [bugs.md](bugs.md) | Known bugs and technical debt |
 | [java-graph-typed-node-edge-patterns.md](research/java-graph-typed-node-edge-patterns.md) | Typed node/edge creation patterns in Java graph libraries |
-| [llms.txt](llms.txt) | LLM-consumable entry point |
-| [llms/](llms/) | LLM-consumable module docs |
+| [llms.txt](llms.txt) | LLM-consumable entry point — links the llms/ module docs |

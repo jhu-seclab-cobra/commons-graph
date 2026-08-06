@@ -49,7 +49,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 
 - An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy.
 - `Label.SUPREMUM` disables label filtering -- all edges pass.
-- `Label.INFIMUM` is below all labels -- sees all edges (used as visibility floor).
+- `Label.INFIMUM` is below all labels -- as a query label it matches no labeled edge.
 - Edges with no labels are visible only when no label filter is applied.
 
 ## Gotchas

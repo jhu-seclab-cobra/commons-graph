@@ -16,6 +16,7 @@ class MyEdge : AbcEdge() {
 class MyGraph(
     override val storage: IStorage,
 ) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
+    override val graphId = "myGraph"
     override val poset: IPoset = PosetDftImpl(storage)
     override fun newNodeObj() = MyNode()
     override fun newEdgeObj() = MyEdge()
@@ -84,6 +85,5 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - `delNode` cascades to all incident edges. No orphan edges remain.
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
-- `close()` clears graph caches but does not call `storage.close()`. Close storage separately.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.

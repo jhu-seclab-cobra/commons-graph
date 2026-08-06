@@ -14,7 +14,7 @@ The storage layer is the **backend-agnostic directed property graph engine**. It
 
 `IStorage` extends `Flushable`. In-memory implementations (`NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`) implement `flush()` as a no-op. Persistent backends (MapDB, Neo4j) perform actual flush-to-disk. Resource lifecycle (file handles, database connections) is the concrete implementation's responsibility, not the `IStorage` contract.
 
-Persistent backends persist graph-level metadata with the same lifetime as entity data: metadata written via `setMeta` is recoverable after close and reopen of the same storage path. MapDB stores metadata in a dedicated map inside the database file. Neo4j stores metadata on a single dedicated meta node (label `_M`) identified by the reserved marker property `__meta_id__`; the meta node carries meta entries as its properties, never appears in `nodeIDs` (entity nodes use label `_N`), and is deleted by `clear()`.
+Persistent backends persist graph-level metadata with the same lifetime as entity data: wherever entity data survives (reopen of the same storage path, export/import round-trip), metadata written via `setMeta` survives with it. Backend-specific meta persistence mechanics: `impl.md`.
 
 ---
 
@@ -118,7 +118,7 @@ Each backend module folds its plain and concurrent implementations into one abst
 | `AbcMapDBStorage` | `commons-graph-impl-mapdb` | `MapDBStorageImpl`, `MapDBConcurStorageImpl` |
 | `AbcNeo4jStorage` | `commons-graph-impl-neo4j` | `Neo4jStorageImpl`, `Neo4jConcurStorageImpl` |
 
-Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through; concurrent subclasses guard with a `ReentrantReadWriteLock`. The native pair (`NativeStorageImpl`, `NativeConcurStorageImpl`) is intentionally not folded: the two differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
+Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through; concurrent subclasses guard with a `ReentrantReadWriteLock`. `NativeStorageImpl` and `NativeConcurStorageImpl` remain separate classes: they differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## APIs
 
-### commons-value 0.1.0
+### commons-value 0.1.1
 
 **[IValue]** Top-level value type interface; subtypes: `NullVal`, `StrVal`, `IntVal`, `FloatVal`, `ListVal`, `SetVal`, `MapVal`.
 **[StrVal]** `StrVal(core: String)` / `"text".strVal` -- string value.
@@ -19,7 +19,6 @@
 ### JGraphT 1.4.0
 
 **[DirectedPseudograph]** `DirectedPseudograph(String::class.java)` -- allows self-loops and parallel edges; used by `JgraphtStorageImpl`.
-**[SimpleDirectedGraph]** `SimpleDirectedGraph(DefaultEdge::class.java)` -- no self-loops, no parallel edges; used for lattice structure.
 **[Graph]** `addVertex(v)` / `removeVertex(v)` / `addEdge(src, dst, edge)` / `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` -- O(1) adjacency.
 **[GmlExporter]** / **[GmlImporter]** -- GML IO with attribute providers/consumers.
 **[SupplierUtil]** `createIntegerSupplier()` / `createStringSupplier()` -- auto-incrementing suppliers for GML IO.
@@ -40,7 +39,7 @@
 
 ## Libraries
 
-- `edu.jhu.cobra:commons-value:0.1.0` -- `IValue` type system, serializers
+- `com.github.jhu-seclab-cobra:commons-value:0.1.1` -- `IValue` type system, serializers
 - `org.jgrapht:jgrapht-core:1.4.0` -- graph data structures
 - `org.jgrapht:jgrapht-io:1.4.0` -- GML import/export
 - `org.mapdb:mapdb:3.0.5` -- embedded off-heap storage
@@ -55,6 +54,8 @@
 - File-based DB collections: `.createOrOpen()`, not `.create()`.
 - MapDB 3.x non-transactional mode: `db.close()` persists data; no `commit()` needed.
 - File-based DB: always enable `fileMmapEnableIfSupported()`.
+- MapDB storage keeps edge structure, adjacency, and meta on-heap; only entity property maps are MapDB-backed.
+- MapDB meta round-trips through `MapDbGraphIOImpl`: export writes an `indexTreeList("meta")` into the export file; import restores it via `setMeta`.
 - Neo4j 5.x: all operations wrapped in `readTx {}` / `writeTx {}`; `writeTx` calls `tx.commit()` on success.
 - Neo4j `deleteNode` must first delete all incident relationships; otherwise `ConstraintViolationException`.
 - Neo4j `clear()` must delete relationships before nodes.

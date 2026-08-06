@@ -68,7 +68,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
   - **Relationships:** Consumed by the graph layer, which maintains a mapping between string node identifiers and storage integer identifiers. The same storage contract backs both the main graph and the label hierarchy.
 
 - **Label**
-  - **Definition:** A domain marker that controls edge visibility. Wraps a string value. Includes sentinel values for top and bottom of the partial order.
+  - **Definition:** A domain marker that controls edge visibility. Wraps a string value. Includes structural bounds for top and bottom of the partial order.
   - **Scope:** Owns its string identity and sentinel semantics. Does not own hierarchy relationships (those belong to the label hierarchy).
   - **Relationships:** Organized into a partial order by the label hierarchy. Used by the graph layer to filter edge queries.
 
@@ -97,7 +97,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
 5. **Label hierarchy dispatch** (label operations) — Label hierarchy queries route to a dedicated storage instance.
 6. **Result propagation** — Success returns typed domain outputs. Contract violations raise domain exceptions.
 
-See `spec.md` for layered query resolution and entity materialization algorithms.
+See `spec.md` for layered query resolution and ownership persistence algorithms.
 
 ## 4. Scenarios
 
