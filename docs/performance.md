@@ -102,7 +102,7 @@ macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Median of 3-5 iterations afte
 | NativeConcurStorage | 26.30M | 2.84M | 103.5 |
 | LayeredStorage | 24.24M | 2.71M | 133.7 |
 
-#### Lattice Operations (5K nodes, 15K edges, 5 labels)
+#### Poset Operations (5K nodes, 15K edges, 5 labels)
 
 | Storage | assignLabels (ms) | filteredQuery (ops/s) |
 |---|---|---|

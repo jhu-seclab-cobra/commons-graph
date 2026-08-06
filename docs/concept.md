@@ -69,7 +69,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
 
 - **Label**
   - **Definition:** A domain marker that controls edge visibility. Wraps a string value. Includes structural bounds for top and bottom of the partial order.
-  - **Scope:** Owns its string identity and sentinel semantics. Does not own hierarchy relationships (those belong to the label hierarchy).
+  - **Scope:** Owns its string identity and structural-bound semantics. Does not own hierarchy relationships (those belong to the label hierarchy).
   - **Relationships:** Organized into a partial order by the label hierarchy. Used by the graph layer to filter edge queries.
 
 - **Label Hierarchy (Poset)**

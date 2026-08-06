@@ -28,10 +28,10 @@ import kotlin.test.assertTrue
  * - `compare child vs parent returns negative` — ordering
  * - `compare parent vs child returns positive` — ordering
  * - `compare incomparable returns null` — no relation
- * - `compare SUPREMUM greater than any` — sentinel
- * - `compare INFIMUM less than any` — sentinel
+ * - `compare SUPREMUM greater than any` — structural bound
+ * - `compare INFIMUM less than any` — structural bound
  * - `compare SUPREMUM vs INFIMUM` — extreme pair
- * - `allLabels includes INFIMUM and SUPREMUM` — sentinels present
+ * - `allLabels includes INFIMUM and SUPREMUM` — structural bounds present
  * - `compare recognizes every parent as ancestor in a multi-parent DAG` — DAG multi-parent ancestry
  * - `compare recognizes shared grandparent through both diamond paths` — diamond reachability
  * - `compare throws on cyclic hierarchy naming a cycle label` — cycle rejection
@@ -56,7 +56,7 @@ import kotlin.test.assertTrue
  * - `getDescendants with label traverses only visible edges` — BFS filter
  * - `getAncestors with label traverses only visible edges` — BFS filter
  * - `parent label sees child label edges` — visibility rule
- * - `SUPREMUM label sees all edges` — sentinel visibility
+ * - `SUPREMUM label sees all edges` — SUPREMUM visibility
  * - `query with label on edges without labels returns empty` — boundary
  * - `multi-level transitive visibility grandparent sees grandchild edges` — deep hierarchy
  * - `getOutgoingEdges with label on node with no edges returns empty` — boundary

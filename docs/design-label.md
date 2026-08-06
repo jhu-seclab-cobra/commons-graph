@@ -35,7 +35,7 @@ value class Label(val core: LabelID) {
 }
 ```
 
-See `model.md` for label ordering and sentinel semantics.
+See `model.md` for label ordering and structural-bound semantics.
 
 ---
 

@@ -11,7 +11,7 @@ import kotlin.test.Test
 
 /**
  * Performance benchmarks for `IGraph` implementations (`AbcMultipleGraph`, `AbcSimpleGraph`)
- * backed by different `IStorage` implementations, including lattice operations.
+ * backed by different `IStorage` implementations, including poset operations.
  *
  * Scale tiers:
  *   - Small:  10K nodes / 30K edges
@@ -22,7 +22,7 @@ import kotlin.test.Test
  * - `benchmark multiple graph population with different storages` -- AbcMultipleGraph population throughput
  * - `benchmark simple graph population with different storages` -- AbcSimpleGraph population throughput
  * - `benchmark graph-level queries with different storages` -- node/edge/adjacency query ops/sec
- * - `benchmark lattice label assignment and filtered queries` -- label assign + filtered query ops/sec
+ * - `benchmark poset label assignment and filtered queries` -- label assign + filtered query ops/sec
  * - `benchmark cold query pattern - each node accessed once` -- cold-cache access pattern
  * - `benchmark mixed access pattern and memory usage` -- hot/cold mix + heap measurement
  *
@@ -221,12 +221,12 @@ internal class GraphPerformanceTest {
     }
 
     @Test
-    fun `benchmark lattice label assignment and filtered queries`() {
+    fun `benchmark poset label assignment and filtered queries`() {
         val nodeCount = 5_000
         val edgesPerNode = 3
         val labelCount = 5
         val queryCount = 50_000
-        println("\n=== Lattice Operations (${nodeCount}n/${nodeCount * edgesPerNode}e, $labelCount labels) ===")
+        println("\n=== Poset Operations (${nodeCount}n/${nodeCount * edgesPerNode}e, $labelCount labels) ===")
         println(String.format("%-20s %14s %14s", "Storage", "assignLabels", "filteredQuery"))
         println("-".repeat(50))
 

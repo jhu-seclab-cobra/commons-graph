@@ -7,8 +7,8 @@ public typealias LabelID = String
 /**
  * Value object representing a label in the partial-order structure (poset).
  *
- * A label's ordering is not intrinsic — it is defined by the graph's lattice structure.
- * [INFIMUM] and [SUPREMUM] are special sentinel bounds and should not be assigned to edges.
+ * A label's ordering is not intrinsic — it is defined by the poset structure.
+ * [INFIMUM] and [SUPREMUM] are structural bounds and are never assigned to edges.
  *
  * @property core The core string representation of the label.
  */
