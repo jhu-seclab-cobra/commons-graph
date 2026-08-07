@@ -41,9 +41,9 @@ import kotlin.test.assertTrue
  *   must not hide the following delimiter
  * - `round-trip on empty storage produces empty target` -- empty boundary
  * - `multiple round-trips produce identical data` -- idempotent serialization
- * - `import skips node rows with fewer columns than headers` -- malformed node CSV tolerance
- * - `import skips edge rows with fewer than four structural columns` -- malformed edge CSV tolerance
- * - `import treats empty lines in node CSV as nodes with empty-string ID` -- empty line behavior
+ * - `import skips node rows with fewer columns than headers` -- missing property cells are sparse, not errors
+ * - `import throws when edge row has fewer than four structural columns` -- foreign edge row rejected
+ * - `import throws when node row lacks node ID` -- blank line no longer imports a phantom node
  * - `import from directory with missing nodes csv throws` -- missing nodes.csv guard
  * - `import from directory with missing edges csv throws` -- missing edges.csv guard
  * - `import succeeds when meta csv is absent` -- optional meta.csv
@@ -58,9 +58,9 @@ import kotlin.test.assertTrue
  * - `writing same property names twice does not change header` -- nodeHeaders.addAll returns false
  * - `close without property writes skips header update` -- isNodeHeaderChanged=false path
  * - `import skips node property when deserialized value is null` -- null property skip in readNodes
- * - `import skips edge rows with fewer than four columns` -- parts.size < 4 in readEdges
+ * - `import throws when edge row in exported file is truncated` -- corrupted edge row rejected
  * - `import skips edge property when deserialized value is null` -- null property skip in readEdges
- * - `import skips meta rows with fewer than two columns` -- parts.size < 2 in readMeta
+ * - `import throws when meta row lacks value` -- foreign meta row rejected
  * - `import succeeds when meta file does not exist` -- metaFile.exists() false path in readMeta
  * - `export skips metadata entry when getMeta returns null` -- null meta value skip in export
  * - `export with no property nodes produces empty-prefix node header` -- fixedPrefix.isEmpty() true
@@ -283,33 +283,29 @@ internal class NativeCsvIOImplTest {
     }
 
     @Test
-    fun `import skips edge rows with fewer than four structural columns`() {
+    fun `import throws when edge row has fewer than four structural columns`() {
         val dir = tempDir.resolve("malformed_edges").createDirectories()
         dir.resolve("nodes.csv").writeText("__nid__\n0\n1\n")
         dir.resolve("edges.csv").writeText("__eid__,__src__,__dst__,__tag__\n0,0,1,rel\nBAD,0\n1,1,0,back\n")
         dir.resolve("meta.csv").writeText("name,value\n")
 
         val target = NativeStorageImpl()
-        NativeCsvIOImpl.import(dir, target)
-
-        assertEquals(2, target.nodeIDs.size)
-        assertEquals(2, target.edgeIDs.size)
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, target)
+        }
     }
 
     @Test
-    fun `import treats empty lines in node CSV as nodes with empty-string ID`() {
+    fun `import throws when node row lacks node ID`() {
         val dir = tempDir.resolve("empty_lines").createDirectories()
         dir.resolve("nodes.csv").writeText("__nid__\n0\n\n1\n")
         dir.resolve("edges.csv").writeText("__eid__,__src__,__dst__,__tag__\n")
         dir.resolve("meta.csv").writeText("name,value\n")
 
         val target = NativeStorageImpl()
-        NativeCsvIOImpl.import(dir, target)
-
-        // Empty line is NOT skipped: "" splits to [""], which has size 1,
-        // so the parts.isEmpty() guard does not trigger. A node is created
-        // for the empty-string ID, giving 3 nodes total.
-        assertEquals(3, target.nodeIDs.size)
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, target)
+        }
     }
 
     // ========================================================================
@@ -530,7 +526,7 @@ internal class NativeCsvIOImplTest {
     }
 
     @Test
-    fun `import skips edge rows with fewer than four columns`() {
+    fun `import throws when edge row in exported file is truncated`() {
         val src = NativeStorageImpl()
         val n1 = src.addNode()
         val n2 = src.addNode()
@@ -548,10 +544,9 @@ internal class NativeCsvIOImplTest {
         edgesFile.writeText(lines.joinToString("\n"))
 
         val target = NativeStorageImpl()
-        NativeCsvIOImpl.import(dir, target)
-
-        assertEquals(2, target.nodeIDs.size)
-        assertEquals(1, target.edgeIDs.size)
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, target)
+        }
     }
 
     @Test
@@ -583,7 +578,7 @@ internal class NativeCsvIOImplTest {
     }
 
     @Test
-    fun `import skips meta rows with fewer than two columns`() {
+    fun `import throws when meta row lacks value`() {
         val src = NativeStorageImpl()
         src.addNode()
         src.setMeta("version", "1.0".strVal)
@@ -600,11 +595,9 @@ internal class NativeCsvIOImplTest {
         metaFile.writeText(lines.joinToString("\n"))
 
         val target = NativeStorageImpl()
-        NativeCsvIOImpl.import(dir, target)
-
-        assertEquals(1, target.nodeIDs.size)
-        // Only one of the two meta entries survives
-        assertEquals(1, target.metaNames.size)
+        assertFailsWith<IllegalArgumentException> {
+            NativeCsvIOImpl.import(dir, target)
+        }
     }
 
     @Test

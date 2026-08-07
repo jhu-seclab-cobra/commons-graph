@@ -94,10 +94,9 @@ internal class NativeCsvReader(
             // First column is __nid__ (structural)
             val propHeaders = fullHeader.drop(1)
             for (line in remainingLines(nodeReader)) {
-                val parts = splitCsvLine(line)
-                if (parts.isEmpty()) continue
-                val unescaped = parts.map { unescape(it) }
+                val unescaped = splitCsvLine(line).map { unescape(it) }
                 val nodeId = unescaped[0]
+                require(nodeId.isNotEmpty()) { "Node row missing ${NativeCsvFormat.NODE_ID_COL}: '$line'" }
                 yield(NodeRecord(nodeId, decodeProps(unescaped, propHeaders, offset = 1)))
             }
         }
@@ -110,7 +109,7 @@ internal class NativeCsvReader(
             val propHeaders = edgeHeader.drop(4)
             for (line in remainingLines(edgeReader)) {
                 val parts = splitCsvLine(line)
-                if (parts.size < 4) continue
+                require(parts.size >= 4) { "Edge row has ${parts.size} of 4 structural columns: '$line'" }
                 val unescaped = parts.map { unescape(it) }
                 val edgeId = unescaped[0]
                 val src = unescaped[1]
@@ -126,7 +125,8 @@ internal class NativeCsvReader(
             readLineOrNull(reader)
             for (line in remainingLines(reader)) {
                 val parts = splitCsvLine(line, limit = 2)
-                val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) } ?: continue
+                val value = parts.getOrNull(1)?.let { deserialize(unescape(it)) }
+                requireNotNull(value) { "Meta row missing value: '$line'" }
                 yield(unescape(parts[0]) to value)
             }
         }
