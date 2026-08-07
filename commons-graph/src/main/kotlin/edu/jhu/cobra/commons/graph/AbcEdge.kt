@@ -11,8 +11,8 @@ import edu.jhu.cobra.commons.value.listVal
  * Abstract base class for graph edges with storage-backed property management.
  *
  * Structural info (source, destination, tag) is injected at bind time by the
- * graph layer — no lazy storage lookup needed. The storage-internal [storageId]
- * serves as the identity for [equals] and [hashCode].
+ * graph layer — no lazy storage lookup needed. The derived [id]
+ * (source-tag-destination) serves as the identity for [equals] and [hashCode].
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
  * creation to inject storage and edge identity — these are not constructor
@@ -103,7 +103,7 @@ public abstract class AbcEdge : AbcEntity() {
 
     override fun toString(): String = "{$srcNid-$eTag-$dstNid, ${this.type}}"
 
-    override fun hashCode(): Int = storageId
+    override fun hashCode(): Int = id.hashCode()
 
-    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.storageId == other.storageId else super.equals(other)
+    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.id == other.id else super.equals(other)
 }

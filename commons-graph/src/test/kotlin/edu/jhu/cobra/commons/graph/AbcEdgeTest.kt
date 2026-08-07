@@ -39,8 +39,9 @@ import kotlin.test.assertTrue
  * - `asMap returns all properties` — verifies complete map
  * - `update sets multiple properties` — verifies bulk update
  * - `update null values remove properties` — verifies null entries remove keys
- * - `equals returns true for same storageId` — verifies equality by storageId
- * - `equals returns false for different storageId` — verifies inequality
+ * - `equals returns true for same id` — verifies equality by derived edge ID
+ * - `equals returns false for different id` — verifies inequality
+ * - `equals returns true for same id across storages` — identity is domain-level, not storage-level
  * - `equals returns false for non-edge object` — verifies type guard
  * - `toString includes src-tag-dst and type` — verifies string format
  */
@@ -198,7 +199,7 @@ internal class AbcEdgeTest {
     // region Equals / hashCode / toString
 
     @Test
-    fun `equals returns true for same storageId`() {
+    fun `equals returns true for same id`() {
         val other = TestEdge()
         other.bind(storage, edge.storageId, "srcNode", "dstNode", "calls")
 
@@ -206,12 +207,27 @@ internal class AbcEdgeTest {
     }
 
     @Test
-    fun `equals returns false for different storageId`() {
+    fun `equals returns false for different id`() {
         val eid2 = storage.addEdge(srcSid, dstSid, "other")
         val other = TestEdge()
         other.bind(storage, eid2, "srcNode", "dstNode", "other")
 
         assertNotEquals(edge, other)
+    }
+
+    @Test
+    fun `equals returns true for same id across storages`() {
+        val otherStorage = NativeStorageImpl()
+        val s = otherStorage.addNode()
+        val d = otherStorage.addNode()
+        // Spacer edge shifts the counter so the two storages assign different storage IDs.
+        otherStorage.addEdge(s, d, "spacer")
+        val eid = otherStorage.addEdge(s, d, "calls")
+        val other = TestEdge()
+        other.bind(otherStorage, eid, "srcNode", "dstNode", "calls")
+
+        assertEquals(edge, other)
+        assertEquals(edge.hashCode(), other.hashCode())
     }
 
     @Test
