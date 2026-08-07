@@ -15,7 +15,6 @@ import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.bufferedWriter
 import kotlin.io.path.createDirectories
-import kotlin.io.path.createFile
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.notExists
@@ -48,11 +47,11 @@ internal class NativeCsvWriter(
         require(!edgeFile.exists() || edgeFile.fileSize() <= 0) { "File $edgeFile already exists" }
         require(!metaFile.exists() || metaFile.fileSize() <= 0) { "File $metaFile already exists" }
         if (path.notExists()) path.createDirectories()
-        nodeWriter = nodeFile.createFile().bufferedWriter()
+        nodeWriter = nodeFile.bufferedWriter()
         nodeWriter.appendLine(NODE_ID_COL)
-        edgeWriter = edgeFile.createFile().bufferedWriter()
+        edgeWriter = edgeFile.bufferedWriter()
         edgeWriter.appendLine("$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL")
-        metaWriter = metaFile.createFile().bufferedWriter()
+        metaWriter = metaFile.bufferedWriter()
         metaWriter.appendLine("name${CSV_DELIMITER}value")
     }
 

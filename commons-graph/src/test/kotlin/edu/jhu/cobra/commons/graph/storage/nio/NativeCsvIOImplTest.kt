@@ -70,6 +70,8 @@ import kotlin.test.assertTrue
  * - `import with node filter excludes node and its edges` -- node predicate skips the node and
  *   every edge referencing it
  * - `import with edge filter excludes edge but keeps nodes` -- edge predicate skips only the edge
+ * - `export succeeds when target directory holds empty csv files` -- empty pre-existing files pass
+ *   the guard and are written over
  */
 internal class NativeCsvIOImplTest {
     private lateinit var tempDir: Path
@@ -746,5 +748,20 @@ internal class NativeCsvIOImplTest {
         assertEquals(3, target.edgeIDs.size)
         val tags = target.edgeIDs.map { target.getEdgeStructure(it).tag }.toSet()
         assertEquals(setOf("a", "b", "c"), tags)
+    }
+
+    @Test
+    fun `export succeeds when target directory holds empty csv files`() {
+        val exportPath = tempDir.resolve("pre_existing").createDirectories()
+        exportPath.resolve(NativeCsvFormat.NODE_FILE).createFile()
+        exportPath.resolve(NativeCsvFormat.EDGE_FILE).createFile()
+        exportPath.resolve(NativeCsvFormat.META_FILE).createFile()
+        storage.addNode(mapOf("name" to "n".strVal))
+
+        NativeCsvIOImpl.export(exportPath, storage)
+
+        val target = NativeStorageImpl()
+        NativeCsvIOImpl.import(exportPath, target)
+        assertEquals(1, target.nodeIDs.size)
     }
 }
