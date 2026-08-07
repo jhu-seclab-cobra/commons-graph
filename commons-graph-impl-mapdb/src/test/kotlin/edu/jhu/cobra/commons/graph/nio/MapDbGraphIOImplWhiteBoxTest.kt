@@ -23,6 +23,8 @@
  * - `import skips edges whose endpoint was filtered out` — endpoint filter, no error on skipped node
  * - `export throws when node property uses reserved key` — "_nid" would be overwritten
  * - `export throws when edge property uses reserved key` — "_etag" would be overwritten
+ * - `import throws when node record lacks nid key` — foreign node record is not skipped silently
+ * - `import throws when edge record lacks structural keys` — foreign edge record is not skipped silently
  */
 package edu.jhu.cobra.commons.graph.nio
 
@@ -363,6 +365,50 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         srcStorage.addEdge(n1, n2, "rel", mapOf("_etag" to "boom".strVal))
         assertFailsWith<InvalidPropNameException> {
             MapDbGraphIOImpl.export(tempFile, srcStorage)
+        }
+    }
+
+    // -- Foreign file rejection --
+
+    @Test
+    fun `import throws when node record lacks nid key`() {
+        val db = DBMaker.fileDB(tempFile.toFile()).make()
+        val serializer = MapDbValSerializer<MapVal>()
+        db.indexTreeList("nodes", serializer).create().add(
+            mapOf<String, IValue>("name" to StrVal("orphan")).mapVal,
+        )
+        db.indexTreeList("edges", serializer).create()
+        db.close()
+
+        val dstStorage = MapDBStorageImpl { memoryDB() }
+        try {
+            assertFailsWith<IllegalStateException> {
+                MapDbGraphIOImpl.import(tempFile, dstStorage)
+            }
+        } finally {
+            dstStorage.close()
+        }
+    }
+
+    @Test
+    fun `import throws when edge record lacks structural keys`() {
+        val db = DBMaker.fileDB(tempFile.toFile()).make()
+        val serializer = MapDbValSerializer<MapVal>()
+        db.indexTreeList("nodes", serializer).create().add(
+            mapOf<String, IValue>("_nid" to IntVal(1)).mapVal,
+        )
+        db.indexTreeList("edges", serializer).create().add(
+            mapOf<String, IValue>("_esrc" to IntVal(1), "_edst" to IntVal(1)).mapVal,
+        )
+        db.close()
+
+        val dstStorage = MapDBStorageImpl { memoryDB() }
+        try {
+            assertFailsWith<IllegalStateException> {
+                MapDbGraphIOImpl.import(tempFile, dstStorage)
+            }
+        } finally {
+            dstStorage.close()
         }
     }
 

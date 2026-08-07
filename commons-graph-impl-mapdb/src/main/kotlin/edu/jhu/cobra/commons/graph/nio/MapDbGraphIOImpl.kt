@@ -25,6 +25,7 @@ import kotlin.io.path.notExists
  * Implementation of [IStorageExporter] and [IStorageImporter] using MapDB for graph data persistence.
  * Provides functionality to export and import graph data between [IStorage] and MapDB files.
  */
+@Suppress("TooManyFunctions")
 public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_KEY = "_nid"
     private const val EDGE_SRC_KEY = "_esrc"
@@ -137,6 +138,11 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         return into
     }
 
+    // A record missing a structural key was not produced by export; silently
+    // skipping it would import a foreign file as a partial graph.
+    private fun missingKey(key: String): Nothing =
+        error("Record missing structural key '$key'; not a MapDbGraphIOImpl export")
+
     private fun importNodes(
         dbManager: DB,
         into: IStorage,
@@ -146,7 +152,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         val filteredNodeIds = HashSet<Int>()
         val nodesList = dbManager.indexTreeList("nodes", mapValSerializer).open()
         nodesList.forEach { props ->
-            val oldNid = (props!!.remove(NODE_ID_KEY) as? IntVal)?.core?.toInt() ?: return@forEach
+            val oldNid = (props!!.remove(NODE_ID_KEY) as? IntVal)?.core?.toInt() ?: missingKey(NODE_ID_KEY)
             if (!predicate(oldNid)) {
                 filteredNodeIds.add(oldNid)
                 return@forEach
@@ -165,9 +171,9 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     ) {
         val edgesList = dbManager.indexTreeList("edges", mapValSerializer).open()
         edgesList.forEach { props ->
-            val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? IntVal)?.core?.toInt() ?: return@forEach
-            val oldDst = (props.remove(EDGE_DST_KEY) as? IntVal)?.core?.toInt() ?: return@forEach
-            val tag = (props.remove(EDGE_TAG_KEY) as? StrVal)?.core ?: return@forEach
+            val oldSrc = (props!!.remove(EDGE_SRC_KEY) as? IntVal)?.core?.toInt() ?: missingKey(EDGE_SRC_KEY)
+            val oldDst = (props.remove(EDGE_DST_KEY) as? IntVal)?.core?.toInt() ?: missingKey(EDGE_DST_KEY)
+            val tag = (props.remove(EDGE_TAG_KEY) as? StrVal)?.core ?: missingKey(EDGE_TAG_KEY)
             if (oldSrc in filteredNodeIds || oldDst in filteredNodeIds) return@forEach
             val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
             val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
