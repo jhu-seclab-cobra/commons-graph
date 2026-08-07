@@ -96,4 +96,4 @@ The label hierarchy is backed by a dedicated storage instance separate from the 
 
 ### Edge Visibility Rule
 
-An edge is visible under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy. `SUPREMUM` sees all labeled edges. `INFIMUM` is below all labels. Edges with no labels are visible only when no label filter is applied.
+An edge is visible under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy (pure covering). Covered labels never shadow one another: every edge carrying at least one covered label is visible. `SUPREMUM` bypasses filtering and sees every edge, labeled or not. `INFIMUM` is below all labels. Edges with no labels are otherwise visible only when no label filter is applied.

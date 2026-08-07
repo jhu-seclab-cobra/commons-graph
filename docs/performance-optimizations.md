@@ -39,9 +39,9 @@ Optimization log for core module. Benchmarks in [performance.md](performance.md)
 | P9-5 | Eclipse Collections ID mapping | Zero-mapping architecture |
 | P10-1 | Eclipse Collections IntObjectHashMap | -17% to -50% all metrics; memory -10% but constant-factor overhead worse than JDK HashMap |
 | P10-2 | Eclipse Collections IntHashSet | Not tested; P10-1 regression makes shared dependency unjustified |
-| P10-3 | filterVisitable O(V·H) maximal | -32% to -47% filteredQuery; ancestors BFS uncached, slower than queryCache-backed compareTo |
+| P10-3 | filterVisitable O(V·H) maximal | -32% to -47% filteredQuery; ancestors BFS uncached, slower than queryCache-backed compareTo. Maximal phase since removed (pure covering) |
 | P11-2 | Eliminate Pair allocation in queryCache keys | Superseded by P11-1 (queryCache eliminated) |
-| P11-3 | doFilterVisitable avoid ArrayList\<Pair\> | -16% filteredQuery; toList() materialization slower than Pair approach |
+| P11-3 | doFilterVisitable avoid ArrayList\<Pair\> | -16% filteredQuery; toList() materialization slower than Pair approach. Obsolete: maximal phase removed, filter is now a single lazy pass |
 | P11-4 | setParents clears entire queryCache | Superseded by P11-1 (queryCache eliminated) |
 
 ---
@@ -72,4 +72,4 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 14. **queryCache makes O(V²) compareTo effectively O(V²·1).** Replacing with uncached BFS is slower despite better asymptotic complexity.
 15. **Eclipse Collections IntObjectHashMap slower than JDK HashMap<Int,*>.** JVM autoboxing cache (-128..127) + JIT inline caching make JDK HashMap competitive. Eclipse overhead in hash function and iteration outweighs boxing savings.
 16. **Memoized ancestor closure replaces queryCache with O(1) compare.** No measurable throughput change at 5 labels (cache was ~100% hit). Lazy rebuild on setParents vs full cache clear. Originally DFS interval labeling; replaced by the ancestor closure because interval containment is wrong on multi-parent DAGs (spec-poset.md).
-17. **doFilterVisitable Pair\<E, Set\<Label\>\> is faster than toList() + filter.** Pair caches the label set read, avoiding double storage access. Removing Pair regresses 16%.
+17. **doFilterVisitable Pair\<E, Set\<Label\>\> was faster than toList() + filter in the two-phase maximal filter.** Pair cached the label set read across the two passes. The maximal phase is removed; the pure-covering filter is a single lazy pass reading each edge's label set once.

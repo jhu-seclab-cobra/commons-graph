@@ -65,22 +65,19 @@ Each node enqueued at most once (visited set guard). Terminates in at most `|V|`
 
 ### Problem
 
-Given edges and a query label `by`, return edges visible under `by`. An edge is visible if at least one of its labels `l` satisfies `by == l` or `by > l`. Among visible labels, keep only maximal ones. Correct when every returned edge has at least one label satisfying the visibility rule.
+Given edges and a query label `by`, return edges visible under `by`. An edge is visible if at least one of its labels `l` satisfies `by == l` or `by > l` (pure covering). Correct when exactly the edges carrying at least one covered label are returned; covered labels never shadow one another.
 
 ### Steps
 
-1. For each edge in the input sequence:
+1. `SUPREMUM` as `by`: every edge passes unfiltered, labeled or not.
+2. For each edge in the input sequence:
    a. Retrieve the edge's label set.
-   b. Collect all labels `l` where `by == l` or `by > l` in the poset.
-   c. If no such labels exist, skip this edge.
-   d. Among collected labels, remove any dominated by another collected label.
-   e. If at least one label remains, include this edge in output.
-2. `SUPREMUM` as `by`: all labeled edges pass.
-3. Edges with no labels: excluded when any label filter is applied.
+   b. Include the edge iff at least one label `l` satisfies `by == l` or `by > l` in the poset.
+3. Edges with no labels: excluded by every label filter except `SUPREMUM`.
 
 ### Invariants
 
-- An edge is included iff it has at least one label visible under `by`. Maximal-label filtering removes only dominated labels.
+- An edge is included iff it carries at least one label covered by `by`. No maximality selection among covered labels.
 
 ### Termination
 
@@ -88,7 +85,7 @@ Input edge sequence is finite. Per edge, label set is finite. Ancestor lookup te
 
 ### Complexity
 
-- Time: O(E * L * A) where E = edges, L = labels per edge, A = ancestor lookup cost (cached). Space: O(L) per edge.
+- Time: O(E * L * A) where E = edges, L = labels per edge, A = ancestor lookup cost (cached). Space: O(1) beyond the streamed sequence.
 
 ---
 
