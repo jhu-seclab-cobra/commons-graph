@@ -37,6 +37,7 @@ import kotlin.test.assertTrue
  * - `contains returns false for absent property` — verifies missing key
  * - `asMap returns empty map when no properties` — verifies empty initial state
  * - `asMap returns all properties` — verifies complete map
+ * - `asMap returns snapshot unaffected by later writes` — verifies snapshot semantics
  * - `update sets multiple properties` — verifies bulk update
  * - `update null values remove properties` — verifies null entries remove keys
  * - `equals returns true for same id` — verifies equality by derived edge ID
@@ -173,6 +174,16 @@ internal class AbcEdgeTest {
         val map = edge.asMap()
 
         assertEquals(2, map.size)
+    }
+
+    @Test
+    fun `asMap returns snapshot unaffected by later writes`() {
+        edge["a"] = "x".strVal
+
+        val map = edge.asMap()
+        edge["b"] = "y".strVal
+
+        assertEquals(1, map.size)
     }
 
     @Test

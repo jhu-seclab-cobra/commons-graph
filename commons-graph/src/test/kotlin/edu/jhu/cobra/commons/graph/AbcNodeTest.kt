@@ -32,6 +32,7 @@ import kotlin.test.assertTrue
  * - `contains returns true for existing user property` — verifies contains on present key
  * - `contains returns false for absent property` — verifies contains on missing key
  * - `asMap returns all user properties` — verifies complete map minus internal
+ * - `asMap returns snapshot unaffected by later writes` — verifies snapshot semantics
  * - `update sets multiple user properties` — verifies bulk update
  * - `equals returns true for same id` — verifies equality by id
  * - `equals returns false for different id` — verifies inequality by id
@@ -148,6 +149,16 @@ internal class AbcNodeTest {
         assertEquals(2, map.size)
         assertEquals("x", (map["a"] as StrVal).core)
         assertEquals(1L, (map["b"] as IntVal).core)
+    }
+
+    @Test
+    fun `asMap returns snapshot unaffected by later writes`() {
+        node["a"] = "x".strVal
+
+        val map = node.asMap()
+        node["b"] = "y".strVal
+
+        assertEquals(1, map.size)
     }
 
     @Test
