@@ -92,6 +92,24 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
             HashMap(props)
         }
 
+    override fun getNodeProperty(
+        id: Int,
+        name: String,
+    ): IValue? =
+        readGuarded {
+            val props = nodeProperties[id] ?: throw EntityNotExistException(id)
+            props[name]
+        }
+
+    override fun getEdgeProperty(
+        id: Int,
+        name: String,
+    ): IValue? =
+        readGuarded {
+            val props = edgeProperties[id] ?: throw EntityNotExistException(id)
+            props[name]
+        }
+
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
