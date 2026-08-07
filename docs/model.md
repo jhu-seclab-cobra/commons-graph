@@ -59,7 +59,7 @@ A marker controlling edge visibility. Wraps a string identifier.
 | Any | write operation | -- | Targets active layer only |
 | Any | read operation | -- | Cascades: active first, then frozen |
 | Active + frozen | delete | Entity in active layer only | Entity deleted |
-| Active + frozen | delete | Entity in active layer shadows a frozen entity | Active overlay removed; reads revert to the frozen snapshot |
+| Active + frozen | delete | Entity in active layer shadows a frozen entity | Active copy removed; reads revert to the frozen snapshot |
 | Active + frozen | delete | Entity in frozen layer only | Rejected |
 
 ---

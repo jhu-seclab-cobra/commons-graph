@@ -37,37 +37,6 @@ internal class ActiveColumnViewMap(
     }
 }
 
-/** Lazy overlay map: [overlay] entries shadow [base] entries on lookup. */
-internal class LazyMergedMap(
-    private val base: Map<String, IValue>,
-    private val overlay: Map<String, IValue>,
-) : AbstractMap<String, IValue>() {
-    override val entries: Set<Map.Entry<String, IValue>>
-        get() {
-            val result = LinkedHashMap<String, IValue>(base.size + overlay.size)
-            result.putAll(base)
-            result.putAll(overlay)
-            return result.entries
-        }
-
-    override fun get(key: String): IValue? = overlay[key] ?: base[key]
-
-    override fun containsKey(key: String): Boolean = overlay.containsKey(key) || base.containsKey(key)
-
-    override val size: Int
-        get() {
-            if (overlay.isEmpty()) return base.size
-            if (base.isEmpty()) return overlay.size
-            var count = overlay.size
-            for (key in base.keys) {
-                if (key !in overlay) count++
-            }
-            return count
-        }
-
-    override fun isEmpty(): Boolean = base.isEmpty() && overlay.isEmpty()
-}
-
 /** Lazy set view translating frozen-local edge IDs to global edge IDs. */
 internal class MappedEdgeSet(
     private val localIds: Set<Int>,

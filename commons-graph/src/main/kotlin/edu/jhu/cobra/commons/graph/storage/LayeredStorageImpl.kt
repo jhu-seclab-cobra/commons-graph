@@ -16,7 +16,9 @@ import java.util.Collections
  * the active layer, keeping query depth at O(1).
  *
  * Query resolution:
- * - Properties: active layer first, then frozen layer (overlay semantics).
+ * - Properties: the active copy is authoritative for entities present in the active
+ *   layer — promotion copies all frozen properties, and a property deleted from the
+ *   copy stays deleted. Frozen-only entities read from the frozen layer.
  * - Adjacency: returns union set views merging both layers.
  *
  * Deletion is restricted to the active layer. Attempting to delete a frozen-layer
@@ -81,23 +83,16 @@ public class LayeredStorageImpl(
     }
 
     override fun getNodeProperties(id: Int): Map<String, IValue> {
-        val inActive = active.containsNode(id)
-        val frozenProps = frozen?.nodeProperties(id)
-        if (!inActive && frozenProps == null) throw EntityNotExistException(id.toString())
-        if (frozenProps == null) return ActiveColumnViewMap(id, active.nodeColumns)
-        if (!inActive) return frozenProps
-        return LazyMergedMap(frozenProps, ActiveColumnViewMap(id, active.nodeColumns))
+        if (active.containsNode(id)) return ActiveColumnViewMap(id, active.nodeColumns)
+        return frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
 
     override fun getNodeProperty(
         id: Int,
         name: String,
     ): IValue? {
-        val inActive = active.containsNode(id)
-        if (!inActive && frozen?.containsNode(id) != true) throw EntityNotExistException(id.toString())
-        if (inActive) {
-            active.nodeColumns[name]?.get(id)?.let { return it }
-        }
+        if (active.containsNode(id)) return active.nodeColumns[name]?.get(id)
+        if (frozen?.containsNode(id) != true) throw EntityNotExistException(id.toString())
         return frozen?.nodeProperty(id, name)
     }
 
@@ -151,23 +146,16 @@ public class LayeredStorageImpl(
     }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        val inActive = active.containsEdge(id)
-        val frozenProps = frozen?.edgeProperties(id)
-        if (!inActive && frozenProps == null) throw EntityNotExistException(id.toString())
-        if (frozenProps == null) return ActiveColumnViewMap(id, active.edgeColumns)
-        if (!inActive) return frozenProps
-        return LazyMergedMap(frozenProps, ActiveColumnViewMap(id, active.edgeColumns))
+        if (active.containsEdge(id)) return ActiveColumnViewMap(id, active.edgeColumns)
+        return frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
 
     override fun getEdgeProperty(
         id: Int,
         name: String,
     ): IValue? {
-        val inActive = active.containsEdge(id)
-        if (!inActive && frozen?.containsEdge(id) != true) throw EntityNotExistException(id.toString())
-        if (inActive) {
-            active.edgeColumns[name]?.get(id)?.let { return it }
-        }
+        if (active.containsEdge(id)) return active.edgeColumns[name]?.get(id)
+        if (frozen?.containsEdge(id) != true) throw EntityNotExistException(id.toString())
         return frozen?.edgeProperty(id, name)
     }
 
@@ -176,13 +164,13 @@ public class LayeredStorageImpl(
         properties: Map<String, IValue?>,
     ) {
         if (!active.containsEdge(id)) {
-            if (frozen?.containsEdge(id) != true) throw EntityNotExistException(id.toString())
-            // Promote frozen edge to active layer for writes; properties stay frozen
-            // and resolve through overlay semantics.
+            // Promote the frozen edge by copying all frozen properties, making the
+            // active copy authoritative for subsequent reads and deletions.
+            val frozenProps = frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
             val structure = getEdgeStructure(id)
             ensureNodeInActiveLayer(structure.src)
             ensureNodeInActiveLayer(structure.dst)
-            active.addEdge(id, structure, emptyMap())
+            active.addEdge(id, structure, frozenProps)
         }
         active.setEdgeProperties(id, properties)
     }

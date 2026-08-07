@@ -96,12 +96,12 @@ Input edge sequence is finite. Per edge, label set is finite. Ancestor lookup te
 
 ### Problem
 
-Given a layered storage with one active layer and at most one frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when active layer values take precedence over frozen layer values.
+Given a layered storage with one active layer and at most one frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when the active layer is authoritative for every entity present in it, and frozen values are visible only for frozen-only entities.
 
 ### Steps — Property read
 
-1. Check active layer. If present, return it.
-2. Check frozen layer (translating global ID to frozen-local ID). If present, return it.
+1. If the entity is present in the active layer, read from the active layer only.
+2. Otherwise, read from the frozen layer (translating global ID to frozen-local ID).
 3. If neither layer has the entity, raise an error.
 
 ### Steps — Adjacency query
@@ -113,17 +113,18 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 ### Steps — Property write (cross-layer)
 
 1. If entity exists in active layer, update directly.
-2. If entity exists only in frozen layer, create a shadow entry in active layer.
+2. If entity exists only in frozen layer, promote it: copy all frozen properties into the active layer, then update.
 
 ### Steps — Freeze
 
 1. Transfer frozen-layer data into a new storage instance.
-2. Transfer active-layer data into the same instance (active overwrites frozen for same entity).
+2. Transfer active-layer data into the same instance; for an entity present in both layers, the active property set replaces the frozen one wholesale.
 3. Replace old frozen layer with merged storage. Clear active layer.
 
 ### Invariants
 
-- Active layer values take precedence over frozen layer values for the same key.
+- An entity present in the active layer reads exactly its active property set; a property deleted from that set stays deleted.
+- Promotion copies every frozen property into the active layer, so the active copy is complete at promotion time.
 - Frozen layer entities cannot be deleted. Only active-layer entities can be deleted.
 - Layer count is always 1 or 2. Global IDs are stable across freezes.
 

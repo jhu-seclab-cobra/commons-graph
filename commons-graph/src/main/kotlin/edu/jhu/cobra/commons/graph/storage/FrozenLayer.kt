@@ -85,14 +85,17 @@ internal class FrozenLayer private constructor(
     companion object {
         /**
          * Builds a new frozen layer by copying [previous] (when present) and overlaying
-         * [active] into [merged]. Active properties win over frozen ones per entity.
+         * [active] into [merged]. For an entity present in the active layer, its active
+         * property set replaces the frozen one wholesale — promotion copied all frozen
+         * properties, so a property absent from the active copy was deleted and stays
+         * deleted.
          */
         fun merge(
             previous: FrozenLayer?,
             active: ActiveLayer,
             merged: IStorage,
         ): FrozenLayer {
-            val oldToNewNode = transferPreviousNodes(previous, merged)
+            val oldToNewNode = transferPreviousNodes(previous, active, merged)
             val (nodeG2L, nodeL2G) = mergeNodes(previous, active, merged, oldToNewNode)
             val (edgeG2L, edgeL2G) = mergeEdges(previous, active, merged, oldToNewNode, nodeG2L)
             transferMetadata(previous, active, merged)
@@ -101,12 +104,20 @@ internal class FrozenLayer private constructor(
 
         private fun transferPreviousNodes(
             previous: FrozenLayer?,
+            active: ActiveLayer,
             merged: IStorage,
         ): Map<Int, Int> {
             val oldToNew = HashMap<Int, Int>()
             if (previous == null) return oldToNew
             for (localId in previous.storage.nodeIDs) {
-                oldToNew[localId] = merged.addNode(previous.storage.getNodeProperties(localId))
+                val globalId = previous.nodeLocalToGlobal.getValue(localId)
+                val props =
+                    if (active.containsNode(globalId)) {
+                        active.collectNodeProperties(globalId)
+                    } else {
+                        previous.storage.getNodeProperties(localId)
+                    }
+                oldToNew[localId] = merged.addNode(props)
             }
             return oldToNew
         }
@@ -119,7 +130,7 @@ internal class FrozenLayer private constructor(
         ): Pair<HashMap<Int, Int>, HashMap<Int, Int>> {
             val (g2l, l2g) =
                 if (previous != null) {
-                    mergePreviousNodes(previous, active, merged, oldToNew)
+                    mergePreviousNodes(previous, oldToNew)
                 } else {
                     HashMap<Int, Int>() to HashMap()
                 }
@@ -132,20 +143,16 @@ internal class FrozenLayer private constructor(
             return g2l to l2g
         }
 
+        // Properties were already resolved in transferPreviousNodes; only the ID
+        // mappings remain to be rebuilt for previously frozen nodes.
         private fun mergePreviousNodes(
             previous: FrozenLayer,
-            active: ActiveLayer,
-            merged: IStorage,
             oldToNew: Map<Int, Int>,
         ): Pair<HashMap<Int, Int>, HashMap<Int, Int>> {
             val g2l = HashMap<Int, Int>()
             val l2g = HashMap<Int, Int>()
             for ((globalId, oldLocalId) in previous.nodeGlobalToLocal) {
                 val newLocalId = oldToNew.getValue(oldLocalId)
-                if (active.containsNode(globalId)) {
-                    val overlay = active.collectNodeProperties(globalId)
-                    if (overlay.isNotEmpty()) merged.setNodeProperties(newLocalId, overlay)
-                }
                 g2l[globalId] = newLocalId
                 l2g[newLocalId] = globalId
             }
@@ -211,11 +218,8 @@ internal class FrozenLayer private constructor(
             localEdgeId: Int,
             globalEdgeId: Int,
         ): Map<String, IValue> {
-            val base = previous.storage.getEdgeProperties(localEdgeId)
-            if (!active.containsEdge(globalEdgeId)) return base
-            val overlay = active.collectEdgeProperties(globalEdgeId)
-            if (overlay.isEmpty()) return base
-            return HashMap(base).also { it.putAll(overlay) }
+            if (active.containsEdge(globalEdgeId)) return active.collectEdgeProperties(globalEdgeId)
+            return previous.storage.getEdgeProperties(localEdgeId)
         }
 
         private fun transferMetadata(

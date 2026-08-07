@@ -45,8 +45,8 @@ import kotlin.test.assertTrue
  * - `getIncomingEdges returns only active edges when node not in frozen` -- adjacency only-active
  * - `getOutgoingEdges returns only frozen edges when active set is empty` -- adjacency only-frozen
  * - `getIncomingEdges returns only frozen edges when active set is empty` -- adjacency only-frozen
- * - `getNodeProperty falls through to frozen when active column lacks the property` -- overlay miss
- * - `getEdgeProperty falls through to frozen when active column lacks the property` -- edge overlay miss
+ * - `getNodeProperty reads frozen-copied property on promoted node` -- promotion copy
+ * - `getEdgeProperty reads frozen-copied property on promoted edge` -- promotion copy
  * - `metaNames merges keys from both layers` -- metadata merge
  * - `metaNames returns only frozen names when active metadata is empty` -- only-frozen metadata
  * - `getMeta returns active value over frozen` -- metadata overlay
@@ -61,6 +61,12 @@ import kotlin.test.assertTrue
  * Cross-layer property writes:
  * - `setNodeProperties on frozen node creates shadow in active` -- shadow entry
  * - `setEdgeProperties on frozen edge creates shadow in active` -- shadow entry
+ *
+ * Property deletion tombstones:
+ * - `deleted node property of promoted node stays deleted` -- no frozen resurrection on read
+ * - `deleted edge property of promoted edge stays deleted` -- no frozen resurrection on read
+ * - `deleted node property stays deleted after freeze` -- no frozen resurrection at merge
+ * - `deleted edge property stays deleted after freeze` -- no frozen resurrection at merge
  *
  * Lifecycle:
  * - `clear removes frozen and active layers and resets layerCount` -- full clear
@@ -82,17 +88,17 @@ import kotlin.test.assertTrue
  * - `ActiveColumnViewMap size delegates to entries` -- size via entries
  * - `getEdgeProperties for active-only edge returns ActiveColumnViewMap` -- active-only edge path
  *
- * LazyMergedMap view:
- * - `LazyMergedMap size returns base size when overlay empty` -- overlay-empty size
- * - `LazyMergedMap size returns overlay size when base empty` -- base-empty size
- * - `LazyMergedMap size counts unique keys across both maps` -- both-populated size
- * - `LazyMergedMap isEmpty returns true when both layers empty` -- both-empty
- * - `LazyMergedMap isEmpty returns false when base non-empty` -- base non-empty
- * - `LazyMergedMap containsKey finds key only in base` -- base-only key
- * - `LazyMergedMap containsKey returns false for absent key` -- absent key
- * - `LazyMergedMap get returns base value when absent in overlay` -- base fallback
- * - `LazyMergedMap get returns null when absent in both` -- absent key
- * - `LazyMergedMap entries merges base and overlay` -- merged entries
+ * Promoted-entity property reads:
+ * - `promoted node with no new writes keeps frozen property count` -- copy-only size
+ * - `promoted node without frozen props counts only active writes` -- active-only size
+ * - `promoted node property count spans copied and new keys` -- combined size
+ * - `promoted node with no properties reads empty map` -- empty copy
+ * - `promoted node with frozen props reads non-empty map` -- non-empty copy
+ * - `promoted node retains frozen-copied key` -- copied key
+ * - `promoted node containsKey returns false for absent key` -- absent key
+ * - `promoted node reads frozen-copied value not overwritten in active` -- copied value
+ * - `promoted node get returns null for absent key` -- absent key
+ * - `promoted node entries span copied and new keys` -- combined entries
  *
  * UnionSet view:
  * - `UnionSet size returns second size when first empty` -- first-empty
@@ -473,26 +479,26 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `getNodeProperty falls through to frozen when active column lacks the property`() {
+    fun `getNodeProperty reads frozen-copied property on promoted node`() {
         val node = storage.addNode(mapOf("frozen_key" to "frozen_val".strVal))
         storage.freeze()
         // Promote node to active layer by writing a different property
         storage.setNodeProperties(node, mapOf("active_key" to "active_val".strVal))
-        // Query the frozen-only property: node is in active, but "frozen_key" is not in active columns
+        // Promotion copied "frozen_key" into the active columns; reads never leave the active copy
         assertEquals("frozen_val", (storage.getNodeProperty(node, "frozen_key") as StrVal).core)
         assertEquals("active_val", (storage.getNodeProperty(node, "active_key") as StrVal).core)
         assertNull(storage.getNodeProperty(node, "nonexistent"))
     }
 
     @Test
-    fun `getEdgeProperty falls through to frozen when active column lacks the property`() {
+    fun `getEdgeProperty reads frozen-copied property on promoted edge`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val edge = storage.addEdge(n1, n2, "rel", mapOf("frozen_key" to "frozen_val".strVal))
         storage.freeze()
         // Promote edge to active layer by writing a different property
         storage.setEdgeProperties(edge, mapOf("active_key" to "active_val".strVal))
-        // Query the frozen-only property: edge is in active, but "frozen_key" is not in active columns
+        // Promotion copied "frozen_key" into the active columns; reads never leave the active copy
         assertEquals("frozen_val", (storage.getEdgeProperty(edge, "frozen_key") as StrVal).core)
         assertEquals("active_val", (storage.getEdgeProperty(edge, "active_key") as StrVal).core)
         assertNull(storage.getEdgeProperty(edge, "nonexistent"))
@@ -597,6 +603,56 @@ internal class LayeredStorageImplTest {
         storage.freeze()
         storage.setEdgeProperties(edge, mapOf("x" to "active".strVal))
         assertEquals("active", (storage.getEdgeProperty(edge, "x") as StrVal).core)
+    }
+
+    // endregion
+
+    // region Property deletion tombstones
+
+    @Test
+    fun `deleted node property of promoted node stays deleted`() {
+        val node = storage.addNode(mapOf("keep" to "kv".strVal, "drop" to "dv".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node, mapOf("drop" to null))
+        assertNull(storage.getNodeProperty(node, "drop"))
+        assertFalse(storage.getNodeProperties(node).containsKey("drop"))
+        assertEquals("kv", (storage.getNodeProperty(node, "keep") as StrVal).core)
+    }
+
+    @Test
+    fun `deleted edge property of promoted edge stays deleted`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("keep" to "kv".strVal, "drop" to "dv".strVal))
+        storage.freeze()
+        storage.setEdgeProperties(edge, mapOf("drop" to null))
+        assertNull(storage.getEdgeProperty(edge, "drop"))
+        assertFalse(storage.getEdgeProperties(edge).containsKey("drop"))
+        assertEquals("kv", (storage.getEdgeProperty(edge, "keep") as StrVal).core)
+    }
+
+    @Test
+    fun `deleted node property stays deleted after freeze`() {
+        val node = storage.addNode(mapOf("keep" to "kv".strVal, "drop" to "dv".strVal))
+        storage.freeze()
+        storage.setNodeProperties(node, mapOf("drop" to null))
+        storage.freeze()
+        assertNull(storage.getNodeProperty(node, "drop"))
+        assertFalse(storage.getNodeProperties(node).containsKey("drop"))
+        assertEquals("kv", (storage.getNodeProperty(node, "keep") as StrVal).core)
+    }
+
+    @Test
+    fun `deleted edge property stays deleted after freeze`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("keep" to "kv".strVal, "drop" to "dv".strVal))
+        storage.freeze()
+        storage.setEdgeProperties(edge, mapOf("drop" to null))
+        storage.freeze()
+        assertNull(storage.getEdgeProperty(edge, "drop"))
+        assertFalse(storage.getEdgeProperties(edge).containsKey("drop"))
+        assertEquals("kv", (storage.getEdgeProperty(edge, "keep") as StrVal).core)
     }
 
     // endregion
@@ -727,10 +783,10 @@ internal class LayeredStorageImplTest {
 
     // endregion
 
-    // region LazyMergedMap view
+    // region Promoted-entity property reads
 
     @Test
-    fun `LazyMergedMap size returns base size when overlay empty`() {
+    fun `promoted node with no new writes keeps frozen property count`() {
         val node = storage.addNode(mapOf("a" to "v1".strVal, "b" to "v2".strVal))
         storage.freeze()
         // Promote node to active without adding any active properties
@@ -740,7 +796,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap size returns overlay size when base empty`() {
+    fun `promoted node without frozen props counts only active writes`() {
         val node = storage.addNode()
         storage.freeze()
         // Node is in frozen with no properties; add active-only properties
@@ -750,18 +806,18 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap size counts unique keys across both maps`() {
+    fun `promoted node property count spans copied and new keys`() {
         val node = storage.addNode(mapOf("a" to "f1".strVal, "b" to "f2".strVal))
         storage.freeze()
         // Override "a" and add new "c"
         storage.setNodeProperties(node, mapOf("a" to "a1".strVal, "c" to "a3".strVal))
         val props = storage.getNodeProperties(node)
-        // Keys: a (overlay), b (base only), c (overlay only) = 3
+        // Keys: a (overwritten), b (copied), c (new) = 3
         assertEquals(3, props.size)
     }
 
     @Test
-    fun `LazyMergedMap isEmpty returns true when both layers empty`() {
+    fun `promoted node with no properties reads empty map`() {
         val node = storage.addNode()
         storage.freeze()
         // Promote to active without properties
@@ -771,7 +827,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap isEmpty returns false when base non-empty`() {
+    fun `promoted node with frozen props reads non-empty map`() {
         val node = storage.addNode(mapOf("k" to "v".strVal))
         storage.freeze()
         // Promote to active without adding active properties
@@ -781,7 +837,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap containsKey finds key only in base`() {
+    fun `promoted node retains frozen-copied key`() {
         val node = storage.addNode(mapOf("base_key" to "v".strVal))
         storage.freeze()
         storage.setNodeProperties(node, mapOf("overlay_key" to "v2".strVal))
@@ -790,7 +846,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap containsKey returns false for absent key`() {
+    fun `promoted node containsKey returns false for absent key`() {
         val node = storage.addNode(mapOf("a" to "v".strVal))
         storage.freeze()
         storage.setNodeProperties(node, mapOf("b" to "v2".strVal))
@@ -799,7 +855,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap get returns base value when absent in overlay`() {
+    fun `promoted node reads frozen-copied value not overwritten in active`() {
         val node = storage.addNode(mapOf("base_only" to "base_val".strVal))
         storage.freeze()
         storage.setNodeProperties(node, mapOf("other" to "v".strVal))
@@ -808,7 +864,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap get returns null when absent in both`() {
+    fun `promoted node get returns null for absent key`() {
         val node = storage.addNode(mapOf("a" to "v".strVal))
         storage.freeze()
         storage.setNodeProperties(node, mapOf("b" to "v2".strVal))
@@ -817,7 +873,7 @@ internal class LayeredStorageImplTest {
     }
 
     @Test
-    fun `LazyMergedMap entries merges base and overlay`() {
+    fun `promoted node entries span copied and new keys`() {
         val node = storage.addNode(mapOf("a" to "base_a".strVal, "b" to "base_b".strVal))
         storage.freeze()
         storage.setNodeProperties(node, mapOf("a" to "overlay_a".strVal, "c" to "overlay_c".strVal))
