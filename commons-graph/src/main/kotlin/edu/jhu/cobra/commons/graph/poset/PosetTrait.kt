@@ -11,6 +11,14 @@ import edu.jhu.cobra.commons.graph.NodeID
  * Implementors provide [poset]; default methods combine [IGraph] traversals
  * with poset visibility filtering.
  *
+ * Visibility semantics (pure covering): an edge is visible under a query label
+ * `by` iff at least one of its labels `l` satisfies `by == l` or `by > l` per
+ * [IPoset.compare]. Covered labels never shadow one another — every edge
+ * carrying at least one covered label is returned, regardless of which other
+ * covered labels coexist in the same adjacency result. [Label.SUPREMUM]
+ * bypasses filtering and returns all edges, labeled or not; edges with no
+ * labels are otherwise visible only through unfiltered queries.
+ *
  * @param N The node type.
  * @param E The edge type.
  * @see IPoset
@@ -111,6 +119,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             }
         }
 
+    // Pure covering per the interface visibility semantics: by == label or by > label.
     private fun covers(
         by: Label,
         label: Label,
@@ -119,29 +128,5 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     private fun doFilterVisitable(
         edges: Sequence<E>,
         by: Label,
-    ): Sequence<E> {
-        val edgesWithLabels = ArrayList<Pair<E, Set<Label>>>()
-        val allVisitable = HashSet<Label>()
-        for (e in edges) {
-            val labels = e.labels
-            edgesWithLabels.add(e to labels)
-            labels.filterTo(allVisitable) { covers(by, it) }
-        }
-        if (allVisitable.size <= 1) {
-            return edgesWithLabels
-                .asSequence()
-                .filter { (_, labels) -> labels.any { it in allVisitable } }
-                .map { it.first }
-        }
-        val allNotCovered =
-            allVisitable.filterTo(HashSet()) { cur ->
-                allVisitable.none { other ->
-                    other != cur && poset.compare(other, cur)?.let { it > 0 } == true
-                }
-            }
-        return edgesWithLabels
-            .asSequence()
-            .filter { (_, labels) -> labels.any { it in allNotCovered } }
-            .map { it.first }
-    }
+    ): Sequence<E> = edges.filter { edge -> edge.labels.any { covers(by, it) } }
 }

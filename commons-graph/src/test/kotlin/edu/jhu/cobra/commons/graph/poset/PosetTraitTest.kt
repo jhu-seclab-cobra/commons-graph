@@ -66,11 +66,13 @@ import kotlin.test.assertTrue
  * - `setParents with empty map removes all parents` — boundary
  * - `allLabels includes user-registered labels` — registered labels
  * - `getAncestors diamond DAG deduplicates shared ancestors` — DAG dedup
+ * - `filterVisitable comparable labels on separate edges keeps both` — pure covering, no shadowing
+ * - `filterVisitable INFIMUM edge stays visible beside context edge` — INFIMUM coexistence
+ * - `filterVisitable multiple covered labels on one edge keeps edge` — label accumulation
  *
  * Cache and branch coverage:
  * - `compare cache hit forward returns cached result` — cache hit
  * - `compare cache hit reverse returns negated cached result` — reverse cache hit
- * - `filterVisitable multiple visitable labels keeps only maximal` — size>1 path
  * - `addEdge with label on non-existent edge creates then labels` — null path
  * - `label ancestors orphan edge in poset storage skips null intToLabel` — null parent label
  *
@@ -616,6 +618,57 @@ internal class PosetTraitTest {
         assertTrue(root in ancestors)
     }
 
+    @Test
+    fun `filterVisitable comparable labels on separate edges keeps both`() {
+        val gp = Label("gp")
+        val p = Label("p")
+        val c = Label("c")
+        graph.poset.setParents(c, mapOf("up" to p))
+        graph.poset.setParents(p, mapOf("up" to gp))
+        graph.addNode("a")
+        graph.addNode("b1")
+        graph.addNode("b2")
+        graph.addEdge("a", "b1", "shallow", p)
+        graph.addEdge("a", "b2", "deep", c)
+
+        val edges = graph.getOutgoingEdges("a", gp).toList()
+
+        assertEquals(2, edges.size, "Pure covering: deeper label (c) is not shadowed by shallower (p)")
+    }
+
+    @Test
+    fun `filterVisitable INFIMUM edge stays visible beside context edge`() {
+        val ctx = Label("ctx")
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addNode("c")
+        graph.addEdge("a", "b", "seed", Label.INFIMUM)
+        graph.addEdge("a", "c", "local", ctx)
+
+        val edges = graph.getOutgoingEdges("a", ctx).toList()
+
+        assertEquals(2, edges.size, "Pure covering: INFIMUM-labeled edge is not shadowed by the context edge")
+    }
+
+    @Test
+    fun `filterVisitable multiple covered labels on one edge keeps edge`() {
+        val gp = Label("gp")
+        val p = Label("p")
+        val c = Label("c")
+        graph.poset.setParents(c, mapOf("up" to p))
+        graph.poset.setParents(p, mapOf("up" to gp))
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addEdge("a", "b", "r1", p)
+        graph.addEdge("a", "b", "r1", c)
+
+        val edges = graph.getOutgoingEdges("a", gp).toList()
+
+        assertEquals(1, edges.size)
+        val labels = edges.first().labels
+        assertTrue(p in labels && c in labels, "Both covered labels remain on the single edge")
+    }
+
     // endregion
 
     // region Cache and branch coverage
@@ -644,25 +697,6 @@ internal class PosetTraitTest {
         assertNotNull(forward)
         assertNotNull(reverse)
         assertEquals(-forward, reverse)
-    }
-
-    @Test
-    fun `filterVisitable multiple visitable labels keeps only maximal`() {
-        val gp = Label("gp")
-        val p = Label("p")
-        val c = Label("c")
-        graph.poset.setParents(c, mapOf("up" to p))
-        graph.poset.setParents(p, mapOf("up" to gp))
-        graph.addNode("a")
-        graph.addNode("b")
-        graph.addEdge("a", "b", "r1", p)
-        graph.addEdge("a", "b", "r1", c)
-
-        val edges = graph.getOutgoingEdges("a", gp).toList()
-
-        assertEquals(1, edges.size)
-        val survivingLabels = edges.first().labels
-        assertTrue(p in survivingLabels, "Only maximal label (p) should survive coverage elimination")
     }
 
     @Test
