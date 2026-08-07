@@ -8,7 +8,6 @@ import org.mapdb.DataInput2
 import org.mapdb.DataOutput2
 import org.mapdb.Serializer
 import java.io.Serializable
-import kotlin.reflect.KClass
 
 /**
  * Serializer implementation for [T] objects using MapDB's serialization framework.
@@ -19,7 +18,6 @@ import kotlin.reflect.KClass
  */
 public class MapDbValSerializer<T : IValue>(
     private val core: IValSerializer<ByteArray> = DftByteArraySerializerImpl,
-    private var valueType: KClass<out T>? = null,
 ) : Serializer<T>,
     Serializable {
     public companion object {
@@ -57,11 +55,5 @@ public class MapDbValSerializer<T : IValue>(
     override fun deserialize(
         input: DataInput2,
         available: Int,
-    ): T {
-        val deserialized = core.deserialize(delegator.deserialize(input, available))
-        require(valueType?.isInstance(deserialized) != false) {
-            "Deserialized value type does not match expected type"
-        }
-        return deserialized as T
-    }
+    ): T = core.deserialize(delegator.deserialize(input, available)) as T
 }
