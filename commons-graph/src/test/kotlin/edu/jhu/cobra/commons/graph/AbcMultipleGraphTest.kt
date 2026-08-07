@@ -58,9 +58,13 @@ import kotlin.test.assertTrue
  * - `getDescendants linear chain returns all` — verifies BFS traversal
  * - `getDescendants with edge condition stops at filtered` — verifies edgeCond
  * - `getDescendants cycle terminates without duplicates` — verifies cycle handling
+ * - `getDescendants diamond yields each node once` — verifies no duplicate yields on converging paths
+ * - `getDescendants parallel edges yield target once` — verifies no duplicate yields on parallel edges
+ * - `getDescendants cycle does not yield start node` — verifies start node excluded from its own descendants
  * - `getAncestors linear chain returns all` — verifies BFS traversal
  * - `getAncestors with edge condition stops at filtered` — verifies edgeCond
  * - `getAncestors cycle terminates without duplicates` — verifies cycle handling
+ * - `getAncestors cycle does not yield start node` — verifies start node excluded from its own ancestors
  * - `flush throws when a cached node is missing from storage` — verifies fail-fast flush guarantee
  */
 internal class AbcMultipleGraphTest {
@@ -466,6 +470,47 @@ internal class AbcMultipleGraphTest {
     }
 
     @Test
+    fun `getDescendants diamond yields each node once`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addNode(NODE_ID_3)
+        graph.addNode(NODE_ID_4)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_3, EDGE_TAG_2)
+        graph.addEdge(NODE_ID_2, NODE_ID_4, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_3, NODE_ID_4, EDGE_TAG_2)
+
+        val ids = graph.getDescendants(NODE_ID_1).map { it.id }.toList()
+
+        assertEquals(setOf(NODE_ID_2, NODE_ID_3, NODE_ID_4), ids.toSet())
+        assertEquals(3, ids.size)
+    }
+
+    @Test
+    fun `getDescendants parallel edges yield target once`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_1)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, EDGE_TAG_2)
+
+        val ids = graph.getDescendants(NODE_ID_1).map { it.id }.toList()
+
+        assertEquals(listOf(NODE_ID_2), ids)
+    }
+
+    @Test
+    fun `getDescendants cycle does not yield start node`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd")
+        graph.addEdge(NODE_ID_2, NODE_ID_1, "back")
+
+        val descendants = graph.getDescendants(NODE_ID_1).toList()
+
+        assertFalse(descendants.any { it.id == NODE_ID_1 })
+    }
+
+    @Test
     fun `getAncestors linear chain returns all`() {
         graph.addNode(NODE_ID_1)
         graph.addNode(NODE_ID_2)
@@ -504,6 +549,18 @@ internal class AbcMultipleGraphTest {
 
         assertTrue(ancestors.any { it.id == NODE_ID_2 })
         assertEquals(ancestors.distinctBy { it.id }.size, ancestors.size)
+    }
+
+    @Test
+    fun `getAncestors cycle does not yield start node`() {
+        graph.addNode(NODE_ID_1)
+        graph.addNode(NODE_ID_2)
+        graph.addEdge(NODE_ID_1, NODE_ID_2, "fwd")
+        graph.addEdge(NODE_ID_2, NODE_ID_1, "back")
+
+        val ancestors = graph.getAncestors(NODE_ID_1).toList()
+
+        assertFalse(ancestors.any { it.id == NODE_ID_1 })
     }
 
     // endregion

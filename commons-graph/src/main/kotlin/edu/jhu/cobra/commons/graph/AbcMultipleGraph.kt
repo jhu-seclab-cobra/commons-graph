@@ -207,16 +207,18 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         neighborId: (IStorage.EdgeStructure) -> Int,
     ) = sequence {
         val startEntry = cache.entryOf(of) ?: return@sequence
-        val visited = hashSetOf<Int>()
+        // Mark at enqueue: a node reachable through several edges (diamond, parallel
+        // edges, cycle back to the start) is yielded at most once, and never the start.
+        val visited = hashSetOf(startEntry.storageId)
         val queue = ArrayDeque<Int>().apply { add(startEntry.storageId) }
         while (queue.isNotEmpty()) {
             val currentInt = queue.removeFirst()
-            if (!visited.add(currentInt)) continue
             adjacentEdges(currentInt).forEach { edgeIntId ->
                 val nextInt = neighborId(storage.getEdgeStructure(edgeIntId))
                 if (!cache.containsStorageId(nextInt)) return@forEach
                 val edge = cache.edge(edgeIntId)
                 if (!edgeCond(edge)) return@forEach
+                if (!visited.add(nextInt)) return@forEach
                 yield(cache.node(nextInt))
                 queue.add(nextInt)
             }
