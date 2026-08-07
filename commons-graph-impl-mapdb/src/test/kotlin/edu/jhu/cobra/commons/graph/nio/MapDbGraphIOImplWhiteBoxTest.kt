@@ -21,9 +21,12 @@
  * - `edge properties and type preserved through serialization`
  * - `export then import preserves storage meta` — meta round-trip per design-storage.md
  * - `import skips edges whose endpoint was filtered out` — endpoint filter, no error on skipped node
+ * - `export throws when node property uses reserved key` — "_nid" would be overwritten
+ * - `export throws when edge property uses reserved key` — "_etag" would be overwritten
  */
 package edu.jhu.cobra.commons.graph.nio
 
+import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.MapDBStorageImpl
 import edu.jhu.cobra.commons.graph.storage.MapDbValSerializer
 import edu.jhu.cobra.commons.value.IValue
@@ -341,6 +344,26 @@ internal class MapDbGraphIOImplWhiteBoxTest {
         assertEquals("1.2.3", (dstStorage.getMeta("version") as StrVal).core)
         assertEquals(42, (dstStorage.getMeta("count") as IntVal).core.toInt())
         dstStorage.close()
+    }
+
+    // -- Reserved property keys --
+
+    @Test
+    fun `export throws when node property uses reserved key`() {
+        srcStorage.addNode(mapOf("_nid" to "boom".strVal))
+        assertFailsWith<InvalidPropNameException> {
+            MapDbGraphIOImpl.export(tempFile, srcStorage)
+        }
+    }
+
+    @Test
+    fun `export throws when edge property uses reserved key`() {
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        srcStorage.addEdge(n1, n2, "rel", mapOf("_etag" to "boom".strVal))
+        assertFailsWith<InvalidPropNameException> {
+            MapDbGraphIOImpl.export(tempFile, srcStorage)
+        }
     }
 
     // -- Import predicate on original IDs; edges follow their endpoints --

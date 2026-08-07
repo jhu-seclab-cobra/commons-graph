@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.nio
 
+import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.MapDbValSerializer
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
@@ -30,6 +31,18 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     private const val EDGE_DST_KEY = "_edst"
     private const val EDGE_TAG_KEY = "_etag"
 
+    // A user property stored under one of these keys would be overwritten by the
+    // structural value on export and stripped on import; export rejects the collision.
+    private val RESERVED_KEYS = setOf(NODE_ID_KEY, EDGE_SRC_KEY, EDGE_DST_KEY, EDGE_TAG_KEY)
+
+    private fun rejectReservedProps(
+        entityId: Int,
+        props: Map<String, IValue>,
+    ) {
+        val clash = props.keys.firstOrNull { it in RESERVED_KEYS } ?: return
+        throw InvalidPropNameException(clash, entityId.toString())
+    }
+
     private val mapValSerializer = MapDbValSerializer<MapVal>()
 
     @Suppress("SwallowedException")
@@ -52,32 +65,59 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         predicate: EntityFilter,
     ): Path {
         require(dstFile.notExists()) { "File $dstFile already exists" }
+        val exportNodeIds = from.nodeIDs.filter(predicate)
+        val exportEdgeIds = from.edgeIDs.filter(predicate)
+        exportNodeIds.forEach { rejectReservedProps(it, from.getNodeProperties(it)) }
+        exportEdgeIds.forEach { rejectReservedProps(it, from.getEdgeProperties(it)) }
         if (dstFile.parent.notExists()) dstFile.createParentDirectories()
         val dbManager = DBMaker.fileDB(dstFile.toFile()).fileMmapEnableIfSupported().make()
         dbManager.use {
-            val nodesList = dbManager.indexTreeList("nodes", mapValSerializer).create()
-            from.nodeIDs.filter(predicate).forEach { nodeID ->
-                val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
-                nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, IntVal(nodeID.toLong())) })
-            }
-            val edgesList = dbManager.indexTreeList("edges", mapValSerializer).create()
-            from.edgeIDs.filter(predicate).forEach { edgeID ->
-                val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
-                val structure = from.getEdgeStructure(edgeID)
-                edgesList.add(
-                    edgeProperties.also {
-                        it.add(EDGE_SRC_KEY, IntVal(structure.src.toLong()))
-                        it.add(EDGE_DST_KEY, IntVal(structure.dst.toLong()))
-                        it.add(EDGE_TAG_KEY, StrVal(structure.tag))
-                    },
-                )
-            }
-            val metaList = dbManager.indexTreeList("meta", mapValSerializer).create()
-            val metaVal = MapVal()
-            from.metaNames.forEach { name -> from.getMeta(name)?.let { value -> metaVal.add(name, value) } }
-            metaList.add(metaVal)
+            exportNodes(dbManager, from, exportNodeIds)
+            exportEdges(dbManager, from, exportEdgeIds)
+            exportMeta(dbManager, from)
         }
         return dstFile
+    }
+
+    private fun exportNodes(
+        dbManager: DB,
+        from: IStorage,
+        nodeIds: List<Int>,
+    ) {
+        val nodesList = dbManager.indexTreeList("nodes", mapValSerializer).create()
+        nodeIds.forEach { nodeID ->
+            val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
+            nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, IntVal(nodeID.toLong())) })
+        }
+    }
+
+    private fun exportEdges(
+        dbManager: DB,
+        from: IStorage,
+        edgeIds: List<Int>,
+    ) {
+        val edgesList = dbManager.indexTreeList("edges", mapValSerializer).create()
+        edgeIds.forEach { edgeID ->
+            val edgeProperties = from.getEdgeProperties(id = edgeID).mapVal
+            val structure = from.getEdgeStructure(edgeID)
+            edgesList.add(
+                edgeProperties.also {
+                    it.add(EDGE_SRC_KEY, IntVal(structure.src.toLong()))
+                    it.add(EDGE_DST_KEY, IntVal(structure.dst.toLong()))
+                    it.add(EDGE_TAG_KEY, StrVal(structure.tag))
+                },
+            )
+        }
+    }
+
+    private fun exportMeta(
+        dbManager: DB,
+        from: IStorage,
+    ) {
+        val metaList = dbManager.indexTreeList("meta", mapValSerializer).create()
+        val metaVal = MapVal()
+        from.metaNames.forEach { name -> from.getMeta(name)?.let { value -> metaVal.add(name, value) } }
+        metaList.add(metaVal)
     }
 
     override fun import(
