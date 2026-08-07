@@ -15,6 +15,8 @@
  * - `clear succeeds after adding and clearing data`
  * - `double close does not throw`
  * - `memoryDB config creates working storage`
+ * - `addNode after reopen from file does not reuse persisted node IDs` -- node counter restore
+ * - `addEdge after reopen from file does not reuse persisted edge IDs` -- edge counter restore
  */
 package edu.jhu.cobra.commons.graph.storage
 
@@ -22,11 +24,13 @@ import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
+import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -197,5 +201,43 @@ internal class MapDBStorageImplWhiteBoxTest {
         val memStorage = MapDBStorageImpl { memoryDB() }
         memStorage.addNode()
         assertEquals(1, memStorage.nodeIDs.size)
+    }
+
+    // -- Counter restore on reopen --
+
+    @Test
+    fun `addNode after reopen from file does not reuse persisted node IDs`() {
+        val dbFile = createTempDirectory("mapdb-reopen").resolve("nodes.db").toFile()
+        val first = MapDBStorageImpl { fileDB(dbFile) }
+        val persisted = first.addNode(mapOf("name" to "original".strVal))
+        first.close()
+        val reopened = MapDBStorageImpl { fileDB(dbFile) }
+        try {
+            val fresh = reopened.addNode(mapOf("name" to "new".strVal))
+            assertNotEquals(persisted, fresh)
+            assertEquals("original", (reopened.getNodeProperties(persisted)["name"] as StrVal).core)
+        } finally {
+            reopened.close()
+        }
+    }
+
+    @Test
+    fun `addEdge after reopen from file does not reuse persisted edge IDs`() {
+        val dbFile = createTempDirectory("mapdb-reopen").resolve("edges.db").toFile()
+        val first = MapDBStorageImpl { fileDB(dbFile) }
+        val src = first.addNode()
+        val dst = first.addNode()
+        val persisted = first.addEdge(src, dst, "rel", mapOf("w" to "original".strVal))
+        first.close()
+        val reopened = MapDBStorageImpl { fileDB(dbFile) }
+        try {
+            val newSrc = reopened.addNode()
+            val newDst = reopened.addNode()
+            val fresh = reopened.addEdge(newSrc, newDst, "rel", mapOf("w" to "new".strVal))
+            assertNotEquals(persisted, fresh)
+            assertEquals("original", (reopened.getEdgeProperties(persisted)["w"] as StrVal).core)
+        } finally {
+            reopened.close()
+        }
     }
 }

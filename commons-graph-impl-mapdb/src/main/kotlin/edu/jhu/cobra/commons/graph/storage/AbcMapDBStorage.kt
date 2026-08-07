@@ -22,11 +22,14 @@ public abstract class AbcMapDBStorage protected constructor(
     private val dbManager: DB,
 ) : IStorage,
     AutoCloseable {
-    private var nodeCounter: Int = 0
-    private var edgeCounter: Int = 0
     private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
     private val nodeProperties = EntityPropertyMap(dbManager, "nodeProps")
     private val edgeProperties = EntityPropertyMap(dbManager, "edgeProps")
+
+    // Counters resume past the highest persisted ID so a database reopened from
+    // file never hands out an ID that overwrites an existing entity.
+    private var nodeCounter: Int = (nodeProperties.keys.maxOrNull() ?: -1) + 1
+    private var edgeCounter: Int = (edgeProperties.keys.maxOrNull() ?: -1) + 1
     private val edgeSrcMap = HashMap<Int, Int>()
     private val edgeDstMap = HashMap<Int, Int>()
     private val edgeTagMap = HashMap<Int, String>()
