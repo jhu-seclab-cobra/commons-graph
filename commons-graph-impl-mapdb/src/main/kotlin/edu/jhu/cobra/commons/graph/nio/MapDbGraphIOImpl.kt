@@ -140,8 +140,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
 
     // A record missing a structural key was not produced by export; silently
     // skipping it would import a foreign file as a partial graph.
-    private fun missingKey(key: String): Nothing =
-        error("Record missing structural key '$key'; not a MapDbGraphIOImpl export")
+    private fun missingKey(key: String): Nothing = error("Record missing structural key '$key'; not a MapDbGraphIOImpl export")
 
     private fun importNodes(
         dbManager: DB,
