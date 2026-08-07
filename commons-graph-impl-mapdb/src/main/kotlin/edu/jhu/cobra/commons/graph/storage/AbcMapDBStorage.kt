@@ -104,8 +104,7 @@ public abstract class AbcMapDBStorage protected constructor(
     ): Unit =
         writeGuarded {
             val nodePropMap = nodeProperties[id] ?: throw EntityNotExistException(id)
-            val merged = (nodePropMap + properties).filterValues { it != null }.mapValues { it.value!! }
-            nodeProperties[id] = merged
+            nodePropMap.update(properties)
         }
 
     override fun setEdgeProperties(
@@ -113,9 +112,8 @@ public abstract class AbcMapDBStorage protected constructor(
         properties: Map<String, IValue?>,
     ): Unit =
         writeGuarded {
-            val curEdgeProps = edgeProperties[id] ?: throw EntityNotExistException(id)
-            val merged = (curEdgeProps + properties).filterValues { it != null }.mapValues { it.value!! }
-            edgeProperties[id] = merged
+            val edgePropMap = edgeProperties[id] ?: throw EntityNotExistException(id)
+            edgePropMap.update(properties)
         }
 
     override fun deleteNode(id: Int): Unit =

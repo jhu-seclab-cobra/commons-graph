@@ -188,6 +188,25 @@ internal class EntityPropertyMap(
             return prev
         }
 
+        /**
+         * Applies [delta] to the persisted entries in place: a non-null value writes
+         * the key, a null value removes it. Untouched keys are not rewritten, and the
+         * key set in [identities] is stored once per call rather than once per key.
+         */
+        fun update(delta: Map<String, IValue?>) {
+            val propKeys = identities[eid] ?: SetVal()
+            for ((key, value) in delta) {
+                if (value == null) {
+                    propertiesMap.remove("$entityPrefix$key")
+                    propKeys.core -= StrVal(key)
+                } else {
+                    propertiesMap["$entityPrefix$key"] = value
+                    propKeys.core += StrVal(key)
+                }
+            }
+            identities[eid] = propKeys
+        }
+
         override fun clear() {
             val propKeys = identities[eid] ?: return
             propKeys.core.map { it.core.toString() }.forEach { propertiesMap.remove("$entityPrefix$it") }

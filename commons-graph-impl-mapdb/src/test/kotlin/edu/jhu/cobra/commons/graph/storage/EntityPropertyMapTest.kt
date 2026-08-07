@@ -5,6 +5,8 @@
  * - `property update and override`
  * - `entity removal`
  * - `property map operations`
+ * - `property map update applies delta without touching other keys`
+ * - `property map update of absent key removal is a no-op`
  * - `property map collection views`
  * - `edge cases for property names and values`
  * - `null and empty value handling`
@@ -126,6 +128,32 @@ internal class EntityPropertyMapTest {
 
         propertyMap.remove("key2")
         assertFalse(propertyMap.containsKey("key2"))
+    }
+
+    @Test
+    fun `property map update applies delta without touching other keys`() {
+        val entity = 1
+        entityPropertyMap.put(entity, mapOf("a" to 1.intVal, "b" to 2.intVal, "c" to 3.intVal))
+        val propertyMap = entityPropertyMap[entity]!!
+
+        propertyMap.update(mapOf("b" to 20.intVal, "c" to null, "d" to 4.intVal))
+
+        assertEquals(1.intVal, propertyMap["a"])
+        assertEquals(20.intVal, propertyMap["b"])
+        assertFalse(propertyMap.containsKey("c"))
+        assertEquals(4.intVal, propertyMap["d"])
+        assertEquals(3, propertyMap.size)
+    }
+
+    @Test
+    fun `property map update of absent key removal is a no-op`() {
+        val entity = 1
+        entityPropertyMap.put(entity, mapOf("a" to 1.intVal))
+        val propertyMap = entityPropertyMap[entity]!!
+
+        propertyMap.update(mapOf("missing" to null))
+
+        assertEquals(mapOf<String, IValue>("a" to 1.intVal), propertyMap.toMap())
     }
 
     @Test

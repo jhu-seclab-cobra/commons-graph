@@ -6,8 +6,8 @@
  * - `deleteEdge removes from graphStructure for both endpoints`
  * - `deleteEdge preserves other edges in graphStructure`
  * - `deleteNode removes graphStructure entry and cascades edge deletion`
- * - `setNodeProperties merges and null removes via filterValues`
- * - `setEdgeProperties merges and null removes via filterValues`
+ * - `setNodeProperties merges and null removes via PropertyMap update`
+ * - `setEdgeProperties merges and null removes via PropertyMap update`
  * - `node properties persist across reads via EntityPropertyMap`
  * - `self loop edge stored under single node in graphStructure`
  * - `deleteNode removes self loop edge`
@@ -114,10 +114,10 @@ internal class MapDBStorageImplWhiteBoxTest {
         assertEquals(setOf(e23), storage.getOutgoingEdges(n2))
     }
 
-    // -- setProperties merge+filterValues pattern --
+    // -- setProperties incremental delta pattern --
 
     @Test
-    fun `setNodeProperties merges and null removes via filterValues`() {
+    fun `setNodeProperties merges and null removes via PropertyMap update`() {
         val n = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         storage.setNodeProperties(n, mapOf("a" to null, "c" to 3.intVal))
         val props = storage.getNodeProperties(n)
@@ -127,7 +127,7 @@ internal class MapDBStorageImplWhiteBoxTest {
     }
 
     @Test
-    fun `setEdgeProperties merges and null removes via filterValues`() {
+    fun `setEdgeProperties merges and null removes via PropertyMap update`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val e = storage.addEdge(n1, n2, "e", mapOf("x" to "old".strVal, "y" to "keep".strVal))
