@@ -20,6 +20,9 @@
  * - `import throws on corrupt serialized attribute value` — known type tag with broken payload
  * - `export throws when node property uses reserved attribute name` — "nid" would clobber meta
  * - `export throws when edge property uses reserved attribute name` — "etype" would clobber meta
+ * - `import throws when node lacks nid attribute` — foreign node record is not skipped silently
+ * - `import throws when edge lacks structural attributes` — foreign edge record is not skipped silently
+ * - `import throws when file carries no serialized attributes` — plain GML is rejected, not imported empty
  *
  * Import tests that need entity attributes use handcrafted GML: the bundled jgrapht 1.4.0
  * GmlExporter has no custom-attribute parameters and exports labels only.
@@ -243,6 +246,63 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
         srcStorage.addEdge(n1, n2, "rel", mapOf("etype" to "boom".strVal))
         assertFailsWith<InvalidPropNameException> {
             JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        }
+    }
+
+    // -- foreign file rejection --
+
+    @Test
+    fun `import throws when node lacks nid attribute`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [ id 1 name "Str:1:a" ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        assertFailsWith<IllegalStateException> {
+            JgraphtGmlIOImpl.import(tempFile, dstStorage)
+        }
+    }
+
+    @Test
+    fun `import throws when edge lacks structural attributes`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [ id 1 nid "Str:1:0" ]
+              node [ id 2 nid "Str:1:1" ]
+              edge [ source 1 target 2 note "Str:1:w" ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        assertFailsWith<IllegalStateException> {
+            JgraphtGmlIOImpl.import(tempFile, dstStorage)
+        }
+    }
+
+    @Test
+    fun `import throws when file carries no serialized attributes`() {
+        Files.writeString(
+            tempFile,
+            """
+            graph [
+              node [ id 1 ]
+              node [ id 2 ]
+              edge [ source 1 target 2 ]
+            ]
+            """.trimIndent(),
+        )
+
+        val dstStorage = JgraphtStorageImpl()
+        assertFailsWith<IllegalArgumentException> {
+            JgraphtGmlIOImpl.import(tempFile, dstStorage)
         }
     }
 

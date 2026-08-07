@@ -109,22 +109,41 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         return dstFile
     }
 
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
     override fun import(
         srcFile: Path,
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
         require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exists or it is empty" }
-        val importer = GmlImporter<Int, Int>()
         val nodesCache = mutableMapOf<Int, MutableMap<String, IValue>>()
+        val edgeCache = mutableMapOf<Int, MutableMap<String, IValue>>()
+        val vGraph = parseGml(srcFile, nodesCache, edgeCache)
+        // An entity jgrapht parsed but no consumer cached carries no serialized
+        // attributes at all — the file is not an export of this implementation.
+        val bareNodes = vGraph.vertexSet().count { it !in nodesCache }
+        val bareEdges = vGraph.edgeSet().count { it !in edgeCache }
+        require(bareNodes == 0 && bareEdges == 0) {
+            "File $srcFile has $bareNodes nodes and $bareEdges edges without " +
+                "serialized attributes; not a JgraphtGmlIOImpl export"
+        }
+        val (nodeIdMapping, filteredNodeIds) = importNodes(nodesCache.values, into, predicate)
+        importEdges(edgeCache.values, into, nodeIdMapping, filteredNodeIds)
+        return into
+    }
+
+    // Parses srcFile with jgrapht, filling the caches with each entity's deserialized attributes.
+    private fun parseGml(
+        srcFile: Path,
+        nodesCache: MutableMap<Int, MutableMap<String, IValue>>,
+        edgeCache: MutableMap<Int, MutableMap<String, IValue>>,
+    ): DirectedPseudograph<Int, Int> {
+        val importer = GmlImporter<Int, Int>()
         importer.addVertexAttributeConsumer { nidAndName, prop ->
             val (id, propName) = nidAndName.first to nidAndName.second
             if (propName == "ID") return@addVertexAttributeConsumer
             if (id !in nodesCache) nodesCache[id] = mutableMapOf()
             nodesCache.getValue(id)[propName] = prop.toValue ?: return@addVertexAttributeConsumer
         }
-        val edgeCache = mutableMapOf<Int, MutableMap<String, IValue>>()
         importer.addEdgeAttributeConsumer { eidAndName, prop ->
             val (id, propName) = eidAndName.first to eidAndName.second
             if (id !in edgeCache) edgeCache[id] = mutableMapOf()
@@ -140,32 +159,53 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             // corrupt-attribute cause directly instead of the transport wrapper.
             throw (e.cause as? IllegalArgumentException) ?: e
         }
+        return vGraph
+    }
 
-        // Track old node ID → new storage ID mapping for edge resolution. The predicate
-        // filters on the original storage Int IDs persisted in the nid attribute; edges have
-        // no persisted ID of their own, so they are filtered through their endpoints.
+    // A record missing a structural attribute was not produced by export; silently
+    // skipping it would import a foreign file as a partial graph.
+    private fun MutableMap<String, IValue>.structuralAttr(name: String): String =
+        (remove(name) as? StrVal)?.core
+            ?: error("Record missing structural attribute '$name'; not a JgraphtGmlIOImpl export")
+
+    // Adds each cached node to the storage keyed by its persisted nid. The predicate
+    // filters on the original storage Int IDs persisted in the nid attribute; edges have
+    // no persisted ID of their own, so they are filtered through their endpoints.
+    private fun importNodes(
+        nodesProps: Collection<MutableMap<String, IValue>>,
+        into: IStorage,
+        predicate: EntityFilter,
+    ): Pair<Map<String, Int>, Set<String>> {
         val nodeIdMapping = HashMap<String, Int>()
         val filteredNodeIds = HashSet<String>()
-        nodesCache.values.forEach { props ->
-            val oldNid = (props.remove(NODE_ID_ATTR) as? StrVal)?.core ?: return@forEach
+        for (props in nodesProps) {
+            val oldNid = props.structuralAttr(NODE_ID_ATTR)
             val originalId = oldNid.toIntOrNull()
             if (originalId != null && !predicate(originalId)) {
                 filteredNodeIds.add(oldNid)
-                return@forEach
+                continue
             }
-            val storageId = into.addNode(props)
-            nodeIdMapping[oldNid] = storageId
+            nodeIdMapping[oldNid] = into.addNode(props)
         }
-        edgeCache.values.forEach { props ->
-            val oldSrc = (props.remove(EDGE_SRC_ATTR) as? StrVal)?.core ?: return@forEach
-            val oldDst = (props.remove(EDGE_DST_ATTR) as? StrVal)?.core ?: return@forEach
-            val type = (props.remove(EDGE_TAG_ATTR) as? StrVal)?.core ?: return@forEach
-            if (oldSrc in filteredNodeIds || oldDst in filteredNodeIds) return@forEach
+        return nodeIdMapping to filteredNodeIds
+    }
+
+    // Resolves each cached edge's endpoints through the node mapping and adds it to the storage.
+    private fun importEdges(
+        edgesProps: Collection<MutableMap<String, IValue>>,
+        into: IStorage,
+        nodeIdMapping: Map<String, Int>,
+        filteredNodeIds: Set<String>,
+    ) {
+        for (props in edgesProps) {
+            val oldSrc = props.structuralAttr(EDGE_SRC_ATTR)
+            val oldDst = props.structuralAttr(EDGE_DST_ATTR)
+            val type = props.structuralAttr(EDGE_TAG_ATTR)
+            if (oldSrc in filteredNodeIds || oldDst in filteredNodeIds) continue
             val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
             val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
             into.addEdge(src, dst, type, props)
         }
-        return into
     }
 
     private val Attribute.toValue: IValue?
