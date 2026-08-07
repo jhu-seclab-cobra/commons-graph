@@ -18,12 +18,15 @@
  * - `export with node filter skips edges of filtered nodes` — no NPE on dangling edges
  * - `import decodes short serialized attribute values` — 5-char frames such as `True:` survive
  * - `import throws on corrupt serialized attribute value` — known type tag with broken payload
+ * - `export throws when node property uses reserved attribute name` — "nid" would clobber meta
+ * - `export throws when edge property uses reserved attribute name` — "etype" would clobber meta
  *
  * Import tests that need entity attributes use handcrafted GML: the bundled jgrapht 1.4.0
  * GmlExporter has no custom-attribute parameters and exports labels only.
  */
 package edu.jhu.cobra.commons.graph.nio
 
+import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
 import edu.jhu.cobra.commons.value.BoolVal
 import edu.jhu.cobra.commons.value.floatVal
@@ -221,6 +224,26 @@ internal class JgraphtGmlIOImplWhiteBoxTest {
 
         val imported = dstStorage.nodeIDs.single()
         assertEquals(BoolVal.T, dstStorage.getNodeProperty(imported, "flag"))
+    }
+
+    // -- reserved attribute names --
+
+    @Test
+    fun `export throws when node property uses reserved attribute name`() {
+        srcStorage.addNode(mapOf("nid" to "boom".strVal))
+        assertFailsWith<InvalidPropNameException> {
+            JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        }
+    }
+
+    @Test
+    fun `export throws when edge property uses reserved attribute name`() {
+        val n1 = srcStorage.addNode()
+        val n2 = srcStorage.addNode()
+        srcStorage.addEdge(n1, n2, "rel", mapOf("etype" to "boom".strVal))
+        assertFailsWith<InvalidPropNameException> {
+            JgraphtGmlIOImpl.export(tempFile, srcStorage)
+        }
     }
 
     @Test

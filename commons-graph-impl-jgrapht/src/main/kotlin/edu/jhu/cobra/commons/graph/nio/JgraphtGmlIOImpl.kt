@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.nio
 
+import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
@@ -30,6 +31,18 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
     private const val EDGE_SRC_ATTR = "esrc"
     private const val EDGE_DST_ATTR = "edst"
     private const val EDGE_TAG_ATTR = "etype"
+
+    // A user property exported under one of these names would be indistinguishable
+    // from the structural attribute on import; export rejects the collision up front.
+    private val RESERVED_ATTRS = setOf(NODE_ID_ATTR, EDGE_SRC_ATTR, EDGE_DST_ATTR, EDGE_TAG_ATTR)
+
+    private fun rejectReservedProps(
+        entityId: Int,
+        props: Map<String, IValue>,
+    ) {
+        val clash = props.keys.firstOrNull { it in RESERVED_ATTRS } ?: return
+        throw InvalidPropNameException(clash, entityId.toString())
+    }
 
     /**
      * Type tags [DftCharBufferSerializerImpl] emits as the frame prefix before the first `:`.
@@ -64,6 +77,8 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
                 val structure = from.getEdgeStructure(edgeID)
                 structure.src in idOfVx && structure.dst in idOfVx
             }
+        nodeList.forEach { rejectReservedProps(it, from.getNodeProperties(it)) }
+        edgeList.forEach { rejectReservedProps(it, from.getEdgeProperties(it)) }
         exporter.setVertexAttributeProvider { index: Int ->
             val nodeID = nodeList[index]
             val metaProp = mapOf(NODE_ID_ATTR to StrVal(nodeID.toString()))
