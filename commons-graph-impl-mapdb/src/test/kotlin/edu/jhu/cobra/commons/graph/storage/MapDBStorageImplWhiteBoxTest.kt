@@ -17,6 +17,8 @@
  * - `memoryDB config creates working storage`
  * - `addNode after reopen from file does not reuse persisted node IDs` -- node counter restore
  * - `addEdge after reopen from file does not reuse persisted edge IDs` -- edge counter restore
+ * - `edge structure and adjacency survive reopen from file` -- structure persistence
+ * - `metadata survives reopen from file` -- metadata persistence
  */
 package edu.jhu.cobra.commons.graph.storage
 
@@ -236,6 +238,42 @@ internal class MapDBStorageImplWhiteBoxTest {
             val fresh = reopened.addEdge(newSrc, newDst, "rel", mapOf("w" to "new".strVal))
             assertNotEquals(persisted, fresh)
             assertEquals("original", (reopened.getEdgeProperties(persisted)["w"] as StrVal).core)
+        } finally {
+            reopened.close()
+        }
+    }
+
+    @Test
+    fun `edge structure and adjacency survive reopen from file`() {
+        val dbFile = createTempDirectory("mapdb-reopen").resolve("structure.db").toFile()
+        val first = MapDBStorageImpl { fileDB(dbFile) }
+        val src = first.addNode()
+        val dst = first.addNode()
+        val edge = first.addEdge(src, dst, "rel")
+        first.close()
+        val reopened = MapDBStorageImpl { fileDB(dbFile) }
+        try {
+            val structure = reopened.getEdgeStructure(edge)
+            assertEquals(src, structure.src)
+            assertEquals(dst, structure.dst)
+            assertEquals("rel", structure.tag)
+            assertEquals(setOf(edge), reopened.getOutgoingEdges(src))
+            assertEquals(setOf(edge), reopened.getIncomingEdges(dst))
+        } finally {
+            reopened.close()
+        }
+    }
+
+    @Test
+    fun `metadata survives reopen from file`() {
+        val dbFile = createTempDirectory("mapdb-reopen").resolve("meta.db").toFile()
+        val first = MapDBStorageImpl { fileDB(dbFile) }
+        first.setMeta("key", "value".strVal)
+        first.close()
+        val reopened = MapDBStorageImpl { fileDB(dbFile) }
+        try {
+            assertEquals("value", (reopened.getMeta("key") as StrVal).core)
+            assertEquals(setOf("key"), reopened.metaNames)
         } finally {
             reopened.close()
         }

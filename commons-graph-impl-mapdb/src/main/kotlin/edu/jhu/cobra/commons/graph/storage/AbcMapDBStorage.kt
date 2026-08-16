@@ -3,13 +3,15 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import org.mapdb.DB
+import org.mapdb.Serializer
 
 /**
  * Shared [IStorage] engine backed by MapDB for off-heap storage of nodes and edges.
  *
- * Entity properties live in MapDB-backed [EntityPropertyMap]s; edge structure, adjacency
- * indices, and metadata live on-heap. Property maps are returned as snapshot copies,
- * never live views.
+ * Entity properties live in MapDB-backed [EntityPropertyMap]s; edge structure and
+ * metadata live in MapDB maps as well, so a database reopened from file restores the
+ * full graph. Adjacency indices are on-heap and rebuilt from the persisted edge
+ * structure on open. Property maps are returned as snapshot copies, never live views.
  *
  * Subclasses supply the database instance and the concurrency guards: [MapDBStorageImpl]
  * disables MapDB concurrency and passes actions through unguarded; [MapDBConcurStorageImpl]
@@ -22,7 +24,8 @@ public abstract class AbcMapDBStorage protected constructor(
     private val dbManager: DB,
 ) : IStorage,
     AutoCloseable {
-    private val metaProperties: MutableMap<String, IValue> = mutableMapOf()
+    private val metaProperties: MutableMap<String, IValue> =
+        dbManager.hashMap("metaProps", Serializer.STRING, EntityPropertyMap.SERIALIZER_IVALUE).createOrOpen()
     private val nodeProperties = EntityPropertyMap(dbManager, "nodeProps")
     private val edgeProperties = EntityPropertyMap(dbManager, "edgeProps")
 
@@ -30,13 +33,27 @@ public abstract class AbcMapDBStorage protected constructor(
     // file never hands out an ID that overwrites an existing entity.
     private var nodeCounter: Int = (nodeProperties.keys.maxOrNull() ?: -1) + 1
     private var edgeCounter: Int = (edgeProperties.keys.maxOrNull() ?: -1) + 1
-    private val edgeSrcMap = HashMap<Int, Int>()
-    private val edgeDstMap = HashMap<Int, Int>()
-    private val edgeTagMap = HashMap<Int, String>()
+    private val edgeSrcMap: MutableMap<Int, Int> =
+        dbManager.hashMap("edgeSrc", Serializer.INTEGER, Serializer.INTEGER).createOrOpen()
+    private val edgeDstMap: MutableMap<Int, Int> =
+        dbManager.hashMap("edgeDst", Serializer.INTEGER, Serializer.INTEGER).createOrOpen()
+    private val edgeTagMap: MutableMap<Int, String> =
+        dbManager.hashMap("edgeTag", Serializer.INTEGER, Serializer.STRING).createOrOpen()
 
-    // Adjacency lists
+    // On-heap adjacency index, rebuilt from the persisted edge structure on open.
     private val outEdges = HashMap<Int, MutableSet<Int>>()
     private val inEdges = HashMap<Int, MutableSet<Int>>()
+
+    init {
+        for (nodeId in nodeProperties.keys) {
+            outEdges[nodeId] = HashSet()
+            inEdges[nodeId] = HashSet()
+        }
+        for ((edgeId, src) in edgeSrcMap) {
+            outEdges.getValue(src).add(edgeId)
+            inEdges.getValue(edgeDstMap.getValue(edgeId)).add(edgeId)
+        }
+    }
 
     /** Runs [action] under this implementation's read guard. */
     protected abstract fun <R> readGuarded(action: () -> R): R

@@ -54,7 +54,7 @@
 - File-based DB collections: `.createOrOpen()`, not `.create()`.
 - MapDB 3.x non-transactional mode: `db.close()` persists data; no `commit()` needed.
 - File-based DB: always enable `fileMmapEnableIfSupported()`.
-- MapDB storage keeps edge structure, adjacency, and meta on-heap; only entity property maps are MapDB-backed.
+- MapDB storage persists entity properties, edge structure, and meta in MapDB maps; adjacency indices are on-heap, rebuilt from the persisted edge structure on open.
 - MapDB meta round-trips through `MapDbGraphIOImpl`: export writes an `indexTreeList("meta")` into the export file; import restores it via `setMeta`.
 - Neo4j 5.x: all operations wrapped in `readTx {}` / `writeTx {}`; `writeTx` calls `tx.commit()` on success.
 - Neo4j `deleteNode` must first delete all incident relationships; otherwise `ConstraintViolationException`.
