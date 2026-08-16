@@ -112,8 +112,8 @@ Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, 
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getChildren(of, label, cond)` | Nodes via label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
 | `getParents(of, label, cond)` | Nodes via label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
-| `getDescendants(of, label, cond)` | BFS via label-filtered edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
-| `getAncestors(of, label, cond)` | BFS via label-filtered edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
+| `getDescendants(of, label, cond)` | BFS via label-filtered edges; never yields the start node | `of`; `label`; `cond` | `Sequence<N>` | -- |
+| `getAncestors(of, label, cond)` | BFS via label-filtered edges; never yields the start node | `of`; `label`; `cond` | `Sequence<N>` | -- |
 
 See `model.md` for the edge visibility rule and `spec.md` for the filtering algorithm.
 

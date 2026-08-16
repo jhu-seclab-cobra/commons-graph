@@ -56,6 +56,8 @@ import kotlin.test.assertTrue
  * - `getParents with label returns visible parents` — node filter
  * - `getDescendants with label traverses only visible edges` — BFS filter
  * - `getAncestors with label traverses only visible edges` — BFS filter
+ * - `getDescendants with label cycle back to start excludes start` — start exclusion
+ * - `getAncestors with label cycle back to start excludes start` — start exclusion
  * - `parent label sees child label edges` — visibility rule
  * - `SUPREMUM label sees all edges` — SUPREMUM visibility
  * - `query with label on edges without labels returns empty` — boundary
@@ -478,6 +480,32 @@ internal class PosetTraitTest {
         graph.addEdge("b", "c", "r2", Label("v1"))
 
         val ids = graph.getAncestors("c", Label("v1")).map { it.id }.toList()
+
+        assertEquals(listOf("b"), ids)
+    }
+
+    @Test
+    fun `getDescendants with label cycle back to start excludes start`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        val label = Label("v1")
+        graph.addEdge("a", "b", "r1", label)
+        graph.addEdge("b", "a", "r2", label)
+
+        val ids = graph.getDescendants("a", label).map { it.id }.toList()
+
+        assertEquals(listOf("b"), ids)
+    }
+
+    @Test
+    fun `getAncestors with label cycle back to start excludes start`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        val label = Label("v1")
+        graph.addEdge("a", "b", "r1", label)
+        graph.addEdge("b", "a", "r2", label)
+
+        val ids = graph.getAncestors("a", label).map { it.id }.toList()
 
         assertEquals(listOf("b"), ids)
     }

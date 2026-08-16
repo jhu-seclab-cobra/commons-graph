@@ -89,7 +89,8 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         cond: (E) -> Boolean = { true },
     ): Sequence<N> =
         sequence {
-            val visited = mutableSetOf<NodeID>()
+            // Seed with the start node so a cycle back to it never yields it as its own descendant.
+            val visited = mutableSetOf(of)
             val queue = ArrayDeque<NodeID>().apply { add(of) }
             while (queue.isNotEmpty()) {
                 val current = queue.removeFirst()
@@ -108,7 +109,8 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         cond: (E) -> Boolean = { true },
     ): Sequence<N> =
         sequence {
-            val visited = mutableSetOf<NodeID>()
+            // Seed with the start node so a cycle back to it never yields it as its own ancestor.
+            val visited = mutableSetOf(of)
             val queue = ArrayDeque<NodeID>().apply { add(of) }
             while (queue.isNotEmpty()) {
                 val current = queue.removeFirst()
