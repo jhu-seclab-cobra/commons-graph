@@ -110,6 +110,5 @@ public abstract class AbcEdge : AbcEntity() {
 
     override fun hashCode(): Int = Triple(srcNid, dstNid, eTag).hashCode()
 
-    override fun equals(other: Any?): Boolean =
-        other is AbcEdge && srcNid == other.srcNid && dstNid == other.dstNid && eTag == other.eTag
+    override fun equals(other: Any?): Boolean = other is AbcEdge && srcNid == other.srcNid && dstNid == other.dstNid && eTag == other.eTag
 }
