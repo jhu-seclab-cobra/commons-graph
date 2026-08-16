@@ -11,8 +11,9 @@ import edu.jhu.cobra.commons.value.listVal
  * Abstract base class for graph edges with storage-backed property management.
  *
  * Structural info (source, destination, tag) is injected at bind time by the
- * graph layer — no lazy storage lookup needed. The derived [id]
- * (source-tag-destination) serves as the identity for [equals] and [hashCode].
+ * graph layer — no lazy storage lookup needed. The `(src, dst, tag)` triple
+ * serves as the identity for [equals] and [hashCode]; the derived [id]
+ * (source-tag-destination) is a display form only.
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
  * creation to inject storage and edge identity — these are not constructor
@@ -67,6 +68,8 @@ public abstract class AbcEdge : AbcEntity() {
 
     /**
      * The edge identifier derived from source, tag, and destination.
+     * Display form only — the joined string is ambiguous when a component
+     * contains the delimiter; identity is the `(src, dst, tag)` triple.
      */
     override val id: String get() = "$srcNid-$eTag-$dstNid"
 
@@ -105,7 +108,8 @@ public abstract class AbcEdge : AbcEntity() {
 
     override fun toString(): String = "{$srcNid-$eTag-$dstNid, ${this.type}}"
 
-    override fun hashCode(): Int = id.hashCode()
+    override fun hashCode(): Int = Triple(srcNid, dstNid, eTag).hashCode()
 
-    override fun equals(other: Any?): Boolean = if (other is AbcEdge) this.id == other.id else super.equals(other)
+    override fun equals(other: Any?): Boolean =
+        other is AbcEdge && srcNid == other.srcNid && dstNid == other.dstNid && eTag == other.eTag
 }

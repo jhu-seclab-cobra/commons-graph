@@ -44,6 +44,7 @@ import kotlin.test.assertTrue
  * - `equals returns false for different id` — verifies inequality
  * - `equals returns true for same id across storages` — identity is domain-level, not storage-level
  * - `equals returns false for non-edge object` — verifies type guard
+ * - `equals returns false for distinct triples with colliding id strings` — delimiter collision guard
  * - `toString includes src-tag-dst and type` — verifies string format
  */
 internal class AbcEdgeTest {
@@ -239,6 +240,19 @@ internal class AbcEdgeTest {
 
         assertEquals(edge, other)
         assertEquals(edge.hashCode(), other.hashCode())
+    }
+
+    @Test
+    fun `equals returns false for distinct triples with colliding id strings`() {
+        // Both triples join to the string "a-b-c-d": ("a-b", "d", tag "c") vs ("a", "d", tag "b-c").
+        val eid1 = storage.addEdge(srcSid, dstSid, "c")
+        val first = TestEdge()
+        first.bind(storage, eid1, "a-b", "d", "c")
+        val eid2 = storage.addEdge(srcSid, dstSid, "b-c")
+        val second = TestEdge()
+        second.bind(storage, eid2, "a", "d", "b-c")
+
+        assertNotEquals(first, second)
     }
 
     @Test
