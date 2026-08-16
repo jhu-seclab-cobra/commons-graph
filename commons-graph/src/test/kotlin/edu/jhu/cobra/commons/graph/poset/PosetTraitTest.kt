@@ -47,6 +47,7 @@ import kotlin.test.assertTrue
  * - `delEdge last label removes edge entirely` — cleanup
  * - `delEdge with label nonexistent edge is no-op` — no-op
  * - `delEdge with label not on edge retains edge` — non-matching
+ * - `delEdge with label on unlabeled edge retains edge` — unlabeled boundary
  *
  * PosetTrait (label-filtered traversal):
  * - `getOutgoingEdges with label filters visible edges` — outgoing filter
@@ -381,6 +382,17 @@ internal class PosetTraitTest {
 
         assertTrue(graph.containEdge("a", "b", "rel"))
         assertTrue(label in graph.getEdge("a", "b", "rel")!!.labels)
+    }
+
+    @Test
+    fun `delEdge with label on unlabeled edge retains edge`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        graph.addEdge("a", "b", "rel")
+
+        graph.delEdge("a", "b", "rel", Label("unrelated"))
+
+        assertTrue(graph.containEdge("a", "b", "rel"))
     }
 
     // endregion

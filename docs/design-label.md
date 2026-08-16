@@ -107,7 +107,7 @@ Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addEdge(src, dst, tag, label)` | Creates or reuses edge and assigns label | `src`, `dst`: NodeID; `tag`; `label` | `E` | `EntityNotExistException` if src/dst missing |
-| `delEdge(src, dst, tag, label)` | Removes label; if no labels remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
+| `delEdge(src, dst, tag, label)` | Removes label; if the edge carried the label and none remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
 | `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getChildren(of, label, cond)` | Nodes via label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
@@ -125,4 +125,4 @@ See `model.md` for the edge visibility rule and `spec.md` for the filtering algo
 |-----------|------------|
 | `EntityNotExistException` | `addEdge` with missing src/dst node (from `IGraph`) |
 
-`delEdge(src, dst, tag, label)` on a non-existent edge is a no-op.
+`delEdge(src, dst, tag, label)` on a non-existent edge is a no-op. Removing a label the edge does not carry — including from an unlabeled edge — is a no-op: only the labeled `delEdge` call that removes the edge's last carried label deletes the edge.

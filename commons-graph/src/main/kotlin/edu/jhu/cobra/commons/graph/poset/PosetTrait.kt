@@ -46,6 +46,8 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         label: Label,
     ) {
         val edge = getEdge(src, dst, tag) ?: return
+        // A label the edge does not carry is a no-op: an unlabeled edge must not be deleted.
+        if (label !in edge.labels) return
         val remaining = edge.labels - label
         edge.labels = remaining
         if (remaining.isEmpty()) delEdge(src, dst, tag)
