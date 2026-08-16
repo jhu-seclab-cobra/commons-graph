@@ -21,8 +21,9 @@ import java.util.Collections
  *   copy stays deleted. Frozen-only entities read from the frozen layer.
  * - Adjacency: returns union set views merging both layers.
  *
- * Deletion is restricted to the active layer. Attempting to delete a frozen-layer
- * entity throws [FrozenLayerModificationException].
+ * Deletion is restricted to entities that exist only in the active layer. Attempting
+ * to delete a frozen-layer entity — including one promoted into the active layer —
+ * throws [FrozenLayerModificationException].
  *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
  * @see FrozenLayerModificationException
@@ -106,10 +107,10 @@ public class LayeredStorageImpl(
     }
 
     override fun deleteNode(id: Int) {
-        if (!active.containsNode(id)) {
-            if (frozen?.containsNode(id) == true) throw FrozenLayerModificationException(id.toString())
-            throw EntityNotExistException(id.toString())
-        }
+        // A promoted node still exists in the frozen layer; deleting only the active
+        // copy would resurrect the frozen one, so the frozen guard runs first.
+        if (frozen?.containsNode(id) == true) throw FrozenLayerModificationException(id.toString())
+        if (!active.containsNode(id)) throw EntityNotExistException(id.toString())
         active.removeNode(id)
     }
 
@@ -176,10 +177,10 @@ public class LayeredStorageImpl(
     }
 
     override fun deleteEdge(id: Int) {
-        if (!active.containsEdge(id)) {
-            if (frozen?.containsEdge(id) == true) throw FrozenLayerModificationException(id.toString())
-            throw EntityNotExistException(id.toString())
-        }
+        // A promoted edge still exists in the frozen layer; deleting only the active
+        // copy would resurrect the frozen one, so the frozen guard runs first.
+        if (frozen?.containsEdge(id) == true) throw FrozenLayerModificationException(id.toString())
+        if (!active.containsEdge(id)) throw EntityNotExistException(id.toString())
         active.removeEdge(id)
     }
 

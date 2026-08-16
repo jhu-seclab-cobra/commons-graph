@@ -100,7 +100,7 @@ interface IStorage : Flushable {
 | `freeze` | Merges frozen + active into a new frozen `IStorage`, replaces old frozen layer, resets active layer. Always exactly one frozen layer after freeze. | -- | -- | -- |
 | `layerCount` | Total layers (frozen + active). Always 1 (no frozen) or 2 (one frozen + active). | -- | `Int` | -- |
 
-**Deletion constraint:** Only active-layer entities can be deleted. Deleting a frozen-layer entity throws `FrozenLayerModificationException`.
+**Deletion constraint:** Only entities that exist solely in the active layer can be deleted. Deleting a frozen-layer entity — including one promoted into the active layer — throws `FrozenLayerModificationException`.
 
 **Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ActiveColumnViewMap`, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
 

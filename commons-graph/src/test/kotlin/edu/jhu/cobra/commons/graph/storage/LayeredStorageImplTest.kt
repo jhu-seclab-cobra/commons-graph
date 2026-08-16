@@ -57,6 +57,8 @@ import kotlin.test.assertTrue
  * - `deleteEdge on frozen edge throws FrozenLayerModificationException` -- frozen guard
  * - `deleteNode on active-layer node succeeds after freeze` -- active deletion
  * - `deleteEdge on active-layer edge succeeds after freeze` -- active deletion
+ * - `deleteNode on promoted node throws FrozenLayerModificationException` -- promoted guard
+ * - `deleteEdge on promoted edge throws FrozenLayerModificationException` -- promoted guard
  *
  * Cross-layer property writes:
  * - `setNodeProperties on frozen node creates shadow in active` -- shadow entry
@@ -581,6 +583,26 @@ internal class LayeredStorageImplTest {
         val edge = storage.addEdge(n1, n2, "rel")
         storage.deleteEdge(edge)
         assertFalse(storage.containsEdge(edge))
+    }
+
+    @Test
+    fun `deleteNode on promoted node throws FrozenLayerModificationException`() {
+        val node = storage.addNode()
+        storage.freeze()
+        storage.setNodeProperties(node, mapOf("k" to "v".strVal))
+        assertFailsWith<FrozenLayerModificationException> { storage.deleteNode(node) }
+        assertTrue(storage.containsNode(node))
+    }
+
+    @Test
+    fun `deleteEdge on promoted edge throws FrozenLayerModificationException`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel")
+        storage.freeze()
+        storage.setEdgeProperties(edge, mapOf("k" to "v".strVal))
+        assertFailsWith<FrozenLayerModificationException> { storage.deleteEdge(edge) }
+        assertTrue(storage.containsEdge(edge))
     }
 
     // endregion
