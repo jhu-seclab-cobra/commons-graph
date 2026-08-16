@@ -61,23 +61,62 @@ public class PosetDftImpl(
         return closure
     }
 
+    // Explicit stack instead of recursion: the build must not consume one call
+    // frame per hierarchy level, or a deep chain overflows the call stack.
     private fun computeAncestors(
+        rootId: Int,
+        closure: MutableMap<Int, Set<Int>>,
+        onPath: MutableSet<Int>,
+    ) {
+        val pending = ArrayDeque<Int>()
+        pending.addLast(rootId)
+        while (pending.isNotEmpty()) {
+            val nodeId = pending.last()
+            when {
+                nodeId in closure -> pending.removeLast()
+                // First visit: expand unresolved parents and revisit after them.
+                onPath.add(nodeId) && expandParents(nodeId, closure, onPath, pending) -> Unit
+                // Revisit: every parent is resolved; finalize this node.
+                else -> finalizeNode(nodeId, closure, onPath, pending)
+            }
+        }
+    }
+
+    /** Unions [nodeId]'s resolved parents into its closure entry and pops it. */
+    private fun finalizeNode(
         nodeId: Int,
         closure: MutableMap<Int, Set<Int>>,
         onPath: MutableSet<Int>,
-    ): Set<Int> {
-        closure[nodeId]?.let { return it }
-        check(onPath.add(nodeId)) { "Label hierarchy cycle through '${intToLabel[nodeId]}'" }
+        pending: ArrayDeque<Int>,
+    ) {
         val ancestors = HashSet<Int>()
         // Edges go child→parent (outgoing): each parent plus its own ancestors.
         for (edgeId in storage.getOutgoingEdges(nodeId)) {
             val parentInt = storage.getEdgeStructure(edgeId).dst
             ancestors.add(parentInt)
-            ancestors.addAll(computeAncestors(parentInt, closure, onPath))
+            ancestors.addAll(closure.getValue(parentInt))
         }
-        onPath.remove(nodeId)
         closure[nodeId] = ancestors
-        return ancestors
+        onPath.remove(nodeId)
+        pending.removeLast()
+    }
+
+    /** Pushes [nodeId]'s unresolved parents onto [pending]; true when any was pushed. */
+    private fun expandParents(
+        nodeId: Int,
+        closure: Map<Int, Set<Int>>,
+        onPath: Set<Int>,
+        pending: ArrayDeque<Int>,
+    ): Boolean {
+        var expanded = false
+        for (edgeId in storage.getOutgoingEdges(nodeId)) {
+            val parentInt = storage.getEdgeStructure(edgeId).dst
+            if (parentInt in closure) continue
+            check(parentInt !in onPath) { "Label hierarchy cycle through '${intToLabel[parentInt]}'" }
+            pending.addLast(parentInt)
+            expanded = true
+        }
+        return expanded
     }
 
     private fun isAncestor(

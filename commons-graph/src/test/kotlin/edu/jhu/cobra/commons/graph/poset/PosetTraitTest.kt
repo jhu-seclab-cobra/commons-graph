@@ -36,6 +36,7 @@ import kotlin.test.assertTrue
  * - `compare recognizes shared grandparent through both diamond paths` — diamond reachability
  * - `compare throws on cyclic hierarchy naming a cycle label` — cycle rejection
  * - `compare reflects hierarchy change after setParents` — closure invalidation
+ * - `compare succeeds on deep chain without exhausting the call stack` — closure build depth bound
  *
  * PosetTrait (label-aware edge operations):
  * - `addEdge with label assigns label` — basic assignment
@@ -264,6 +265,37 @@ internal class PosetTraitTest {
                 graph.poset.compare(a, b)
             }
         assertTrue("cyc" in exception.message.orEmpty())
+    }
+
+    @Test
+    fun `compare succeeds on deep chain without exhausting the call stack`() {
+        // Bottom-first creation gives every child a smaller storage ID than its
+        // parent, so an ID-ordered closure build meets the whole uncached chain
+        // at the first node instead of finding each parent already memoized.
+        val depth = 2000
+        for (i in 0 until depth - 1) {
+            graph.poset.setParents(Label("deep$i"), mapOf("up" to Label("deep${i + 1}")))
+        }
+
+        // A 128 KiB stack cannot hold one closure-build frame per chain level;
+        // the ancestor-closure build must bound its call depth independently of
+        // the hierarchy depth.
+        val stackBytes = 128L * 1024
+        var result: Int? = null
+        var failure: Throwable? = null
+        val worker =
+            Thread(null, {
+                try {
+                    result = graph.poset.compare(Label("deep${depth - 1}"), Label("deep0"))
+                } catch (raised: Throwable) {
+                    failure = raised
+                }
+            }, "deep-chain-compare", stackBytes)
+        worker.start()
+        worker.join()
+
+        assertNull(failure)
+        assertEquals(1, result)
     }
 
     @Test

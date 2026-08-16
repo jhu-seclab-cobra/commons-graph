@@ -53,7 +53,8 @@ raises an error naming a label on the cycle.
 The hierarchy is finite and acyclic. Memoization computes each label's set
 once; the being-computed mark bounds every traversal path by the longest
 chain. Cycle input terminates with an error at the first revisited on-path
-node.
+node. The traversal keeps its pending nodes on an explicit worklist, so
+hierarchy depth never consumes call-stack frames.
 
 ### Complexity
 
