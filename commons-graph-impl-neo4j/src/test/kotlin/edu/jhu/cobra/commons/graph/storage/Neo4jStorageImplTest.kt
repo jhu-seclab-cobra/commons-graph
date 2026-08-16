@@ -40,6 +40,7 @@
  * - `getMeta returns null for nonexistent key`
  * - `clear removes all nodes edges and metadata`
  * - `transferTo copies nodes edges and metadata to target`
+ * - `transferTo same instance throws IllegalArgumentException`
  * - `invalid property name throws InvalidPropNameException`
  */
 package edu.jhu.cobra.commons.graph.storage
@@ -402,6 +403,12 @@ internal class Neo4jStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1", target.getMeta("version")?.core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // -- Neo4j-specific: reserved property name --

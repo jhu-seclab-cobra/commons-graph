@@ -269,8 +269,10 @@ public class NativeConcurStorageImpl : IStorage {
             edgeCounter = 0
         }
 
-    override fun transferTo(target: IStorage): Map<Int, Int> =
-        lock.readLock().withLock {
+    override fun transferTo(target: IStorage): Map<Int, Int> {
+        // A self-transfer would request the write lock while holding the read lock — deadlock.
+        require(target !== this) { "Cannot transfer a storage into itself" }
+        return lock.readLock().withLock {
             val nodeIdMap = HashMap<Int, Int>()
             for (nodeId in outEdges.keys) {
                 val newId = target.addNode(collectNodeProperties(nodeId))
@@ -286,4 +288,5 @@ public class NativeConcurStorageImpl : IStorage {
             }
             nodeIdMap
         }
+    }
 }

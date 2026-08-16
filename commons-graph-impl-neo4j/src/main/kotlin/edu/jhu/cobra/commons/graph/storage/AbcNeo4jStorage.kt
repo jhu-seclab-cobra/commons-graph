@@ -257,13 +257,17 @@ public abstract class AbcNeo4jStorage protected constructor(
             edgeCounter = 0
         }
 
-    override fun transferTo(target: IStorage): Map<Int, Int> =
-        readTx {
+    override fun transferTo(target: IStorage): Map<Int, Int> {
+        // A self-transfer mutates the iterated graph and, in the concurrent subclass,
+        // requests the write lock while holding the read lock — deadlock.
+        require(target !== this) { "Cannot transfer a storage into itself" }
+        return readTx {
             val idMap = copyNodesTo(target)
             copyEdgesTo(target, idMap)
             findMetaNode()?.propertyEntries()?.forEach { (name, value) -> target.setMeta(name, value) }
             idMap
         }
+    }
 
     private fun Transaction.copyNodesTo(target: IStorage): HashMap<Int, Int> {
         val idMap = HashMap<Int, Int>()

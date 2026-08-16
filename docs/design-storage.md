@@ -68,7 +68,7 @@ interface IStorage : Flushable {
 | `getIncomingEdges` / `getOutgoingEdges` | Returns all incoming/outgoing edge IDs | `id`: node ID | `Set<Int>` | `EntityNotExistException` if missing |
 | `getMeta` / `setMeta` | Reads/writes metadata as named key-value pairs | `name`; `value` | `IValue?` | -- |
 | `clear` | Removes all nodes, edges, and metadata | -- | -- | -- |
-| `transferTo` | Copies all data into `target`; returns node ID mapping | `target` | `Map<Int, Int>` | -- |
+| `transferTo` | Copies all data into `target`; returns node ID mapping. `target` must be a different storage instance. | `target` | `Map<Int, Int>` | `IllegalArgumentException` if `target` is the receiver |
 | `flush` | Persists buffered data. No-op for in-memory implementations. | -- | -- | -- |
 
 ---

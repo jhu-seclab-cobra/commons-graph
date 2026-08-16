@@ -124,6 +124,7 @@ import kotlin.test.assertTrue
  * transferTo:
  * - `transferTo copies nodes and edges from both layers` -- frozen present
  * - `transferTo copies metadata from both layers` -- metadata transfer
+ * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
  *
  * Freeze edge cases:
  * - `freeze resolves edge with active overlay and empty active props` -- empty overlay edge
@@ -1116,6 +1117,12 @@ internal class LayeredStorageImplTest {
         storage.transferTo(target)
         assertEquals("fm", (target.getMeta("frozen_meta") as StrVal).core)
         assertEquals("am", (target.getMeta("active_meta") as StrVal).core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // endregion

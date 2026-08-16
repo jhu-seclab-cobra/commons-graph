@@ -52,6 +52,7 @@ import kotlin.test.assertTrue
  * - `metaNames returns all metadata keys` -- metadata enumeration
  * - `clear removes all nodes edges and metadata` -- full reset
  * - `transferTo copies all data and returns node ID mapping` -- transfer
+ * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
  *
  * Thread-safety tests:
  * - `concurrent reads do not deadlock` -- parallel read lock acquisition
@@ -316,6 +317,12 @@ internal class NativeConcurStorageImplTest {
         assertTrue(target.containsNode(idMap[n1]!!))
         assertTrue(target.containsNode(idMap[n2]!!))
         assertEquals("1.0", (target.getMeta("version") as StrVal).core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // endregion

@@ -56,6 +56,7 @@
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `transferTo preserves edge properties and tag`
+ * - `transferTo same instance throws IllegalArgumentException`
  * - `complex IValue types survive property round-trip`
  * - `NullVal stored and retrieved correctly`
  */
@@ -560,6 +561,12 @@ internal class MapDBStorageImplTest {
         assertEquals("typed", target.getEdgeStructure(tEdge).tag)
         assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as IntVal).core)
         target.close()
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // -- complex values --

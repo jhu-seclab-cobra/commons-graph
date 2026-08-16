@@ -203,6 +203,8 @@ public class NativeStorageImpl : IStorage {
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        // Copying into the iterated storage mutates it mid-iteration; reject up front.
+        require(target !== this) { "Cannot transfer a storage into itself" }
         val nodeIdMap = HashMap<Int, Int>()
         for (nodeId in outEdges.keys) {
             val newId = target.addNode(getNodeProperties(nodeId))

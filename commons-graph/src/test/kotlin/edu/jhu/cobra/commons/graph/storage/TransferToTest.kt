@@ -8,6 +8,7 @@ import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -21,6 +22,7 @@ import kotlin.test.assertTrue
  * - `transferTo preserves metadata in target` -- metadata fidelity
  * - `transferTo on empty storage returns empty map` -- empty graph boundary
  * - `transferTo does not modify source storage` -- non-destructive copy
+ * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
  */
 internal class TransferToTest {
     @Test
@@ -130,5 +132,12 @@ internal class TransferToTest {
         assertTrue(source.containsNode(n2))
         assertTrue(source.containsEdge(e1))
         assertEquals("v", (source.getNodeProperties(n1)["k"] as StrVal).core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        val source = NativeStorageImpl()
+        source.addNode()
+        assertFailsWith<IllegalArgumentException> { source.transferTo(source) }
     }
 }

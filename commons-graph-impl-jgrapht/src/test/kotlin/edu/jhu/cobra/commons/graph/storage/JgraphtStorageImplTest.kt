@@ -56,6 +56,7 @@
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `transferTo preserves edge properties and tag`
+ * - `transferTo same instance throws IllegalArgumentException`
  * - `complex IValue types survive property round-trip`
  */
 package edu.jhu.cobra.commons.graph.storage
@@ -550,6 +551,12 @@ internal class JgraphtStorageImplTest {
         val tEdge = target.edgeIDs.first()
         assertEquals("typed", target.getEdgeStructure(tEdge).tag)
         assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as IntVal).core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // -- complex values --

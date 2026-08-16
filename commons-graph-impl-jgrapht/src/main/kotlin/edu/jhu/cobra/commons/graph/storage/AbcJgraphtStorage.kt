@@ -216,8 +216,11 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
             edgeCounter = 0
         }
 
-    override fun transferTo(target: IStorage): Map<Int, Int> =
-        readGuarded {
+    override fun transferTo(target: IStorage): Map<Int, Int> {
+        // A self-transfer mutates the iterated maps and, in the concurrent subclass,
+        // requests the write lock while holding the read lock — deadlock.
+        require(target !== this) { "Cannot transfer a storage into itself" }
+        return readGuarded {
             val idMap = HashMap<Int, Int>()
             for (nodeId in nodeProperties.keys) {
                 idMap[nodeId] = target.addNode(nodeProperties.getValue(nodeId))
@@ -233,4 +236,5 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
             }
             idMap
         }
+    }
 }
