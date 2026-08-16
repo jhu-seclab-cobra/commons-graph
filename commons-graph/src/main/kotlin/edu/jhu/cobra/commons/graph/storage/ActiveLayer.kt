@@ -17,6 +17,9 @@ internal class ActiveLayer {
     val inEdges = HashMap<Int, MutableSet<Int>>()
     val metaProperties = HashMap<String, IValue>()
 
+    // Tombstones masking frozen-layer metadata deleted through the active layer.
+    val deletedMetaNames = HashSet<String>()
+
     val nodeIds: Set<Int> get() = outEdges.keys
 
     fun containsNode(id: Int): Boolean = id in outEdges
@@ -87,5 +90,6 @@ internal class ActiveLayer {
         edgeColumns.clear()
         nodeColumns.clear()
         metaProperties.clear()
+        deletedMetaNames.clear()
     }
 }

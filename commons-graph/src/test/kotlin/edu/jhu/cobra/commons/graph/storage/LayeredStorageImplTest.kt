@@ -51,6 +51,9 @@ import kotlin.test.assertTrue
  * - `metaNames returns only frozen names when active metadata is empty` -- only-frozen metadata
  * - `getMeta returns active value over frozen` -- metadata overlay
  * - `getMeta falls through to frozen when absent in active` -- metadata fallback
+ * - `setMeta with null deletes frozen meta` -- frozen metadata delete
+ * - `setMeta with null on frozen meta stays deleted after freeze` -- delete survives merge
+ * - `setMeta after null delete restores the property` -- delete then re-set
  *
  * Deletion restriction:
  * - `deleteNode on frozen node throws FrozenLayerModificationException` -- frozen guard
@@ -543,6 +546,40 @@ internal class LayeredStorageImplTest {
         val names = storage.metaNames
         assertEquals(1, names.size)
         assertTrue(names.contains("frozenMeta"))
+    }
+
+    @Test
+    fun `setMeta with null deletes frozen meta`() {
+        storage.setMeta("key", "frozen".strVal)
+        storage.freeze()
+
+        storage.setMeta("key", null)
+
+        assertNull(storage.getMeta("key"))
+        assertFalse(storage.metaNames.contains("key"))
+    }
+
+    @Test
+    fun `setMeta with null on frozen meta stays deleted after freeze`() {
+        storage.setMeta("key", "frozen".strVal)
+        storage.freeze()
+        storage.setMeta("key", null)
+
+        storage.freeze()
+
+        assertNull(storage.getMeta("key"))
+        assertFalse(storage.metaNames.contains("key"))
+    }
+
+    @Test
+    fun `setMeta after null delete restores the property`() {
+        storage.setMeta("key", "frozen".strVal)
+        storage.freeze()
+        storage.setMeta("key", null)
+
+        storage.setMeta("key", "restored".strVal)
+
+        assertEquals("restored", (storage.getMeta("key") as StrVal).core)
     }
 
     // endregion

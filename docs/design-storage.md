@@ -102,6 +102,8 @@ interface IStorage : Flushable {
 
 **Deletion constraint:** Only entities that exist solely in the active layer can be deleted. Deleting a frozen-layer entity — including one promoted into the active layer — throws `FrozenLayerModificationException`.
 
+**Metadata deletion:** `setMeta(name, null)` deletes the property across both layers: the active layer records a tombstone that masks the frozen value on reads and excludes the name from `freeze` merges. A later non-null `setMeta` clears the tombstone.
+
 **Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ActiveColumnViewMap`, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
 
 See `spec.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.

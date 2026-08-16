@@ -228,7 +228,8 @@ internal class FrozenLayer private constructor(
             merged: IStorage,
         ) {
             if (previous != null) {
-                for (name in previous.storage.metaNames) {
+                // Names tombstoned in the active layer stay deleted in the merged layer.
+                for (name in previous.storage.metaNames - active.deletedMetaNames) {
                     merged.setMeta(name, previous.storage.getMeta(name))
                 }
             }

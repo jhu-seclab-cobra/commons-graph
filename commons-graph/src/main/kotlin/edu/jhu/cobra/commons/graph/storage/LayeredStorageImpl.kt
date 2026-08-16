@@ -212,7 +212,7 @@ public class LayeredStorageImpl(
 
     override val metaNames: Set<String>
         get() {
-            val frozenNames = frozen?.metaNames ?: emptySet()
+            val frozenNames = (frozen?.metaNames ?: emptySet()) - active.deletedMetaNames
             if (active.metaProperties.isEmpty()) return frozenNames
             if (frozenNames.isEmpty()) return active.metaProperties.keys
             return UnionSet(frozenNames, active.metaProperties.keys)
@@ -220,6 +220,7 @@ public class LayeredStorageImpl(
 
     override fun getMeta(name: String): IValue? {
         active.metaProperties[name]?.let { return it }
+        if (name in active.deletedMetaNames) return null
         return frozen?.meta(name)
     }
 
@@ -227,7 +228,14 @@ public class LayeredStorageImpl(
         name: String,
         value: IValue?,
     ) {
-        if (value == null) active.metaProperties.remove(name) else active.metaProperties[name] = value
+        if (value == null) {
+            // Tombstone the name so a frozen-layer value does not resurface on reads.
+            active.metaProperties.remove(name)
+            active.deletedMetaNames.add(name)
+        } else {
+            active.deletedMetaNames.remove(name)
+            active.metaProperties[name] = value
+        }
     }
 
     // ============================================================================
