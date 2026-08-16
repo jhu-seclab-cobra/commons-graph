@@ -95,7 +95,7 @@ abstract class AbcNode : AbcEntity() {
 - `nodeId` -- the user-provided `NodeID`, injected via `bind()`
 - `id` -- returns `nodeId`
 - `bind()` -- post-construction injection of storage reference, storage ID, and node ID
-- Property access filters the internal `PROP_NODE_ID` property from all user-facing APIs
+- Property access filters the reserved graph-layer properties (`PROP_NODE_ID`, `PROP_OWNERS`) from all user-facing APIs
 
 ---
 

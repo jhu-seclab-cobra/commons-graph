@@ -26,6 +26,9 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     public companion object {
         internal const val PROP_NODE_ID = "__nid__"
         internal const val PROP_OWNERS = "__owners__"
+
+        // Graph-layer bookkeeping names, filtered from all user-facing node property APIs.
+        internal val RESERVED_NODE_PROPS = setOf(PROP_NODE_ID, PROP_OWNERS)
     }
 
     public abstract val storage: IStorage

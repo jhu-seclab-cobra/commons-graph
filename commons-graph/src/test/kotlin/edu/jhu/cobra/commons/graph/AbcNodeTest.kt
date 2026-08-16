@@ -26,6 +26,11 @@ import kotlin.test.assertTrue
  * - `contains filters PROP_NODE_ID` — verifies internal property excluded
  * - `asMap filters PROP_NODE_ID` — verifies internal property excluded from map
  * - `update rejects PROP_NODE_ID` — verifies require guard on bulk update
+ * - `get filters PROP_OWNERS` — verifies ownership mark hidden from user
+ * - `set rejects PROP_OWNERS` — verifies require guard on reserved property
+ * - `contains filters PROP_OWNERS` — verifies ownership mark excluded
+ * - `asMap filters PROP_OWNERS` — verifies ownership mark excluded from map
+ * - `update rejects PROP_OWNERS` — verifies require guard on bulk update
  * - `get returns value for user property` — verifies normal property read
  * - `set stores user property` — verifies normal property write
  * - `set null removes user property` — verifies null removes property
@@ -96,6 +101,45 @@ internal class AbcNodeTest {
     fun `update rejects PROP_NODE_ID`() {
         assertFailsWith<IllegalArgumentException> {
             node.update(mapOf(AbcMultipleGraph.PROP_NODE_ID to "bad".strVal))
+        }
+    }
+
+    // endregion
+
+    // region PROP_OWNERS filtering
+
+    @Test
+    fun `get filters PROP_OWNERS`() {
+        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
+
+        assertNull(node[AbcMultipleGraph.PROP_OWNERS])
+    }
+
+    @Test
+    fun `set rejects PROP_OWNERS`() {
+        assertFailsWith<IllegalArgumentException> {
+            node[AbcMultipleGraph.PROP_OWNERS] = "bad".strVal
+        }
+    }
+
+    @Test
+    fun `contains filters PROP_OWNERS`() {
+        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
+
+        assertFalse(AbcMultipleGraph.PROP_OWNERS in node)
+    }
+
+    @Test
+    fun `asMap filters PROP_OWNERS`() {
+        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
+
+        assertFalse(node.asMap().containsKey(AbcMultipleGraph.PROP_OWNERS))
+    }
+
+    @Test
+    fun `update rejects PROP_OWNERS`() {
+        assertFailsWith<IllegalArgumentException> {
+            node.update(mapOf(AbcMultipleGraph.PROP_OWNERS to "bad".strVal))
         }
     }
 

@@ -1,6 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.AbcMultipleGraph.Companion.PROP_NODE_ID
+import edu.jhu.cobra.commons.graph.AbcMultipleGraph.Companion.RESERVED_NODE_PROPS
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 
@@ -13,9 +13,11 @@ public typealias NodeID = String
  * Abstract base class for graph nodes with storage-backed property management.
  *
  * The node's [id] is the user-provided [NodeID]. Storage operations use the
- * internal [storageId] (auto-generated Int). The graph layer stores the NodeID
- * as an internal property ([AbcMultipleGraph.PROP_NODE_ID]) which is filtered
- * from all user-facing property APIs ([get], [set], [contains], [asMap], [update]).
+ * internal [storageId] (auto-generated Int). The graph layer stores its
+ * bookkeeping — the NodeID ([AbcMultipleGraph.PROP_NODE_ID]) and the ownership
+ * mark ([AbcMultipleGraph.PROP_OWNERS]) — as reserved node properties, which are
+ * filtered from all user-facing property APIs ([get], [set], [contains],
+ * [asMap], [update]).
  *
  * Subclasses use a no-arg constructor. The graph layer calls [bind] after
  * creation to inject storage and node identity — these are not constructor
@@ -78,7 +80,7 @@ public abstract class AbcNode : AbcEntity() {
     public fun doUseStorage(target: IStorage): Boolean = target == storage
 
     override fun get(name: String): IValue? {
-        if (name == PROP_NODE_ID) return null
+        if (name in RESERVED_NODE_PROPS) return null
         return storage.getNodeProperty(storageId, name)
     }
 
@@ -86,19 +88,20 @@ public abstract class AbcNode : AbcEntity() {
         name: String,
         value: IValue?,
     ) {
-        require(name != PROP_NODE_ID) { "Cannot set reserved property: $PROP_NODE_ID" }
+        require(name !in RESERVED_NODE_PROPS) { "Cannot set reserved property: $name" }
         storage.setNodeProperties(storageId, mapOf(name to value))
     }
 
     override fun contains(name: String): Boolean {
-        if (name == PROP_NODE_ID) return false
+        if (name in RESERVED_NODE_PROPS) return false
         return storage.getNodeProperty(storageId, name) != null
     }
 
-    override fun asMap(): Map<String, IValue> = storage.getNodeProperties(storageId) - PROP_NODE_ID
+    override fun asMap(): Map<String, IValue> = storage.getNodeProperties(storageId) - RESERVED_NODE_PROPS
 
     override fun update(props: Map<String, IValue?>) {
-        require(PROP_NODE_ID !in props) { "Cannot set reserved property: $PROP_NODE_ID" }
+        val reserved = props.keys.intersect(RESERVED_NODE_PROPS)
+        require(reserved.isEmpty()) { "Cannot set reserved property: ${reserved.joinToString()}" }
         storage.setNodeProperties(storageId, props)
     }
 
