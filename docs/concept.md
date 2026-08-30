@@ -79,7 +79,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
 
 - **Layered Storage**
   - **Definition:** A composition of one frozen storage instance plus one mutable active layer into a unified storage view. Supports phase-based analysis where completed phases become read-only.
-  - **Scope:** Owns layer lifecycle, freeze transitions, query routing, and merge operations. Deletion restricted to the active layer. Query depth bounded to two layers (active + one frozen).
+  - **Scope:** Owns layer lifecycle, freeze transitions, query routing, and merge operations. Deletion restricted to the active layer.
   - **Relationships:** Composed from flat storage instances. Exposes the same storage contract. On freeze, active data merges into the frozen layer and a fresh active layer is created.
 
 ## 3. Contracts & Flow
@@ -97,7 +97,7 @@ This module is the stable graph domain boundary, translating domain-level graph 
 5. **Label hierarchy dispatch** (label operations) — Label hierarchy queries route to a dedicated storage instance.
 6. **Result propagation** — Success returns typed domain outputs. Contract violations raise domain exceptions.
 
-See `spec.md` for layered query resolution and ownership persistence algorithms.
+See `spec-graph.md` for layered query resolution and ownership persistence algorithms.
 
 ## 4. Scenarios
 

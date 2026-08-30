@@ -1,6 +1,6 @@
 # commons-graph Performance Optimizations
 
-Optimization log for core module. Benchmarks in [performance.md](performance.md).
+Optimization log for core module. Benchmarks in [performance-core.md](performance-core.md).
 
 ## Key Improvements
 

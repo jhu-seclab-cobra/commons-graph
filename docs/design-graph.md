@@ -10,7 +10,7 @@
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
 
-`AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. See `spec.md` for edge lookup and traversal algorithms.
+`AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. See `spec-graph.md` for edge lookup and traversal algorithms.
 
 ---
 
@@ -97,7 +97,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 **Ownership Persistence:**
 
-`flush()` persists node ownership to storage via a `__owners__` property. `rebuild()` restores nodes belonging to this graph. Graph remains usable after flush. See `spec.md` for the flush/rebuild algorithm.
+`flush()` persists node ownership to storage via a `__owners__` property. `rebuild()` restores nodes belonging to this graph. Graph remains usable after flush. See `spec-graph.md` for the flush/rebuild algorithm.
 
 ---
 

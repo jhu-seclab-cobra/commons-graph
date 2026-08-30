@@ -106,7 +106,7 @@ interface IStorage : Flushable {
 
 **Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ActiveColumnViewMap`, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
 
-See `spec.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
+See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
 ---
 

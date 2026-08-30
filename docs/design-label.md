@@ -10,7 +10,7 @@
 
 The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset`.
 
-See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec.md` for the visibility filtering algorithm.
+See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm.
 
 ---
 
@@ -115,7 +115,7 @@ Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, 
 | `getDescendants(of, label, cond)` | BFS via label-filtered edges; never yields the start node | `of`; `label`; `cond` | `Sequence<N>` | -- |
 | `getAncestors(of, label, cond)` | BFS via label-filtered edges; never yields the start node | `of`; `label`; `cond` | `Sequence<N>` | -- |
 
-See `model.md` for the edge visibility rule and `spec.md` for the filtering algorithm.
+See `model.md` for the edge visibility rule and `spec-graph.md` for the filtering algorithm.
 
 ---
 

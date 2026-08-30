@@ -7,7 +7,7 @@ Paired design: `design-storage.md`
 macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Median of 3-5 iterations after JIT warmup. Separate JVM per implementation. JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`. Int-keyed storage (identity-function hashCode). NativeStorageImpl uses columnar layout -- one `HashMap<Int, IValue>` per property name (O(K) columns, K << N).
 
 ```bash
-./gradlew :graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests -Pbenchmark.impl=NativeStorageImpl --rerun
+./gradlew :jhu-seclab-cobra-commons-graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests -Pbenchmark.impl=NativeStorageImpl --rerun
 ```
 
 ### Storage-Level Benchmarks
