@@ -7,7 +7,7 @@ Paired design: `design-storage.md`, `impl.md`
 macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Separate JVM per implementation.
 
 ```bash
-./gradlew :modules:impl-jgrapht:test --tests "*.JgraphtPerformanceTest" -PincludePerformanceTests --rerun
+./gradlew :jhu-seclab-cobra-commons-graph-impl-jgrapht:test --tests "*.JgraphtPerformanceTest" -PincludePerformanceTests --rerun
 ```
 
 Scale tiers: 10K/30K, 100K/300K, 1M/3M nodes/edges.

@@ -51,13 +51,13 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 #### Lifecycle
 
 - **`clear()`** -- Remove all nodes, edges, and metadata.
-- **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. Returns node ID mapping (source to target).
+- **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. `target` must be a different storage instance; raises `IllegalArgumentException` if same. Returns node ID mapping (source to target).
 - Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
 
 ### Implementations
 
 - **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
-- **`NativeConcurStorageImpl`** -- In-memory, thread-safe with read-write locks. No constructor parameters.
+- **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
 - **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines.
 
 ### `LayeredStorageImpl` Extra API
@@ -78,7 +78,7 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 - All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
 - `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
-- `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs.
+- `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs. `target` must be a different storage instance.
 - `deleteNode` cascades to all incident edges in the same storage.
 - `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
 - `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.

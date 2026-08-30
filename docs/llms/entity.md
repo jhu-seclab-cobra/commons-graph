@@ -65,8 +65,8 @@ class MyNode : AbcNode() {
 ## Gotchas
 
 - Never instantiate `AbcNode` or `AbcEdge` subclasses directly. The graph layer calls `bind()` to inject storage and identity.
-- `AbcNode` filters the internal `__nid__` property from all user-facing APIs (`get`, `set`, `contains`, `asMap`, `update`). Setting `__nid__` raises `IllegalArgumentException`.
-- `AbcNode.equals` compares by `NodeID`. `AbcEdge.equals` compares by `storageId`.
+- `AbcNode` filters reserved properties (`__nid__`, `__owners__`) from all user-facing APIs (`get`, `set`, `contains`, `asMap`, `update`). Setting a reserved property raises `IllegalArgumentException`.
+- `AbcNode.equals` compares by `NodeID`. `AbcEdge.equals` compares by `(srcNid, dstNid, eTag)` triple.
 - `EntityType` delegate persists the enum name as a `StrVal` property. Renaming enum entries breaks deserialization.
 - `EntityProperty` nullable delegate propagates `null` to `IEntity.set(name, null)`, which removes the property.
 - Property reads and writes go directly to storage. No local caching in the entity object.

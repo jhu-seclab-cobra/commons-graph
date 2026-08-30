@@ -7,7 +7,7 @@ Paired design: `design-storage.md`, `impl.md`
 macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Separate JVM per implementation.
 
 ```bash
-./gradlew :modules:impl-mapdb:test --tests "*.MapDBPerformanceTest" -PincludePerformanceTests --rerun
+./gradlew :jhu-seclab-cobra-commons-graph-impl-mapdb:test --tests "*.MapDBPerformanceTest" -PincludePerformanceTests --rerun
 ```
 
 Tests all 8 configurations (2 impls x 4 backends). Scale: 5K/15K nodes/edges.

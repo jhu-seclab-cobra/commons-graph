@@ -7,7 +7,7 @@ Paired design: `design-storage.md`, `impl.md`
 macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Separate JVM per implementation.
 
 ```bash
-./gradlew :modules:impl-neo4j:test --tests "*.Neo4jPerformanceTest" -PincludePerformanceTests --rerun
+./gradlew :jhu-seclab-cobra-commons-graph-impl-neo4j:test --tests "*.Neo4jPerformanceTest" -PincludePerformanceTests --rerun
 ```
 
 Scale tiers: 1K/3K, 5K/15K, 10K/30K nodes/edges.
