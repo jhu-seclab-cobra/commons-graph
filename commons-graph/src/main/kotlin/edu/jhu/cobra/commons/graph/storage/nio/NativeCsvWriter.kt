@@ -19,8 +19,9 @@ import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.notExists
 
-// Structural edge columns, fixed by NativeCsvFormat: they precede every property column.
-private const val EDGE_FIXED_HEADER = "$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL"
+// Structural columns, fixed by NativeCsvFormat: they precede every property column.
+private val NODE_FIXED_COLUMNS = listOf(NODE_ID_COL)
+private val EDGE_FIXED_COLUMNS = listOf(EDGE_ID_COL, EDGE_SRC_COL, EDGE_DST_COL, EDGE_TAG_COL)
 
 /**
  * Streams a storage's nodes, edges, and metadata into a CSV directory in
@@ -51,9 +52,9 @@ internal class NativeCsvWriter(
         require(!metaFile.exists() || metaFile.fileSize() <= 0) { "File $metaFile already exists" }
         if (path.notExists()) path.createDirectories()
         nodeWriter = nodeFile.bufferedWriter()
-        nodeWriter.appendLine(NODE_ID_COL)
+        nodeWriter.appendLine(headerLine(NODE_FIXED_COLUMNS, emptySet()))
         edgeWriter = edgeFile.bufferedWriter()
-        edgeWriter.appendLine(EDGE_FIXED_HEADER)
+        edgeWriter.appendLine(headerLine(EDGE_FIXED_COLUMNS, emptySet()))
         metaWriter = metaFile.bufferedWriter()
         metaWriter.appendLine("name${CSV_DELIMITER}value")
     }
@@ -102,19 +103,20 @@ internal class NativeCsvWriter(
         metaWriter.appendLine("$serName$CSV_DELIMITER$serValue")
     }
 
+    // Each column name is escaped as its own cell; the fixed names never contain the delimiter,
+    // and a property name that does must not split the header.
+    private fun headerLine(
+        fixedColumns: List<String>,
+        header: Set<String>,
+    ): String = (fixedColumns.asSequence() + header.asSequence()).map { escape(it) }.joinToString(CSV_DELIMITER)
+
     private fun updateHeader(
         file: File,
         header: LinkedHashSet<String>,
-        fixedPrefix: String,
+        fixedColumns: List<String>,
     ) {
         require(!isClosed) { "The file is closed" }
-        val headerSequence =
-            if (fixedPrefix.isEmpty()) {
-                header.asSequence()
-            } else {
-                sequenceOf(fixedPrefix) + header.asSequence()
-            }
-        val newFirstLine = headerSequence.map { escape(it) }.joinToString(CSV_DELIMITER)
+        val newFirstLine = headerLine(fixedColumns, header)
         val tempFile = File.createTempFile("tmp", ".txt")
         try {
             file.bufferedReader().use { reader ->
@@ -136,10 +138,10 @@ internal class NativeCsvWriter(
         edgeWriter.close()
         metaWriter.close()
         if (isNodeHeaderChanged) {
-            updateHeader(nodeFile.toFile(), nodeHeaders, NODE_ID_COL)
+            updateHeader(nodeFile.toFile(), nodeHeaders, NODE_FIXED_COLUMNS)
         }
         if (isEdgeHeaderChanged) {
-            updateHeader(edgeFile.toFile(), edgeHeaders, EDGE_FIXED_HEADER)
+            updateHeader(edgeFile.toFile(), edgeHeaders, EDGE_FIXED_COLUMNS)
         }
         isClosed = true
     }
