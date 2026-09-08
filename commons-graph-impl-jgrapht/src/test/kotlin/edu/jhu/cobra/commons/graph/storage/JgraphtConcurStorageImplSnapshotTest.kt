@@ -1,14 +1,3 @@
-/*
- * White-box tests for JGraphT concurrent-specific internal behavior of [JgraphtConcurStorageImpl].
- *
- * - `getNodeProperties returns defensive copy not internal reference`
- * - `getEdgeProperties returns defensive copy not internal reference`
- * - `modifying returned properties does not affect internal state`
- * - `nodeIDs returns snapshot under read lock`
- * - `pseudograph supports parallel edges under concurrent impl`
- * - `concurrent deleteNode does not cause ConcurrentModificationException`
- * - `no deadlock under mixed read-write operations`
- */
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
@@ -27,7 +16,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 
-internal class JgraphtConcurStorageImplWhiteBoxTest {
+/*
+ * White-box tests for JgraphtConcurStorageImpl: defensive copies, snapshots under read lock, and concurrent safety.
+ *
+ * - `getNodeProperties returns defensive copy not internal reference`
+ * - `getEdgeProperties returns defensive copy not internal reference`
+ * - `modifying returned properties does not affect internal state`
+ * - `nodeIDs returns snapshot under read lock`
+ * - `pseudograph supports parallel edges under concurrent impl`
+ * - `concurrent deleteNode does not cause ConcurrentModificationException`
+ * - `no deadlock under mixed read-write operations`
+ */
+internal class JgraphtConcurStorageImplSnapshotTest {
     private lateinit var storage: JgraphtConcurStorageImpl
 
     @BeforeTest

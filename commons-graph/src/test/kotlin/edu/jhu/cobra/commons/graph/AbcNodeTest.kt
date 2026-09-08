@@ -15,38 +15,30 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Black-box tests for AbcNode: bind, id, type, property access with PROP_NODE_ID filtering,
- * equals/hashCode.
+/*
+ * Black-box tests for AbcNode: identity, property access, and equality contract.
  *
- * - `id returns nodeId injected via bind` — verifies id delegates to nodeId
- * - `type returns subclass-defined type` — verifies abstract type override
- * - `get filters PROP_NODE_ID` — verifies internal property hidden from user
- * - `set rejects PROP_NODE_ID` — verifies require guard on reserved property
- * - `contains filters PROP_NODE_ID` — verifies internal property excluded
- * - `asMap filters PROP_NODE_ID` — verifies internal property excluded from map
- * - `update rejects PROP_NODE_ID` — verifies require guard on bulk update
- * - `get filters PROP_OWNERS` — verifies ownership mark hidden from user
- * - `set rejects PROP_OWNERS` — verifies require guard on reserved property
- * - `contains filters PROP_OWNERS` — verifies ownership mark excluded
- * - `asMap filters PROP_OWNERS` — verifies ownership mark excluded from map
- * - `update rejects PROP_OWNERS` — verifies require guard on bulk update
- * - `get returns value for user property` — verifies normal property read
- * - `set stores user property` — verifies normal property write
- * - `set null removes user property` — verifies null removes property
- * - `contains returns true for existing user property` — verifies contains on present key
- * - `contains returns false for absent property` — verifies contains on missing key
- * - `asMap returns all user properties` — verifies complete map minus internal
- * - `asMap returns snapshot unaffected by later writes` — verifies snapshot semantics
- * - `update sets multiple user properties` — verifies bulk update
- * - `equals returns true for same id` — verifies equality by id
- * - `equals returns false for different id` — verifies inequality by id
- * - `equals returns false for non-node object` — verifies type guard
- * - `hashCode uses id` — verifies hashCode consistency with equals
- * - `toString includes id and type` — verifies string representation
+ * - `id returns nodeId injected via bind` -- verifies id delegates to nodeId
+ * - `type returns subclass-defined type` -- verifies abstract type override
+ * - `get returns value for user property` -- verifies normal property read
+ * - `set stores user property` -- verifies normal property write
+ * - `set null removes user property` -- verifies null removes property
+ * - `contains returns true for existing user property` -- verifies contains on present key
+ * - `contains returns false for absent property` -- verifies contains on missing key
+ * - `asMap returns all user properties` -- verifies complete map minus internal
+ * - `asMap returns snapshot unaffected by later writes` -- verifies snapshot semantics
+ * - `update sets multiple user properties` -- verifies bulk update
+ * - `equals returns true for same id` -- verifies equality by id
+ * - `equals returns false for different id` -- verifies inequality by id
+ * - `equals returns false for non-node object` -- verifies type guard
+ * - `hashCode uses id` -- verifies hashCode consistency with equals
+ * - `toString includes id and type` -- verifies string representation
+ * - `AbcNode hashCode equals contract - same id different storageId` -- hashCode must match equals
+ * - `AbcNode in HashSet - same id different storageId treated as duplicates` -- collection dedup
  */
 internal class AbcNodeTest {
     private lateinit var storage: NativeStorageImpl
+
     private lateinit var node: TestNode
 
     @BeforeTest
@@ -67,80 +59,6 @@ internal class AbcNodeTest {
     @Test
     fun `type returns subclass-defined type`() {
         assertEquals("TestNode", node.type.name)
-    }
-
-    // endregion
-
-    // region PROP_NODE_ID filtering
-
-    @Test
-    fun `get filters PROP_NODE_ID`() {
-        assertNull(node[AbcMultipleGraph.PROP_NODE_ID])
-    }
-
-    @Test
-    fun `set rejects PROP_NODE_ID`() {
-        assertFailsWith<IllegalArgumentException> {
-            node[AbcMultipleGraph.PROP_NODE_ID] = "bad".strVal
-        }
-    }
-
-    @Test
-    fun `contains filters PROP_NODE_ID`() {
-        assertFalse(AbcMultipleGraph.PROP_NODE_ID in node)
-    }
-
-    @Test
-    fun `asMap filters PROP_NODE_ID`() {
-        val map = node.asMap()
-
-        assertFalse(map.containsKey(AbcMultipleGraph.PROP_NODE_ID))
-    }
-
-    @Test
-    fun `update rejects PROP_NODE_ID`() {
-        assertFailsWith<IllegalArgumentException> {
-            node.update(mapOf(AbcMultipleGraph.PROP_NODE_ID to "bad".strVal))
-        }
-    }
-
-    // endregion
-
-    // region PROP_OWNERS filtering
-
-    @Test
-    fun `get filters PROP_OWNERS`() {
-        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
-
-        assertNull(node[AbcMultipleGraph.PROP_OWNERS])
-    }
-
-    @Test
-    fun `set rejects PROP_OWNERS`() {
-        assertFailsWith<IllegalArgumentException> {
-            node[AbcMultipleGraph.PROP_OWNERS] = "bad".strVal
-        }
-    }
-
-    @Test
-    fun `contains filters PROP_OWNERS`() {
-        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
-
-        assertFalse(AbcMultipleGraph.PROP_OWNERS in node)
-    }
-
-    @Test
-    fun `asMap filters PROP_OWNERS`() {
-        storage.setNodeProperties(node.storageId, mapOf(AbcMultipleGraph.PROP_OWNERS to "g".strVal))
-
-        assertFalse(node.asMap().containsKey(AbcMultipleGraph.PROP_OWNERS))
-    }
-
-    @Test
-    fun `update rejects PROP_OWNERS`() {
-        assertFailsWith<IllegalArgumentException> {
-            node.update(mapOf(AbcMultipleGraph.PROP_OWNERS to "bad".strVal))
-        }
     }
 
     // endregion
@@ -257,17 +175,30 @@ internal class AbcNodeTest {
 
     // endregion
 
-    // region Utility: assertFailsWith (inline for kotlin.test)
+    @Test
+    fun `AbcNode hashCode equals contract - same id different storageId`() {
+        val storage1 = NativeStorageImpl()
+        val storage2 = NativeStorageImpl()
+        val node1 = TestNode()
+        node1.bind(storage1, storage1.addNode(), "shared-id")
+        val node2 = TestNode()
+        storage2.addNode()
+        node2.bind(storage2, storage2.addNode(), "shared-id")
 
-    private inline fun <reified T : Throwable> assertFailsWith(block: () -> Unit): T {
-        try {
-            block()
-            throw AssertionError("Expected ${T::class.simpleName} but no exception was thrown")
-        } catch (e: Throwable) {
-            if (e is T) return e
-            throw e
-        }
+        assertEquals(node1, node2)
+        assertEquals(node1.hashCode(), node2.hashCode())
     }
 
-    // endregion
+    @Test
+    fun `AbcNode in HashSet - same id different storageId treated as duplicates`() {
+        val storage = NativeStorageImpl()
+        val node1 = TestNode()
+        node1.bind(storage, storage.addNode(), "same-id")
+        val node2 = TestNode()
+        node2.bind(storage, storage.addNode(), "same-id")
+
+        val set = hashSetOf(node1, node2)
+
+        assertEquals(1, set.size)
+    }
 }

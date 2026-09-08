@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
@@ -8,6 +9,7 @@ import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
 import edu.jhu.cobra.commons.value.strVal
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,12 +19,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for JgraphtConcurStorageImpl: adjacency, metadata, lifecycle, and transferTo.
+ * Black-box tests for the AbcMapDBStorage engine through MapDBStorageImpl: adjacency, metadata, clear, transferTo, and complex values.
  *
  * - `getIncomingEdges returns correct edge set`
  * - `getIncomingEdges returns empty set when no incoming edges`
  * - `getIncomingEdges throws EntityNotExistException for missing node`
  * - `getOutgoingEdges returns correct edge set`
+ * - `getOutgoingEdges returns empty set when no outgoing edges`
  * - `getOutgoingEdges throws EntityNotExistException for missing node`
  * - `self loop edge appears in both incoming and outgoing`
  * - `setMeta stores and getMeta retrieves value`
@@ -32,14 +35,23 @@ import kotlin.test.assertTrue
  * - `clear removes all nodes edges and metadata`
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
+ * - `transferTo preserves edge properties and tag`
+ * - `transferTo same instance throws IllegalArgumentException`
  * - `complex IValue types survive property round-trip`
+ * - `NullVal stored and retrieved correctly`
+ * - `getOutgoingEdges returns mutable internal set - caller can corrupt adjacency`
  */
-internal class JgraphtConcurStorageImplTest {
+internal class AbcMapDBStorageTest {
     private lateinit var storage: IStorage
 
     @BeforeTest
     fun setUp() {
-        storage = JgraphtConcurStorageImpl()
+        storage = MapDBStorageImpl { memoryDB() }
+    }
+
+    @AfterTest
+    fun tearDown() {
+        (storage as AutoCloseable).close()
     }
 
     // -- adjacency --
@@ -73,6 +85,12 @@ internal class JgraphtConcurStorageImplTest {
         val e1 = storage.addEdge(n1, n2, "a")
         val e2 = storage.addEdge(n1, n3, "b")
         assertEquals(setOf(e1, e2), storage.getOutgoingEdges(n1))
+    }
+
+    @Test
+    fun `getOutgoingEdges returns empty set when no outgoing edges`() {
+        val n = storage.addNode()
+        assertTrue(storage.getOutgoingEdges(n).isEmpty())
     }
 
     @Test
@@ -136,31 +154,54 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `transferTo copies nodes edges and metadata to target`() {
-        val n1 = storage.addNode(mapOf("a" to 1.intVal))
-        val n2 = storage.addNode(mapOf("b" to 2.intVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 3.intVal))
-        storage.setMeta("version", 7.intVal)
+        val n1 = storage.addNode(mapOf("name" to "A".strVal))
+        val n2 = storage.addNode(mapOf("name" to "B".strVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
+        storage.setMeta("version", "1.0".strVal)
 
-        val target = JgraphtStorageImpl()
+        val target = MapDBStorageImpl { memoryDB() }
         storage.transferTo(target)
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
-        assertEquals(7.intVal, target.getMeta("version"))
+        assertEquals("1.0", (target.getMeta("version") as StrVal).core)
+        target.close()
     }
 
     @Test
     fun `transferTo remaps edge endpoints to target node IDs`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        storage.addEdge(n1, n2, "link")
+        storage.addEdge(n1, n2, "rel")
 
-        val target = JgraphtStorageImpl()
+        val target = MapDBStorageImpl { memoryDB() }
         storage.transferTo(target)
 
         val tEdge = target.edgeIDs.first()
         assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
         assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
+        target.close()
+    }
+
+    @Test
+    fun `transferTo preserves edge properties and tag`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdge(n1, n2, "typed", mapOf("score" to 99.intVal))
+
+        val target = MapDBStorageImpl { memoryDB() }
+        storage.transferTo(target)
+
+        val tEdge = target.edgeIDs.first()
+        assertEquals("typed", target.getEdgeStructure(tEdge).tag)
+        assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as IntVal).core)
+        target.close()
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // -- complex values --
@@ -172,13 +213,46 @@ internal class JgraphtConcurStorageImplTest {
                 "str" to "test".strVal,
                 "num" to 42.intVal,
                 "bool" to true.boolVal,
-                "list" to listOf(1.intVal, 2.intVal).listVal,
+                "list" to listOf(1.intVal, 2.intVal, 3.intVal).listVal,
                 "map" to mapOf("nested" to "value".strVal).mapVal,
             ).mapVal
 
-        val id = storage.addNode(mapOf("complex" to complexValue, "null" to NullVal))
+        val id = storage.addNode(mapOf("complex" to complexValue))
+        assertEquals(complexValue, storage.getNodeProperties(id)["complex"])
+    }
+
+    @Test
+    fun `NullVal stored and retrieved correctly`() {
+        val id = storage.addNode(mapOf("nullProp" to NullVal, "normal" to "x".strVal))
         val props = storage.getNodeProperties(id)
-        assertEquals(complexValue, props["complex"])
-        assertTrue(props["null"] is NullVal)
+        assertEquals(NullVal, props["nullProp"])
+        assertEquals("x".strVal, props["normal"])
+    }
+
+    @Test
+    fun `getOutgoingEdges returns mutable internal set - caller can corrupt adjacency`() {
+        val storage = MapDBStorageImpl()
+        val nodeA = storage.addNode()
+        val nodeB = storage.addNode()
+        storage.addEdge(nodeA, nodeB, "tag")
+
+        val outEdges = storage.getOutgoingEdges(nodeA)
+        assertEquals(1, outEdges.size, "Should have 1 outgoing edge")
+
+        // Attempt to mutate the returned set — if mutable internal set is returned, this corrupts the index
+        try {
+            (outEdges as MutableSet<Int>).clear()
+        } catch (_: UnsupportedOperationException) {
+            // If this throws, the set is properly unmodifiable — no bug
+            return
+        }
+
+        // If we got here, the set was mutable and we corrupted the index
+        val outEdgesAfter = storage.getOutgoingEdges(nodeA)
+        assertEquals(
+            1,
+            outEdgesAfter.size,
+            "Adjacency should still show 1 edge — but if mutable set was returned, it was corrupted to 0",
+        )
     }
 }

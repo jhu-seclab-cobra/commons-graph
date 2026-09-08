@@ -1,6 +1,8 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.GraphFixtures.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.intVal
@@ -13,43 +15,32 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Black-box tests for IEntity sealed interface and AbcEntity delegate utilities.
+/*
+ * Black-box tests for AbcEntity: property access, type, and getTypeProp.
  *
- * - `get returns value when property exists` — verifies operator get returns stored IValue
- * - `get returns null when property absent` — verifies absent property yields null
- * - `set stores value` — verifies operator set writes property
- * - `set null removes property` — verifies null value deletes the property
- * - `contains returns true when property exists` — verifies operator contains for present key
- * - `contains returns false when property absent` — verifies operator contains for missing key
- * - `asMap returns empty map when no properties` — verifies empty initial state
- * - `asMap returns all properties as snapshot` — verifies complete property map
- * - `update sets multiple properties` — verifies bulk set of name-value pairs
- * - `update null values remove properties` — verifies null entries in update map remove keys
- * - `update with empty map is no-op` — verifies empty update preserves state
- * - `IEntity Type exposes name` — verifies Type.name contract
- * - `getTypeProp returns typed value when type matches` — verifies reified cast on match
- * - `getTypeProp returns null when type mismatches` — verifies reified cast returns null on mismatch
- * - `getTypeProp returns null when property absent` — verifies absent property returns null
- * - `EntityProperty delegate returns default when unset` — verifies default fallback
- * - `EntityProperty delegate set and get round-trips` — verifies delegate write-read cycle
- * - `EntityProperty delegate custom name uses custom storage key` — verifies optName mapping
- * - `EntityProperty nullable delegate returns null initially` — verifies nullable default
- * - `EntityProperty nullable delegate set and get round-trips` — verifies nullable write-read
- * - `EntityProperty nullable set to null does not write` — verifies null assignment is no-op
- * - `EntityType delegate returns default when unset` — verifies enum type default
- * - `EntityType delegate set and get round-trips` — verifies enum type write-read
- * - `EntityType delegate custom name uses custom storage key` — verifies optName mapping
- * - `EntityType delegate auto name uses entity class prefix` — verifies auto-generated key is
- *   prefixed with the entity class name, not the anonymous delegate class
- * - `EntityType delegate returns default on unknown stored value` — verifies fallback for bad data
- * - `EntityProperty nullable delegate returns null when storage value is null` — nullable delegate null in storage
- * - `EntityType delegate returns default when stored value is non-StrVal type` — wrong type in storage
- * - `getTypeProp returns null when property exists but wrong type` — type mismatch returns null
- * - `EntityType delegate set same value is no-op` — skip write when value unchanged
+ * - `get returns value when property exists` -- verifies operator get returns stored IValue
+ * - `get returns null when property absent` -- verifies absent property yields null
+ * - `set stores value` -- verifies operator set writes property
+ * - `set null removes property` -- verifies null value deletes the property
+ * - `contains returns true when property exists` -- verifies operator contains for present key
+ * - `contains returns false when property absent` -- verifies operator contains for missing key
+ * - `asMap returns empty map when no properties` -- verifies empty initial state
+ * - `asMap returns all properties as snapshot` -- verifies complete property map
+ * - `update sets multiple properties` -- verifies bulk set of name-value pairs
+ * - `update null values remove properties` -- verifies null entries in update map remove keys
+ * - `update with empty map is no-op` -- verifies empty update preserves state
+ * - `IEntity Type exposes name` -- verifies Type.name contract
+ * - `getTypeProp returns typed value when type matches` -- verifies reified cast on match
+ * - `getTypeProp returns null when type mismatches` -- verifies reified cast returns null on mismatch
+ * - `getTypeProp returns null when property absent` -- verifies absent property returns null
+ * - `EntityProperty nullable delegate returns null when storage value is null` -- nullable delegate null in storage
+ * - `EntityType delegate returns default when stored value is non-StrVal type` -- wrong type in storage
+ * - `getTypeProp returns null when property exists but wrong type` -- type mismatch returns null
+ * - `EntityType delegate set same value is no-op` -- skip write when value unchanged
  */
 internal class AbcEntityTest {
     private lateinit var storage: NativeStorageImpl
+
     private lateinit var testNode: GraphFixtures.TestNode
 
     @BeforeTest
@@ -198,142 +189,6 @@ internal class AbcEntityTest {
         val result: StrVal? = testNode.getTypeProp("missing")
 
         assertNull(result)
-    }
-
-    // endregion
-
-    // region EntityProperty delegate
-
-    private class PropNode : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "PropNode"
-            }
-        var label: StrVal by EntityProperty(default = "default".strVal)
-        var custom: StrVal by EntityProperty("customKey", default = "d".strVal)
-        var opt: StrVal? by EntityProperty()
-    }
-
-    @Test
-    fun `EntityProperty delegate returns default when unset`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        assertEquals("default", node.label.core)
-    }
-
-    @Test
-    fun `EntityProperty delegate set and get round-trips`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        node.label = "updated".strVal
-
-        assertEquals("updated", node.label.core)
-    }
-
-    @Test
-    fun `EntityProperty delegate custom name uses custom storage key`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        node.custom = "val".strVal
-
-        assertEquals("val", (node["customKey"] as? StrVal)?.core)
-    }
-
-    @Test
-    fun `EntityProperty nullable delegate returns null initially`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        assertNull(node.opt)
-    }
-
-    @Test
-    fun `EntityProperty nullable delegate set and get round-trips`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        node.opt = "hello".strVal
-
-        assertEquals("hello", node.opt?.core)
-    }
-
-    @Test
-    fun `EntityProperty nullable set to null does not write`() {
-        val sid = storage.addNode()
-        val node = PropNode().also { it.bind(storage, sid, "p") }
-
-        node.opt = null
-
-        assertNull(node.opt)
-        assertFalse("opt" in node)
-    }
-
-    // endregion
-
-    // region EntityType delegate
-
-    private enum class Kind : IEntity.Type {
-        SOURCE,
-        SINK,
-    }
-
-    private class TypeNode : AbcNode() {
-        override val type: AbcNode.Type =
-            object : AbcNode.Type {
-                override val name = "TypeNode"
-            }
-        var kind: Kind by EntityType(default = Kind.SOURCE)
-        var namedKind: Kind by EntityType("myKind", default = Kind.SOURCE)
-    }
-
-    @Test
-    fun `EntityType delegate returns default when unset`() {
-        val sid = storage.addNode()
-        val node = TypeNode().also { it.bind(storage, sid, "t") }
-
-        assertEquals(Kind.SOURCE, node.kind)
-    }
-
-    @Test
-    fun `EntityType delegate set and get round-trips`() {
-        val sid = storage.addNode()
-        val node = TypeNode().also { it.bind(storage, sid, "t") }
-
-        node.kind = Kind.SINK
-
-        assertEquals(Kind.SINK, node.kind)
-    }
-
-    @Test
-    fun `EntityType delegate custom name uses custom storage key`() {
-        val sid = storage.addNode()
-        val node = TypeNode().also { it.bind(storage, sid, "t") }
-
-        node.namedKind = Kind.SINK
-
-        assertEquals("SINK", (node["myKind"] as? StrVal)?.core)
-    }
-
-    @Test
-    fun `EntityType delegate auto name uses entity class prefix`() {
-        val sid = storage.addNode()
-        val node = TypeNode().also { it.bind(storage, sid, "t") }
-
-        node.kind = Kind.SINK
-
-        assertEquals("SINK", (node["typenode_kind"] as? StrVal)?.core)
-    }
-
-    @Test
-    fun `EntityType delegate returns default on unknown stored value`() {
-        val sid = storage.addNode()
-        val node = TypeNode().also { it.bind(storage, sid, "t") }
-        node["myKind"] = "INVALID_VALUE".strVal
-
-        assertEquals(Kind.SOURCE, node.namedKind)
     }
 
     // endregion

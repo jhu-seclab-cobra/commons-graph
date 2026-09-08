@@ -3,10 +3,9 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.boolVal
 import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
-import java.nio.file.Files
-import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -16,86 +15,57 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for Neo4jConcurStorageImpl: metadata, clear, transferTo, and concurrency.
+ * Black-box tests for MapDBConcurStorageImpl: read consistency and thread safety under concurrent access.
  *
- * - `setMeta stores and getMeta retrieves value`
- * - `getMeta returns null for nonexistent key`
- * - `clear removes all nodes edges and metadata`
- * - `transferTo copies nodes edges and metadata to target`
+ * - `read consistency returns snapshot properties`
  * - `concurrent node additions produce correct total count`
  * - `concurrent read-write operations do not produce errors`
  * - `concurrent node deletion completes without errors`
  * - `concurrent graph traversal reads consistent adjacency`
+ * - `lock contention under heavy read-write does not deadlock`
  */
-internal class Neo4jConcurStorageImplTest {
-    private lateinit var storage: Neo4jConcurStorageImpl
-
-    private lateinit var graphDir: Path
+internal class MapDBConcurStorageImplConcurrencyTest {
+    private lateinit var storage: IStorage
 
     @BeforeTest
     fun setUp() {
-        graphDir = Files.createTempDirectory("neo4j-concur-test")
-        storage = Neo4jConcurStorageImpl(graphDir)
+        storage = MapDBConcurStorageImpl { memoryDB() }
     }
 
     @AfterTest
     fun tearDown() {
-        storage.close()
-        graphDir.toFile().deleteRecursively()
+        (storage as AutoCloseable).close()
     }
 
-    // -- metadata --
+    // -- read consistency --
 
     @Test
-    fun `setMeta stores and getMeta retrieves value`() {
-        storage.setMeta("version", "1.0".strVal)
-        assertEquals("1.0", (storage.getMeta("version") as StrVal).core)
-    }
+    fun `read consistency returns snapshot properties`() {
+        val node1 = storage.addNode(mapOf("prop1" to "value1".strVal))
+        val props = storage.getNodeProperties(node1)
 
-    @Test
-    fun `getMeta returns null for nonexistent key`() {
-        assertNull(storage.getMeta("nonexistent"))
-    }
+        val done = CountDownLatch(1)
+        Thread {
+            storage.setNodeProperties(node1, mapOf("prop1" to "changed".strVal))
+            done.countDown()
+        }.start()
+        done.await(1, TimeUnit.SECONDS)
 
-    // -- clear --
-
-    @Test
-    fun `clear removes all nodes edges and metadata`() {
-        storage.addNode()
-        storage.setMeta("key", "val".strVal)
-        storage.clear()
-        assertEquals(0, storage.nodeIDs.size)
-        assertTrue(storage.metaNames.isEmpty())
-    }
-
-    // -- transferTo --
-
-    @Test
-    fun `transferTo copies nodes edges and metadata to target`() {
-        val n1 = storage.addNode(mapOf("label" to "A".strVal))
-        val n2 = storage.addNode(mapOf("label" to "B".strVal))
-        storage.addEdge(n1, n2, "CONNECTS")
-        storage.setMeta("version", "1".strVal)
-
-        val target = NativeStorageImpl()
-        storage.transferTo(target)
-
-        assertEquals(2, target.nodeIDs.size)
-        assertEquals(1, target.edgeIDs.size)
-        assertEquals("1", target.getMeta("version")?.core)
+        assertEquals("value1", (props["prop1"] as StrVal).core)
+        assertEquals("changed", (storage.getNodeProperties(node1)["prop1"] as StrVal).core)
     }
 
     // -- concurrency tests --
 
     @Test
     fun `concurrent node additions produce correct total count`() {
-        val threadCount = 4
-        val nodesPerThread = 10
+        val threadCount = 10
+        val nodesPerThread = 100
         val errors = AtomicInteger(0)
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
@@ -114,7 +84,7 @@ internal class Neo4jConcurStorageImplTest {
             }
         }
 
-        latch.await(60, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         executor.shutdown()
         assertEquals(0, errors.get())
         assertEquals(threadCount * nodesPerThread, storage.nodeIDs.size)
@@ -123,8 +93,8 @@ internal class Neo4jConcurStorageImplTest {
     @Test
     fun `concurrent read-write operations do not produce errors`() {
         val node1 = storage.addNode(mapOf("counter" to 0.intVal))
-        val threadCount = 3
-        val iterations = 10
+        val threadCount = 5
+        val iterations = 100
         val executor = Executors.newFixedThreadPool(threadCount * 2)
         val latch = CountDownLatch(threadCount * 2)
         val errors = AtomicInteger(0)
@@ -158,14 +128,14 @@ internal class Neo4jConcurStorageImplTest {
             }
         }
 
-        latch.await(60, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         executor.shutdown()
         assertEquals(0, errors.get())
     }
 
     @Test
     fun `concurrent node deletion completes without errors`() {
-        val nodeIds = (0 until 20).map { storage.addNode(mapOf("index" to it.intVal)) }
+        val nodeIds = (0 until 100).map { storage.addNode(mapOf("index" to it.intVal)) }
         val oddNodes = nodeIds.filterIndexed { idx, _ -> idx % 2 == 1 }
 
         val startLatch = CountDownLatch(1)
@@ -204,11 +174,11 @@ internal class Neo4jConcurStorageImplTest {
         }.start()
 
         startLatch.countDown()
-        finishLatch.await(30, TimeUnit.SECONDS)
+        finishLatch.await(10, TimeUnit.SECONDS)
 
         assertTrue(deleteSuccess.get())
         assertTrue(querySuccess.get())
-        assertEquals(10, storage.nodeIDs.size)
+        assertEquals(50, storage.nodeIDs.size)
     }
 
     @Test
@@ -220,7 +190,7 @@ internal class Neo4jConcurStorageImplTest {
         storage.addEdge(n2, n3, "e2")
         storage.addEdge(n1, n3, "e3")
 
-        val threadCount = 3
+        val threadCount = 5
         val executor = Executors.newFixedThreadPool(threadCount)
         val latch = CountDownLatch(threadCount)
         val errors = AtomicInteger(0)
@@ -228,7 +198,7 @@ internal class Neo4jConcurStorageImplTest {
         for (t in 0 until threadCount) {
             executor.submit {
                 try {
-                    repeat(10) {
+                    repeat(100) {
                         assertEquals(2, storage.getIncomingEdges(n3).size)
                         assertEquals(2, storage.getOutgoingEdges(n1).size)
                     }
@@ -240,8 +210,67 @@ internal class Neo4jConcurStorageImplTest {
             }
         }
 
-        latch.await(60, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         executor.shutdown()
+        assertEquals(0, errors.get())
+    }
+
+    @Test
+    fun `lock contention under heavy read-write does not deadlock`() {
+        val node1 = storage.addNode(mapOf("counter" to 0.intVal))
+        val readThreads = 20
+        val writeThreads = 5
+        val readOps = 1000
+        val writeOps = 100
+
+        val executor = Executors.newFixedThreadPool(readThreads + writeThreads)
+        val errors = AtomicInteger(0)
+        val latch = CountDownLatch(readThreads + writeThreads)
+        val timeoutOccurred = AtomicBoolean(false)
+
+        for (t in 0 until readThreads) {
+            executor.submit {
+                try {
+                    repeat(readOps) {
+                        try {
+                            assertNotNull(storage.getNodeProperties(node1)["counter"])
+                        } catch (e: EntityNotExistException) {
+                            // acceptable
+                        }
+                    }
+                } finally {
+                    latch.countDown()
+                }
+            }
+        }
+
+        for (t in 0 until writeThreads) {
+            executor.submit {
+                try {
+                    repeat(writeOps) { i ->
+                        try {
+                            val current = (storage.getNodeProperties(node1)["counter"] as? IntVal)?.core ?: 0
+                            storage.setNodeProperties(node1, mapOf("counter" to (current.toInt() + 1).intVal))
+                            if (i % 10 == 0) {
+                                val tempId = storage.addNode(mapOf("temp" to true.boolVal))
+                                storage.deleteNode(tempId)
+                            }
+                        } catch (e: EntityNotExistException) {
+                            // acceptable
+                        }
+                    }
+                } finally {
+                    latch.countDown()
+                }
+            }
+        }
+
+        val completed = latch.await(30, TimeUnit.SECONDS)
+        if (!completed) timeoutOccurred.set(true)
+        executor.shutdownNow()
+        executor.awaitTermination(5, TimeUnit.SECONDS)
+
+        assertFalse(timeoutOccurred.get(), "Should not deadlock")
         assertEquals(0, errors.get())
     }
 }

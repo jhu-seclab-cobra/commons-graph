@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
+import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.NullVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.boolVal
@@ -17,12 +18,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for JgraphtConcurStorageImpl: adjacency, metadata, lifecycle, and transferTo.
+ * Black-box tests for the AbcJgraphtStorage engine through JgraphtStorageImpl: adjacency, metadata, clear, transferTo, and complex values.
  *
  * - `getIncomingEdges returns correct edge set`
  * - `getIncomingEdges returns empty set when no incoming edges`
  * - `getIncomingEdges throws EntityNotExistException for missing node`
  * - `getOutgoingEdges returns correct edge set`
+ * - `getOutgoingEdges returns empty set when no outgoing edges`
  * - `getOutgoingEdges throws EntityNotExistException for missing node`
  * - `self loop edge appears in both incoming and outgoing`
  * - `setMeta stores and getMeta retrieves value`
@@ -32,14 +34,16 @@ import kotlin.test.assertTrue
  * - `clear removes all nodes edges and metadata`
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
+ * - `transferTo preserves edge properties and tag`
+ * - `transferTo same instance throws IllegalArgumentException`
  * - `complex IValue types survive property round-trip`
  */
-internal class JgraphtConcurStorageImplTest {
+internal class AbcJgraphtStorageTest {
     private lateinit var storage: IStorage
 
     @BeforeTest
     fun setUp() {
-        storage = JgraphtConcurStorageImpl()
+        storage = JgraphtStorageImpl()
     }
 
     // -- adjacency --
@@ -73,6 +77,12 @@ internal class JgraphtConcurStorageImplTest {
         val e1 = storage.addEdge(n1, n2, "a")
         val e2 = storage.addEdge(n1, n3, "b")
         assertEquals(setOf(e1, e2), storage.getOutgoingEdges(n1))
+    }
+
+    @Test
+    fun `getOutgoingEdges returns empty set when no outgoing edges`() {
+        val n = storage.addNode()
+        assertTrue(storage.getOutgoingEdges(n).isEmpty())
     }
 
     @Test
@@ -136,24 +146,24 @@ internal class JgraphtConcurStorageImplTest {
 
     @Test
     fun `transferTo copies nodes edges and metadata to target`() {
-        val n1 = storage.addNode(mapOf("a" to 1.intVal))
-        val n2 = storage.addNode(mapOf("b" to 2.intVal))
-        storage.addEdge(n1, n2, "rel", mapOf("w" to 3.intVal))
-        storage.setMeta("version", 7.intVal)
+        val n1 = storage.addNode(mapOf("name" to "A".strVal))
+        val n2 = storage.addNode(mapOf("name" to "B".strVal))
+        storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
+        storage.setMeta("version", "1.0".strVal)
 
         val target = JgraphtStorageImpl()
         storage.transferTo(target)
 
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
-        assertEquals(7.intVal, target.getMeta("version"))
+        assertEquals("1.0", (target.getMeta("version") as StrVal).core)
     }
 
     @Test
     fun `transferTo remaps edge endpoints to target node IDs`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
-        storage.addEdge(n1, n2, "link")
+        storage.addEdge(n1, n2, "rel")
 
         val target = JgraphtStorageImpl()
         storage.transferTo(target)
@@ -161,6 +171,26 @@ internal class JgraphtConcurStorageImplTest {
         val tEdge = target.edgeIDs.first()
         assertTrue(target.getEdgeStructure(tEdge).src in target.nodeIDs)
         assertTrue(target.getEdgeStructure(tEdge).dst in target.nodeIDs)
+    }
+
+    @Test
+    fun `transferTo preserves edge properties and tag`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        storage.addEdge(n1, n2, "typed", mapOf("score" to 99.intVal))
+
+        val target = JgraphtStorageImpl()
+        storage.transferTo(target)
+
+        val tEdge = target.edgeIDs.first()
+        assertEquals("typed", target.getEdgeStructure(tEdge).tag)
+        assertEquals(99, (target.getEdgeProperties(tEdge)["score"] as IntVal).core)
+    }
+
+    @Test
+    fun `transferTo same instance throws IllegalArgumentException`() {
+        storage.addNode()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
     }
 
     // -- complex values --
@@ -172,7 +202,7 @@ internal class JgraphtConcurStorageImplTest {
                 "str" to "test".strVal,
                 "num" to 42.intVal,
                 "bool" to true.boolVal,
-                "list" to listOf(1.intVal, 2.intVal).listVal,
+                "list" to listOf(1.intVal, 2.intVal, 3.intVal).listVal,
                 "map" to mapOf("nested" to "value".strVal).mapVal,
             ).mapVal
 

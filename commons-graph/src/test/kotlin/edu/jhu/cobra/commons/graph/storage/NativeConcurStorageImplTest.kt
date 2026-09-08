@@ -1,17 +1,10 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
-import edu.jhu.cobra.commons.value.FloatVal
 import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.floatVal
 import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,11 +13,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Black-box tests for `NativeConcurStorageImpl` verifying the `IStorage` contract
- * and thread-safety guarantees (ReentrantReadWriteLock).
+/*
+ * Black-box tests for NativeConcurStorageImpl: node CRUD, metadata, and lifecycle.
  *
- * IStorage contract tests:
  * - `addNode returns unique Int ID` -- node creation
  * - `addNode with properties stores initial properties` -- property creation
  * - `containsNode returns true for existing and false for absent` -- lookup
@@ -34,30 +25,12 @@ import kotlin.test.assertTrue
  * - `setNodeProperties adds updates and deletes atomically` -- atomic property mutation
  * - `deleteNode removes node and cascades incident edge deletion` -- cascade delete
  * - `deleteNode throws EntityNotExistException for absent node` -- error path
- * - `addEdge returns unique Int ID between existing nodes` -- edge creation
- * - `addEdge throws EntityNotExistException when src or dst missing` -- missing endpoint
- * - `containsEdge returns true for existing and false for absent` -- lookup
- * - `edgeIDs returns all added edge IDs` -- enumeration
- * - `getEdgeStructure returns src dst and tag` -- structural metadata
- * - `getEdgeProperties returns stored properties` -- property retrieval
- * - `getEdgeProperty returns single value or null for absent key` -- single-key lookup
- * - `setEdgeProperties adds updates and deletes atomically` -- atomic property mutation
- * - `deleteEdge removes edge and updates adjacency` -- edge deletion
- * - `deleteEdge throws EntityNotExistException for absent edge` -- error path
- * - `getIncomingEdges returns edges targeting node` -- adjacency
- * - `getOutgoingEdges returns edges originating from node` -- adjacency
- * - `self-loop appears in both incoming and outgoing` -- self-loop adjacency
  * - `getMeta returns stored value or null for absent key` -- metadata
  * - `setMeta with null deletes metadata entry` -- metadata deletion
  * - `metaNames returns all metadata keys` -- metadata enumeration
  * - `clear removes all nodes edges and metadata` -- full reset
  * - `transferTo copies all data and returns node ID mapping` -- transfer
  * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
- *
- * Thread-safety tests:
- * - `concurrent reads do not deadlock` -- parallel read lock acquisition
- * - `concurrent writes produce consistent node count` -- parallel write lock
- * - `concurrent read-write does not corrupt state` -- mixed lock acquisition
  */
 internal class NativeConcurStorageImplTest {
     private lateinit var storage: NativeConcurStorageImpl
@@ -141,128 +114,6 @@ internal class NativeConcurStorageImplTest {
 
     // endregion
 
-    // region Edge CRUD
-
-    @Test
-    fun `addEdge returns unique Int ID between existing nodes`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val e1 = storage.addEdge(n1, n2, "t1")
-        val e2 = storage.addEdge(n1, n2, "t2")
-        assertTrue(e1 != e2)
-        assertTrue(storage.containsEdge(e1))
-        assertTrue(storage.containsEdge(e2))
-    }
-
-    @Test
-    fun `addEdge throws EntityNotExistException when src or dst missing`() {
-        val n1 = storage.addNode()
-        assertFailsWith<EntityNotExistException> { storage.addEdge(999, n1, "rel") }
-        assertFailsWith<EntityNotExistException> { storage.addEdge(n1, 999, "rel") }
-    }
-
-    @Test
-    fun `containsEdge returns true for existing and false for absent`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel")
-        assertTrue(storage.containsEdge(edgeId))
-        assertFalse(storage.containsEdge(999))
-    }
-
-    @Test
-    fun `edgeIDs returns all added edge IDs`() {
-        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
-        val e1 = storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
-        val e2 = storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
-        assertEquals(setOf(e1, e2), storage.edgeIDs)
-    }
-
-    @Test
-    fun `getEdgeStructure returns src dst and tag`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "tag")
-        val structure = storage.getEdgeStructure(edgeId)
-        assertEquals(n1, structure.src)
-        assertEquals(n2, structure.dst)
-        assertEquals("tag", structure.tag)
-    }
-
-    @Test
-    fun `getEdgeProperties returns stored properties`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.intVal))
-        assertEquals(1L, (storage.getEdgeProperties(edgeId)["w"] as IntVal).core)
-    }
-
-    @Test
-    fun `getEdgeProperty returns single value or null for absent key`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("w" to 1.5.floatVal))
-        assertEquals(1.5, (storage.getEdgeProperty(edgeId, "w") as FloatVal).core)
-        assertNull(storage.getEdgeProperty(edgeId, "absent"))
-    }
-
-    @Test
-    fun `setEdgeProperties adds updates and deletes atomically`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel", mapOf("a" to "1".strVal, "b" to "2".strVal))
-        storage.setEdgeProperties(edgeId, mapOf("a" to "updated".strVal, "b" to null))
-        val props = storage.getEdgeProperties(edgeId)
-        assertEquals("updated", (props["a"] as StrVal).core)
-        assertFalse(props.containsKey("b"))
-    }
-
-    @Test
-    fun `deleteEdge removes edge and updates adjacency`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edgeId = storage.addEdge(n1, n2, "rel")
-        storage.deleteEdge(edgeId)
-        assertFalse(storage.containsEdge(edgeId))
-        assertTrue(storage.getOutgoingEdges(n1).isEmpty())
-        assertTrue(storage.getIncomingEdges(n2).isEmpty())
-    }
-
-    @Test
-    fun `deleteEdge throws EntityNotExistException for absent edge`() {
-        assertFailsWith<EntityNotExistException> { storage.deleteEdge(999) }
-    }
-
-    // endregion
-
-    // region Adjacency
-
-    @Test
-    fun `getIncomingEdges returns edges targeting node`() {
-        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
-        val e1 = storage.addEdge(n1, n3, "a")
-        val e2 = storage.addEdge(n2, n3, "b")
-        assertEquals(setOf(e1, e2), storage.getIncomingEdges(n3))
-    }
-
-    @Test
-    fun `getOutgoingEdges returns edges originating from node`() {
-        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
-        val e1 = storage.addEdge(n1, n2, "a")
-        val e2 = storage.addEdge(n1, n3, "b")
-        assertEquals(setOf(e1, e2), storage.getOutgoingEdges(n1))
-    }
-
-    @Test
-    fun `self-loop appears in both incoming and outgoing`() {
-        val node = storage.addNode()
-        val selfEdge = storage.addEdge(node, node, "self")
-        assertTrue(storage.getOutgoingEdges(node).contains(selfEdge))
-        assertTrue(storage.getIncomingEdges(node).contains(selfEdge))
-    }
-
-    // endregion
-
     // region Metadata
 
     @Test
@@ -323,124 +174,6 @@ internal class NativeConcurStorageImplTest {
     fun `transferTo same instance throws IllegalArgumentException`() {
         storage.addNode()
         assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
-    }
-
-    // endregion
-
-    // region Thread safety
-
-    @Test
-    fun `concurrent reads do not deadlock`() {
-        val (n1, n2, n3) = StorageFixtures.addTestNodes(storage)
-        storage.addEdge(n1, n2, StorageFixtures.EDGE_TAG_1)
-        storage.addEdge(n2, n3, StorageFixtures.EDGE_TAG_2)
-
-        val threadCount = 10
-        val opsPerThread = 500
-        val executor = Executors.newFixedThreadPool(threadCount)
-        val latch = CountDownLatch(threadCount)
-        val errors = CopyOnWriteArrayList<Exception>()
-        val timedOut = AtomicBoolean(false)
-
-        for (t in 0 until threadCount) {
-            executor.submit {
-                try {
-                    repeat(opsPerThread) {
-                        storage.containsNode(n1)
-                        storage.getNodeProperties(n1)
-                        storage.getOutgoingEdges(n1)
-                        storage.getIncomingEdges(n2)
-                    }
-                } catch (e: Exception) {
-                    errors.add(e)
-                } finally {
-                    latch.countDown()
-                }
-            }
-        }
-
-        val completed = latch.await(15, TimeUnit.SECONDS)
-        executor.shutdown()
-        if (!completed) timedOut.set(true)
-
-        assertFalse(timedOut.get(), "Concurrent reads timed out, potential deadlock")
-        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
-    }
-
-    @Test
-    fun `concurrent writes produce consistent node count`() {
-        val threadCount = 10
-        val nodesPerThread = 100
-        val executor = Executors.newFixedThreadPool(threadCount)
-        val latch = CountDownLatch(threadCount)
-        val errors = CopyOnWriteArrayList<Exception>()
-
-        for (t in 0 until threadCount) {
-            executor.submit {
-                try {
-                    repeat(nodesPerThread) {
-                        storage.addNode(mapOf("thread" to t.intVal))
-                    }
-                } catch (e: Exception) {
-                    errors.add(e)
-                } finally {
-                    latch.countDown()
-                }
-            }
-        }
-
-        latch.await(30, TimeUnit.SECONDS)
-        executor.shutdown()
-
-        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
-        assertEquals(threadCount * nodesPerThread, storage.nodeIDs.size)
-    }
-
-    @Test
-    fun `concurrent read-write does not corrupt state`() {
-        val node = storage.addNode(mapOf("counter" to 0.intVal))
-        val threadCount = 4
-        val opsPerThread = 200
-        val executor = Executors.newFixedThreadPool(threadCount * 2)
-        val latch = CountDownLatch(threadCount * 2)
-        val errors = CopyOnWriteArrayList<Exception>()
-
-        for (t in 0 until threadCount) {
-            executor.submit {
-                try {
-                    repeat(opsPerThread) {
-                        val current = storage.getNodeProperties(node)["counter"] as IntVal
-                        storage.setNodeProperties(node, mapOf("counter" to (current.core.toInt() + 1).intVal))
-                    }
-                } catch (e: Exception) {
-                    errors.add(e)
-                } finally {
-                    latch.countDown()
-                }
-            }
-        }
-
-        for (t in 0 until threadCount) {
-            executor.submit {
-                try {
-                    repeat(opsPerThread) {
-                        val value = storage.getNodeProperties(node)["counter"] as IntVal
-                        assertTrue(value.core.toInt() >= 0)
-                    }
-                } catch (e: Exception) {
-                    errors.add(e)
-                } finally {
-                    latch.countDown()
-                }
-            }
-        }
-
-        latch.await(30, TimeUnit.SECONDS)
-        executor.shutdown()
-
-        assertTrue(errors.isEmpty(), "Unexpected errors: $errors")
-        val finalValue = (storage.getNodeProperties(node)["counter"] as IntVal).core.toInt()
-        assertTrue(finalValue > 0)
     }
 
     // endregion

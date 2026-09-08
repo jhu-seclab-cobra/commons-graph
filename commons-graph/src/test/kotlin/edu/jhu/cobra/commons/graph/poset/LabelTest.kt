@@ -1,6 +1,5 @@
-package edu.jhu.cobra.commons.graph
+package edu.jhu.cobra.commons.graph.poset
 
-import edu.jhu.cobra.commons.graph.poset.Label
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 import kotlin.test.assertEquals

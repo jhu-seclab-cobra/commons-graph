@@ -1,19 +1,3 @@
-/*
- * White-box tests for MapDB concurrent-specific internal behavior of [MapDBConcurStorageImpl].
- *
- * - `deleteNode uses WithoutLock helpers to avoid deadlock`
- * - `deleteNode with self loop does not deadlock`
- * - `getNodeProperties returns copy not reference`
- * - `getEdgeProperties returns copy not reference`
- * - `setNodeProperties merges and null removes under write lock`
- * - `graphStructure updated correctly after addEdge and deleteEdge`
- * - `deleteNode cleans graphStructure for node`
- * - `double close does not throw`
- * - `clear under write lock empties all structures`
- * - `meta operations under read write locks`
- * - `concurrent deleteNode does not deadlock`
- * - `no deadlock under mixed read write operations`
- */
 package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
@@ -34,7 +18,23 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-internal class MapDBConcurStorageImplWhiteBoxTest {
+/*
+ * White-box tests for MapDBConcurStorageImpl: lock helpers, defensive copies, and structure consistency under locks.
+ *
+ * - `deleteNode uses WithoutLock helpers to avoid deadlock`
+ * - `deleteNode with self loop does not deadlock`
+ * - `getNodeProperties returns copy not reference`
+ * - `getEdgeProperties returns copy not reference`
+ * - `setNodeProperties merges and null removes under write lock`
+ * - `graphStructure updated correctly after addEdge and deleteEdge`
+ * - `deleteNode cleans graphStructure for node`
+ * - `double close does not throw`
+ * - `clear under write lock empties all structures`
+ * - `meta operations under read write locks`
+ * - `concurrent deleteNode does not deadlock`
+ * - `no deadlock under mixed read write operations`
+ */
+internal class MapDBConcurStorageImplLockingTest {
     private lateinit var storage: MapDBConcurStorageImpl
 
     @BeforeTest

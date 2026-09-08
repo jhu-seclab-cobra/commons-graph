@@ -11,10 +11,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/**
- * Black-box tests for the `IStorage.transferTo` contract.
+/*
+ * Black-box tests for NativeStorageImpl: the IStorage.transferTo contract.
  *
- * Tests:
  * - `transferTo returns map from source node IDs to target node IDs` -- return value semantics
  * - `transferTo preserves node properties in target` -- node property fidelity
  * - `transferTo preserves edge structure with remapped endpoints` -- edge structural fidelity
@@ -24,7 +23,7 @@ import kotlin.test.assertTrue
  * - `transferTo does not modify source storage` -- non-destructive copy
  * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
  */
-internal class TransferToTest {
+internal class NativeStorageImplTransferTest {
     @Test
     fun `transferTo returns map from source node IDs to target node IDs`() {
         val source = NativeStorageImpl()
