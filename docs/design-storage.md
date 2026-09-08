@@ -137,8 +137,8 @@ All graph-layer exceptions extend the abstract base `GraphException` (extends `E
 | Exception | When raised |
 |-----------|------------|
 | `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src/dst |
-| `EntityAlreadyExistException` | Adding a node/edge whose ID already exists |
-| `InvalidPropNameException` | Using a reserved property name on an entity |
+| `EntityAlreadyExistException` | Graph layer: adding a node/edge whose `NodeID` or `(src, dst, tag)` triple already exists; never raised by `IStorage`, whose IDs are auto-generated |
+| `InvalidPropNameException` | Property name collides with a backend reserved name (Neo4j `__sid__`, `__tag__`, `__meta_id__`) or an exporter structural attribute (GML `nid`/`esrc`/`edst`/`etype`, MapDB `_nid`/`_esrc`/`_edst`/`_etag`) |
 | `FrozenLayerModificationException` | Deleting an entity from the frozen layer in `LayeredStorageImpl` |
 
 Deletion of a non-existent entity is a no-op at the graph level.

@@ -10,7 +10,7 @@ Directed property graph library for Kotlin/JVM with pluggable storage backends.
 
 ## Install
 
-Java 8+. Add JitPack and the modules you need:
+Java 21+. Add JitPack and the modules you need:
 
 ```kotlin
 repositories {
@@ -18,11 +18,11 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.jhu-seclab-cobra.commons-graph:graph:<version>")
+    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph:<version>")
     // Optional backends:
-    implementation("com.github.jhu-seclab-cobra.commons-graph:modules-impl-jgrapht:<version>")
-    implementation("com.github.jhu-seclab-cobra.commons-graph:modules-impl-mapdb:<version>")
-    implementation("com.github.jhu-seclab-cobra.commons-graph:modules-impl-neo4j:<version>")
+    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-jgrapht:<version>")
+    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-mapdb:<version>")
+    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-neo4j:<version>")
 }
 ```
 
@@ -39,7 +39,7 @@ val graph = object : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEd
 val a = graph.addNode("A")                    // returns MyNode (NodeID is String)
 val b = graph.addNode("B")
 val e = graph.addEdge("A", "B", "calls")      // returns MyEdge
-a["weight"] = 42.numVal                        // property access
+a["weight"] = 42.intVal                        // property access
 graph.getChildren("A")                         // Sequence<MyNode>
 graph.flush()
 ```
@@ -72,7 +72,7 @@ graph.flush()
 | `LayeredStorageImpl` | No | No | Phase-based freeze-and-stack |
 | `JgraphtStorageImpl` | No | No | JGraphT algorithm access |
 | `MapDBStorageImpl` | File | No | Graphs exceeding heap |
-| `Neo4jStorageImpl` | Disk | Yes | Enterprise persistence |
+| `Neo4jStorageImpl` | Disk | No | Embedded Neo4j persistence |
 
 **Supporting Types**
 
@@ -80,7 +80,7 @@ graph.flush()
 |------|-------------|
 | `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
 | `PosetTrait<N, E>` | Graph trait adding label-filtered operations via pluggable `IPoset`. |
-| `PosetDftImpl` | Default `IPoset` implementation with DFS interval labeling. |
+| `PosetDftImpl` | Default `IPoset` implementation with a memoized ancestor closure. |
 | `NodeID` | Typealias for `String`. User-facing node identifier. |
 
 **Exceptions**
@@ -89,19 +89,19 @@ graph.flush()
 |-----------|---------|
 | `EntityNotExistException` | Operation on missing node or edge |
 | `EntityAlreadyExistException` | Duplicate node or edge creation |
-| `InvalidPropNameException` | Reserved or invalid property name |
-| `AccessClosedStorageException` | Operation on closed storage |
+| `InvalidPropNameException` | Property name collides with a backend or exporter reserved name |
 | `FrozenLayerModificationException` | Write to frozen layer |
 
 ## Documentation
 
-- [Concepts and terminology](docs/idea.md) — problem, scope, data flow, scenarios.
+- [Concepts and terminology](docs/concept.md) — problem, scope, data flow, scenarios.
 - [Domain model](docs/model.md) — entities, relations, state transitions, invariants.
 - [Design: entities](docs/design-entity.md) — IEntity, AbcNode, AbcEdge, property delegates.
 - [Design: graph](docs/design-graph.md) — IGraph, AbcMultipleGraph, AbcSimpleGraph.
 - [Design: storage](docs/design-storage.md) — IStorage and backend implementations.
 - [Design: labels](docs/design-label.md) — IPoset, PosetDftImpl, PosetTrait.
-- [Algorithms](docs/spec.md) — edge lookup, BFS, visibility filtering, layered queries.
+- [Algorithms: graph](docs/spec-graph.md) — edge lookup, BFS, visibility filtering, layered queries.
+- [Algorithms: poset](docs/spec-poset.md) — ancestor closure over the label hierarchy.
 - [Full docs index](docs/index.md) — all documentation files.
 
 ## For Agents
@@ -124,4 +124,4 @@ If you use this repository in your research, please cite our paper:
 
 ## License
 
-[GNU General Public License v2.0](./LICENSE)
+GPL-2.0. See [LICENSE](./LICENSE).

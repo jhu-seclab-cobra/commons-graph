@@ -11,7 +11,7 @@ A vertex in the graph identified by a user-provided string (`NodeID`). Carries t
 
 ### Edge
 
-A directed connection between two nodes identified by the triple `(src: NodeID, dst: NodeID, tag: String)`. Carries typed properties and optional label assignments.
+A directed connection between two nodes identified by the triple of source node identifier, destination node identifier, and tag string — written `(src, dst, tag)`. Carries typed properties and optional label assignments.
 
 - Existence: an edge exists when both its source and destination nodes exist in the same graph.
 - Identity at graph level: the `(src, dst, tag)` triple.

@@ -39,7 +39,3 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 ## Labels
 
 - [Labels & Poset](llms/label.md): Label system -- `Label`, `IPoset`, `PosetDftImpl`, `PosetTrait`.
-
-## Optional
-
-- [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.

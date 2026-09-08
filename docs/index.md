@@ -16,5 +16,7 @@
 | [performance-jgrapht.md](performance-jgrapht.md) | JGraphT module benchmarks |
 | [performance-mapdb.md](performance-mapdb.md) | MapDB module benchmarks |
 | [performance-neo4j.md](performance-neo4j.md) | Neo4j module benchmarks |
-| [java-graph-typed-node-edge-patterns.md](research/java-graph-typed-node-edge-patterns.md) | Typed node/edge creation patterns in Java graph libraries |
+| [research/java-graph-typed-node-edge-patterns.md](research/java-graph-typed-node-edge-patterns.md) | Typed node/edge creation patterns in Java graph libraries — summary, comparison, findings |
+| [research/java-graph-typed-node-edge-patterns-libraries-1.md](research/java-graph-typed-node-edge-patterns-libraries-1.md) | Library analysis — JGraphT, Neo4j embedded, Gremlin/TinkerPop |
+| [research/java-graph-typed-node-edge-patterns-libraries-2.md](research/java-graph-typed-node-edge-patterns-libraries-2.md) | Library analysis — MapDB, JanusGraph, commons-graph |
 | [llms.txt](llms.txt) | LLM-consumable entry point — links the llms/ module docs |
