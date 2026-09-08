@@ -16,23 +16,23 @@
 **[DftCharBufferSerializerImpl]** `serialize(value): CharBuffer` / `deserialize(buf): IValue` -- text serializer for GML/CSV IO.
 **[ListVal?.orEmpty()]** / **[SetVal?.orEmpty()]** / **[MapVal?.orEmpty()]** -- returns empty collection value for `null`.
 
-### JGraphT 1.4.0
+### JGraphT 1.5.3
 
 **[DirectedPseudograph]** `DirectedPseudograph(String::class.java)` -- allows self-loops and parallel edges; used by `JgraphtStorageImpl`.
 **[Graph]** `addVertex(v)` / `removeVertex(v)` / `addEdge(src, dst, edge)` / `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` -- O(1) adjacency.
 **[GmlExporter]** / **[GmlImporter]** -- GML IO with attribute providers/consumers.
 **[SupplierUtil]** `createIntegerSupplier()` / `createStringSupplier()` -- auto-incrementing suppliers for GML IO.
 
-### MapDB 3.0.5
+### MapDB 3.1.0
 
 **[DBMaker]** `memoryDB()` / `fileDB(file)` -- config: `concurrencyDisable()`, `fileMmapEnableIfSupported()`, `closeOnJvmShutdown()`, `make()`.
 **[DB]** `hashMap(name, keySerializer, valueSerializer)` / `indexTreeList(name)` -- `.createOrOpen()` / `.create()`, `.counterEnable()` makes `size` O(1).
 **[Serializer]** `STRING` / `BYTE_ARRAY` -- custom: `serialize(DataOutput2, T)` / `deserialize(DataInput2, Int): T`.
 
-### Neo4j 5.26.0
+### Neo4j 2026.08.0
 
 **[DatabaseManagementServiceBuilder]** `DatabaseManagementServiceBuilder(path).build()` -- creates `DatabaseManagementService`.
-**[GraphDatabaseService]** `database.beginTx()` -- all reads and writes require a transaction in Neo4j 5.x.
+**[GraphDatabaseService]** `database.beginTx()` -- all reads and writes require a transaction since Neo4j 5.x.
 **[Transaction]** `tx.commit()` / `tx.close()` / `tx.findNode(label, key, value)` / `tx.createNode(label)`.
 **[Node]** `setProperty` / `getProperty` / `getRelationships(Direction)` / `delete()` / `createRelationshipTo(other, type)`.
 **[Relationship]** `delete()` / `startNode` / `endNode` / `type`.
@@ -40,10 +40,10 @@
 ## Libraries
 
 - `com.github.jhu-seclab-cobra:commons-value:0.1.1` -- `IValue` type system, serializers
-- `org.jgrapht:jgrapht-core:1.4.0` -- graph data structures
-- `org.jgrapht:jgrapht-io:1.4.0` -- GML import/export
-- `org.mapdb:mapdb:3.0.5` -- embedded off-heap storage
-- `org.neo4j:neo4j:5.26.0` -- embedded graph database
+- `org.jgrapht:jgrapht-core:1.5.3` -- graph data structures
+- `org.jgrapht:jgrapht-io:1.5.3` -- GML import/export
+- `org.mapdb:mapdb:3.1.0` -- embedded off-heap storage
+- `org.neo4j:neo4j:2026.08.0` -- embedded graph database
 
 ## Developer Instructions
 
