@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for JGraphT concurrent-specific internal behavior of [JgraphtConcurStorageImpl].
  *
  * - `getNodeProperties returns defensive copy not internal reference`

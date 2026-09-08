@@ -74,8 +74,10 @@ public class PosetDftImpl(
             val nodeId = pending.last()
             when {
                 nodeId in closure -> pending.removeLast()
+
                 // First visit: expand unresolved parents and revisit after them.
                 onPath.add(nodeId) && expandParents(nodeId, closure, onPath, pending) -> Unit
+
                 // Revisit: every parent is resolved; finalize this node.
                 else -> finalizeNode(nodeId, closure, onPath, pending)
             }

@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for GML export/import round-trip via [JgraphtGmlIOImpl].
  *
  * - `isValidFile returns false for nonexistent file`

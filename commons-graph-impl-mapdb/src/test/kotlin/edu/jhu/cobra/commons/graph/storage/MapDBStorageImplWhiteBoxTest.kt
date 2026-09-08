@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for MapDB-specific internal behavior of [MapDBStorageImpl].
  *
  * - `graphStructure stores serialized edges for both src and dst nodes`

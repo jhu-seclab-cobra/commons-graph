@@ -1,4 +1,4 @@
-/**
+/*
  * Tests for [MapDbValSerializer] round-trip serialization of IValue types.
  *
  * - `serialize and deserialize StrVal`

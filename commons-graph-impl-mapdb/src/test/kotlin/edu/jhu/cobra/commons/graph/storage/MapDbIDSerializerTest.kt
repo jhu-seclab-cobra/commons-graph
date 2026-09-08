@@ -1,4 +1,4 @@
-/**
+/*
  * Tests for [MapDbIDSerializer] round-trip serialization.
  *
  * - `serialize and deserialize Int ID`

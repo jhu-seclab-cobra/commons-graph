@@ -1,6 +1,6 @@
 @file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
 
-/**
+/*
  * Performance benchmarks for JGraphT-based IStorage implementations at scale.
  *
  * Scale tiers: 10K/30K, 100K/300K, 1M/3M (nodes/edges).

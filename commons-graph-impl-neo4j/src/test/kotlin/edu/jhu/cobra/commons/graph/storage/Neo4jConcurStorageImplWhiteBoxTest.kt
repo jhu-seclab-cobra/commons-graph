@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for Neo4j concurrent-specific internal behavior of [Neo4jConcurStorageImpl].
  *
  * - `addNode populates node mapping cache`

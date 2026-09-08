@@ -1,4 +1,4 @@
-/**
+/*
  * Tests for [EntityPropertyMap] backed by MapDB.
  *
  * - `basic put and get operations`

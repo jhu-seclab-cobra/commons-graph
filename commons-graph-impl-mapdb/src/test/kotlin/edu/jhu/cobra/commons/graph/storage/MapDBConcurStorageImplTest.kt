@@ -1,4 +1,4 @@
-/**
+/*
  * Black-box IStorage contract tests for [MapDBConcurStorageImpl].
  *
  * - `addNode with properties returns valid ID and stores properties`

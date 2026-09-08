@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for Neo4j-specific internal behavior of [Neo4jStorageImpl].
  *
  * - `addNode populates node mapping cache`

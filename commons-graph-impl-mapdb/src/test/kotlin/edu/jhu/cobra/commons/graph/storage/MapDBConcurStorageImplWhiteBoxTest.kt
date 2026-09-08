@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for MapDB concurrent-specific internal behavior of [MapDBConcurStorageImpl].
  *
  * - `deleteNode uses WithoutLock helpers to avoid deadlock`

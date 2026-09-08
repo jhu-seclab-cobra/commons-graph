@@ -1,6 +1,6 @@
 @file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
 
-/**
+/*
  * Performance benchmarks for Neo4j-based IStorage implementations.
  *
  * Tests both [Neo4jStorageImpl] and [Neo4jConcurStorageImpl].

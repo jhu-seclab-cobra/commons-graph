@@ -1,4 +1,4 @@
-/**
+/*
  * Black-box IStorage contract tests for [Neo4jStorageImpl].
  *
  * - `empty storage has no nodes or edges`

@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for MapDB graph IO round-trip via [MapDbGraphIOImpl].
  *
  * - `isValidFile returns false for nonexistent file`

@@ -1,6 +1,6 @@
 @file:Suppress("ExplicitGarbageCollectionCall", "ImplicitDefaultLocale")
 
-/**
+/*
  * Performance benchmarks for MapDB-based IStorage implementations.
  *
  * Tests both [MapDBStorageImpl] and [MapDBConcurStorageImpl] across different

@@ -1,4 +1,4 @@
-/**
+/*
  * White-box tests for JGraphT-specific internal behavior of [JgraphtStorageImpl].
  *
  * - `nodeIDs preserves insertion order via linkedMapOf`
