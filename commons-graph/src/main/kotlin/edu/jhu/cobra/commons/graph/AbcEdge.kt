@@ -7,6 +7,9 @@ import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.listVal
 
+// Storage property holding an edge's visibility labels; fixed by the entity design (design-entity.md).
+private const val LABELS_PROP = "labels"
+
 /**
  * Abstract base class for graph edges with storage-backed property management.
  *
@@ -80,11 +83,11 @@ public abstract class AbcEdge : AbcEntity() {
      */
     public var labels: Set<Label>
         get() {
-            val raw = storage.getEdgeProperty(storageId, "labels") as? ListVal ?: return emptySet()
+            val raw = storage.getEdgeProperty(storageId, LABELS_PROP) as? ListVal ?: return emptySet()
             return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }
         }
         set(values) {
-            storage.setEdgeProperties(storageId, mapOf("labels" to values.map { it.core }.listVal))
+            storage.setEdgeProperties(storageId, mapOf(LABELS_PROP to values.map { it.core }.listVal))
         }
 
     override fun get(name: String): IValue? = storage.getEdgeProperty(storageId, name)

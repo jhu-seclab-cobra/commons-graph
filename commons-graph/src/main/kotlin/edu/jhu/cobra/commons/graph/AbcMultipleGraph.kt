@@ -52,8 +52,8 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         val srcEntry = cache.entryOf(src) ?: return null
         val dstEntry = cache.entryOf(dst) ?: return null
         return storage.getOutgoingEdges(srcEntry.storageId).firstOrNull { edgeId ->
-            val s = storage.getEdgeStructure(edgeId)
-            s.dst == dstEntry.storageId && s.tag == tag
+            val structure = storage.getEdgeStructure(edgeId)
+            structure.dst == dstEntry.storageId && structure.tag == tag
         }
     }
 
@@ -148,8 +148,8 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         storage.edgeIDs
             .asSequence()
             .filter { edgeId ->
-                val s = storage.getEdgeStructure(edgeId)
-                cache.containsStorageId(s.src) && cache.containsStorageId(s.dst)
+                val structure = storage.getEdgeStructure(edgeId)
+                cache.containsStorageId(structure.src) && cache.containsStorageId(structure.dst)
             }.map { cache.edge(it) }
             .filter(doSatisfy)
 

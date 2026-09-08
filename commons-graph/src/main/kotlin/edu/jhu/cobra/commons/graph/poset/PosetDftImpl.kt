@@ -4,6 +4,9 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 
+// Poset-store node property holding the label core; fixed by the label design (design-label.md).
+private const val LABEL_PROP = "label"
+
 /**
  * Default [IPoset] implementation backed by an [IStorage] for label DAG persistence.
  *
@@ -27,7 +30,7 @@ public class PosetDftImpl(
     private fun ensureCache() {
         if (cacheReady) return
         for (nodeId in storage.nodeIDs) {
-            val labelCore = storage.getNodeProperty(nodeId, "label") as? StrVal
+            val labelCore = storage.getNodeProperty(nodeId, LABEL_PROP) as? StrVal
             if (labelCore != null) {
                 labelIdCache[labelCore.core] = nodeId
                 intToLabel[nodeId] = labelCore.core
@@ -43,7 +46,7 @@ public class PosetDftImpl(
 
     private fun ensureLabelNode(label: Label): Int {
         resolveLabelId(label)?.let { return it }
-        val storageId = storage.addNode(mapOf("label" to label.core.strVal))
+        val storageId = storage.addNode(mapOf(LABEL_PROP to label.core.strVal))
         labelIdCache[label.core] = storageId
         intToLabel[storageId] = label.core
         return storageId

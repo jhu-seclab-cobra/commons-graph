@@ -116,7 +116,7 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
     ): Unit =
         writeGuarded {
             val container = nodeProperties[id] ?: throw EntityNotExistException(id)
-            properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
+            applyPropertyUpdates(container, properties)
         }
 
     override fun setEdgeProperties(
@@ -125,8 +125,18 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
     ): Unit =
         writeGuarded {
             val container = edgeProperties[id] ?: throw EntityNotExistException(id)
-            properties.forEach { (k, v) -> if (v != null) container[k] = v else container.remove(k) }
+            applyPropertyUpdates(container, properties)
         }
+
+    // Null values delete; non-null values set — the IStorage set-properties contract.
+    private fun applyPropertyUpdates(
+        container: MutableMap<String, IValue>,
+        properties: Map<String, IValue?>,
+    ) {
+        for ((name, value) in properties) {
+            if (value != null) container[name] = value else container.remove(name)
+        }
+    }
 
     override fun deleteNode(id: Int): Unit =
         writeGuarded {

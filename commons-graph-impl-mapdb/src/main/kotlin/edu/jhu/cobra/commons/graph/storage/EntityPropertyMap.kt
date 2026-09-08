@@ -56,6 +56,12 @@ internal class EntityPropertyMap(
 
         private val entityPrefix = "$eid:"
 
+        // Removes every stored property whose name is not in [keep]; true when any was removed.
+        private fun removeAllExcept(keep: Set<String>): Boolean {
+            val storedKeys = identities.getValue(eid).core.map { it.core.toString() }
+            return storedKeys.filter { it !in keep }.map { this@PropertyMap.remove(it) != null }.any { it }
+        }
+
         override val entries =
             object : MutableSet<MutableMap.MutableEntry<String, IValue>> {
                 override val size: Int get() = this@PropertyMap.size
@@ -95,16 +101,8 @@ internal class EntityPropertyMap(
                         }
                     }
 
-                override fun retainAll(elements: Collection<MutableMap.MutableEntry<String, IValue>>): Boolean {
-                    val allPropKeys =
-                        identities
-                            .getValue(eid)
-                            .core
-                            .map { it.core.toString() }
-                            .toSet()
-                    val allRmvKeys = (allPropKeys - elements.map { ele -> ele.key }.toSet())
-                    return allRmvKeys.map { this@PropertyMap.remove(it) != null }.any { it }
-                }
+                override fun retainAll(elements: Collection<MutableMap.MutableEntry<String, IValue>>): Boolean =
+                    removeAllExcept(elements.mapTo(HashSet()) { entry -> entry.key })
 
                 override fun removeAll(elements: Collection<MutableMap.MutableEntry<String, IValue>>): Boolean =
                     elements.map { this@PropertyMap.remove(it.key) != null }.any { it }
@@ -142,16 +140,7 @@ internal class EntityPropertyMap(
                             override fun remove() = entryIterator.remove()
                         }
 
-                    override fun retainAll(elements: Collection<String>): Boolean {
-                        val allPropKeys =
-                            identities
-                                .getValue(eid)
-                                .core
-                                .map { it.core.toString() }
-                                .toSet()
-                        val allRmvKeys = (allPropKeys - elements.toSet())
-                        return allRmvKeys.map { this@PropertyMap.remove(it) != null }.any { it }
-                    }
+                    override fun retainAll(elements: Collection<String>): Boolean = removeAllExcept(elements.toSet())
 
                     override fun removeAll(elements: Collection<String>): Boolean =
                         elements.map { this@PropertyMap.remove(it) != null }.any { it }

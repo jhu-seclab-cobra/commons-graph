@@ -67,14 +67,14 @@ public abstract class AbcNeo4jStorage protected constructor(
         database.beginTx().use { tx ->
             var maxNodeSid = -1
             for (node in tx.findNodes(NODE_LABEL)) {
-                val sid = (node.getProperty(SID) as Long).toInt()
+                val sid = node.storageId
                 if (sid > maxNodeSid) maxNodeSid = sid
             }
             nodeCounter = maxNodeSid + 1
 
             var maxEdgeSid = -1
             for (rel in tx.findRelationships(EDGE_TYPE)) {
-                val sid = (rel.getProperty(SID) as Long).toInt()
+                val sid = rel.storageId
                 if (sid > maxEdgeSid) maxEdgeSid = sid
             }
             edgeCounter = maxEdgeSid + 1
@@ -110,7 +110,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             readTx {
                 val ids = mutableSetOf<Int>()
                 for (node in findNodes(NODE_LABEL)) {
-                    ids.add((node.getProperty(SID) as Long).toInt())
+                    ids.add(node.storageId)
                 }
                 ids
             }
@@ -120,7 +120,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             readTx {
                 val ids = mutableSetOf<Int>()
                 for (rel in findRelationships(EDGE_TYPE)) {
-                    ids.add((rel.getProperty(SID) as Long).toInt())
+                    ids.add(rel.storageId)
                 }
                 ids
             }
@@ -211,8 +211,8 @@ public abstract class AbcNeo4jStorage protected constructor(
     override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
         readTx {
             val edge = findEdgeBySid(id) ?: throw EntityNotExistException(id)
-            val src = (edge.startNode.getProperty(SID) as Long).toInt()
-            val dst = (edge.endNode.getProperty(SID) as Long).toInt()
+            val src = edge.startNode.storageId
+            val dst = edge.endNode.storageId
             val tag = edge.getProperty(TAG) as String
             IStorage.EdgeStructure(src, dst, tag)
         }
@@ -222,7 +222,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
             node
                 .getRelationships(Direction.INCOMING)
-                .map { (it.getProperty(SID) as Long).toInt() }
+                .map { it.storageId }
                 .toSet()
         }
 
@@ -231,7 +231,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             val node = findNodeBySid(id) ?: throw EntityNotExistException(id)
             node
                 .getRelationships(Direction.OUTGOING)
-                .map { (it.getProperty(SID) as Long).toInt() }
+                .map { it.storageId }
                 .toSet()
         }
 
@@ -272,7 +272,7 @@ public abstract class AbcNeo4jStorage protected constructor(
     private fun Transaction.copyNodesTo(target: IStorage): HashMap<Int, Int> {
         val idMap = HashMap<Int, Int>()
         for (node in findNodes(NODE_LABEL)) {
-            val oldId = (node.getProperty(SID) as Long).toInt()
+            val oldId = node.storageId
             idMap[oldId] = target.addNode(node.propertyEntries())
         }
         return idMap
@@ -283,8 +283,8 @@ public abstract class AbcNeo4jStorage protected constructor(
         idMap: Map<Int, Int>,
     ) {
         for (rel in findRelationships(EDGE_TYPE)) {
-            val src = (rel.startNode.getProperty(SID) as Long).toInt()
-            val dst = (rel.endNode.getProperty(SID) as Long).toInt()
+            val src = rel.startNode.storageId
+            val dst = rel.endNode.storageId
             val tag = rel.getProperty(TAG) as String
             target.addEdge(idMap.getValue(src), idMap.getValue(dst), tag, rel.propertyEntries())
         }

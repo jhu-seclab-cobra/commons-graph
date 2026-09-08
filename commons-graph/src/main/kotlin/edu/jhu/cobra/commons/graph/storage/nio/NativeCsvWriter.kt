@@ -19,6 +19,9 @@ import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.notExists
 
+// Structural edge columns, fixed by NativeCsvFormat: they precede every property column.
+private const val EDGE_FIXED_HEADER = "$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL"
+
 /**
  * Streams a storage's nodes, edges, and metadata into a CSV directory in
  * [NativeCsvFormat]. Property headers grow as entities are written; changed
@@ -50,7 +53,7 @@ internal class NativeCsvWriter(
         nodeWriter = nodeFile.bufferedWriter()
         nodeWriter.appendLine(NODE_ID_COL)
         edgeWriter = edgeFile.bufferedWriter()
-        edgeWriter.appendLine("$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL")
+        edgeWriter.appendLine(EDGE_FIXED_HEADER)
         metaWriter = metaFile.bufferedWriter()
         metaWriter.appendLine("name${CSV_DELIMITER}value")
     }
@@ -62,10 +65,7 @@ internal class NativeCsvWriter(
         require(!isClosed) { "The file is closed" }
         isNodeHeaderChanged = nodeHeaders.addAll(props.keys) || isNodeHeaderChanged
         val structural = sequenceOf(escape(nodeId))
-        val values = nodeHeaders.asSequence().map(props::get)
-        val serialized = values.map { it?.let { v -> DftCharBufferSerializerImpl.serialize(v).toString() } ?: "" }
-        val escaped = serialized.map { escape(it) }
-        nodeWriter.appendLine((structural + escaped).joinToString(CSV_DELIMITER))
+        nodeWriter.appendLine((structural + serializedColumns(nodeHeaders, props)).joinToString(CSV_DELIMITER))
     }
 
     fun writeEdge(
@@ -78,12 +78,18 @@ internal class NativeCsvWriter(
         require(!isClosed) { "The file is closed" }
         isEdgeHeaderChanged = edgeHeaders.addAll(props.keys) || isEdgeHeaderChanged
         val structural = sequenceOf(escape(edgeId), escape(src), escape(dst), escape(tag))
-        val values = edgeHeaders.asSequence().map(props::get)
-        val serialized = values.map { it?.let { v -> DftCharBufferSerializerImpl.serialize(v).toString() } ?: "" }
-        val escaped = serialized.map { escape(it) }
-        val all = structural + escaped
-        edgeWriter.appendLine(all.joinToString(CSV_DELIMITER))
+        edgeWriter.appendLine((structural + serializedColumns(edgeHeaders, props)).joinToString(CSV_DELIMITER))
     }
+
+    // One escaped cell per header, in header order; an absent property is an empty cell.
+    private fun serializedColumns(
+        headers: LinkedHashSet<String>,
+        props: Map<String, IValue>,
+    ): Sequence<String> =
+        headers.asSequence().map { name ->
+            val value = props[name] ?: return@map escape("")
+            escape(DftCharBufferSerializerImpl.serialize(value).toString())
+        }
 
     fun writeMeta(
         name: String,
@@ -133,9 +139,7 @@ internal class NativeCsvWriter(
             updateHeader(nodeFile.toFile(), nodeHeaders, NODE_ID_COL)
         }
         if (isEdgeHeaderChanged) {
-            val edgeFixedPrefix =
-                "$EDGE_ID_COL$CSV_DELIMITER$EDGE_SRC_COL$CSV_DELIMITER$EDGE_DST_COL$CSV_DELIMITER$EDGE_TAG_COL"
-            updateHeader(edgeFile.toFile(), edgeHeaders, edgeFixedPrefix)
+            updateHeader(edgeFile.toFile(), edgeHeaders, EDGE_FIXED_HEADER)
         }
         isClosed = true
     }

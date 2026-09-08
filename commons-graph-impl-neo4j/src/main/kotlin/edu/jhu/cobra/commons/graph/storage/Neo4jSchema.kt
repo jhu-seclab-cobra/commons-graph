@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
+import org.neo4j.graphdb.Entity
 import org.neo4j.graphdb.Label
 import org.neo4j.graphdb.Node
 import org.neo4j.graphdb.RelationshipType
@@ -11,6 +12,9 @@ internal const val SID = "__sid__"
 internal const val TAG = "__tag__"
 internal val NODE_LABEL: Label = Label.label("_N")
 internal val EDGE_TYPE: RelationshipType = RelationshipType.withName("_E")
+
+/** The storage ID carried in [SID]; Neo4j persists integral properties as Long. */
+internal val Entity.storageId: Int get() = (getProperty(SID) as Long).toInt()
 
 // Storage meta lives on a single dedicated node outside NODE_LABEL, so it
 // persists across reopen without appearing in nodeIDs. The node is identified

@@ -220,36 +220,4 @@ public class NativeStorageImpl : IStorage {
         }
         return nodeIdMap
     }
-
-    private class ColumnViewMap(
-        private val entityId: Int,
-        private val columns: HashMap<String, HashMap<Int, IValue>>,
-    ) : AbstractMap<String, IValue>() {
-        private var cachedEntries: Set<Map.Entry<String, IValue>>? = null
-
-        override val entries: Set<Map.Entry<String, IValue>>
-            get() {
-                cachedEntries?.let { return it }
-                val result = LinkedHashMap<String, IValue>()
-                for ((colName, col) in columns) {
-                    val v = col[entityId] ?: continue
-                    result[colName] = v
-                }
-                return result.entries.also { cachedEntries = it }
-            }
-
-        override fun get(key: String): IValue? = columns[key]?.get(entityId)
-
-        override fun containsKey(key: String): Boolean = columns[key]?.containsKey(entityId) == true
-
-        override val size: Int get() = entries.size
-
-        override fun isEmpty(): Boolean {
-            cachedEntries?.let { return it.isEmpty() }
-            for (col in columns.values) {
-                if (col.containsKey(entityId)) return false
-            }
-            return true
-        }
-    }
 }

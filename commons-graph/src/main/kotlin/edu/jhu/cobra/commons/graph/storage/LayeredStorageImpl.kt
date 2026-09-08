@@ -84,7 +84,7 @@ public class LayeredStorageImpl(
     }
 
     override fun getNodeProperties(id: Int): Map<String, IValue> {
-        if (active.containsNode(id)) return ActiveColumnViewMap(id, active.nodeColumns)
+        if (active.containsNode(id)) return ColumnViewMap(id, active.nodeColumns)
         return frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
 
@@ -147,7 +147,7 @@ public class LayeredStorageImpl(
     }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
-        if (active.containsEdge(id)) return ActiveColumnViewMap(id, active.edgeColumns)
+        if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)
         return frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
 

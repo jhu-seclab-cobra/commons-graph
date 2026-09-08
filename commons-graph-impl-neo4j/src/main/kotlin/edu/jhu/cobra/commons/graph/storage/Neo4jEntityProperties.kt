@@ -5,7 +5,8 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl
 import org.neo4j.graphdb.Entity
 
-private val RESERVED_PROPS = setOf("__meta_id__", "__sid__", "__tag__")
+// Names owned by the storage schema (Neo4jSchema.kt); user properties never collide with them.
+private val RESERVED_PROPS = setOf(META_ID, SID, TAG)
 
 private fun Entity.setProp(
     name: String,

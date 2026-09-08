@@ -1,41 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
-import edu.jhu.cobra.commons.value.IValue
-
 // Read-only view collections backing LayeredStorageImpl query results.
 // Each view resolves lazily against the underlying layer data instead of copying it.
-
-/** Lazy map view over one entity's columnar properties in the active layer. */
-internal class ActiveColumnViewMap(
-    private val entityId: Int,
-    private val columns: HashMap<String, HashMap<Int, IValue>>,
-) : AbstractMap<String, IValue>() {
-    private var cachedEntries: Set<Map.Entry<String, IValue>>? = null
-
-    override val entries: Set<Map.Entry<String, IValue>>
-        get() {
-            cachedEntries?.let { return it }
-            val result = LinkedHashMap<String, IValue>()
-            for ((colName, col) in columns) {
-                val v = col[entityId] ?: continue
-                result[colName] = v
-            }
-            return result.entries.also { cachedEntries = it }
-        }
-
-    override fun get(key: String): IValue? = columns[key]?.get(entityId)
-
-    override fun containsKey(key: String): Boolean = columns[key]?.containsKey(entityId) == true
-
-    override val size: Int get() = entries.size
-
-    override fun isEmpty(): Boolean {
-        for (col in columns.values) {
-            if (col.containsKey(entityId)) return false
-        }
-        return true
-    }
-}
 
 /** Lazy set view translating frozen-local edge IDs to global edge IDs. */
 internal class MappedEdgeSet(

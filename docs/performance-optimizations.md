@@ -22,7 +22,7 @@ Optimization log for core module. Benchmarks in [performance-core.md](performanc
 | I17 | AbcMultipleGraph | Label.changes avoids intermediate list | One less allocation per read/write |
 | I18 | LayeredStorageImpl | MappedEdgeSet.contains() O(1) | Outgoing +29%, incoming +21% |
 | I19 | LayeredStorageImpl | Frozen edge structure cache | Eliminates repeated translation |
-| I20 | LayeredStorageImpl | ActiveColumnViewMap entries cache | Matches I14 pattern |
+| I20 | LayeredStorageImpl | ColumnViewMap entries cache | Matches I14 pattern |
 | I21 | LayeredStorageImpl | Eliminate double HashMap lookups | One fewer lookup per query |
 | I22 | PosetDftImpl | Memoized ancestor closure for O(1) compare | O(1) ancestor check; lazy rebuild on setParents; DAG-correct (spec-poset.md) |
 
