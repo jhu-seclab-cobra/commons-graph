@@ -89,7 +89,7 @@ subprojects {
     // ----- Code Quality -----
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set("1.5.0")
+        version.set("1.8.0")
         verbose.set(true)
         android.set(false)
         outputToConsole.set(true)
