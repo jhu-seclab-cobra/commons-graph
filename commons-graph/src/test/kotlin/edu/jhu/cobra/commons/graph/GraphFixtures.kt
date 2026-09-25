@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.poset.IPoset
+import edu.jhu.cobra.commons.graph.poset.LabelEdgeIndex
 import edu.jhu.cobra.commons.graph.poset.PosetDftImpl
 import edu.jhu.cobra.commons.graph.poset.PosetTrait
 import edu.jhu.cobra.commons.graph.storage.IStorage
@@ -46,6 +47,7 @@ object GraphFixtures {
         override val storage: IStorage = graphStorage
         override val graphId: String = "TestMultiplePoset"
         override val poset: IPoset = PosetDftImpl(posetStorage)
+        override val labelIndex: LabelEdgeIndex<TestEdge> = LabelEdgeIndex()
 
         override fun newNodeObj() = TestNode()
 
@@ -78,6 +80,7 @@ object GraphFixtures {
         override val storage: IStorage = graphStorage
         override val graphId: String = "TestSimplePoset"
         override val poset: IPoset = PosetDftImpl(posetStorage)
+        override val labelIndex: LabelEdgeIndex<TestEdge> = LabelEdgeIndex()
 
         override fun newNodeObj() = TestNode()
 

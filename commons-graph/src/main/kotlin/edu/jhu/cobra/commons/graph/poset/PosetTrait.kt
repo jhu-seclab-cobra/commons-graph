@@ -19,6 +19,11 @@ import edu.jhu.cobra.commons.graph.NodeID
  * bypasses filtering and returns all edges, labeled or not; edges with no
  * labels are otherwise visible only through unfiltered queries.
  *
+ * Label assignments go through [addEdge], [delEdge], and [relabel] with a
+ * label, which maintain [labelIndex]; [getLabeledEdges] and [relabel] then
+ * cost O(candidates of the label) instead of a full edge scan (spec-poset.md,
+ * Label Carrier Index).
+ *
  * @param N The node type.
  * @param E The edge type.
  * @see IPoset
@@ -27,15 +32,20 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     /** The pluggable poset module for label hierarchy operations. */
     public val poset: IPoset
 
+    /** The label carrier index of this graph instance. */
+    public val labelIndex: LabelEdgeIndex<E>
+
     public fun addEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
         label: Label,
     ): E {
+        labelIndex.ensureBuilt { getAllEdges() }
         val existing = getEdge(src, dst, tag)
         val edge = existing ?: addEdge(src, dst, tag)
         edge.labels = edge.labels + label
+        labelIndex.record(label, edge)
         return edge
     }
 
@@ -45,12 +55,35 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         tag: String,
         label: Label,
     ) {
+        // Build before the removal, so a storage revert restoring the label finds it indexed.
+        labelIndex.ensureBuilt { getAllEdges() }
         val edge = getEdge(src, dst, tag) ?: return
         // A label the edge does not carry is a no-op: an unlabeled edge must not be deleted.
         if (label !in edge.labels) return
         val remaining = edge.labels - label
         edge.labels = remaining
         if (remaining.isEmpty()) delEdge(src, dst, tag)
+    }
+
+    /** Edges carrying [label] directly — no covering through the poset. */
+    public fun getLabeledEdges(label: Label): Sequence<E> {
+        labelIndex.ensureBuilt { getAllEdges() }
+        val (stored, deleted) = labelIndex.candidates(label).partition { it.isStored() }
+        for (edge in deleted) labelIndex.drop(label, edge)
+        return stored.filter { label in it.labels }.asSequence()
+    }
+
+    /** On every edge carrying [from] that satisfies [cond], replaces [from] by [to]. */
+    public fun relabel(
+        from: Label,
+        to: Label,
+        cond: (E) -> Boolean = { true },
+    ) {
+        if (from == to) return
+        for (edge in getLabeledEdges(from).filter(cond)) {
+            edge.labels = edge.labels - from + to
+            labelIndex.record(to, edge)
+        }
     }
 
     public fun getOutgoingEdges(

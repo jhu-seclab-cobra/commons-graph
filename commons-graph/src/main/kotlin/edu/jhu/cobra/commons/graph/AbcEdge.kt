@@ -79,6 +79,10 @@ public abstract class AbcEdge : AbcEntity() {
     /**
      * Visibility labels assigned to this edge.
      *
+     * The setter is internal: assignments go through
+     * [edu.jhu.cobra.commons.graph.poset.PosetTrait], which keeps the owning
+     * graph's label index complete.
+     *
      * @return Set of labels currently assigned.
      */
     public var labels: Set<Label>
@@ -86,9 +90,12 @@ public abstract class AbcEdge : AbcEntity() {
             val raw = storage.getEdgeProperty(storageId, LABELS_PROP) as? ListVal ?: return emptySet()
             return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }
         }
-        set(values) {
+        internal set(values) {
             storage.setEdgeProperties(storageId, mapOf(LABELS_PROP to values.map { it.core }.listVal))
         }
+
+    /** Whether the bound storage still contains this edge's [storageId]. */
+    internal fun isStored(): Boolean = storage.containsEdge(storageId)
 
     override fun get(name: String): IValue? = storage.getEdgeProperty(storageId, name)
 
