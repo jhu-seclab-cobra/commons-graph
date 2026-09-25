@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.storage.IRevertibleStorage
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.SetVal
@@ -42,7 +43,12 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     public abstract val graphId: String
 
-    private val cache = GraphEntityCache<N, E>({ storage }, ::newNodeObj, ::newEdgeObj)
+    // Created on first use: the abstract storage is not initialized during this constructor.
+    private val cache by lazy {
+        GraphEntityCache<N, E>(storage, ::newNodeObj, ::newEdgeObj).also { created ->
+            (storage as? IRevertibleStorage)?.addRevertListener(created)
+        }
+    }
 
     override val nodeIDs: Set<NodeID>
         get() = storage.criticalSection { cache.nodeIds.toSet() }

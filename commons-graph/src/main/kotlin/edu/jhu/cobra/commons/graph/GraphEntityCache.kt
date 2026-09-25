@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.RevertListener
 import java.lang.ref.SoftReference
 
 /**
@@ -8,15 +9,14 @@ import java.lang.ref.SoftReference
  *
  * Owns the bidirectional NodeID-to-storage-Int mapping and the softly referenced
  * node/edge wrapper objects, recreating a wrapper on demand via the supplied
- * factories when its soft reference has been collected. [storage] is a supplier
- * because the owning graph exposes storage as an abstract property that is not
- * initialized when this cache is constructed.
+ * factories when its soft reference has been collected. As a [RevertListener] it
+ * evicts the node entries and edge wrappers whose storage IDs a revert removed.
  */
 internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
-    private val storage: () -> IStorage,
+    private val storage: IStorage,
     private val newNode: () -> N,
     private val newEdge: () -> E,
-) {
+) : RevertListener {
     class NodeEntry<N>(
         val nodeId: NodeID,
         val storageId: Int,
@@ -52,7 +52,7 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
     fun node(entry: NodeEntry<N>): N {
         entry.ref?.get()?.let { return it }
         val node = newNode()
-        node.bind(storage(), entry.storageId, entry.nodeId)
+        node.bind(storage, entry.storageId, entry.nodeId)
         entry.ref = SoftReference(node)
         return node
     }
@@ -61,12 +61,11 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
 
     fun edge(storageId: Int): E {
         edgeCache[storageId]?.get()?.let { return it }
-        val boundStorage = storage()
-        val structure = boundStorage.getEdgeStructure(storageId)
+        val structure = storage.getEdgeStructure(storageId)
         val srcEntry = nodeByStorageId.getValue(structure.src)
         val dstEntry = nodeByStorageId.getValue(structure.dst)
         val edge = newEdge()
-        edge.bind(boundStorage, storageId, srcEntry.nodeId, dstEntry.nodeId, structure.tag)
+        edge.bind(storage, storageId, srcEntry.nodeId, dstEntry.nodeId, structure.tag)
         edgeCache[storageId] = SoftReference(edge)
         return edge
     }
@@ -78,6 +77,18 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
     fun removeNode(entry: NodeEntry<N>) {
         nodeEntries.remove(entry.nodeId)
         nodeByStorageId.remove(entry.storageId)
+    }
+
+    // A removed storage node need not belong to this graph: graphs and posets share storage.
+    override fun onRevert(
+        removedNodes: Set<Int>,
+        removedEdges: Set<Int>,
+    ) {
+        for (storageId in removedNodes) {
+            val entry = nodeByStorageId.remove(storageId) ?: continue
+            nodeEntries.remove(entry.nodeId)
+        }
+        for (storageId in removedEdges) edgeCache.remove(storageId)
     }
 
     fun clear() {

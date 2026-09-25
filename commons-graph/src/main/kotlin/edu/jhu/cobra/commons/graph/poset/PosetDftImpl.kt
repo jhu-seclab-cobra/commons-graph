@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.poset
 
+import edu.jhu.cobra.commons.graph.storage.IRevertibleStorage
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.StrVal
@@ -15,7 +16,8 @@ private const val LABEL_PROP = "label"
  * DAGs including labels with multiple parents. The table is built lazily on the
  * first query and discarded on any parent mutation. A cycle in the hierarchy is
  * detected during the build and rejected.
- * All caching state is private. Consumers interact only through the [IPoset] interface.
+ * On an [IRevertibleStorage], a revert evicts the removed label nodes and discards
+ * the table. All caching state is private. Consumers interact only through the [IPoset] interface.
  *
  * Every public operation runs inside [criticalSection] on [storage] — the same
  * lock instance used by graphs sharing this storage — so a caching read/write
@@ -31,6 +33,20 @@ public class PosetDftImpl(
     private var cacheReady = false
 
     private var ancestorClosure: Map<Int, Set<Int>>? = null
+
+    init {
+        (storage as? IRevertibleStorage)?.addRevertListener { removedNodes, _ -> onRevert(removedNodes) }
+    }
+
+    // A revert also restores tombstoned parent edges of surviving labels, so the
+    // closure is discarded even when no label node was removed.
+    private fun onRevert(removedNodes: Set<Int>) {
+        for (nodeId in removedNodes) {
+            val labelCore = intToLabel.remove(nodeId) ?: continue
+            labelIdCache.remove(labelCore)
+        }
+        ancestorClosure = null
+    }
 
     private fun ensureCache() {
         if (cacheReady) return

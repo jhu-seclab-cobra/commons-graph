@@ -28,6 +28,8 @@ import kotlin.test.assertTrue
  * - `evictEdge drops the cached wrapper so the next call rebinds` -- edge eviction
  * - `removeNode drops both index entries` -- node removal
  * - `clear empties indexes and edge cache` -- reset
+ * - `onRevert drops removed nodes and ignores storage IDs of other graphs` -- revert eviction
+ * - `onRevert drops removed edge wrappers so the next call rebinds` -- revert edge eviction
  */
 internal class GraphEntityCacheTest {
     private lateinit var storage: NativeStorageImpl
@@ -36,7 +38,7 @@ internal class GraphEntityCacheTest {
     @BeforeTest
     fun setUp() {
         storage = NativeStorageImpl()
-        cache = GraphEntityCache({ storage }, { TestNode() }, { TestEdge() })
+        cache = GraphEntityCache(storage, { TestNode() }, { TestEdge() })
     }
 
     @Test
@@ -148,6 +150,33 @@ internal class GraphEntityCacheTest {
         assertTrue(cache.storageIds.isEmpty())
         cache.register(NODE_ID_1, src)
         cache.register(NODE_ID_2, dst)
+        assertNotSame(before, cache.edge(eid))
+    }
+
+    @Test
+    fun `onRevert drops removed nodes and ignores storage IDs of other graphs`() {
+        val kept = storage.addNode()
+        val removed = storage.addNode()
+        val foreign = storage.addNode()
+        cache.register(NODE_ID_1, kept)
+        cache.register(NODE_ID_2, removed)
+
+        cache.onRevert(setOf(removed, foreign), emptySet())
+
+        assertEquals(setOf(NODE_ID_1), cache.nodeIds)
+    }
+
+    @Test
+    fun `onRevert drops removed edge wrappers so the next call rebinds`() {
+        val src = storage.addNode()
+        val dst = storage.addNode()
+        cache.register(NODE_ID_1, src)
+        cache.register(NODE_ID_2, dst)
+        val eid = storage.addEdge(src, dst, EDGE_TAG_1)
+        val before = cache.edge(eid)
+
+        cache.onRevert(emptySet(), setOf(eid))
+
         assertNotSame(before, cache.edge(eid))
     }
 }

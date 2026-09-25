@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
 import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 
@@ -38,8 +39,9 @@ import kotlin.concurrent.withLock
 @Suppress("TooManyFunctions")
 public class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
-) : IStorage {
+) : IRevertibleStorage {
     private val lock = ReentrantReadWriteLock()
+    private val revertListeners = CopyOnWriteArrayList<RevertListener>()
 
     // Global ID counters (protected by write lock)
     private var nodeCounter: Int = 0
@@ -68,10 +70,37 @@ public class LayeredStorageImpl(
      *
      * Removes all active-layer nodes, edges, properties, metadata, and tombstones.
      * The frozen layer and its ID mappings remain intact, so subsequent
-     * reads still resolve against frozen data.
+     * reads still resolve against frozen data. Revert listeners receive the
+     * active-only node and edge IDs.
      */
-    public fun clearActiveLayer() {
-        lock.writeLock().withLock { active.clear() }
+    public fun clearActiveLayer(): Unit =
+        criticalSection {
+            val (removedNodes, removedEdges) =
+                lock.writeLock().withLock {
+                    val removed = activeOnlyIdsUnlocked()
+                    active.clear()
+                    removed
+                }
+            notifyRevert(removedNodes, removedEdges)
+        }
+
+    override fun addRevertListener(listener: RevertListener) {
+        revertListeners.add(listener)
+    }
+
+    // Promoted entities and tombstoned edges survive a revert in the frozen layer.
+    private fun activeOnlyIdsUnlocked(): Pair<Set<Int>, Set<Int>> {
+        val frozenLayer = frozen ?: return active.nodeIds.toSet() to active.edgeEndpoints.keys.toSet()
+        val nodes = active.nodeIds.filterTo(HashSet()) { !frozenLayer.containsNode(it) }
+        val edges = active.edgeEndpoints.keys.filterTo(HashSet()) { !frozenLayer.containsEdge(it) }
+        return nodes to edges
+    }
+
+    private fun notifyRevert(
+        removedNodes: Set<Int>,
+        removedEdges: Set<Int>,
+    ) {
+        for (listener in revertListeners) listener.onRevert(removedNodes, removedEdges)
     }
 
     // ============================================================================
@@ -300,12 +329,18 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override fun clear(): Unit =
-        lock.writeLock().withLock {
-            frozen?.close()
-            frozen = null
-            active.clear()
-            nodeCounter = 0
-            edgeCounter = 0
+        criticalSection {
+            val (removedNodes, removedEdges) =
+                lock.writeLock().withLock {
+                    val removed = nodeIdsUnlocked().toSet() to edgeIdsUnlocked().toSet()
+                    frozen?.close()
+                    frozen = null
+                    active.clear()
+                    nodeCounter = 0
+                    edgeCounter = 0
+                    removed
+                }
+            notifyRevert(removedNodes, removedEdges)
         }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
