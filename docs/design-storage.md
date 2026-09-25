@@ -108,6 +108,14 @@ interface IStorage : Flushable {
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
+**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze` and `clearActiveLayer`) exclusive — mirroring `NativeConcurStorageImpl`.
+
+---
+
+### Storage critical section
+
+**Responsibility:** `IStorage.criticalSection(action)` runs `action` under a reentrant lock keyed by the storage instance. An `IStorage` implementation makes each single call atomic; a graph-layer step that makes several calls (allocate an ID then persist it, check-then-create, read-modify-write, a multi-edge traversal) runs inside `criticalSection` so the sequence is atomic as a unit. Every graph and poset sharing one storage serializes through the same lock; a nested call on the same thread does not block.
+
 ---
 
 ### Backend base classes

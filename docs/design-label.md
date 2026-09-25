@@ -67,7 +67,7 @@ interface IPoset {
 
 ### PosetDftImpl
 
-**Responsibility:** Default `IPoset` implementation backed by an `IStorage` for label DAG persistence. All caching state is private.
+**Responsibility:** Default `IPoset` implementation backed by an `IStorage` for label DAG persistence. All caching state is private. Every public operation runs inside `storage.criticalSection` (`design-storage.md`), so cache reads/writes and closure rebuilds never interleave with a concurrent mutation.
 
 **Constructor:** `PosetDftImpl(storage: IStorage)`
 

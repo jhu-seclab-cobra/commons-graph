@@ -91,6 +91,10 @@ Multiple graph instances may share a single `IStorage`. See `model.md` for share
 | `addNode(withID)` | Creates a new storage row via `storage.addNode()`. Registers in this graph. |
 | `claimNode(from)` | Registers an existing storage row (via `from.storageId`) in this graph. No new storage row created. Returns existing node if already claimed. |
 
+**Concurrency:**
+
+Every public operation runs inside `storage.criticalSection` (`design-storage.md`), so a compound operation is atomic against other callers sharing the storage. Sequence-returning queries materialize their result inside the critical section.
+
 **Edge Isolation:**
 
 All edge query methods filter by this graph's node registry membership. See `model.md` for the edge isolation invariant.
@@ -109,7 +113,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
+| `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super; check and insert run in one critical section | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
 
 ---
 
