@@ -24,5 +24,4 @@ internal val storageLocks: ConcurrentHashMap<IStorage, ReentrantLock> = Concurre
  * Reentrant: a call nested inside another critical section on the same storage,
  * on the same thread, proceeds without blocking.
  */
-public inline fun <T> IStorage.criticalSection(action: () -> T): T =
-    storageLocks.computeIfAbsent(this) { ReentrantLock() }.withLock(action)
+public inline fun <T> IStorage.criticalSection(action: () -> T): T = storageLocks.computeIfAbsent(this) { ReentrantLock() }.withLock(action)

@@ -97,8 +97,7 @@ public class LayeredStorageImpl(
             id
         }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> =
-        lock.readLock().withLock { getNodePropertiesUnlocked(id) }
+    override fun getNodeProperties(id: Int): Map<String, IValue> = lock.readLock().withLock { getNodePropertiesUnlocked(id) }
 
     private fun getNodePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsNode(id)) return ColumnViewMap(id, active.nodeColumns)
@@ -168,16 +167,14 @@ public class LayeredStorageImpl(
             id
         }
 
-    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
-        lock.readLock().withLock { getEdgeStructureUnlocked(id) }
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure = lock.readLock().withLock { getEdgeStructureUnlocked(id) }
 
     private fun getEdgeStructureUnlocked(id: Int): IStorage.EdgeStructure {
         active.edgeEndpoints[id]?.let { return it }
         return frozen?.edgeStructure(id) ?: throw EntityNotExistException(id.toString())
     }
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> =
-        lock.readLock().withLock { getEdgePropertiesUnlocked(id) }
+    override fun getEdgeProperties(id: Int): Map<String, IValue> = lock.readLock().withLock { getEdgePropertiesUnlocked(id) }
 
     private fun getEdgePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)

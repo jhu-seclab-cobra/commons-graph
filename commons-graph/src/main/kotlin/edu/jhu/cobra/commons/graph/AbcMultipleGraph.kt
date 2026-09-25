@@ -102,7 +102,10 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getAllNodes(doSatisfy: (N) -> Boolean): Sequence<N> =
         storage.criticalSection {
-            cache.entries.map { cache.node(it) }.filter(doSatisfy).asSequence()
+            cache.entries
+                .map { cache.node(it) }
+                .filter(doSatisfy)
+                .asSequence()
         }
 
     // endregion
@@ -228,14 +231,12 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> =
-        storage.criticalSection { bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }.asSequence() }
+    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }.asSequence() }
 
     override fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> =
-        storage.criticalSection { bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }.asSequence() }
+    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }.asSequence() }
 
     private fun bfsTraversal(
         of: NodeID,
