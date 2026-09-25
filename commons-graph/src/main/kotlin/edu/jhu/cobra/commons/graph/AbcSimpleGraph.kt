@@ -1,5 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.graph.storage.criticalSection
+
 /**
  * Abstract simple directed graph where at most one edge exists between any
  * two nodes in a given direction.
@@ -12,9 +14,10 @@ public abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGrap
         src: NodeID,
         dst: NodeID,
         tag: String,
-    ): E {
-        val existing = getOutgoingEdges(src).any { it.dstNid == dst }
-        if (existing) throw EntityAlreadyExistException("$src->$dst")
-        return super.addEdge(src, dst, tag)
-    }
+    ): E =
+        storage.criticalSection {
+            val existing = getOutgoingEdges(src).any { it.dstNid == dst }
+            if (existing) throw EntityAlreadyExistException("$src->$dst")
+            super.addEdge(src, dst, tag)
+        }
 }

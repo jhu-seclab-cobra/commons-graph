@@ -4,6 +4,8 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
 import java.util.Collections
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.withLock
 
 /**
  * Multi-layer freeze-and-stack storage for phased analysis pipelines.
@@ -25,6 +27,9 @@ import java.util.Collections
  * to delete a frozen-layer entity — including one promoted into the active layer —
  * throws [FrozenLayerModificationException].
  *
+ * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl].
+ * Uses internal non-locking helpers to avoid lock re-entrance overhead.
+ *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
  * @see FrozenLayerModificationException
  */
@@ -32,7 +37,9 @@ import java.util.Collections
 public class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IStorage {
-    // Global ID counters
+    private val lock = ReentrantReadWriteLock()
+
+    // Global ID counters (protected by write lock)
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
@@ -43,13 +50,15 @@ public class LayeredStorageImpl(
     // LAYERED STORAGE API
     // ============================================================================
 
-    public val layerCount: Int get() = if (frozen != null) 2 else 1
+    public val layerCount: Int get() = lock.readLock().withLock { if (frozen != null) 2 else 1 }
 
     public fun freeze() {
-        val merged = FrozenLayer.merge(frozen, active, frozenLayerFactory())
-        frozen?.close()
-        frozen = merged
-        active.clear()
+        lock.writeLock().withLock {
+            val merged = FrozenLayer.merge(frozen, active, frozenLayerFactory())
+            frozen?.close()
+            frozen = merged
+            active.clear()
+        }
     }
 
     /**
@@ -60,7 +69,7 @@ public class LayeredStorageImpl(
      * reads still resolve against frozen data.
      */
     public fun clearActiveLayer() {
-        active.clear()
+        lock.writeLock().withLock { active.clear() }
     }
 
     // ============================================================================
@@ -68,22 +77,30 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override val nodeIDs: Set<Int>
-        get() {
-            val frozenIds = frozen?.nodeIds ?: emptySet()
-            if (active.nodeIds.isEmpty()) return frozenIds
-            if (frozenIds.isEmpty()) return active.nodeIds
-            return UnionSet(frozenIds, active.nodeIds)
-        }
+        get() = lock.readLock().withLock { nodeIdsUnlocked() }
 
-    override fun containsNode(id: Int): Boolean = active.containsNode(id) || frozen?.containsNode(id) == true
-
-    override fun addNode(properties: Map<String, IValue>): Int {
-        val id = nodeCounter++
-        active.addNode(id, properties)
-        return id
+    private fun nodeIdsUnlocked(): Set<Int> {
+        val frozenIds = frozen?.nodeIds ?: emptySet()
+        if (active.nodeIds.isEmpty()) return frozenIds
+        if (frozenIds.isEmpty()) return active.nodeIds
+        return UnionSet(frozenIds, active.nodeIds)
     }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> {
+    override fun containsNode(id: Int): Boolean = lock.readLock().withLock { containsNodeUnlocked(id) }
+
+    private fun containsNodeUnlocked(id: Int): Boolean = active.containsNode(id) || frozen?.containsNode(id) == true
+
+    override fun addNode(properties: Map<String, IValue>): Int =
+        lock.writeLock().withLock {
+            val id = nodeCounter++
+            active.addNode(id, properties)
+            id
+        }
+
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
+        lock.readLock().withLock { getNodePropertiesUnlocked(id) }
+
+    private fun getNodePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsNode(id)) return ColumnViewMap(id, active.nodeColumns)
         return frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
@@ -91,62 +108,78 @@ public class LayeredStorageImpl(
     override fun getNodeProperty(
         id: Int,
         name: String,
-    ): IValue? {
-        if (active.containsNode(id)) return active.nodeColumns[name]?.get(id)
-        if (frozen?.containsNode(id) != true) throw EntityNotExistException(id.toString())
-        return frozen?.nodeProperty(id, name)
-    }
+    ): IValue? =
+        lock.readLock().withLock {
+            when {
+                active.containsNode(id) -> active.nodeColumns[name]?.get(id)
+                frozen?.containsNode(id) == true -> frozen?.nodeProperty(id, name)
+                else -> throw EntityNotExistException(id.toString())
+            }
+        }
 
     override fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) {
-        if (!containsNode(id)) throw EntityNotExistException(id.toString())
-        ensureNodeInActiveLayer(id)
-        active.setNodeProperties(id, properties)
-    }
+    ): Unit =
+        lock.writeLock().withLock {
+            if (!containsNodeUnlocked(id)) throw EntityNotExistException(id.toString())
+            ensureNodeInActiveLayerUnlocked(id)
+            active.setNodeProperties(id, properties)
+        }
 
-    override fun deleteNode(id: Int) {
-        // A promoted node still exists in the frozen layer; deleting only the active
-        // copy would resurrect the frozen one, so the frozen guard runs first.
-        if (frozen?.containsNode(id) == true) throw FrozenLayerModificationException(id.toString())
-        if (!active.containsNode(id)) throw EntityNotExistException(id.toString())
-        active.removeNode(id)
-    }
+    override fun deleteNode(id: Int): Unit =
+        lock.writeLock().withLock {
+            // A promoted node still exists in the frozen layer; deleting only the active
+            // copy would resurrect the frozen one, so the frozen guard runs first.
+            if (frozen?.containsNode(id) == true) throw FrozenLayerModificationException(id.toString())
+            if (!active.containsNode(id)) throw EntityNotExistException(id.toString())
+            active.removeNode(id)
+        }
 
     // ============================================================================
     // EDGE OPERATIONS
     // ============================================================================
 
     override val edgeIDs: Set<Int>
-        get() {
-            val frozenIds = frozen?.edgeIds ?: emptySet()
-            if (active.edgeEndpoints.isEmpty()) return frozenIds
-            if (frozenIds.isEmpty()) return active.edgeEndpoints.keys
-            return UnionSet(frozenIds, active.edgeEndpoints.keys)
-        }
+        get() = lock.readLock().withLock { edgeIdsUnlocked() }
 
-    override fun containsEdge(id: Int): Boolean = active.containsEdge(id) || frozen?.containsEdge(id) == true
+    private fun edgeIdsUnlocked(): Set<Int> {
+        val frozenIds = frozen?.edgeIds ?: emptySet()
+        if (active.edgeEndpoints.isEmpty()) return frozenIds
+        if (frozenIds.isEmpty()) return active.edgeEndpoints.keys
+        return UnionSet(frozenIds, active.edgeEndpoints.keys)
+    }
+
+    override fun containsEdge(id: Int): Boolean = lock.readLock().withLock { containsEdgeUnlocked(id) }
+
+    private fun containsEdgeUnlocked(id: Int): Boolean = active.containsEdge(id) || frozen?.containsEdge(id) == true
 
     override fun addEdge(
         src: Int,
         dst: Int,
         tag: String,
         properties: Map<String, IValue>,
-    ): Int {
-        ensureNodeInActiveLayer(src)
-        ensureNodeInActiveLayer(dst)
-        val id = edgeCounter++
-        active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), properties)
-        return id
-    }
+    ): Int =
+        lock.writeLock().withLock {
+            ensureNodeInActiveLayerUnlocked(src)
+            ensureNodeInActiveLayerUnlocked(dst)
+            val id = edgeCounter++
+            active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), properties)
+            id
+        }
 
-    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure {
+    override fun getEdgeStructure(id: Int): IStorage.EdgeStructure =
+        lock.readLock().withLock { getEdgeStructureUnlocked(id) }
+
+    private fun getEdgeStructureUnlocked(id: Int): IStorage.EdgeStructure {
         active.edgeEndpoints[id]?.let { return it }
         return frozen?.edgeStructure(id) ?: throw EntityNotExistException(id.toString())
     }
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> {
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
+        lock.readLock().withLock { getEdgePropertiesUnlocked(id) }
+
+    private fun getEdgePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)
         return frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
@@ -154,71 +187,86 @@ public class LayeredStorageImpl(
     override fun getEdgeProperty(
         id: Int,
         name: String,
-    ): IValue? {
-        if (active.containsEdge(id)) return active.edgeColumns[name]?.get(id)
-        if (frozen?.containsEdge(id) != true) throw EntityNotExistException(id.toString())
-        return frozen?.edgeProperty(id, name)
-    }
+    ): IValue? =
+        lock.readLock().withLock {
+            when {
+                active.containsEdge(id) -> active.edgeColumns[name]?.get(id)
+                frozen?.containsEdge(id) == true -> frozen?.edgeProperty(id, name)
+                else -> throw EntityNotExistException(id.toString())
+            }
+        }
 
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
-    ) {
-        if (!active.containsEdge(id)) {
-            // Promote the frozen edge by copying all frozen properties, making the
-            // active copy authoritative for subsequent reads and deletions.
-            val frozenProps = frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
-            val structure = getEdgeStructure(id)
-            ensureNodeInActiveLayer(structure.src)
-            ensureNodeInActiveLayer(structure.dst)
-            active.addEdge(id, structure, frozenProps)
+    ): Unit =
+        lock.writeLock().withLock {
+            if (!active.containsEdge(id)) {
+                // Promote the frozen edge by copying all frozen properties, making the
+                // active copy authoritative for subsequent reads and deletions.
+                val frozenProps = frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
+                val structure = getEdgeStructureUnlocked(id)
+                ensureNodeInActiveLayerUnlocked(structure.src)
+                ensureNodeInActiveLayerUnlocked(structure.dst)
+                active.addEdge(id, structure, frozenProps)
+            }
+            active.setEdgeProperties(id, properties)
         }
-        active.setEdgeProperties(id, properties)
-    }
 
-    override fun deleteEdge(id: Int) {
-        // A promoted edge still exists in the frozen layer; deleting only the active
-        // copy would resurrect the frozen one, so the frozen guard runs first.
-        if (frozen?.containsEdge(id) == true) throw FrozenLayerModificationException(id.toString())
-        if (!active.containsEdge(id)) throw EntityNotExistException(id.toString())
-        active.removeEdge(id)
-    }
+    override fun deleteEdge(id: Int): Unit =
+        lock.writeLock().withLock {
+            // A promoted edge still exists in the frozen layer; deleting only the active
+            // copy would resurrect the frozen one, so the frozen guard runs first.
+            if (frozen?.containsEdge(id) == true) throw FrozenLayerModificationException(id.toString())
+            if (!active.containsEdge(id)) throw EntityNotExistException(id.toString())
+            active.removeEdge(id)
+        }
 
     // ============================================================================
     // ADJACENCY QUERIES
     // ============================================================================
 
-    override fun getIncomingEdges(id: Int): Set<Int> {
-        val activeEdges = active.inEdges[id]
-        val frozenEdges = frozen?.incomingEdges(id)
-        if (activeEdges == null && frozenEdges == null) throw EntityNotExistException(id.toString())
-        if (activeEdges == null || activeEdges.isEmpty()) return frozenEdges ?: emptySet()
-        if (frozenEdges == null || frozenEdges.isEmpty()) return Collections.unmodifiableSet(activeEdges)
-        return UnionSet(frozenEdges, activeEdges)
-    }
+    override fun getIncomingEdges(id: Int): Set<Int> =
+        lock.readLock().withLock {
+            val activeEdges = active.inEdges[id]
+            val frozenEdges = frozen?.incomingEdges(id)
+            when {
+                activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
+                activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()
+                frozenEdges == null || frozenEdges.isEmpty() -> Collections.unmodifiableSet(activeEdges)
+                else -> UnionSet(frozenEdges, activeEdges)
+            }
+        }
 
-    override fun getOutgoingEdges(id: Int): Set<Int> {
-        val activeEdges = active.outEdges[id]
-        val frozenEdges = frozen?.outgoingEdges(id)
-        if (activeEdges == null && frozenEdges == null) throw EntityNotExistException(id.toString())
-        if (activeEdges == null || activeEdges.isEmpty()) return frozenEdges ?: emptySet()
-        if (frozenEdges == null || frozenEdges.isEmpty()) return Collections.unmodifiableSet(activeEdges)
-        return UnionSet(frozenEdges, activeEdges)
-    }
+    override fun getOutgoingEdges(id: Int): Set<Int> =
+        lock.readLock().withLock {
+            val activeEdges = active.outEdges[id]
+            val frozenEdges = frozen?.outgoingEdges(id)
+            when {
+                activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
+                activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()
+                frozenEdges == null || frozenEdges.isEmpty() -> Collections.unmodifiableSet(activeEdges)
+                else -> UnionSet(frozenEdges, activeEdges)
+            }
+        }
 
     // ============================================================================
     // METADATA OPERATIONS
     // ============================================================================
 
     override val metaNames: Set<String>
-        get() {
-            val frozenNames = (frozen?.metaNames ?: emptySet()) - active.deletedMetaNames
-            if (active.metaProperties.isEmpty()) return frozenNames
-            if (frozenNames.isEmpty()) return active.metaProperties.keys
-            return UnionSet(frozenNames, active.metaProperties.keys)
-        }
+        get() = lock.readLock().withLock { metaNamesUnlocked() }
 
-    override fun getMeta(name: String): IValue? {
+    private fun metaNamesUnlocked(): Set<String> {
+        val frozenNames = (frozen?.metaNames ?: emptySet()) - active.deletedMetaNames
+        if (active.metaProperties.isEmpty()) return frozenNames
+        if (frozenNames.isEmpty()) return active.metaProperties.keys
+        return UnionSet(frozenNames, active.metaProperties.keys)
+    }
+
+    override fun getMeta(name: String): IValue? = lock.readLock().withLock { getMetaUnlocked(name) }
+
+    private fun getMetaUnlocked(name: String): IValue? {
         active.metaProperties[name]?.let { return it }
         if (name in active.deletedMetaNames) return null
         return frozen?.meta(name)
@@ -227,46 +275,50 @@ public class LayeredStorageImpl(
     override fun setMeta(
         name: String,
         value: IValue?,
-    ) {
-        if (value == null) {
-            // Tombstone the name so a frozen-layer value does not resurface on reads.
-            active.metaProperties.remove(name)
-            active.deletedMetaNames.add(name)
-        } else {
-            active.deletedMetaNames.remove(name)
-            active.metaProperties[name] = value
+    ): Unit =
+        lock.writeLock().withLock {
+            if (value == null) {
+                // Tombstone the name so a frozen-layer value does not resurface on reads.
+                active.metaProperties.remove(name)
+                active.deletedMetaNames.add(name)
+            } else {
+                active.deletedMetaNames.remove(name)
+                active.metaProperties[name] = value
+            }
         }
-    }
 
     // ============================================================================
     // LIFECYCLE
     // ============================================================================
 
-    override fun clear() {
-        frozen?.close()
-        frozen = null
-        active.clear()
-        nodeCounter = 0
-        edgeCounter = 0
-    }
+    override fun clear(): Unit =
+        lock.writeLock().withLock {
+            frozen?.close()
+            frozen = null
+            active.clear()
+            nodeCounter = 0
+            edgeCounter = 0
+        }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
         // Copying into the iterated storage mutates it mid-iteration; reject up front.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        val nodeIdMap = HashMap<Int, Int>()
-        for (nodeId in nodeIDs) {
-            nodeIdMap[nodeId] = target.addNode(getNodeProperties(nodeId))
+        return lock.readLock().withLock {
+            val nodeIdMap = HashMap<Int, Int>()
+            for (nodeId in nodeIdsUnlocked()) {
+                nodeIdMap[nodeId] = target.addNode(getNodePropertiesUnlocked(nodeId))
+            }
+            for (edgeId in edgeIdsUnlocked()) {
+                val structure = getEdgeStructureUnlocked(edgeId)
+                val newSrc = nodeIdMap.getValue(structure.src)
+                val newDst = nodeIdMap.getValue(structure.dst)
+                target.addEdge(newSrc, newDst, structure.tag, getEdgePropertiesUnlocked(edgeId))
+            }
+            for (name in metaNamesUnlocked()) {
+                target.setMeta(name, getMetaUnlocked(name))
+            }
+            nodeIdMap
         }
-        for (edgeId in edgeIDs) {
-            val structure = getEdgeStructure(edgeId)
-            val newSrc = nodeIdMap.getValue(structure.src)
-            val newDst = nodeIdMap.getValue(structure.dst)
-            target.addEdge(newSrc, newDst, structure.tag, getEdgeProperties(edgeId))
-        }
-        for (name in metaNames) {
-            target.setMeta(name, getMeta(name))
-        }
-        return nodeIdMap
     }
 
     override fun flush() {
@@ -279,7 +331,7 @@ public class LayeredStorageImpl(
 
     // Writes always land in the active layer; a frozen node is promoted by copying
     // its frozen properties into the active columns first.
-    private fun ensureNodeInActiveLayer(id: Int) {
+    private fun ensureNodeInActiveLayerUnlocked(id: Int) {
         if (active.containsNode(id)) return
         val props = frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
         active.addNode(id, props)

@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.poset
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 
@@ -15,6 +16,10 @@ private const val LABEL_PROP = "label"
  * first query and discarded on any parent mutation. A cycle in the hierarchy is
  * detected during the build and rejected.
  * All caching state is private. Consumers interact only through the [IPoset] interface.
+ *
+ * Every public operation runs inside [criticalSection] on [storage] — the same
+ * lock instance used by graphs sharing this storage — so a caching read/write
+ * or a closure rebuild is never interleaved with a concurrent mutation.
  *
  * @param storage The storage instance for label DAG persistence.
  */
@@ -130,69 +135,80 @@ public class PosetDftImpl(
     ): Boolean = ancestorId in ensureClosure().getValue(descendantId)
 
     override val allLabels: Set<Label>
-        get() {
-            ensureCache()
-            val labels = labelIdCache.keys.mapTo(LinkedHashSet()) { Label(it) }
-            return labels + Label.INFIMUM + Label.SUPREMUM
-        }
+        get() =
+            storage.criticalSection {
+                ensureCache()
+                val labels = labelIdCache.keys.mapTo(LinkedHashSet()) { Label(it) }
+                labels + Label.INFIMUM + Label.SUPREMUM
+            }
 
-    override fun getParents(label: Label): Map<String, Label> {
-        val storageId = resolveLabelId(label) ?: return emptyMap()
-        val result = LinkedHashMap<String, Label>()
-        for (edgeId in storage.getOutgoingEdges(storageId)) {
-            val (_, parentInt, name) = storage.getEdgeStructure(edgeId)
-            val parentLabelCore = intToLabel[parentInt] ?: continue
-            result[name] = Label(parentLabelCore)
+    override fun getParents(label: Label): Map<String, Label> =
+        storage.criticalSection {
+            val storageId = resolveLabelId(label) ?: return@criticalSection emptyMap()
+            val result = LinkedHashMap<String, Label>()
+            for (edgeId in storage.getOutgoingEdges(storageId)) {
+                val (_, parentInt, name) = storage.getEdgeStructure(edgeId)
+                val parentLabelCore = intToLabel[parentInt] ?: continue
+                result[name] = Label(parentLabelCore)
+            }
+            result
         }
-        return result
-    }
 
     override fun setParents(
         label: Label,
         parents: Map<String, Label>,
-    ) {
-        val storageId = ensureLabelNode(label)
-        for (edgeId in storage.getOutgoingEdges(storageId).toList()) {
-            storage.deleteEdge(edgeId)
+    ): Unit =
+        storage.criticalSection {
+            val storageId = ensureLabelNode(label)
+            for (edgeId in storage.getOutgoingEdges(storageId).toList()) {
+                storage.deleteEdge(edgeId)
+            }
+            for ((name, parentLabel) in parents) {
+                val parentInt = ensureLabelNode(parentLabel)
+                storage.addEdge(storageId, parentInt, name, emptyMap())
+            }
+            ancestorClosure = null
         }
-        for ((name, parentLabel) in parents) {
-            val parentInt = ensureLabelNode(parentLabel)
-            storage.addEdge(storageId, parentInt, name, emptyMap())
-        }
-        ancestorClosure = null
-    }
 
     override fun getAncestors(label: Label): Sequence<Label> =
-        sequence {
-            val startId = resolveLabelId(label) ?: return@sequence
-            val visited = hashSetOf(startId)
-            val queue = ArrayDeque<Int>()
-            for (edgeId in storage.getOutgoingEdges(startId)) {
-                val parentInt = storage.getEdgeStructure(edgeId).dst
-                if (visited.add(parentInt)) queue.add(parentInt)
-            }
-            while (queue.isNotEmpty()) {
-                val currentId = queue.removeFirst()
-                val labelCore = intToLabel[currentId] ?: continue
-                yield(Label(labelCore))
-                for (edgeId in storage.getOutgoingEdges(currentId)) {
+        storage.criticalSection {
+            val startId = resolveLabelId(label)
+            if (startId == null) {
+                emptySequence()
+            } else {
+                val visited = hashSetOf(startId)
+                val queue = ArrayDeque<Int>()
+                for (edgeId in storage.getOutgoingEdges(startId)) {
                     val parentInt = storage.getEdgeStructure(edgeId).dst
                     if (visited.add(parentInt)) queue.add(parentInt)
                 }
+                val result = mutableListOf<Label>()
+                while (queue.isNotEmpty()) {
+                    val currentId = queue.removeFirst()
+                    val labelCore = intToLabel[currentId]
+                    if (labelCore == null) continue
+                    result.add(Label(labelCore))
+                    for (edgeId in storage.getOutgoingEdges(currentId)) {
+                        val parentInt = storage.getEdgeStructure(edgeId).dst
+                        if (visited.add(parentInt)) queue.add(parentInt)
+                    }
+                }
+                result.asSequence()
             }
         }
 
     override fun compare(
         a: Label,
         b: Label,
-    ): Int? {
-        if (a == b) return 0
-        if (a == Label.SUPREMUM || b == Label.INFIMUM) return 1
-        if (b == Label.SUPREMUM || a == Label.INFIMUM) return -1
-        val aId = resolveLabelId(a) ?: return null
-        val bId = resolveLabelId(b) ?: return null
-        if (isAncestor(aId, bId)) return 1
-        if (isAncestor(bId, aId)) return -1
-        return null
-    }
+    ): Int? =
+        storage.criticalSection {
+            if (a == b) return@criticalSection 0
+            if (a == Label.SUPREMUM || b == Label.INFIMUM) return@criticalSection 1
+            if (b == Label.SUPREMUM || a == Label.INFIMUM) return@criticalSection -1
+            val aId = resolveLabelId(a) ?: return@criticalSection null
+            val bId = resolveLabelId(b) ?: return@criticalSection null
+            if (isAncestor(aId, bId)) return@criticalSection 1
+            if (isAncestor(bId, aId)) return@criticalSection -1
+            null
+        }
 }

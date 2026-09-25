@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
@@ -15,6 +16,12 @@ import java.io.Flushable
  * delegating to IStorage via auto-generated Int IDs. Edge lookups by (src, dst, tag)
  * scan the source node's adjacency list in storage — O(out-degree) per query.
  * BFS traversals use Int visited sets for identity-function hashCode.
+ *
+ * Every public operation runs inside [criticalSection] on [storage], serializing
+ * compound (multi-call) sequences against concurrent callers sharing the same
+ * storage instance. Sequence-returning queries materialize their result inside
+ * that critical section before returning, trading lazy evaluation for a
+ * consistent snapshot under concurrent mutation.
  *
  * @param N The type of nodes in the graph, must extend [AbcNode].
  * @param E The type of edges in the graph, must extend [AbcEdge].
@@ -38,7 +45,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     private val cache = GraphEntityCache<N, E>({ storage }, ::newNodeObj, ::newEdgeObj)
 
     override val nodeIDs: Set<NodeID>
-        get() = cache.nodeIds
+        get() = storage.criticalSection { cache.nodeIds.toSet() }
 
     protected abstract fun newNodeObj(): N
 
@@ -59,41 +66,44 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     // region Node operations
 
-    override fun addNode(withID: NodeID): N {
-        if (cache.containsNode(withID)) throw EntityAlreadyExistException(withID)
-        val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal))
-        return cache.node(cache.register(withID, storageId))
-    }
-
-    override fun claimNode(from: AbcNode): N {
-        cache.entryOf(from.id)?.let { return cache.node(it) }
-        return cache.node(cache.register(from.id, from.storageId))
-    }
-
-    override fun getNode(whoseID: NodeID): N? {
-        val entry = cache.entryOf(whoseID) ?: return null
-        return cache.node(entry)
-    }
-
-    override fun containNode(whoseID: NodeID): Boolean = cache.containsNode(whoseID)
-
-    override fun delNode(whoseID: NodeID) {
-        val entry = cache.entryOf(whoseID) ?: return
-        val allEdges =
-            (storage.getIncomingEdges(entry.storageId) + storage.getOutgoingEdges(entry.storageId)).toList()
-        for (edgeIntId in allEdges) {
-            cache.evictEdge(edgeIntId)
-            storage.deleteEdge(edgeIntId)
+    override fun addNode(withID: NodeID): N =
+        storage.criticalSection {
+            if (cache.containsNode(withID)) throw EntityAlreadyExistException(withID)
+            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal))
+            cache.node(cache.register(withID, storageId))
         }
-        cache.removeNode(entry)
-        storage.deleteNode(entry.storageId)
-    }
+
+    override fun claimNode(from: AbcNode): N =
+        storage.criticalSection {
+            cache.entryOf(from.id)?.let { return@criticalSection cache.node(it) }
+            cache.node(cache.register(from.id, from.storageId))
+        }
+
+    override fun getNode(whoseID: NodeID): N? =
+        storage.criticalSection {
+            val entry = cache.entryOf(whoseID) ?: return@criticalSection null
+            cache.node(entry)
+        }
+
+    override fun containNode(whoseID: NodeID): Boolean = storage.criticalSection { cache.containsNode(whoseID) }
+
+    override fun delNode(whoseID: NodeID): Unit =
+        storage.criticalSection {
+            val entry = cache.entryOf(whoseID) ?: return@criticalSection
+            val allEdges =
+                (storage.getIncomingEdges(entry.storageId) + storage.getOutgoingEdges(entry.storageId)).toList()
+            for (edgeIntId in allEdges) {
+                cache.evictEdge(edgeIntId)
+                storage.deleteEdge(edgeIntId)
+            }
+            cache.removeNode(entry)
+            storage.deleteNode(entry.storageId)
+        }
 
     override fun getAllNodes(doSatisfy: (N) -> Boolean): Sequence<N> =
-        cache.entries
-            .asSequence()
-            .map { cache.node(it) }
-            .filter(doSatisfy)
+        storage.criticalSection {
+            cache.entries.map { cache.node(it) }.filter(doSatisfy).asSequence()
+        }
 
     // endregion
 
@@ -103,129 +113,154 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         src: NodeID,
         dst: NodeID,
         tag: String,
-    ): E {
-        val srcEntry = cache.entryOf(src) ?: throw EntityNotExistException(src)
-        val dstEntry = cache.entryOf(dst) ?: throw EntityNotExistException(dst)
-        if (findEdge(src, dst, tag) != null) throw EntityAlreadyExistException("$src-$tag-$dst")
-        val storageId = storage.addEdge(srcEntry.storageId, dstEntry.storageId, tag, emptyMap())
-        return cache.edge(storageId)
-    }
+    ): E =
+        storage.criticalSection {
+            val srcEntry = cache.entryOf(src) ?: throw EntityNotExistException(src)
+            val dstEntry = cache.entryOf(dst) ?: throw EntityNotExistException(dst)
+            if (findEdge(src, dst, tag) != null) throw EntityAlreadyExistException("$src-$tag-$dst")
+            val storageId = storage.addEdge(srcEntry.storageId, dstEntry.storageId, tag, emptyMap())
+            cache.edge(storageId)
+        }
 
     override fun getEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
-    ): E? {
-        if (!cache.containsNode(src)) return null
-        if (!cache.containsNode(dst)) return null
-        val storageId = findEdge(src, dst, tag) ?: return null
-        return cache.edge(storageId)
-    }
+    ): E? =
+        storage.criticalSection {
+            if (!cache.containsNode(src)) return@criticalSection null
+            if (!cache.containsNode(dst)) return@criticalSection null
+            val storageId = findEdge(src, dst, tag) ?: return@criticalSection null
+            cache.edge(storageId)
+        }
 
     override fun containEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
-    ): Boolean {
-        if (!cache.containsNode(src)) return false
-        if (!cache.containsNode(dst)) return false
-        return findEdge(src, dst, tag) != null
-    }
+    ): Boolean =
+        storage.criticalSection {
+            if (!cache.containsNode(src)) return@criticalSection false
+            if (!cache.containsNode(dst)) return@criticalSection false
+            findEdge(src, dst, tag) != null
+        }
 
     override fun delEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
-    ) {
-        if (!cache.containsNode(src)) return
-        if (!cache.containsNode(dst)) return
-        val storageId = findEdge(src, dst, tag) ?: return
-        cache.evictEdge(storageId)
-        storage.deleteEdge(storageId)
-    }
+    ): Unit =
+        storage.criticalSection {
+            if (!cache.containsNode(src)) return@criticalSection
+            if (!cache.containsNode(dst)) return@criticalSection
+            val storageId = findEdge(src, dst, tag) ?: return@criticalSection
+            cache.evictEdge(storageId)
+            storage.deleteEdge(storageId)
+        }
 
     override fun getAllEdges(doSatisfy: (E) -> Boolean): Sequence<E> =
-        storage.edgeIDs
-            .asSequence()
-            .filter { edgeId ->
-                val structure = storage.getEdgeStructure(edgeId)
-                cache.containsStorageId(structure.src) && cache.containsStorageId(structure.dst)
-            }.map { cache.edge(it) }
-            .filter(doSatisfy)
+        storage.criticalSection {
+            storage.edgeIDs
+                .filter { edgeId ->
+                    val structure = storage.getEdgeStructure(edgeId)
+                    cache.containsStorageId(structure.src) && cache.containsStorageId(structure.dst)
+                }.map { cache.edge(it) }
+                .filter(doSatisfy)
+                .asSequence()
+        }
 
     // endregion
 
     // region Graph structure queries
 
-    override fun getOutgoingEdges(of: NodeID): Sequence<E> {
-        val entry = cache.entryOf(of) ?: return emptySequence()
-        return storage
-            .getOutgoingEdges(entry.storageId)
-            .asSequence()
-            .filter { cache.containsStorageId(storage.getEdgeStructure(it).dst) }
-            .map { cache.edge(it) }
-    }
+    override fun getOutgoingEdges(of: NodeID): Sequence<E> =
+        storage.criticalSection {
+            val entry = cache.entryOf(of)
+            if (entry == null) {
+                emptySequence()
+            } else {
+                storage
+                    .getOutgoingEdges(entry.storageId)
+                    .filter { cache.containsStorageId(storage.getEdgeStructure(it).dst) }
+                    .map { cache.edge(it) }
+                    .asSequence()
+            }
+        }
 
-    override fun getIncomingEdges(of: NodeID): Sequence<E> {
-        val entry = cache.entryOf(of) ?: return emptySequence()
-        return storage
-            .getIncomingEdges(entry.storageId)
-            .asSequence()
-            .filter { cache.containsStorageId(storage.getEdgeStructure(it).src) }
-            .map { cache.edge(it) }
-    }
+    override fun getIncomingEdges(of: NodeID): Sequence<E> =
+        storage.criticalSection {
+            val entry = cache.entryOf(of)
+            if (entry == null) {
+                emptySequence()
+            } else {
+                storage
+                    .getIncomingEdges(entry.storageId)
+                    .filter { cache.containsStorageId(storage.getEdgeStructure(it).src) }
+                    .map { cache.edge(it) }
+                    .asSequence()
+            }
+        }
 
     override fun getParents(
         of: NodeID,
         edgeCond: (E) -> Boolean,
     ): Sequence<N> =
-        getIncomingEdges(of).filter(edgeCond).mapNotNull { edge ->
-            val entry = cache.entryOf(edge.srcNid) ?: return@mapNotNull null
-            cache.node(entry)
+        storage.criticalSection {
+            getIncomingEdges(of)
+                .filter(edgeCond)
+                .mapNotNull { edge -> cache.entryOf(edge.srcNid)?.let(cache::node) }
+                .toList()
+                .asSequence()
         }
 
     override fun getChildren(
         of: NodeID,
         edgeCond: (E) -> Boolean,
     ): Sequence<N> =
-        getOutgoingEdges(of).filter(edgeCond).mapNotNull { edge ->
-            val entry = cache.entryOf(edge.dstNid) ?: return@mapNotNull null
-            cache.node(entry)
+        storage.criticalSection {
+            getOutgoingEdges(of)
+                .filter(edgeCond)
+                .mapNotNull { edge -> cache.entryOf(edge.dstNid)?.let(cache::node) }
+                .toList()
+                .asSequence()
         }
 
     override fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }
+    ): Sequence<N> =
+        storage.criticalSection { bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }.asSequence() }
 
     override fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }
+    ): Sequence<N> =
+        storage.criticalSection { bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }.asSequence() }
 
     private fun bfsTraversal(
         of: NodeID,
         edgeCond: (E) -> Boolean,
         adjacentEdges: (Int) -> Set<Int>,
         neighborId: (IStorage.EdgeStructure) -> Int,
-    ) = sequence {
-        val startEntry = cache.entryOf(of) ?: return@sequence
+    ): List<N> {
+        val startEntry = cache.entryOf(of) ?: return emptyList()
         // Mark at enqueue: a node reachable through several edges (diamond, parallel
-        // edges, cycle back to the start) is yielded at most once, and never the start.
+        // edges, cycle back to the start) is included at most once, and never the start.
         val visited = hashSetOf(startEntry.storageId)
         val queue = ArrayDeque<Int>().apply { add(startEntry.storageId) }
+        val result = mutableListOf<N>()
         while (queue.isNotEmpty()) {
             val currentInt = queue.removeFirst()
-            adjacentEdges(currentInt).forEach { edgeIntId ->
+            for (edgeIntId in adjacentEdges(currentInt)) {
                 val nextInt = neighborId(storage.getEdgeStructure(edgeIntId))
-                if (!cache.containsStorageId(nextInt)) return@forEach
-                val edge = cache.edge(edgeIntId)
-                if (!edgeCond(edge)) return@forEach
-                if (!visited.add(nextInt)) return@forEach
-                yield(cache.node(nextInt))
+                val includable =
+                    cache.containsStorageId(nextInt) && edgeCond(cache.edge(edgeIntId)) && visited.add(nextInt)
+                if (!includable) continue
+                result.add(cache.node(nextInt))
                 queue.add(nextInt)
             }
         }
+        return result
     }
 
     // endregion
@@ -238,16 +273,17 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
      * back to loading all nodes when [PROP_OWNERS] is absent (first run before
      * any flush).
      */
-    protected fun rebuild() {
-        cache.clear()
-        for (storageId in storage.nodeIDs) {
-            val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
-            val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
-            val ownedByThis = owners == null || owners.contains(StrVal(graphId))
-            if (nodeIdVal == null || !ownedByThis) continue
-            cache.register(nodeIdVal.core, storageId)
+    protected fun rebuild(): Unit =
+        storage.criticalSection {
+            cache.clear()
+            for (storageId in storage.nodeIDs) {
+                val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
+                val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
+                val ownedByThis = owners == null || owners.contains(StrVal(graphId))
+                if (nodeIdVal == null || !ownedByThis) continue
+                cache.register(nodeIdVal.core, storageId)
+            }
         }
-    }
 
     /**
      * Writes this graph's ownership mark ([PROP_OWNERS]) onto every cached node.
@@ -259,13 +295,14 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
      *
      * @throws EntityNotExistException if a cached node no longer exists in storage.
      */
-    override fun flush() {
-        for (storageId in cache.storageIds) {
-            val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
-            if (!existing.contains(StrVal(graphId))) {
-                val updated = SetVal(existing.core + StrVal(graphId))
-                storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to updated))
+    override fun flush(): Unit =
+        storage.criticalSection {
+            for (storageId in cache.storageIds) {
+                val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+                if (!existing.contains(StrVal(graphId))) {
+                    val updated = SetVal(existing.core + StrVal(graphId))
+                    storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to updated))
+                }
             }
         }
-    }
 }
