@@ -37,8 +37,8 @@ raises an error naming a label on the cycle.
 
 ### Steps — Invalidate
 
-1. Any parent mutation (`setParents`) discards the closure table. The next
-   query rebuilds it.
+1. Any parent mutation (`setParents`) or storage revert discards the closure
+   table. The next query rebuilds it.
 
 ### Invariants
 
@@ -148,7 +148,8 @@ A label removal leaves `candidates` unchanged.
 
 - **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
 - **Exact index (remove on relabel)**: loses completeness when a layered
-  storage reverts the active layer, unless storage notifies the graph of every
-  revert — an API that storage does not have.
+  storage reverts the active layer: a revert notification names removed IDs
+  only, not the frozen label sets it restores, so the index would rescan every
+  restored edge.
 - **Traversal-local write log**: misses carriers written before the current
   traversal under the same deterministic label.

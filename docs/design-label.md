@@ -71,6 +71,8 @@ interface IPoset {
 
 **Constructor:** `PosetDftImpl(storage: IStorage)`
 
+When `storage` is an `IRevertibleStorage`, the constructor subscribes a `RevertListener`: a revert evicts the removed label nodes from the label↔`Int` caches and discards the ancestor closure (`spec-graph.md` Revert).
+
 The poset store uses auto-generated `Int` IDs:
 
 | Poset concept | IStorage mapping |

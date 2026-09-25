@@ -2,10 +2,10 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`
-- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `LayeredStorageImpl` implements `IStorage` (composes an internal `ActiveLayer` + at most one `FrozenLayer` wrapping a frozen `IStorage`)
-- **Abstract**: `IStorage` (implemented by all storage types); per-backend bases `AbcJgraphtStorage`, `AbcMapDBStorage`, `AbcNeo4jStorage` (each extended by a plain and a concurrent subclass)
-- **Exceptions**: `GraphException` (abstract base for all graph-layer failures); `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting entities from frozen layer
+- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `IRevertibleStorage`, `RevertListener`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`
+- **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `IRevertibleStorage` extends `IStorage`; `LayeredStorageImpl` implements `IRevertibleStorage` (composes an internal `ActiveLayer` + at most one `FrozenLayer` wrapping a frozen `IStorage`) and notifies registered `RevertListener`s
+- **Abstract**: `IStorage` (implemented by all storage types); `IRevertibleStorage` (implemented by `LayeredStorageImpl`); `RevertListener` (implemented by graph and poset caches); per-backend bases `AbcJgraphtStorage`, `AbcMapDBStorage`, `AbcNeo4jStorage` (each extended by a plain and a concurrent subclass)
+- **Exceptions**: `GraphException` (abstract base for all graph-layer failures); `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting a frozen-layer node
 - **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (composes internal `ActiveLayer` + at most one `FrozenLayer`). Helpers: `ColumnarProperties` (internal — pure operations on columnar property maps).
 
 The storage layer is the **backend-agnostic directed property graph engine**. It manages nodes and edges identified by auto-generated `Int` IDs, per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), edge structural metadata (source, destination, tag), and graph-level metadata. It does not know about domain types (`Label`).
@@ -73,6 +73,20 @@ interface IStorage : Flushable {
 
 ---
 
+### IRevertibleStorage
+
+**Responsibility:** An `IStorage` that removes entities without a `deleteNode`/`deleteEdge` call (a revert). Consumers holding caches keyed by storage IDs subscribe to learn which IDs a revert removed.
+
+| Method | Behavior | Input | Output | Errors |
+|--------|----------|-------|--------|--------|
+| `addRevertListener` | Registers a listener, notified after every revert with the IDs the revert removed. The storage holds the listener for its own lifetime. | `listener: RevertListener` | -- | -- |
+
+### RevertListener
+
+**Responsibility:** `fun interface` receiving one revert notification: `onRevert(removedNodes: Set<Int>, removedEdges: Set<Int>)`. The sets hold exactly the node and edge IDs that existed before the revert and do not exist after it. Invoked inside the storage's `criticalSection`, after the storage state is final; a listener does not call back into the storage.
+
+---
+
 ### NativeStorageImpl
 
 **Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op.
@@ -91,20 +105,25 @@ interface IStorage : Flushable {
 
 ### LayeredStorageImpl
 
-**Responsibility:** Multi-layer freeze-and-stack `IStorage` for phased analysis pipelines. Active layer data stored inline using global `Int` IDs. Frozen layer is an independent `IStorage` instance with its own local IDs. ID mapping (global to frozen local) maintained internally. `flush()` is a no-op.
+**Responsibility:** Multi-layer freeze-and-stack `IRevertibleStorage` for phased analysis pipelines. Active layer data stored inline using global `Int` IDs. Frozen layer is an independent `IStorage` instance with its own local IDs. ID mapping (global to frozen local) maintained internally. `flush()` is a no-op.
 
 **Layer management API (concrete class methods, not inherited from IStorage):**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `freeze` | Merges frozen + active into a new frozen `IStorage`, replaces old frozen layer, resets active layer. Always exactly one frozen layer after freeze. | -- | -- | -- |
+| `clearActiveLayer` | Reverts to the frozen layer: drops every active-layer node, edge, property change, and tombstone. Notifies revert listeners with the active-only node and edge IDs. | -- | -- | -- |
 | `layerCount` | Total layers (frozen + active). Always 1 (no frozen) or 2 (one frozen + active). | -- | `Int` | -- |
 
-**Deletion constraint:** Only entities that exist solely in the active layer can be deleted. Deleting a frozen-layer entity — including one promoted into the active layer — throws `FrozenLayerModificationException`.
+`clear()` is also a revert: it notifies revert listeners with every node and edge ID it removes.
+
+**Edge deletion:** Deleting an active-only edge removes it. Deleting a frozen-layer edge — including one promoted into the active layer — drops the active copy and records a tombstone in the active layer. A tombstoned edge reads as absent everywhere (`containsEdge`, `edgeIDs`, adjacency, structure, properties) and is excluded from `freeze` merges; `clearActiveLayer` drops the tombstone and the frozen edge reads again.
+
+**Node deletion constraint:** Only nodes that exist solely in the active layer can be deleted. Deleting a frozen-layer node — including one promoted into the active layer — throws `FrozenLayerModificationException`.
 
 **Metadata deletion:** `setMeta(name, null)` deletes the property across both layers: the active layer records a tombstone that masks the frozen value on reads and excludes the name from `freeze` merges. A later non-null `setMeta` clears the tombstone.
 
-**Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
+**Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta, edge and meta tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
@@ -147,6 +166,6 @@ All graph-layer exceptions extend the abstract base `GraphException` (extends `E
 | `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src/dst |
 | `EntityAlreadyExistException` | Graph layer: adding a node/edge whose `NodeID` or `(src, dst, tag)` triple already exists; never raised by `IStorage`, whose IDs are auto-generated |
 | `InvalidPropNameException` | Property name collides with a backend reserved name (Neo4j `__sid__`, `__tag__`, `__meta_id__`) or an exporter structural attribute (GML `nid`/`esrc`/`edst`/`etype`, MapDB `_nid`/`_esrc`/`_edst`/`_etag`) |
-| `FrozenLayerModificationException` | Deleting an entity from the frozen layer in `LayeredStorageImpl` |
+| `FrozenLayerModificationException` | Deleting a frozen-layer node in `LayeredStorageImpl` |
 
 Deletion of a non-existent entity is a no-op at the graph level.

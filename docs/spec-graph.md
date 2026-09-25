@@ -104,8 +104,13 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 ### Steps — Adjacency query
 
 1. Retrieve edge IDs from active layer for the node.
-2. Retrieve edge IDs from frozen layer (translating to global IDs).
+2. Retrieve edge IDs from frozen layer (translating to global IDs), minus tombstoned edges.
 3. Return the union of both sets.
+
+### Steps — Edge delete
+
+1. Active-only edge: remove it.
+2. Frozen edge (promoted or not): remove the active copy when present, then record a tombstone. Containment, ID enumeration, and property/structure reads treat a tombstoned edge as absent.
 
 ### Steps — Property write (cross-layer)
 
@@ -115,14 +120,21 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 ### Steps — Freeze
 
 1. Transfer frozen-layer data into a new storage instance.
-2. Transfer active-layer data into the same instance; for an entity present in both layers, the active property set replaces the frozen one wholesale.
+2. Transfer active-layer data into the same instance; for an entity present in both layers, the active property set replaces the frozen one wholesale. Tombstoned edges are not transferred.
 3. Replace old frozen layer with merged storage. Clear active layer.
+
+### Steps — Revert (`clearActiveLayer`)
+
+1. Removed nodes = active-layer nodes absent from the frozen layer; removed edges = active-layer edges absent from the frozen layer.
+2. Clear the active layer, tombstones included.
+3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and discards its closure table. Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid.
 
 ### Invariants
 
 - An entity present in the active layer reads exactly its active property set; a property deleted from that set stays deleted.
 - Promotion copies every frozen property into the active layer, so the active copy is complete at promotion time.
-- Frozen layer entities cannot be deleted. Only active-layer entities can be deleted.
+- Frozen layer nodes cannot be deleted. A deleted frozen edge is masked by a tombstone, never removed from the frozen layer.
+- After a revert, storage reads equal the reads right after the last freeze, and every registered graph and poset cache holds only IDs that exist.
 - Layer count is always 1 or 2. Global IDs are stable across freezes.
 
 ### Termination
@@ -131,7 +143,7 @@ Property read and adjacency query check at most two layers. Property write updat
 
 ### Complexity
 
-- Property read: O(1) amortized. Adjacency: O(active + frozen edges). Freeze: O(N + E).
+- Property read: O(1) amortized. Adjacency: O(active + frozen edges). Freeze: O(N + E). Revert: O(active nodes + active edges) per listener.
 
 ---
 

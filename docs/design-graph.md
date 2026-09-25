@@ -77,7 +77,7 @@ AbcMultipleGraph
 +-- abstract graphId: String                <- graph identifier for ownership tracking
 +-- newNodeObj(): N                         <- subclass entity factory (protected abstract)
 +-- newEdgeObj(): E                         <- subclass entity factory (protected abstract)
-+-- cache: GraphEntityCache<N, E>           <- NodeID↔Int index + entity wrappers (private)
++-- cache: GraphEntityCache<N, E>           <- NodeID↔Int index + entity wrappers (private, created on first use)
 ```
 
 **Shared Storage:**
@@ -94,6 +94,10 @@ Multiple graph instances may share a single `IStorage`. See `model.md` for share
 **Concurrency:**
 
 Every public operation runs inside `storage.criticalSection` (`design-storage.md`), so a compound operation is atomic against other callers sharing the storage. Sequence-returning queries materialize their result inside the critical section.
+
+**Revert Coherence:**
+
+The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the cache subscribes as a `RevertListener` at creation and evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache (`spec-graph.md` Revert).
 
 **Edge Isolation:**
 

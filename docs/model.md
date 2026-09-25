@@ -59,8 +59,9 @@ A marker controlling edge visibility. Wraps a string identifier.
 | Any | write operation | -- | Targets active layer only |
 | Any | read operation | -- | Cascades: active first, then frozen |
 | Active + frozen | delete | Entity in active layer only | Entity deleted |
-| Active + frozen | delete | Entity in active layer shadows a frozen entity | Active copy removed; reads revert to the frozen snapshot |
-| Active + frozen | delete | Entity in frozen layer only | Rejected |
+| Active + frozen | delete edge | Edge in frozen layer (promoted or not) | Edge masked as deleted until the next revert; removed at the next freeze |
+| Active + frozen | delete node | Node in frozen layer (promoted or not) | Rejected |
+| Active + frozen | revert (clear active layer) | -- | Active + frozen; every read equals the read right after the last freeze |
 
 ---
 
@@ -75,7 +76,8 @@ A marker controlling edge visibility. Wraps a string identifier.
 - `INFIMUM` and `SUPREMUM` are never assigned to edges. They are structural bounds only.
 - Label hierarchy is a DAG. No cycles in parent relationships.
 - Layer count is always 1 (active only) or 2 (active + one frozen). Merge-on-freeze maintains this bound.
-- Storage integer IDs are stable across freeze operations.
+- Storage integer IDs are stable across freeze operations and never reused within one storage lifetime.
+- After a revert, every graph and label hierarchy over the storage holds exactly the entities the storage holds: no registered node, cached edge, or label refers to a removed ID.
 
 ---
 
