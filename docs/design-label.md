@@ -2,15 +2,15 @@
 
 ## Design Overview
 
-- **Classes**: `Label`, `LabelID`, `IPoset`, `PosetDftImpl`, `PosetTrait`
-- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `AbcEdge.labels` stores label assignments (see `design-entity.md`)
+- **Classes**: `Label`, `LabelID`, `IPoset`, `PosetDftImpl`, `LabelEdgeIndex`, `PosetTrait`
+- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `LabelEdgeIndex` is the per-graph label → edges index `PosetTrait` maintains; `AbcEdge.labels` stores label assignments (see `design-entity.md`)
 - **Abstract**: `IPoset` (implemented by `PosetDftImpl`); `PosetTrait` (mixed in by concrete graph classes)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
-- **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation).
+- **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation), `LabelEdgeIndex` (label carrier index).
 
-The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset`.
+The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E>`.
 
-See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm.
+See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm and `spec-poset.md` for the label carrier index.
 
 ---
 
@@ -88,7 +88,24 @@ The poset store uses auto-generated `Int` IDs:
 var labels: Set<Label>
 ```
 
-Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, dst, tag, label)`) are responsible for managing label assignments.
+Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`), which keeps `LabelEdgeIndex` complete.
+
+---
+
+### LabelEdgeIndex
+
+**Responsibility:** Per-graph inverted index from a label to the edges that may carry it. Owned by one graph instance; mutated only by `PosetTrait` default methods. Algorithm, invariants, and preconditions: `spec-poset.md` (Label Carrier Index).
+
+**Constructor:** `LabelEdgeIndex<E : AbcEdge>()` — public; every member is `internal`.
+
+| Member | Behavior |
+|--------|----------|
+| `ensureBuilt(allEdges)` | Scans `allEdges()` once and records each edge under each label it carries; later calls return immediately |
+| `record(label, edge)` | Adds `edge` to the candidates of `label` |
+| `candidates(label)` | Snapshot of the candidates of `label` (a superset of its carriers) |
+| `drop(label, edge)` | Removes a candidate whose edge no longer exists |
+
+Thread-safe: concurrent maps and key sets; the build runs once under the index monitor.
 
 ---
 
@@ -101,13 +118,16 @@ Backed by a `ListVal` storage property. Callers (e.g., `PosetTrait.addEdge(src, 
 | Field | Type | Content |
 |-------|------|---------|
 | `poset` | `IPoset` | Pluggable poset module for label hierarchy operations |
+| `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
 
 **Label-filtered methods (default implementations):**
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge(src, dst, tag, label)` | Creates or reuses edge and assigns label | `src`, `dst`: NodeID; `tag`; `label` | `E` | `EntityNotExistException` if src/dst missing |
+| `addEdge(src, dst, tag, label)` | Creates or reuses edge, assigns label, records it in `labelIndex` | `src`, `dst`: NodeID; `tag`; `label` | `E` | `EntityNotExistException` if src/dst missing |
 | `delEdge(src, dst, tag, label)` | Removes label; if the edge carried the label and none remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
+| `getLabeledEdges(label)` | Edges carrying `label` directly (no covering), in O(candidates) | `label` | `Sequence<E>` | -- |
+| `relabel(from, to, cond)` | On every edge carrying `from` with `cond`, replaces `from` by `to`; `from == to` is a no-op | `from`; `to`; `cond` | -- | -- |
 | `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getChildren(of, label, cond)` | Nodes via label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<N>` | -- |

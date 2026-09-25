@@ -7,9 +7,9 @@
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
 | [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph |
 | [design-storage.md](design-storage.md) | Storage module — IStorage and implementations (Native, Concurrent, Layered) |
-| [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, PosetTrait |
+| [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, LabelEdgeIndex, PosetTrait |
 | [spec-graph.md](spec-graph.md) | Algorithms — edge lookup, BFS, visibility filtering, layered queries |
-| [spec-poset.md](spec-poset.md) | Poset ancestor query — DAG-correct ancestor closure |
+| [spec-poset.md](spec-poset.md) | Poset queries — DAG-correct ancestor closure, label carrier index |
 | [impl.md](impl.md) | Library APIs — commons-value, JGraphT, MapDB, Neo4j |
 | [performance-core.md](performance-core.md) | Core module benchmarks — NativeStorage, LayeredStorage, graph-level |
 | [performance-optimizations.md](performance-optimizations.md) | Optimization log — completed, rejected, candidates, insights |

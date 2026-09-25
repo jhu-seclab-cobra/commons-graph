@@ -114,14 +114,16 @@ abstract class AbcEdge : AbcEntity() {
     internal fun bind(storage: IStorage, storageId: Int, srcNid: NodeID, dstNid: NodeID, tag: String)
     override val id: String                    // "$srcNid-$eTag-$dstNid"
     abstract override val type: AbcEdge.Type
-    var labels: Set<Label>
+    var labels: Set<Label>                     // setter internal
+    internal fun isStored(): Boolean
 }
 ```
 
 - `storageId` -- the storage-internal `Int` ID, injected via `bind()`
 - `srcNid` / `dstNid` -- source and destination `NodeID`s, injected at bind time
 - `eTag` -- the edge tag, injected at bind time
-- `labels` -- the set of `Label` values, backed by a `ListVal` storage property named `"labels"`
+- `labels` -- the set of `Label` values, backed by a `ListVal` storage property named `"labels"`; the setter is `internal` so assignments go through `PosetTrait` (see `design-label.md`)
+- `isStored()` -- whether the bound storage still contains `storageId`
 - `bind()` -- post-construction injection of storage reference, storage ID, and structural info
 - `toString()` format: `{srcNid-eTag-dstNid, type}`
 

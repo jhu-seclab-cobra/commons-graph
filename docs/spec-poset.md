@@ -1,7 +1,8 @@
-# Algorithm Specification — Poset Ancestor Query
+# Algorithm Specification — Poset Queries
 
 Ancestor queries in the label hierarchy resolve through a memoized ancestor
-closure, correct on arbitrary DAGs.
+closure, correct on arbitrary DAGs. Label-carrier queries (which edges carry a
+label) resolve through a per-graph inverted index.
 
 ## Ancestor Closure (DAG reachability)
 
@@ -73,3 +74,81 @@ hierarchy depth never consumes call-stack frames.
 - **Multi-interval labeling**: correct on DAGs, but interval-set size is
   unbounded in the worst case and the implementation complexity exceeds the
   closure table with no asymptotic gain at this scale.
+
+## Label Carrier Index (label → edges)
+
+### Problem
+
+Given a label `L`, return the edges that carry `L` directly (`L ∈ labels(e)`,
+no covering), and move `L` to another label on those edges. Callers relabel
+once per control-flow merge; a full edge scan per call costs O(|E|) and makes
+a whole analysis quadratic. Lookup must cost O(carriers(L)), not O(|E|).
+
+### State
+
+- `candidates(L)`: a set of edges per label. Superset of the current carriers
+  of `L`; entries are only added, except edges that no longer exist.
+- `built`: whether the index has taken its initial scan.
+
+### Steps — Build (before the first label operation on the graph)
+
+1. For each edge `e` of the graph, for each `l ∈ labels(e)`: add `e` to
+   `candidates(l)`.
+2. Set `built`.
+
+### Steps — Record (every label assignment through the trait)
+
+1. Build when not `built`.
+2. Assign the label on the edge, then add the edge to `candidates(label)`.
+
+A label removal leaves `candidates` unchanged.
+
+### Steps — Query `carriers(L)`
+
+1. Build when not `built`.
+2. For each `e ∈ candidates(L)`: when `e` no longer exists in storage, drop it
+   from `candidates(L)`; otherwise keep `e` when `L ∈ labels(e)`.
+
+### Steps — Relabel `from → to` on edges satisfying `cond`
+
+1. `from == to` is a no-op.
+2. For each `e ∈ carriers(from)` with `cond(e)`: `labels(e) := labels(e) − {from} ∪ {to}`;
+   add `e` to `candidates(to)`.
+
+### Invariants
+
+- Completeness: every edge currently carrying `L` is in `candidates(L)`,
+  provided every label assignment after the build goes through the trait.
+- A storage that reverts writes (a cleared layered-storage active layer)
+  restores only labels an edge held before; the build or a record added the
+  edge to those labels' candidates, and they are never removed while the edge
+  exists. Completeness therefore holds across a revert with no invalidation.
+- Dropping a nonexistent edge is safe: storage IDs are never reused within one
+  storage lifetime, so a dropped edge never exists again under the same ID.
+- `carriers(L)` equals `{e ∈ E | L ∈ labels(e)}`: the query verifies every
+  candidate against storage.
+
+### Preconditions
+
+- Label assignments go through the owning graph's trait operations. Writes
+  through the generic property API, through storage directly, or through
+  another graph instance over the same storage are not recorded.
+- `IStorage.clear()` resets storage IDs; a graph whose storage was cleared is
+  not reused.
+
+### Complexity
+
+- Build: O(|E| + Σ|labels(e)|), once per graph instance.
+- Record: O(1) expected.
+- Query and relabel: O(|candidates(L)|). Candidates exceed carriers only by
+  edges that lost `L` (a relabel or a labeled delete); a label relabeled `k`
+  times keeps up to `k` generations of such edges.
+
+### Rejected alternatives
+
+- **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
+- **Exact index (remove on relabel)**: loses completeness when a layered
+  storage reverts the active layer, unless storage notifies the graph of every
+  revert — an API that storage does not have.
+- **Traversal-local write log**: misses carriers written before the current
+  traversal under the same deterministic label.

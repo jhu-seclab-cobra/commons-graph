@@ -34,9 +34,9 @@ val visible = graph.getOutgoingEdges("a", v2)
 
 ### `PosetTrait<N, E>` (interface, extends `IGraph`)
 
-Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`.
 
-- **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge and assign label.
+- **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge, assign label, record it in `labelIndex`.
 - **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
 - **`fun getOutgoingEdges(of, label, cond): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`fun getIncomingEdges(of, label, cond): Sequence<E>`** -- Label-filtered incoming edges.
@@ -44,6 +44,8 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - **`fun getParents(of, label, cond): Sequence<N>`** -- Nodes via label-filtered incoming edges.
 - **`fun getDescendants(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
+- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
+- **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
 
 ### Edge Visibility Rules
 
@@ -57,3 +59,5 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
+- Edge labels change only through `addEdge`/`delEdge`/`relabel` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
+- Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
