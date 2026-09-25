@@ -23,8 +23,10 @@ import kotlin.concurrent.withLock
  *   copy stays deleted. Frozen-only entities read from the frozen layer.
  * - Adjacency: returns union set views merging both layers.
  *
- * Deletion is restricted to entities that exist only in the active layer. Attempting
- * to delete a frozen-layer entity — including one promoted into the active layer —
+ * Deleting a frozen-layer edge — including one promoted into the active layer — records
+ * a tombstone in the active layer: the edge reads as absent until [clearActiveLayer]
+ * drops the tombstone, and [freeze] excludes it from the merged layer. Node deletion is
+ * restricted to nodes that exist only in the active layer; deleting a frozen-layer node
  * throws [FrozenLayerModificationException].
  *
  * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl].
@@ -64,7 +66,7 @@ public class LayeredStorageImpl(
     /**
      * Clears all data in the active layer while preserving the frozen layer.
      *
-     * Removes all active-layer nodes, edges, properties, and metadata.
+     * Removes all active-layer nodes, edges, properties, metadata, and tombstones.
      * The frozen layer and its ID mappings remain intact, so subsequent
      * reads still resolve against frozen data.
      */
@@ -143,7 +145,7 @@ public class LayeredStorageImpl(
         get() = lock.readLock().withLock { edgeIdsUnlocked() }
 
     private fun edgeIdsUnlocked(): Set<Int> {
-        val frozenIds = frozen?.edgeIds ?: emptySet()
+        val frozenIds = frozen?.edgeIds?.let(::withoutTombstones) ?: emptySet()
         if (active.edgeEndpoints.isEmpty()) return frozenIds
         if (frozenIds.isEmpty()) return active.edgeEndpoints.keys
         return UnionSet(frozenIds, active.edgeEndpoints.keys)
@@ -151,7 +153,13 @@ public class LayeredStorageImpl(
 
     override fun containsEdge(id: Int): Boolean = lock.readLock().withLock { containsEdgeUnlocked(id) }
 
-    private fun containsEdgeUnlocked(id: Int): Boolean = active.containsEdge(id) || frozen?.containsEdge(id) == true
+    private fun containsEdgeUnlocked(id: Int): Boolean = active.containsEdge(id) || containsFrozenEdgeUnlocked(id)
+
+    // A frozen edge is visible unless the active layer tombstoned it.
+    private fun containsFrozenEdgeUnlocked(id: Int): Boolean = frozen?.containsEdge(id) == true && id !in active.deletedEdgeIds
+
+    private fun withoutTombstones(frozenEdges: Set<Int>): Set<Int> =
+        if (active.deletedEdgeIds.isEmpty()) frozenEdges else ExcludingSet(frozenEdges, active.deletedEdgeIds)
 
     override fun addEdge(
         src: Int,
@@ -171,14 +179,16 @@ public class LayeredStorageImpl(
 
     private fun getEdgeStructureUnlocked(id: Int): IStorage.EdgeStructure {
         active.edgeEndpoints[id]?.let { return it }
-        return frozen?.edgeStructure(id) ?: throw EntityNotExistException(id.toString())
+        if (!containsFrozenEdgeUnlocked(id)) throw EntityNotExistException(id.toString())
+        return checkNotNull(frozen?.edgeStructure(id))
     }
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> = lock.readLock().withLock { getEdgePropertiesUnlocked(id) }
 
     private fun getEdgePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)
-        return frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
+        if (!containsFrozenEdgeUnlocked(id)) throw EntityNotExistException(id.toString())
+        return checkNotNull(frozen?.edgeProperties(id))
     }
 
     override fun getEdgeProperty(
@@ -188,7 +198,7 @@ public class LayeredStorageImpl(
         lock.readLock().withLock {
             when {
                 active.containsEdge(id) -> active.edgeColumns[name]?.get(id)
-                frozen?.containsEdge(id) == true -> frozen?.edgeProperty(id, name)
+                containsFrozenEdgeUnlocked(id) -> frozen?.edgeProperty(id, name)
                 else -> throw EntityNotExistException(id.toString())
             }
         }
@@ -201,7 +211,7 @@ public class LayeredStorageImpl(
             if (!active.containsEdge(id)) {
                 // Promote the frozen edge by copying all frozen properties, making the
                 // active copy authoritative for subsequent reads and deletions.
-                val frozenProps = frozen?.edgeProperties(id) ?: throw EntityNotExistException(id.toString())
+                val frozenProps = getEdgePropertiesUnlocked(id)
                 val structure = getEdgeStructureUnlocked(id)
                 ensureNodeInActiveLayerUnlocked(structure.src)
                 ensureNodeInActiveLayerUnlocked(structure.dst)
@@ -212,11 +222,12 @@ public class LayeredStorageImpl(
 
     override fun deleteEdge(id: Int): Unit =
         lock.writeLock().withLock {
-            // A promoted edge still exists in the frozen layer; deleting only the active
-            // copy would resurrect the frozen one, so the frozen guard runs first.
-            if (frozen?.containsEdge(id) == true) throw FrozenLayerModificationException(id.toString())
-            if (!active.containsEdge(id)) throw EntityNotExistException(id.toString())
+            val frozenEdge = containsFrozenEdgeUnlocked(id)
+            if (!frozenEdge && !active.containsEdge(id)) throw EntityNotExistException(id.toString())
             active.removeEdge(id)
+            // Dropping only the active copy of a promoted edge would resurrect the
+            // frozen one; the tombstone masks it until a revert or freeze.
+            if (frozenEdge) active.deletedEdgeIds.add(id)
         }
 
     // ============================================================================
@@ -226,7 +237,7 @@ public class LayeredStorageImpl(
     override fun getIncomingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
             val activeEdges = active.inEdges[id]
-            val frozenEdges = frozen?.incomingEdges(id)
+            val frozenEdges = frozen?.incomingEdges(id)?.let(::withoutTombstones)
             when {
                 activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
                 activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()
@@ -238,7 +249,7 @@ public class LayeredStorageImpl(
     override fun getOutgoingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
             val activeEdges = active.outEdges[id]
-            val frozenEdges = frozen?.outgoingEdges(id)
+            val frozenEdges = frozen?.outgoingEdges(id)?.let(::withoutTombstones)
             when {
                 activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
                 activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()

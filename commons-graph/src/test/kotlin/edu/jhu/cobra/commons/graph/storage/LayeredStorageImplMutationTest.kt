@@ -13,14 +13,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for LayeredStorageImpl: deletion restriction, tombstones, error paths, and transferTo.
+ * Black-box tests for LayeredStorageImpl: node deletion restriction, property tombstones, error paths, and transferTo.
  *
  * - `deleteNode on frozen node throws FrozenLayerModificationException` -- frozen guard
- * - `deleteEdge on frozen edge throws FrozenLayerModificationException` -- frozen guard
  * - `deleteNode on active-layer node succeeds after freeze` -- active deletion
  * - `deleteEdge on active-layer edge succeeds after freeze` -- active deletion
  * - `deleteNode on promoted node throws FrozenLayerModificationException` -- promoted guard
- * - `deleteEdge on promoted edge throws FrozenLayerModificationException` -- promoted guard
  * - `setNodeProperties on frozen node creates shadow in active` -- shadow entry
  * - `setEdgeProperties on frozen edge creates shadow in active` -- shadow entry
  * - `deleted node property of promoted node stays deleted` -- no frozen resurrection on read
@@ -56,16 +54,6 @@ internal class LayeredStorageImplMutationTest {
     }
 
     @Test
-    fun `deleteEdge on frozen edge throws FrozenLayerModificationException`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edge = storage.addEdge(n1, n2, "rel")
-        storage.freeze()
-        assertFailsWith<FrozenLayerModificationException> { storage.deleteEdge(edge) }
-        assertTrue(storage.containsEdge(edge))
-    }
-
-    @Test
     fun `deleteNode on active-layer node succeeds after freeze`() {
         storage.freeze()
         val node = storage.addNode()
@@ -90,17 +78,6 @@ internal class LayeredStorageImplMutationTest {
         storage.setNodeProperties(node, mapOf("k" to "v".strVal))
         assertFailsWith<FrozenLayerModificationException> { storage.deleteNode(node) }
         assertTrue(storage.containsNode(node))
-    }
-
-    @Test
-    fun `deleteEdge on promoted edge throws FrozenLayerModificationException`() {
-        val n1 = storage.addNode()
-        val n2 = storage.addNode()
-        val edge = storage.addEdge(n1, n2, "rel")
-        storage.freeze()
-        storage.setEdgeProperties(edge, mapOf("k" to "v".strVal))
-        assertFailsWith<FrozenLayerModificationException> { storage.deleteEdge(edge) }
-        assertTrue(storage.containsEdge(edge))
     }
 
     // endregion

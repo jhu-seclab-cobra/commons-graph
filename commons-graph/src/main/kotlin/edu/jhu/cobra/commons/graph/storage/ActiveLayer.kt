@@ -5,8 +5,8 @@ import edu.jhu.cobra.commons.value.IValue
 /**
  * Mutable active layer of [LayeredStorageImpl].
  *
- * Holds columnar node/edge properties, edge endpoints, adjacency sets, and
- * metadata, all keyed by global IDs. Columnar bookkeeping is delegated to
+ * Holds columnar node/edge properties, edge endpoints, adjacency sets,
+ * metadata, and edge/metadata tombstones, all keyed by global IDs. Columnar bookkeeping is delegated to
  * [ColumnarProperties].
  */
 internal class ActiveLayer {
@@ -19,6 +19,9 @@ internal class ActiveLayer {
 
     // Tombstones masking frozen-layer metadata deleted through the active layer.
     val deletedMetaNames = HashSet<String>()
+
+    // Tombstones masking frozen-layer edges deleted through the active layer.
+    val deletedEdgeIds = HashSet<Int>()
 
     val nodeIds: Set<Int> get() = outEdges.keys
 
@@ -91,5 +94,6 @@ internal class ActiveLayer {
         nodeColumns.clear()
         metaProperties.clear()
         deletedMetaNames.clear()
+        deletedEdgeIds.clear()
     }
 }

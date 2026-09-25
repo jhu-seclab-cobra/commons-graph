@@ -64,3 +64,20 @@ internal class UnionSet<E>(
 
     override fun isEmpty(): Boolean = first.isEmpty() && second.isEmpty()
 }
+
+/** Lazy view of [base] without the elements of [excluded]. */
+internal class ExcludingSet<E>(
+    private val base: Set<E>,
+    private val excluded: Set<E>,
+) : AbstractSet<E>() {
+    override val size: Int get() = base.size - excluded.count { it in base }
+
+    override fun iterator(): Iterator<E> =
+        iterator {
+            for (e in base) {
+                if (e !in excluded) yield(e)
+            }
+        }
+
+    override fun contains(element: E): Boolean = element in base && element !in excluded
+}

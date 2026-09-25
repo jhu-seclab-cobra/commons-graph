@@ -88,7 +88,7 @@ internal class FrozenLayer private constructor(
          * [active] into [merged]. For an entity present in the active layer, its active
          * property set replaces the frozen one wholesale — promotion copied all frozen
          * properties, so a property absent from the active copy was deleted and stays
-         * deleted.
+         * deleted. Edges tombstoned in [active] are not transferred.
          */
         fun merge(
             previous: FrozenLayer?,
@@ -196,8 +196,10 @@ internal class FrozenLayer private constructor(
             val g2l = HashMap<Int, Int>()
             val l2g = HashMap<Int, Int>()
             for (localEdgeId in previous.storage.edgeIDs) {
-                val structure = previous.storage.getEdgeStructure(localEdgeId)
                 val globalEdgeId = previous.edgeLocalToGlobal.getValue(localEdgeId)
+                // Edges tombstoned in the active layer stay deleted in the merged layer.
+                if (globalEdgeId in active.deletedEdgeIds) continue
+                val structure = previous.storage.getEdgeStructure(localEdgeId)
                 val props = resolveEdgeProperties(previous, active, localEdgeId, globalEdgeId)
                 val newId =
                     merged.addEdge(
