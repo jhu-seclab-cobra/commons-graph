@@ -43,8 +43,14 @@ internal class LabelEdgeIndexTest {
     @Test
     fun `ensureBuilt scans only once`() {
         var scans = 0
-        index.ensureBuilt { scans++; graph.getAllEdges() }
-        index.ensureBuilt { scans++; graph.getAllEdges() }
+        index.ensureBuilt {
+            scans++
+            graph.getAllEdges()
+        }
+        index.ensureBuilt {
+            scans++
+            graph.getAllEdges()
+        }
 
         assertEquals(1, scans)
     }
