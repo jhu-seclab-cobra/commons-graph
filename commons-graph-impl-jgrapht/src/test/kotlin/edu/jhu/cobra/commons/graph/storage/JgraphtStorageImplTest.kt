@@ -5,6 +5,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
@@ -17,6 +18,7 @@ import kotlin.test.assertTrue
  * - `edgeIDs returns copy not live view`
  * - `pseudograph allows multiple edges between same node pair`
  * - `deleteNode cascading deletes self loop edge`
+ * - `criticalSectionLock is null for the single-threaded storage`
  */
 internal class JgraphtStorageImplTest {
     private lateinit var storage: JgraphtStorageImpl
@@ -102,5 +104,10 @@ internal class JgraphtStorageImplTest {
         storage.deleteNode(node1)
         assertFalse(storage.containsNode(node1))
         assertFalse(storage.containsEdge(selfEdge))
+    }
+
+    @Test
+    fun `criticalSectionLock is null for the single-threaded storage`() {
+        assertNull(storage.criticalSectionLock)
     }
 }

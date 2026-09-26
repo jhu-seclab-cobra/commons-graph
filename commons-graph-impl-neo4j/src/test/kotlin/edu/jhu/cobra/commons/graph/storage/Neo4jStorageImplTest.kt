@@ -36,6 +36,7 @@ import kotlin.test.assertTrue
  * - `transferTo copies all data`
  * - `getEdgeStructure returns correct src dst and tag`
  * - `getEdgeStructure nonexistent throws EntityNotExistException`
+ * - `criticalSectionLock is null for the single-threaded storage`
  */
 internal class Neo4jStorageImplTest {
     private lateinit var storage: Neo4jStorageImpl
@@ -232,5 +233,10 @@ internal class Neo4jStorageImplTest {
     @Test
     fun `getEdgeStructure nonexistent throws EntityNotExistException`() {
         assertFailsWith<EntityNotExistException> { storage.getEdgeStructure(-1) }
+    }
+
+    @Test
+    fun `criticalSectionLock is null for the single-threaded storage`() {
+        assertNull(storage.criticalSectionLock)
     }
 }

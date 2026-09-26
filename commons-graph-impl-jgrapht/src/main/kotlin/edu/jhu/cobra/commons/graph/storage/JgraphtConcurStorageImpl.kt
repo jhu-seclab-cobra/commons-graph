@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.storage
 
+import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -17,4 +18,6 @@ public class JgraphtConcurStorageImpl : AbcJgraphtStorage() {
     override fun <R> readGuarded(action: () -> R): R = storageLock.read(action)
 
     override fun <R> writeGuarded(action: () -> R): R = storageLock.write(action)
+
+    override val criticalSectionLock: Lock get() = storageLock.writeLock()
 }

@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 
@@ -20,6 +21,8 @@ import kotlin.concurrent.withLock
 @Suppress("TooManyFunctions")
 public class NativeConcurStorageImpl : IStorage {
     private val lock = ReentrantReadWriteLock()
+
+    override val criticalSectionLock: Lock get() = lock.writeLock()
 
     // Auto-increment counters (protected by write lock)
     private var nodeCounter: Int = 0

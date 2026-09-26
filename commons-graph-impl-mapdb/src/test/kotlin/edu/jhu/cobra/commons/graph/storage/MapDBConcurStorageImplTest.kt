@@ -4,6 +4,7 @@ import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -24,6 +25,7 @@ import kotlin.test.assertTrue
  * - `getMeta returns null for nonexistent key`
  * - `clear removes all nodes edges and metadata`
  * - `transferTo copies nodes edges and metadata to target`
+ * - `criticalSection holds the storage write lock`
  */
 internal class MapDBConcurStorageImplTest {
     private lateinit var storage: IStorage
@@ -122,5 +124,11 @@ internal class MapDBConcurStorageImplTest {
         assertEquals(2, target.nodeIDs.size)
         assertEquals(1, target.edgeIDs.size)
         assertEquals("1", (target.getMeta("version") as StrVal).core)
+    }
+
+    @Test
+    fun `criticalSection holds the storage write lock`() {
+        val lock = storage.criticalSectionLock as ReentrantReadWriteLock.WriteLock
+        assertTrue(storage.criticalSection { lock.isHeldByCurrentThread })
     }
 }

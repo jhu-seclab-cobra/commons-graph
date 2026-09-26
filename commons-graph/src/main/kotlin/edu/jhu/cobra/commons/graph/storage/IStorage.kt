@@ -3,6 +3,7 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
 import java.io.Flushable
+import java.util.concurrent.locks.Lock
 
 /**
  * Core interface for graph storage with auto-generated Int IDs.
@@ -261,4 +262,12 @@ public interface IStorage : Flushable {
      * @return Node ID mapping from this storage's IDs to target storage's IDs.
      */
     public fun transferTo(target: IStorage): Map<Int, Int>
+
+    /**
+     * The lock [criticalSection] holds: the write lock of a thread-safe
+     * implementation's own read-write lock, so a compound operation excludes
+     * every other call on this storage. `null` for an implementation that is
+     * not thread-safe; [criticalSection] then runs its action unguarded.
+     */
+    public val criticalSectionLock: Lock? get() = null
 }

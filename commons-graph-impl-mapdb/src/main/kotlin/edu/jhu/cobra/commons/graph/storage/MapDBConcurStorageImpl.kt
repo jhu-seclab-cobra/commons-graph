@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage
 
 import org.mapdb.DBMaker
+import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -24,4 +25,6 @@ public class MapDBConcurStorageImpl(
     override fun <R> readGuarded(action: () -> R): R = dbLock.read(action)
 
     override fun <R> writeGuarded(action: () -> R): R = dbLock.write(action)
+
+    override val criticalSectionLock: Lock get() = dbLock.writeLock()
 }

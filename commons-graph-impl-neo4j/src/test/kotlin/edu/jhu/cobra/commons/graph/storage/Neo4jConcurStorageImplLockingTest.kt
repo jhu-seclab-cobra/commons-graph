@@ -13,6 +13,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -41,6 +42,7 @@ import kotlin.test.assertTrue
  * - `concurrent deleteNode does not cause errors`
  * - `no deadlock under mixed read-write operations`
  * - `nodeIDs returns snapshot not live view`
+ * - `criticalSection holds the storage write lock`
  */
 internal class Neo4jConcurStorageImplLockingTest {
     private lateinit var storage: Neo4jConcurStorageImpl
@@ -286,5 +288,11 @@ internal class Neo4jConcurStorageImplLockingTest {
         storage.addNode()
         assertEquals(1, snapshot.size)
         assertEquals(2, storage.nodeIDs.size)
+    }
+
+    @Test
+    fun `criticalSection holds the storage write lock`() {
+        val lock = storage.criticalSectionLock as ReentrantReadWriteLock.WriteLock
+        assertTrue(storage.criticalSection { lock.isHeldByCurrentThread })
     }
 }

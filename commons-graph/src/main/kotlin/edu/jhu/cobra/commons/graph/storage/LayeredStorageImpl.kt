@@ -5,6 +5,7 @@ import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
 import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 
@@ -31,6 +32,7 @@ import kotlin.concurrent.withLock
  * throws [FrozenLayerModificationException].
  *
  * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl].
+ * [criticalSectionLock] is its write lock; revert listeners run while it is held.
  * Uses internal non-locking helpers to avoid lock re-entrance overhead.
  *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
@@ -41,6 +43,8 @@ public class LayeredStorageImpl(
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IRevertibleStorage {
     private val lock = ReentrantReadWriteLock()
+
+    override val criticalSectionLock: Lock get() = lock.writeLock()
     private val revertListeners = CopyOnWriteArrayList<RevertListener>()
 
     // Global ID counters (protected by write lock)
@@ -74,13 +78,9 @@ public class LayeredStorageImpl(
      * active-only node and edge IDs.
      */
     public fun clearActiveLayer(): Unit =
-        criticalSection {
-            val (removedNodes, removedEdges) =
-                lock.writeLock().withLock {
-                    val removed = activeOnlyIdsUnlocked()
-                    active.clear()
-                    removed
-                }
+        lock.writeLock().withLock {
+            val (removedNodes, removedEdges) = activeOnlyIdsUnlocked()
+            active.clear()
             notifyRevert(removedNodes, removedEdges)
         }
 
@@ -329,17 +329,14 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override fun clear(): Unit =
-        criticalSection {
-            val (removedNodes, removedEdges) =
-                lock.writeLock().withLock {
-                    val removed = nodeIdsUnlocked().toSet() to edgeIdsUnlocked().toSet()
-                    frozen?.close()
-                    frozen = null
-                    active.clear()
-                    nodeCounter = 0
-                    edgeCounter = 0
-                    removed
-                }
+        lock.writeLock().withLock {
+            val removedNodes = nodeIdsUnlocked().toSet()
+            val removedEdges = edgeIdsUnlocked().toSet()
+            frozen?.close()
+            frozen = null
+            active.clear()
+            nodeCounter = 0
+            edgeCounter = 0
             notifyRevert(removedNodes, removedEdges)
         }
 

@@ -65,6 +65,7 @@
 - `EXPORT_VERTEX_LABELS` / `EXPORT_EDGE_LABELS` must be explicitly set to `true` for GML export.
 - `closeOnJvmShutdown()` is a safety net; call `close()` explicitly as primary path.
 - Use `lazy` for Neo4j DB initialization to avoid constructor blocking.
+- JDK `ReentrantReadWriteLock`: `writeLock()` returns one `Lock` instance per lock; the write-lock holder may take the read lock, a read-lock holder never gets the write lock (no upgrade, it blocks forever). `kotlin.concurrent.withLock` takes any `Lock`.
 
 ## Design-Specific
 

@@ -8,6 +8,7 @@ import edu.jhu.cobra.commons.value.intVal
 import edu.jhu.cobra.commons.value.listVal
 import edu.jhu.cobra.commons.value.mapVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,6 +34,7 @@ import kotlin.test.assertTrue
  * - `transferTo copies nodes edges and metadata to target`
  * - `transferTo remaps edge endpoints to target node IDs`
  * - `complex IValue types survive property round-trip`
+ * - `criticalSection holds the storage write lock`
  */
 internal class JgraphtConcurStorageImplTest {
     private lateinit var storage: IStorage
@@ -180,5 +182,11 @@ internal class JgraphtConcurStorageImplTest {
         val props = storage.getNodeProperties(id)
         assertEquals(complexValue, props["complex"])
         assertTrue(props["null"] is NullVal)
+    }
+
+    @Test
+    fun `criticalSection holds the storage write lock`() {
+        val lock = storage.criticalSectionLock as ReentrantReadWriteLock.WriteLock
+        assertTrue(storage.criticalSection { lock.isHeldByCurrentThread })
     }
 }

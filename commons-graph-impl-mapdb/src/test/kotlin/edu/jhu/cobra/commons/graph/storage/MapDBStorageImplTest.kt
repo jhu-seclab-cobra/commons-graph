@@ -35,6 +35,7 @@ import kotlin.test.assertTrue
  * - `addEdge after reopen from file does not reuse persisted edge IDs` -- edge counter restore
  * - `edge structure and adjacency survive reopen from file` -- structure persistence
  * - `metadata survives reopen from file` -- metadata persistence
+ * - `criticalSectionLock is null for the single-threaded storage`
  */
 internal class MapDBStorageImplTest {
     private lateinit var storage: MapDBStorageImpl
@@ -277,5 +278,10 @@ internal class MapDBStorageImplTest {
         } finally {
             reopened.close()
         }
+    }
+
+    @Test
+    fun `criticalSectionLock is null for the single-threaded storage`() {
+        assertNull(storage.criticalSectionLock)
     }
 }

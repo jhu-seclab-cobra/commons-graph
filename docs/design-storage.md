@@ -51,6 +51,7 @@ interface IStorage : Flushable {
     fun setMeta(name: String, value: IValue?)
     fun clear()
     fun transferTo(target: IStorage): Map<Int, Int>
+    val criticalSectionLock: Lock? get() = null
 }
 ```
 
@@ -70,6 +71,7 @@ interface IStorage : Flushable {
 | `clear` | Removes all nodes, edges, and metadata | -- | -- | -- |
 | `transferTo` | Copies all data into `target`; returns node ID mapping. `target` must be a different storage instance. | `target` | `Map<Int, Int>` | `IllegalArgumentException` if `target` is the receiver |
 | `flush` | Persists buffered data. No-op for in-memory implementations. | -- | -- | -- |
+| `criticalSectionLock` | The lock `criticalSection` holds: the exclusive half of the implementation's own read-write lock. `null` for an implementation that is not thread-safe. | -- | `Lock?` | -- |
 
 ---
 
@@ -100,6 +102,7 @@ interface IStorage : Flushable {
 - Multiple concurrent reads allowed (read lock)
 - Writes are exclusive (write lock)
 - `nodeIDs` and `edgeIDs` return snapshot copies for thread safety
+- `criticalSectionLock` is the write lock
 
 ---
 
@@ -127,13 +130,17 @@ interface IStorage : Flushable {
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
-**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze` and `clearActiveLayer`) exclusive — mirroring `NativeConcurStorageImpl`.
+**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive — mirroring `NativeConcurStorageImpl`. `criticalSectionLock` is the write lock; revert listeners run while it is held.
 
 ---
 
 ### Storage critical section
 
-**Responsibility:** `IStorage.criticalSection(action)` runs `action` under a reentrant lock keyed by the storage instance. An `IStorage` implementation makes each single call atomic; a graph-layer step that makes several calls (allocate an ID then persist it, check-then-create, read-modify-write, a multi-edge traversal) runs inside `criticalSection` so the sequence is atomic as a unit. Every graph and poset sharing one storage serializes through the same lock; a nested call on the same thread does not block.
+**Responsibility:** `IStorage.criticalSection(action)` runs `action` holding the storage's `criticalSectionLock`, or runs it unguarded when that is `null`. A thread-safe `IStorage` makes each single call atomic; a graph-layer step that makes several calls (allocate an ID then persist it, check-then-create, read-modify-write, a multi-edge traversal) runs inside `criticalSection` so the sequence is atomic as a unit. Every graph and poset sharing one storage serializes through that storage's lock; a nested call on the same thread does not block, and every storage call inside the section re-enters the same lock.
+
+Compound atomicity is a property of the chosen implementation, like per-call atomicity: a graph over a storage that is not thread-safe is single-threaded. Each storage holds exactly one lock; no lock state lives outside the storage.
+
+A caller holding a storage's read lock never enters its critical section (a read lock does not upgrade to the write lock). Storage implementations never invoke caller code while holding their read lock.
 
 ---
 
@@ -147,7 +154,7 @@ Each backend module folds its plain and concurrent implementations into one abst
 | `AbcMapDBStorage` | `commons-graph-impl-mapdb` | `MapDBStorageImpl`, `MapDBConcurStorageImpl` |
 | `AbcNeo4jStorage` | `commons-graph-impl-neo4j` | `Neo4jStorageImpl`, `Neo4jConcurStorageImpl` |
 
-Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through; concurrent subclasses guard with a `ReentrantReadWriteLock`. `NativeStorageImpl` and `NativeConcurStorageImpl` remain separate classes: they differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
+Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through and leave `criticalSectionLock` `null`; concurrent subclasses guard with a `ReentrantReadWriteLock` and expose its write lock as `criticalSectionLock`. `NativeStorageImpl` and `NativeConcurStorageImpl` remain separate classes: they differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
 
 ---
 

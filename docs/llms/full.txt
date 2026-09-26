@@ -201,6 +201,11 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. `target` must be a different storage instance; raises `IllegalArgumentException` if same. Returns node ID mapping (source to target).
 - Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
 
+#### Concurrency
+
+- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds: the write lock of a thread-safe implementation, `null` for a single-threaded one.
+- **`IStorage.criticalSection { ... }`** -- Runs a compound read-modify-write atomically against every other operation on a thread-safe storage; unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
+
 ### Implementations
 
 - **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
