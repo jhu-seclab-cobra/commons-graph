@@ -14,6 +14,7 @@ import kotlin.test.assertTrue
  * - `record same edge twice keeps one candidate` -- set semantics
  * - `candidates of unknown label is empty` -- boundary
  * - `drop removes only that label candidate` -- nonexistent-edge pruning
+ * - `re-added edge is a candidate apart from its deleted predecessor` -- keyed by storage ID
  */
 internal class LabelEdgeIndexTest {
     private lateinit var graph: TestGraph
@@ -89,5 +90,17 @@ internal class LabelEdgeIndexTest {
 
         assertTrue(index.candidates(Label("x")).isEmpty())
         assertEquals(listOf(ab), index.candidates(Label("y")).toList())
+    }
+
+    @Test
+    fun `re-added edge is a candidate apart from its deleted predecessor`() {
+        val deleted = graph.addEdge("a", "b", "rel")
+        index.record(Label("x"), deleted)
+        graph.delEdge("a", "b", "rel")
+        val readded = graph.addEdge("a", "b", "rel")
+
+        index.record(Label("x"), readded)
+
+        assertEquals(listOf(deleted.storageId, readded.storageId), index.candidates(Label("x")).map { it.storageId })
     }
 }

@@ -86,9 +86,14 @@ a whole analysis quadratic. Lookup must cost O(carriers(L)), not O(|E|).
 
 ### State
 
-- `candidates(L)`: a set of edges per label. Superset of the current carriers
-  of `L`; entries are only added, except edges that no longer exist.
+- `candidates(L)`: a set of edges per label, keyed by each edge's storage ID
+  (`model.md`, Edge identity at storage level). Superset of the current
+  carriers of `L`; entries are only added, except edges that no longer exist.
 - `built`: whether the index has taken its initial scan.
+
+Every step below — build, record with its label assignment, query, and each
+relabel — executes atomically with respect to every other operation on the
+graph's storage.
 
 ### Steps — Build (before the first label operation on the graph)
 
@@ -99,21 +104,29 @@ a whole analysis quadratic. Lookup must cost O(carriers(L)), not O(|E|).
 ### Steps — Record (every label assignment through the trait)
 
 1. Build when not `built`.
-2. Assign the label on the edge, then add the edge to `candidates(label)`.
+2. Assign the label on the edge, then add the edge to `candidates(label)`
+   under its storage ID.
 
 A label removal leaves `candidates` unchanged.
 
 ### Steps — Query `carriers(L)`
 
 1. Build when not `built`.
-2. For each `e ∈ candidates(L)`: when `e` no longer exists in storage, drop it
-   from `candidates(L)`; otherwise keep `e` when `L ∈ labels(e)`.
+2. For each `e ∈ candidates(L)`: when `e`'s storage ID no longer exists in
+   storage, drop it from `candidates(L)`; otherwise keep `e` when `L ∈ labels(e)`.
 
 ### Steps — Relabel `from → to` on edges satisfying `cond`
 
 1. `from == to` is a no-op.
 2. For each `e ∈ carriers(from)` with `cond(e)`: `labels(e) := labels(e) − {from} ∪ {to}`;
    add `e` to `candidates(to)`.
+
+### Edge cases
+
+- An edge deleted and re-added under the same `(src, dst, tag)` receives a new
+  storage ID; the old entry drops at the next query and the new one is a
+  separate candidate.
+- Two concurrent label assignments on one edge serialize; neither is lost.
 
 ### Invariants
 
@@ -127,6 +140,13 @@ A label removal leaves `candidates` unchanged.
   storage lifetime, so a dropped edge never exists again under the same ID.
 - `carriers(L)` equals `{e ∈ E | L ∈ labels(e)}`: the query verifies every
   candidate against storage.
+
+### Termination
+
+Build visits each edge and each of its labels once. Query and relabel iterate
+a snapshot of `candidates(L)` taken at their start, so records made during a
+relabel (`to` may equal a later `from` in the caller) never extend the
+iteration.
 
 ### Preconditions
 
@@ -153,3 +173,6 @@ A label removal leaves `candidates` unchanged.
   restored edge.
 - **Traversal-local write log**: misses carriers written before the current
   traversal under the same deterministic label.
+- **Candidates keyed by `(src, dst, tag)`**: the graph-level identity survives
+  a delete and re-add while the storage ID does not; the stale entry shadows
+  the re-added edge, and the query drops both.

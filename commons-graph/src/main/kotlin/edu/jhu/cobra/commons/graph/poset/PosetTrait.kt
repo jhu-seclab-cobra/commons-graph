@@ -4,6 +4,8 @@ import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.IGraph
 import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.criticalSection
 
 /**
  * Graph trait that adds label-filtered operations via a pluggable [IPoset].
@@ -22,7 +24,9 @@ import edu.jhu.cobra.commons.graph.NodeID
  * Label assignments go through [addEdge], [delEdge], and [relabel] with a
  * label, which maintain [labelIndex]; [getLabeledEdges] and [relabel] then
  * cost O(candidates of the label) instead of a full edge scan (spec-poset.md,
- * Label Carrier Index).
+ * Label Carrier Index). Each of these label operations runs inside
+ * [storage]'s critical section, so its label read, label write, and index
+ * update are one atomic step.
  *
  * @param N The node type.
  * @param E The edge type.
@@ -35,43 +39,48 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     /** The label carrier index of this graph instance. */
     public val labelIndex: LabelEdgeIndex<E>
 
+    /** The storage of this graph; its critical section guards every label operation. */
+    public val storage: IStorage
+
     public fun addEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
         label: Label,
-    ): E {
-        labelIndex.ensureBuilt { getAllEdges() }
-        val existing = getEdge(src, dst, tag)
-        val edge = existing ?: addEdge(src, dst, tag)
-        edge.labels = edge.labels + label
-        labelIndex.record(label, edge)
-        return edge
-    }
+    ): E =
+        storage.criticalSection {
+            labelIndex.ensureBuilt { getAllEdges() }
+            val edge = getEdge(src, dst, tag) ?: addEdge(src, dst, tag)
+            edge.labels = edge.labels + label
+            labelIndex.record(label, edge)
+            edge
+        }
 
     public fun delEdge(
         src: NodeID,
         dst: NodeID,
         tag: String,
         label: Label,
-    ) {
-        // Build before the removal, so a storage revert restoring the label finds it indexed.
-        labelIndex.ensureBuilt { getAllEdges() }
-        val edge = getEdge(src, dst, tag) ?: return
-        // A label the edge does not carry is a no-op: an unlabeled edge must not be deleted.
-        if (label !in edge.labels) return
-        val remaining = edge.labels - label
-        edge.labels = remaining
-        if (remaining.isEmpty()) delEdge(src, dst, tag)
-    }
+    ): Unit =
+        storage.criticalSection {
+            // Build before the removal, so a storage revert restoring the label finds it indexed.
+            labelIndex.ensureBuilt { getAllEdges() }
+            val edge = getEdge(src, dst, tag) ?: return@criticalSection
+            // A label the edge does not carry is a no-op: an unlabeled edge must not be deleted.
+            if (label !in edge.labels) return@criticalSection
+            val remaining = edge.labels - label
+            edge.labels = remaining
+            if (remaining.isEmpty()) delEdge(src, dst, tag)
+        }
 
     /** Edges carrying [label] directly — no covering through the poset. */
-    public fun getLabeledEdges(label: Label): Sequence<E> {
-        labelIndex.ensureBuilt { getAllEdges() }
-        val (stored, deleted) = labelIndex.candidates(label).partition { it.isStored() }
-        for (edge in deleted) labelIndex.drop(label, edge)
-        return stored.filter { label in it.labels }.asSequence()
-    }
+    public fun getLabeledEdges(label: Label): Sequence<E> =
+        storage.criticalSection {
+            labelIndex.ensureBuilt { getAllEdges() }
+            val (stored, deleted) = labelIndex.candidates(label).partition { it.isStored() }
+            for (edge in deleted) labelIndex.drop(label, edge)
+            stored.filter { label in it.labels }.asSequence()
+        }
 
     /** On every edge carrying [from] that satisfies [cond], replaces [from] by [to]. */
     public fun relabel(
@@ -80,9 +89,11 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         cond: (E) -> Boolean = { true },
     ) {
         if (from == to) return
-        for (edge in getLabeledEdges(from).filter(cond)) {
-            edge.labels = edge.labels - from + to
-            labelIndex.record(to, edge)
+        storage.criticalSection {
+            for (edge in getLabeledEdges(from).filter(cond)) {
+                edge.labels = edge.labels - from + to
+                labelIndex.record(to, edge)
+            }
         }
     }
 

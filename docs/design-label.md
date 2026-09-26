@@ -8,7 +8,7 @@
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
 - **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation), `LabelEdgeIndex` (label carrier index).
 
-The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E>`.
+The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E>`; `AbcMultipleGraph.storage` supplies the trait's `storage`.
 
 See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm and `spec-poset.md` for the label carrier index.
 
@@ -96,18 +96,18 @@ Backed by a `ListVal` storage property. The setter is `internal`: label assignme
 
 ### LabelEdgeIndex
 
-**Responsibility:** Per-graph inverted index from a label to the edges that may carry it. Owned by one graph instance; mutated only by `PosetTrait` default methods. Algorithm, invariants, and preconditions: `spec-poset.md` (Label Carrier Index).
+**Responsibility:** Per-graph inverted index from a label to the edges that may carry it, keyed by edge storage ID. Owned by one graph instance; mutated only by `PosetTrait` default methods. Algorithm, invariants, and preconditions: `spec-poset.md` (Label Carrier Index).
 
 **Constructor:** `LabelEdgeIndex<E : AbcEdge>()` — public; every member is `internal`.
 
 | Member | Behavior |
 |--------|----------|
 | `ensureBuilt(allEdges)` | Scans `allEdges()` once and records each edge under each label it carries; later calls return immediately |
-| `record(label, edge)` | Adds `edge` to the candidates of `label` |
+| `record(label, edge)` | Adds `edge` to the candidates of `label` under `edge.storageId`; an entry under the same storage ID is replaced |
 | `candidates(label)` | Snapshot of the candidates of `label` (a superset of its carriers) |
-| `drop(label, edge)` | Removes a candidate whose edge no longer exists |
+| `drop(label, edge)` | Removes the candidate under `edge.storageId`; only for an edge that no longer exists |
 
-Thread-safe: concurrent maps and key sets; the build runs once under the index monitor.
+Not synchronized: every member is called inside the owning graph's `storage.criticalSection` (`PosetTrait`), so the index holds no lock of its own and never orders a lock against the storage lock.
 
 ---
 
@@ -121,14 +121,15 @@ Thread-safe: concurrent maps and key sets; the build runs once under the index m
 |-------|------|---------|
 | `poset` | `IPoset` | Pluggable poset module for label hierarchy operations |
 | `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
+| `storage` | `IStorage` | Storage of this graph; its critical section makes each label operation atomic |
 
-**Label-filtered methods (default implementations):**
+**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, and `relabel` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addEdge(src, dst, tag, label)` | Creates or reuses edge, assigns label, records it in `labelIndex` | `src`, `dst`: NodeID; `tag`; `label` | `E` | `EntityNotExistException` if src/dst missing |
 | `delEdge(src, dst, tag, label)` | Removes label; if the edge carried the label and none remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
-| `getLabeledEdges(label)` | Edges carrying `label` directly (no covering), in O(candidates) | `label` | `Sequence<E>` | -- |
+| `getLabeledEdges(label)` | Edges carrying `label` directly (no covering), in O(candidates); materialized inside the critical section | `label` | `Sequence<E>` | -- |
 | `relabel(from, to, cond)` | On every edge carrying `from` with `cond`, replaces `from` by `to`; `from == to` is a no-op | `from`; `to`; `cond` | -- | -- |
 | `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |

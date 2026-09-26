@@ -354,7 +354,7 @@ val visible = graph.getOutgoingEdges("a", v2)
 
 ### `PosetTrait<N, E>` (interface, extends `IGraph`)
 
-Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, and `relabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
 
 - **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge and assign label.
 - **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.

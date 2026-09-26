@@ -23,6 +23,8 @@ import kotlin.test.assertTrue
  * - `relabel matches full edge scan` -- equivalence with a full scan
  * - `getLabeledEdges sees label restored by active layer clear` -- layered revert
  * - `getLabeledEdges excludes edge removed by active layer clear` -- layered revert
+ * - `getLabeledEdges finds edge re-added after delete` -- new storage ID, not the stale candidate
+ * - `getLabeledEdges finds edge re-added after active layer clear` -- new storage ID after revert
  */
 internal class PosetTraitRelabelTest {
     private lateinit var graph: TestGraph
@@ -174,5 +176,29 @@ internal class PosetTraitRelabelTest {
         storage.clearActiveLayer()
 
         assertTrue(layered.getLabeledEdges(c).none())
+    }
+
+    @Test
+    fun `getLabeledEdges finds edge re-added after delete`() {
+        graph.addEdge("a", "b", "rel", c)
+        graph.delEdge("a", "b", "rel", c)
+
+        graph.addEdge("a", "b", "rel", c)
+
+        assertEquals(listOf("a-rel-b"), graph.getLabeledEdges(c).map { it.id }.toList())
+    }
+
+    @Test
+    fun `getLabeledEdges finds edge re-added after active layer clear`() {
+        val storage = LayeredStorageImpl()
+        val layered = TestGraph(storage)
+        listOf("a", "b").forEach { layered.addNode(it) }
+        storage.freeze()
+        layered.addEdge("a", "b", "rel", c)
+        storage.clearActiveLayer()
+
+        layered.addEdge("a", "b", "rel", c)
+
+        assertEquals(listOf("a-rel-b"), layered.getLabeledEdges(c).map { it.id }.toList())
     }
 }
