@@ -86,4 +86,7 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
-- All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.
+- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
+- On a thread-safe storage, each `IGraph`, `PosetTrait`, and `IPoset` call is atomic. A group of calls is not: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
+- Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
+- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.

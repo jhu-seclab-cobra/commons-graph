@@ -21,7 +21,11 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 - `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
 - Use `NativeStorageImpl` for single-threaded in-memory graphs.
 - Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
-- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics.
+- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics. It is thread-safe.
+- Share a storage or graph across threads only when `storage.criticalSectionLock != null`. Never share `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, or `Neo4jStorageImpl`.
+- Wrap every multi-call sequence that must be atomic (check-then-add, read-modify-write) in `storage.criticalSection { }`. Single calls are already atomic.
+- Never call a `suspend` function, or wait on another thread, inside `storage.criticalSection { }`.
+- Read `llms/storage.md` Concurrent Use before writing multi-threaded code.
 - Never add language-specific analysis logic to this library. Language mapping belongs in analysis modules.
 
 ## Graph API
@@ -30,7 +34,7 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 
 ## Storage
 
-- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs.
+- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs, `criticalSection`, concurrent-use rules.
 
 ## Entities
 

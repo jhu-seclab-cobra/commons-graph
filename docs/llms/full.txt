@@ -21,7 +21,11 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 - `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
 - Use `NativeStorageImpl` for single-threaded in-memory graphs.
 - Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
-- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics.
+- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics. It is thread-safe.
+- Share a storage or graph across threads only when `storage.criticalSectionLock != null`. Never share `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, or `Neo4jStorageImpl`.
+- Wrap every multi-call sequence that must be atomic (check-then-add, read-modify-write) in `storage.criticalSection { }`. Single calls are already atomic.
+- Never call a `suspend` function, or wait on another thread, inside `storage.criticalSection { }`.
+- Read `llms/storage.md` Concurrent Use before writing multi-threaded code.
 - Never add language-specific analysis logic to this library. Language mapping belongs in analysis modules.
 
 ## Graph API
@@ -30,7 +34,7 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 
 ## Storage
 
-- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs.
+- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs, `criticalSection`, concurrent-use rules.
 
 ## Entities
 
@@ -39,10 +43,6 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 ## Labels
 
 - [Labels & Poset](llms/label.md): Label system -- `Label`, `IPoset`, `PosetDftImpl`, `PosetTrait`.
-
-## Optional
-
-- [Full Reference](llms/full.txt): All L1 docs concatenated for single-load context.
 
 
 ---
@@ -139,7 +139,10 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
-- All `Sequence` returns are lazy. Collect to a list before modifying the graph mid-iteration.
+- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
+- On a thread-safe storage, each `IGraph`, `PosetTrait`, and `IPoset` call is atomic. A group of calls is not: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
+- Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
+- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
 
 ---
 
@@ -203,14 +206,14 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 #### Concurrency
 
-- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds: the write lock of a thread-safe implementation, `null` for a single-threaded one.
-- **`IStorage.criticalSection { ... }`** -- Runs a compound read-modify-write atomically against every other operation on a thread-safe storage; unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
+- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds. Non-null on a thread-safe implementation, `null` on a single-threaded one.
+- **`IStorage.criticalSection { ... }: T`** -- Runs the block atomically against every other operation on the same thread-safe storage and returns its result. Runs unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
 
 ### Implementations
 
 - **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
 - **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
-- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines.
+- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The frozen layer is read-only, so the default single-threaded factory stays safe.
 
 ### `LayeredStorageImpl` Extra API
 
@@ -225,6 +228,33 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - **`MapDBConcurStorageImpl`** -- Concurrent MapDB backend.
 - **`Neo4jStorageImpl`** -- Neo4j backend (module: `commons-graph-impl-neo4j`).
 - **`Neo4jConcurStorageImpl`** -- Concurrent Neo4j backend.
+
+## Concurrent Use
+
+```kotlin
+val storage = NativeConcurStorageImpl()
+val counter = storage.addNode(mapOf("n" to 0.intVal))
+storage.criticalSection {
+    val n = (storage.getNodeProperty(counter, "n") as IntVal).core
+    storage.setNodeProperties(counter, mapOf("n" to (n + 1).intVal))
+}
+```
+
+| Implementation | Share across threads | Returned maps and sets |
+|----------------|----------------------|------------------------|
+| `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | Never | -- |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl` | Yes | Copies |
+| `LayeredStorageImpl` | Yes | Live views |
+
+- Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
+- Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
+- Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
+- `LayeredStorageImpl`: `nodeIDs`, `edgeIDs`, `metaNames`, `getNodeProperties`, `getEdgeProperties`, `getIncomingEdges`, and `getOutgoingEdges` return live views. While other threads write, read them inside `criticalSection`, and copy them there (`toSet()`, `toMap()`) to keep them. A kept view reflects later writes; `freeze()` and `clearActiveLayer()` empty its active-layer part.
+- Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
+- Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
+- Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
+- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks and never calls the storage.
+- Stop every thread that uses a persistent concurrent backend before calling `close()`.
 
 ## Gotchas
 
@@ -313,6 +343,8 @@ class MyNode : AbcNode() {
 - `EntityType` delegate persists the enum name as a `StrVal` property. Renaming enum entries breaks deserialization.
 - `EntityProperty` nullable delegate propagates `null` to `IEntity.set(name, null)`, which removes the property.
 - Property reads and writes go directly to storage. No local caching in the entity object.
+- Each `entity["key"]` read and write is atomic on a thread-safe storage. A read-modify-write is not: wrap `entity["n"] = next(entity["n"])` in `graph.storage.criticalSection { }`.
+- On `LayeredStorageImpl`, call `asMap()` inside `graph.storage.criticalSection { }` while other threads write.
 
 ---
 
@@ -356,7 +388,7 @@ val visible = graph.getOutgoingEdges("a", v2)
 
 Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, and `relabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
 
-- **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge and assign label.
+- **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge, assign label, record it in `labelIndex`.
 - **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
 - **`fun getOutgoingEdges(of, label, cond): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`fun getIncomingEdges(of, label, cond): Sequence<E>`** -- Label-filtered incoming edges.
@@ -364,6 +396,8 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - **`fun getParents(of, label, cond): Sequence<N>`** -- Nodes via label-filtered incoming edges.
 - **`fun getDescendants(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
+- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
+- **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
 
 ### Edge Visibility Rules
 
@@ -377,5 +411,9 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
+- Edge labels change only through `addEdge`/`delEdge`/`relabel` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
+- Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
+- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. Each step is atomic; the whole iteration is not. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`.
 
 ---
+

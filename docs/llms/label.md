@@ -61,3 +61,4 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 - Edge labels change only through `addEdge`/`delEdge`/`relabel` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
 - Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
+- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. Each step is atomic; the whole iteration is not. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`.

@@ -123,7 +123,7 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 | `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
 | `storage` | `IStorage` | Storage of this graph; its critical section makes each label operation atomic |
 
-**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, and `relabel` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step.
+**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, and `relabel` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|

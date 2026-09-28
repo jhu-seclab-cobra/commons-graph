@@ -130,7 +130,7 @@ interface IStorage : Flushable {
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
-**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive — mirroring `NativeConcurStorageImpl`. `criticalSectionLock` is the write lock; revert listeners run while it is held.
+**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive. `criticalSectionLock` is the write lock; revert listeners run while it is held. Unlike `NativeConcurStorageImpl`, the collections it returns (property maps, adjacency sets, `nodeIDs`, `edgeIDs`, `metaNames`) are the lazy views above, not copies: the lock covers building a view, not reading it. A view reflects later writes, and `freeze` and `clearActiveLayer` empty the active-layer data it reads. A caller that reads a returned view while another thread writes reads it inside `criticalSection`.
 
 ---
 
@@ -141,6 +141,16 @@ See `spec-graph.md` for layered query resolution (active-authoritative property 
 Compound atomicity is a property of the chosen implementation, like per-call atomicity: a graph over a storage that is not thread-safe is single-threaded. Each storage holds exactly one lock; no lock state lives outside the storage.
 
 A caller holding a storage's read lock never enters its critical section (a read lock does not upgrade to the write lock). Storage implementations never invoke caller code while holding their read lock.
+
+**Concurrent use per implementation:**
+
+| Implementation | Thread-safe | Returned collections (property maps, adjacency sets, ID and meta-name sets) |
+|----------------|-------------|-------------------------------------------|
+| `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | No (`criticalSectionLock` is `null`) | -- |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl` | Yes | Copies, readable outside the lock |
+| `LayeredStorageImpl` | Yes | Live views, readable only inside `criticalSection` while another thread writes |
+
+A section that holds two storages' locks at once (a `criticalSection` nested inside another storage's, or `transferTo`, which holds the source's read lock while writing the target) deadlocks against a thread taking the same two locks in the opposite order. Callers take the locks of any two storages in one fixed order.
 
 ---
 

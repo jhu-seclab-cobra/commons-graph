@@ -56,14 +56,14 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 #### Concurrency
 
-- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds: the write lock of a thread-safe implementation, `null` for a single-threaded one.
-- **`IStorage.criticalSection { ... }`** -- Runs a compound read-modify-write atomically against every other operation on a thread-safe storage; unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
+- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds. Non-null on a thread-safe implementation, `null` on a single-threaded one.
+- **`IStorage.criticalSection { ... }: T`** -- Runs the block atomically against every other operation on the same thread-safe storage and returns its result. Runs unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
 
 ### Implementations
 
 - **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
 - **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
-- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines.
+- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The frozen layer is read-only, so the default single-threaded factory stays safe.
 
 ### `LayeredStorageImpl` Extra API
 
@@ -78,6 +78,33 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - **`MapDBConcurStorageImpl`** -- Concurrent MapDB backend.
 - **`Neo4jStorageImpl`** -- Neo4j backend (module: `commons-graph-impl-neo4j`).
 - **`Neo4jConcurStorageImpl`** -- Concurrent Neo4j backend.
+
+## Concurrent Use
+
+```kotlin
+val storage = NativeConcurStorageImpl()
+val counter = storage.addNode(mapOf("n" to 0.intVal))
+storage.criticalSection {
+    val n = (storage.getNodeProperty(counter, "n") as IntVal).core
+    storage.setNodeProperties(counter, mapOf("n" to (n + 1).intVal))
+}
+```
+
+| Implementation | Share across threads | Returned maps and sets |
+|----------------|----------------------|------------------------|
+| `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | Never | -- |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl` | Yes | Copies |
+| `LayeredStorageImpl` | Yes | Live views |
+
+- Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
+- Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
+- Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
+- `LayeredStorageImpl`: `nodeIDs`, `edgeIDs`, `metaNames`, `getNodeProperties`, `getEdgeProperties`, `getIncomingEdges`, and `getOutgoingEdges` return live views. While other threads write, read them inside `criticalSection`, and copy them there (`toSet()`, `toMap()`) to keep them. A kept view reflects later writes; `freeze()` and `clearActiveLayer()` empty its active-layer part.
+- Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
+- Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
+- Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
+- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks and never calls the storage.
+- Stop every thread that uses a persistent concurrent backend before calling `close()`.
 
 ## Gotchas
 
