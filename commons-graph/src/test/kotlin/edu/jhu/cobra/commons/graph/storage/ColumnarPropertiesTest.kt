@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /*
@@ -15,6 +16,7 @@ import kotlin.test.assertTrue
  * - `ColumnViewMap isEmpty returns true when entity has no properties` -- empty ColumnViewMap
  * - `ColumnViewMap containsKey returns true for existing and false for absent` -- containsKey paths
  * - `ColumnViewMap get returns value for existing and null for absent` -- get hit and miss
+ * - `ColumnViewMap entries caches result on second access` -- caching
  * - `setColumnarProperties creates new column for first property of that name` -- column creation
  * - `removeEntityFromColumns removes column when it becomes empty` -- column cleanup
  * - `removeEntityFromColumns keeps column when other entities remain` -- column retention
@@ -57,6 +59,15 @@ internal class ColumnarPropertiesTest {
 
         assertEquals("Alice", (props["name"] as StrVal).core)
         assertNull(props["absent"])
+    }
+
+    @Test
+    fun `ColumnViewMap entries caches result on second access`() {
+        val nodeId = storage.addNode(mapOf("name" to "Alice".strVal))
+
+        val props = storage.getNodeProperties(nodeId)
+
+        assertSame(props.entries, props.entries)
     }
 
     // endregion

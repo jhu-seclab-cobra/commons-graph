@@ -71,4 +71,3 @@ class MyNode : AbcNode() {
 - `EntityProperty` nullable delegate propagates `null` to `IEntity.set(name, null)`, which removes the property.
 - Property reads and writes go directly to storage. No local caching in the entity object.
 - Each `entity["key"]` read and write is atomic on a thread-safe storage. A read-modify-write is not: wrap `entity["n"] = next(entity["n"])` in `graph.storage.criticalSection { }`.
-- On `LayeredStorageImpl`, call `asMap()` inside `graph.storage.criticalSection { }` while other threads write.

@@ -93,13 +93,12 @@ storage.criticalSection {
 | Implementation | Share across threads | Returned maps and sets |
 |----------------|----------------------|------------------------|
 | `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | Never | -- |
-| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl` | Yes | Copies |
-| `LayeredStorageImpl` | Yes | Live views |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl`, `LayeredStorageImpl` | Yes | Copies |
 
 - Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
 - Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
 - Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
-- `LayeredStorageImpl`: `nodeIDs`, `edgeIDs`, `metaNames`, `getNodeProperties`, `getEdgeProperties`, `getIncomingEdges`, and `getOutgoingEdges` return live views. While other threads write, read them inside `criticalSection`, and copy them there (`toSet()`, `toMap()`) to keep them. A kept view reflects later writes; `freeze()` and `clearActiveLayer()` empty its active-layer part.
+- A copy returned by a thread-safe storage is fixed at the call. Later writes, `freeze()`, and `clearActiveLayer()` do not change it.
 - Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
 - Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
 - Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
@@ -115,4 +114,3 @@ storage.criticalSection {
 - `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
 - `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.
 - `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
-- `NativeConcurStorageImpl` returns snapshot copies from adjacency queries. Mutations after retrieval do not affect the snapshot.

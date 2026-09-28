@@ -3,7 +3,6 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
-import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -23,7 +22,7 @@ import kotlin.concurrent.withLock
  * - Properties: the active copy is authoritative for entities present in the active
  *   layer — promotion copies all frozen properties, and a property deleted from the
  *   copy stays deleted. Frozen-only entities read from the frozen layer.
- * - Adjacency: returns union set views merging both layers.
+ * - Adjacency: returns the union of both layers.
  *
  * Deleting a frozen-layer edge — including one promoted into the active layer — records
  * a tombstone in the active layer: the edge reads as absent until [clearActiveLayer]
@@ -31,7 +30,9 @@ import kotlin.concurrent.withLock
  * restricted to nodes that exist only in the active layer; deleting a frozen-layer node
  * throws [FrozenLayerModificationException].
  *
- * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl].
+ * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl]. Every
+ * returned collection is a copy taken under the lock; later writes, [freeze], and
+ * [clearActiveLayer] never change it.
  * [criticalSectionLock] is its write lock; revert listeners run while it is held.
  * Uses internal non-locking helpers to avoid lock re-entrance overhead.
  *
@@ -108,7 +109,7 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override val nodeIDs: Set<Int>
-        get() = lock.readLock().withLock { nodeIdsUnlocked() }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(nodeIdsUnlocked()) }
 
     private fun nodeIdsUnlocked(): Set<Int> {
         val frozenIds = frozen?.nodeIds ?: emptySet()
@@ -128,7 +129,8 @@ public class LayeredStorageImpl(
             id
         }
 
-    override fun getNodeProperties(id: Int): Map<String, IValue> = lock.readLock().withLock { getNodePropertiesUnlocked(id) }
+    override fun getNodeProperties(id: Int): Map<String, IValue> =
+        lock.readLock().withLock { java.util.Map.copyOf(getNodePropertiesUnlocked(id)) }
 
     private fun getNodePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsNode(id)) return ColumnViewMap(id, active.nodeColumns)
@@ -171,7 +173,7 @@ public class LayeredStorageImpl(
     // ============================================================================
 
     override val edgeIDs: Set<Int>
-        get() = lock.readLock().withLock { edgeIdsUnlocked() }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(edgeIdsUnlocked()) }
 
     private fun edgeIdsUnlocked(): Set<Int> {
         val frozenIds = frozen?.edgeIds?.let(::withoutTombstones) ?: emptySet()
@@ -212,7 +214,8 @@ public class LayeredStorageImpl(
         return checkNotNull(frozen?.edgeStructure(id))
     }
 
-    override fun getEdgeProperties(id: Int): Map<String, IValue> = lock.readLock().withLock { getEdgePropertiesUnlocked(id) }
+    override fun getEdgeProperties(id: Int): Map<String, IValue> =
+        lock.readLock().withLock { java.util.Map.copyOf(getEdgePropertiesUnlocked(id)) }
 
     private fun getEdgePropertiesUnlocked(id: Int): Map<String, IValue> {
         if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)
@@ -265,34 +268,29 @@ public class LayeredStorageImpl(
 
     override fun getIncomingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
-            val activeEdges = active.inEdges[id]
-            val frozenEdges = frozen?.incomingEdges(id)?.let(::withoutTombstones)
-            when {
-                activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
-                activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()
-                frozenEdges == null || frozenEdges.isEmpty() -> Collections.unmodifiableSet(activeEdges)
-                else -> UnionSet(frozenEdges, activeEdges)
-            }
+            copyAdjacency(id, active.inEdges[id], frozen?.incomingEdges(id)?.let(::withoutTombstones))
         }
 
     override fun getOutgoingEdges(id: Int): Set<Int> =
         lock.readLock().withLock {
-            val activeEdges = active.outEdges[id]
-            val frozenEdges = frozen?.outgoingEdges(id)?.let(::withoutTombstones)
-            when {
-                activeEdges == null && frozenEdges == null -> throw EntityNotExistException(id.toString())
-                activeEdges == null || activeEdges.isEmpty() -> frozenEdges ?: emptySet()
-                frozenEdges == null || frozenEdges.isEmpty() -> Collections.unmodifiableSet(activeEdges)
-                else -> UnionSet(frozenEdges, activeEdges)
-            }
+            copyAdjacency(id, active.outEdges[id], frozen?.outgoingEdges(id)?.let(::withoutTombstones))
         }
+
+    private fun copyAdjacency(
+        id: Int,
+        activeEdges: Set<Int>?,
+        frozenEdges: Set<Int>?,
+    ): Set<Int> {
+        if (activeEdges == null && frozenEdges == null) throw EntityNotExistException(id.toString())
+        return java.util.Set.copyOf(UnionSet(frozenEdges.orEmpty(), activeEdges.orEmpty()))
+    }
 
     // ============================================================================
     // METADATA OPERATIONS
     // ============================================================================
 
     override val metaNames: Set<String>
-        get() = lock.readLock().withLock { metaNamesUnlocked() }
+        get() = lock.readLock().withLock { java.util.Set.copyOf(metaNamesUnlocked()) }
 
     private fun metaNamesUnlocked(): Set<String> {
         val frozenNames = (frozen?.metaNames ?: emptySet()) - active.deletedMetaNames

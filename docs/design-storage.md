@@ -126,11 +126,11 @@ interface IStorage : Flushable {
 
 **Metadata deletion:** `setMeta(name, null)` deletes the property across both layers: the active layer records a tombstone that masks the frozen value on reads and excludes the name from `freeze` merges. A later non-null `setMeta` clears the tombstone.
 
-**Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta, edge and meta tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union without copying.
+**Internal composition:** `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta, edge and meta tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union inside the lock; a public read copies the view's contents before releasing it.
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
-**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive. `criticalSectionLock` is the write lock; revert listeners run while it is held. Unlike `NativeConcurStorageImpl`, the collections it returns (property maps, adjacency sets, `nodeIDs`, `edgeIDs`, `metaNames`) are the lazy views above, not copies: the lock covers building a view, not reading it. A view reflects later writes, and `freeze` and `clearActiveLayer` empty the active-layer data it reads. A caller that reads a returned view while another thread writes reads it inside `criticalSection`.
+**Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive. `criticalSectionLock` is the write lock; revert listeners run while it is held. Like `NativeConcurStorageImpl`, every collection it returns (property maps, adjacency sets, `nodeIDs`, `edgeIDs`, `metaNames`) is a copy taken under the read lock (decided 2026-09-27): later writes, `freeze`, and `clearActiveLayer` do not change it, and a caller reads it outside the lock.
 
 ---
 
@@ -147,8 +147,7 @@ A caller holding a storage's read lock never enters its critical section (a read
 | Implementation | Thread-safe | Returned collections (property maps, adjacency sets, ID and meta-name sets) |
 |----------------|-------------|-------------------------------------------|
 | `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | No (`criticalSectionLock` is `null`) | -- |
-| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl` | Yes | Copies, readable outside the lock |
-| `LayeredStorageImpl` | Yes | Live views, readable only inside `criticalSection` while another thread writes |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl`, `LayeredStorageImpl` | Yes | Copies, readable outside the lock |
 
 A section that holds two storages' locks at once (a `criticalSection` nested inside another storage's, or `transferTo`, which holds the source's read lock while writing the target) deadlocks against a thread taking the same two locks in the opposite order. Callers take the locks of any two storages in one fixed order.
 

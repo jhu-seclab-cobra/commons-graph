@@ -11,15 +11,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for LayeredStorageImpl: ColumnViewMap property views and promoted-entity reads.
+ * Black-box tests for LayeredStorageImpl: active-layer property reads and promoted-entity reads.
  *
- * - `getNodeProperties for active-only node returns ColumnViewMap` -- active-only path
- * - `ColumnViewMap get returns null when column exists but lacks entity` -- column miss
- * - `ColumnViewMap containsKey returns false when column exists but lacks entity` -- column miss
- * - `ColumnViewMap isEmpty returns true when columns exist but none contain entity` -- empty view
- * - `ColumnViewMap entries caches result on second access` -- caching
- * - `ColumnViewMap size delegates to entries` -- size via entries
- * - `getEdgeProperties for active-only edge returns ColumnViewMap` -- active-only edge path
+ * - `getNodeProperties for active-only node returns its properties` -- active-only path
+ * - `getNodeProperties get returns null when column exists but lacks entity` -- column miss
+ * - `getNodeProperties containsKey returns false when column exists but lacks entity` -- column miss
+ * - `getNodeProperties isEmpty returns true when columns exist but none contain entity` -- empty view
+ * - `getNodeProperties size counts every property` -- property count
+ * - `getEdgeProperties for active-only edge returns its properties` -- active-only edge path
  * - `promoted node with no new writes keeps frozen property count` -- copy-only size
  * - `promoted node without frozen props counts only active writes` -- active-only size
  * - `promoted node property count spans copied and new keys` -- combined size
@@ -39,10 +38,10 @@ internal class LayeredStorageImplPropertyViewTest {
         storage = LayeredStorageImpl()
     }
 
-    // region ColumnViewMap view
+    // region Active-layer property reads
 
     @Test
-    fun `getNodeProperties for active-only node returns ColumnViewMap`() {
+    fun `getNodeProperties for active-only node returns its properties`() {
         val node = storage.addNode(mapOf("a" to "v1".strVal, "b" to "v2".strVal))
         val props = storage.getNodeProperties(node)
         assertEquals(2, props.size)
@@ -51,7 +50,7 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `ColumnViewMap get returns null when column exists but lacks entity`() {
+    fun `getNodeProperties get returns null when column exists but lacks entity`() {
         val n1 = storage.addNode(mapOf("shared_col" to "val1".strVal))
         val n2 = storage.addNode()
         // n2 has no properties, but "shared_col" column exists from n1
@@ -60,7 +59,7 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `ColumnViewMap containsKey returns false when column exists but lacks entity`() {
+    fun `getNodeProperties containsKey returns false when column exists but lacks entity`() {
         val n1 = storage.addNode(mapOf("col" to "val".strVal))
         val n2 = storage.addNode()
         val props = storage.getNodeProperties(n2)
@@ -68,7 +67,7 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `ColumnViewMap isEmpty returns true when columns exist but none contain entity`() {
+    fun `getNodeProperties isEmpty returns true when columns exist but none contain entity`() {
         val n1 = storage.addNode(mapOf("col" to "val".strVal))
         val n2 = storage.addNode()
         val props = storage.getNodeProperties(n2)
@@ -76,24 +75,14 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `ColumnViewMap entries caches result on second access`() {
-        val node = storage.addNode(mapOf("k" to "v".strVal))
-        val props = storage.getNodeProperties(node)
-        val entries1 = props.entries
-        val entries2 = props.entries
-        // Cached: same object reference
-        assertTrue(entries1 === entries2)
-    }
-
-    @Test
-    fun `ColumnViewMap size delegates to entries`() {
+    fun `getNodeProperties size counts every property`() {
         val node = storage.addNode(mapOf("a" to 1.intVal, "b" to 2.intVal))
         val props = storage.getNodeProperties(node)
         assertEquals(2, props.size)
     }
 
     @Test
-    fun `getEdgeProperties for active-only edge returns ColumnViewMap`() {
+    fun `getEdgeProperties for active-only edge returns its properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val edge = storage.addEdge(n1, n2, "rel", mapOf("x" to "v".strVal))
