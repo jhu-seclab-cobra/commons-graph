@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
  * - `setParents with equal parents keeps the closure` -- no edge churn, no rebuild
  * - `a new label adds one row` -- insertion costs no rebuild
  * - `a label first seen as a parent gets its own parents later` -- row of a label with descendants
- * - `parents of an existing label changed leaves the closure correct` -- relabel with descendants
+ * - `parents of an existing label changed leaves the closure correct` -- reparent with descendants
  * - `cycle through a new label is rejected` -- cycle still raised by the query
  * - `a self-parent is rejected by the query` -- self loop
  * - `incremental closure equals a fresh rebuild on random DAGs` -- seeded differential test after every step, with a freeze and a revert
@@ -131,31 +131,47 @@ internal class PosetDftImplClosureTest {
     fun `incremental closure equals a fresh rebuild on random DAGs`() {
         val random = Random(20261022)
         val labels = List(40) { Label("L$it") }
-        val usedAsParent = HashSet<Label>()
+        var usedAsParent = HashSet<Label>()
+        var usedAtFreeze = emptySet<Label>()
+        val inserted = HashSet<Label>()
+        var insertedAtFreeze = emptySet<Label>()
         var incrementalSteps = 0
+        var reparentedWhileFrozen = 0
         repeat(200) { step ->
-            if (step == 80) storage.layered.freeze()
+            if (step == 80) {
+                storage.layered.freeze()
+                usedAtFreeze = usedAsParent.toSet()
+                insertedAtFreeze = inserted.toSet()
+            }
             if (step == 140) {
                 storage.layered.clearActiveLayer()
+                // The revert restores the hierarchy of step 80, so only its parent labels have children.
+                usedAsParent = HashSet(usedAtFreeze)
                 assertSameOrder(labels)
             }
-            val child = labels[random.nextInt(labels.size - 1)]
+            val childIndex = random.nextInt(labels.size - 1)
+            val child = labels[childIndex]
             // Parents have a larger index than the child, so every state is acyclic.
             val parents =
                 (0 until random.nextInt(4)).associate { slot ->
-                    "p$slot" to labels[random.nextInt(labels.indexOf(child) + 1, labels.size)]
+                    "p$slot" to labels[random.nextInt(childIndex + 1, labels.size)]
                 }
+            if (step in 80 until 140 && child in insertedAtFreeze && poset.getParents(child) != parents) {
+                reparentedWhileFrozen++
+            }
             poset.setParents(child, parents)
             // A label never used as a parent has no child label: its insertion costs no rebuild.
             // The previous step's comparison left a closure alive, except before step 0.
             val extended = step > 0 && child !in usedAsParent
             usedAsParent.addAll(parents.values)
+            inserted.add(child)
             val reads = storage.readsDuring { assertSameOrder(labels) }
             if (extended) {
                 assertEquals(0, reads, "step $step: the live closure was rebuilt")
                 incrementalSteps++
             }
         }
+        assertTrue(reparentedWhileFrozen > 0, "no frozen label was reparented before the revert")
         assertTrue(incrementalSteps > 20, "the incremental path ran only $incrementalSteps times")
     }
 

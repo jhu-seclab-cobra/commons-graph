@@ -19,9 +19,9 @@ import kotlin.test.assertNull
  * - `getAncestors of frozen label is restored after revert` -- closure rebuilt from storage
  * - `setParents on label created after freeze succeeds after revert` -- label node re-created
  * - `revert removes the rows of removed labels only` -- frozen rows are kept, not recomputed
- * - `compare of a relabeled frozen label is restored after revert` -- tombstoned edges restored
+ * - `compare of a reparented frozen label is restored after revert` -- tombstoned edges restored
  * - `compare of a frozen label stripped of parents is restored after revert` -- empty replacement
- * - `compare of a frozen descendant is restored after its ancestor is relabeled and reverted` -- descendant rows
+ * - `compare of a frozen descendant is restored after its ancestor is reparented and reverted` -- descendant rows
  */
 internal class PosetDftImplRevertTest {
     private val frozen = Label("frozen")
@@ -122,7 +122,7 @@ internal class PosetDftImplRevertTest {
     }
 
     @Test
-    fun `compare of a relabeled frozen label is restored after revert`() {
+    fun `compare of a reparented frozen label is restored after revert`() {
         poset.setParents(frozen, mapOf("x" to other))
         assertEquals(1, poset.compare(other, frozen))
         assertNull(poset.compare(frozenParent, frozen))
@@ -144,7 +144,7 @@ internal class PosetDftImplRevertTest {
     }
 
     @Test
-    fun `compare of a frozen descendant is restored after its ancestor is relabeled and reverted`() {
+    fun `compare of a frozen descendant is restored after its ancestor is reparented and reverted`() {
         val grandchild = Label("grandchild")
         poset.setParents(grandchild, mapOf("p" to frozen))
         storage.freeze()

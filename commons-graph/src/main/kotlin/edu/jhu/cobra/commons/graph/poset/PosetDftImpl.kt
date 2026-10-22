@@ -15,8 +15,7 @@ private const val LABEL_PROP = "label"
  * Ancestor queries use a memoized ancestor-closure table, correct on arbitrary
  * DAGs including labels with multiple parents. The table is built lazily on the
  * first query. Once built, [setParents] keeps it when the parents are unchanged, recomputes
- * one row when the label has no child label (a new label, or an existing label with no
- * child label), and discards it otherwise. A cycle in the hierarchy is detected during the
+ * the row of a label without descendants, new or existing, and discards it otherwise. A cycle in the hierarchy is detected during the
  * build and rejected.
  * On an [IRevertibleStorage], a revert drops the rows of the removed labels and keeps
  * the other rows, unless [setParents] changed the parents of an existing label since the
