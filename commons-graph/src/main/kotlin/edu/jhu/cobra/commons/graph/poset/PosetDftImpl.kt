@@ -14,10 +14,10 @@ private const val LABEL_PROP = "label"
  *
  * Ancestor queries use a memoized ancestor-closure table, correct on arbitrary
  * DAGs including labels with multiple parents. The table is built lazily on the
- * first query. Once built, [setParents] extends it by one row when the label has no
- * descendants (a new label, the common case), keeps it when the parents are unchanged,
- * and discards it otherwise. A cycle in the hierarchy is detected during the build and
- * rejected.
+ * first query. Once built, [setParents] keeps it when the parents are unchanged, recomputes
+ * one row when the label has no child label (a new label, or an existing label with no
+ * child label), and discards it otherwise. A cycle in the hierarchy is detected during the
+ * build and rejected.
  * On an [IRevertibleStorage], a revert drops the rows of the removed labels and keeps
  * the other rows, unless [setParents] changed the parents of an existing label since the
  * last revert: the revert may restore its earlier parent edges, so the table is discarded.
@@ -40,7 +40,7 @@ public class PosetDftImpl(
     private var ancestorClosure: MutableMap<Int, Set<Int>>? = null
 
     // Set when setParents changed the parents of an existing label; a revert may undo that change.
-    private var existingLabelRelabeled = false
+    private var existingLabelReparented = false
 
     init {
         (storage as? IRevertibleStorage)?.addRevertListener { removedNodes, _ -> onRevert(removedNodes) }
@@ -56,8 +56,8 @@ public class PosetDftImpl(
             val labelCore = intToLabel.remove(nodeId) ?: continue
             labelIdCache.remove(labelCore)
         }
-        if (existingLabelRelabeled) ancestorClosure = null
-        existingLabelRelabeled = false
+        if (existingLabelReparented) ancestorClosure = null
+        existingLabelReparented = false
     }
 
     private fun ensureCache() {
@@ -199,8 +199,8 @@ public class PosetDftImpl(
                 parents.map { (name, parentLabel) ->
                     ensureLabelNode(parentLabel).also { storage.addEdge(storageId, it, name, emptyMap()) }
                 }
-            if (existingId != null) existingLabelRelabeled = true
-            extendClosure(storageId, parentIds, hasDescendants)
+            if (existingId != null) existingLabelReparented = true
+            extendOrDiscardClosure(storageId, parentIds, hasDescendants)
         }
 
     /** True when [labelId] already holds exactly [parents], by name and by label. */
@@ -217,9 +217,9 @@ public class PosetDftImpl(
         }
     }
 
-    // Recomputes the row of [labelId] alone when no other row can change; otherwise discards
+    // Either recomputes the row of [labelId] alone, when no other row can change, or discards
     // the table. A parent that is the label itself closes a cycle, which the next build reports.
-    private fun extendClosure(
+    private fun extendOrDiscardClosure(
         labelId: Int,
         parentIds: List<Int>,
         hasDescendants: Boolean,
@@ -232,7 +232,7 @@ public class PosetDftImpl(
         val row = HashSet<Int>()
         for (parentInt in parentIds) {
             row.add(parentInt)
-            row.addAll(closure.getOrPut(parentInt) { emptySet() })
+            row.addAll(closure.getOrPut(parentInt) { emptySet() }) // a first-seen parent gets an empty row
         }
         closure[labelId] = row
     }
