@@ -3,6 +3,7 @@ package edu.jhu.cobra.commons.graph
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
+import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_4
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestEdge
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestNode
 import edu.jhu.cobra.commons.graph.storage.IStorage
@@ -11,13 +12,15 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/**
+/*
  * Black-box tests for typed adjacency: two graphs share one storage and each owns a tag
  * set; its traversals read only the edges whose tag it owns.
  *
- * - `getDescendants ignores an edge of another graph` — verifies outgoing walk
- * - `getAncestors ignores an edge of another graph` — verifies incoming walk
- * - `traversal follows an edge of its own tag` — verifies the owned edges still walk
+ * - `getDescendants ignores an edge of another graph` -- verifies outgoing walk
+ * - `getAncestors ignores an edge of another graph` -- verifies incoming walk
+ * - `traversal follows an edge of its own tag` -- verifies the owned edges still walk
+ * - `a foreign edge parallel to an own edge does not hide the own edge` -- yields the target once
+ * - `a foreign edge in the middle of a chain stops the walk there` -- own edges on both sides
  */
 internal class AbcMultipleGraphTypedAdjacencyTest {
     private class TaggedGraph(
@@ -63,5 +66,22 @@ internal class AbcMultipleGraphTypedAdjacencyTest {
     fun `traversal follows an edge of its own tag`() {
         assertEquals(setOf(NODE_ID_3), graphB.getDescendants(NODE_ID_2).map { it.id }.toSet())
         assertEquals(setOf(NODE_ID_2), graphB.getAncestors(NODE_ID_3).map { it.id }.toSet())
+    }
+
+    @Test
+    fun `a foreign edge parallel to an own edge does not hide the own edge`() {
+        graphB.addEdge(NODE_ID_1, NODE_ID_2, "b")
+
+        assertEquals(listOf(NODE_ID_2), graphA.getDescendants(NODE_ID_1).map { it.id }.toList())
+        assertEquals(listOf(NODE_ID_1), graphA.getAncestors(NODE_ID_2).map { it.id }.toList())
+    }
+
+    @Test
+    fun `a foreign edge in the middle of a chain stops the walk there`() {
+        graphB.claimNode(graphA.addNode(NODE_ID_4))
+        graphA.addEdge(NODE_ID_3, NODE_ID_4, "a")
+
+        assertEquals(setOf(NODE_ID_2), graphA.getDescendants(NODE_ID_1).map { it.id }.toSet())
+        assertEquals(setOf(NODE_ID_3), graphA.getAncestors(NODE_ID_4).map { it.id }.toSet())
     }
 }
