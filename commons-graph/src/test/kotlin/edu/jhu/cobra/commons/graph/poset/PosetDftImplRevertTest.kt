@@ -5,6 +5,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 /*
  * Black-box tests for PosetDftImpl over a LayeredStorageImpl whose active layer is
@@ -17,19 +18,25 @@ import kotlin.test.assertFalse
  * - `getParents of frozen label is restored after revert` -- tombstones revert
  * - `getAncestors of frozen label is restored after revert` -- closure rebuilt from storage
  * - `setParents on label created after freeze succeeds after revert` -- label node re-created
+ * - `revert removes the rows of removed labels only` -- frozen rows are kept, not recomputed
+ * - `compare of a relabeled frozen label is restored after revert` -- tombstoned edges restored
+ * - `compare of a frozen label stripped of parents is restored after revert` -- empty replacement
+ * - `compare of a frozen descendant is restored after its ancestor is relabeled and reverted` -- descendant rows
  */
 internal class PosetDftImplRevertTest {
     private val frozen = Label("frozen")
     private val frozenParent = Label("frozenParent")
     private val child = Label("child")
     private val other = Label("other")
+    private lateinit var counted: CountingLayeredStorage
     private lateinit var storage: LayeredStorageImpl
     private lateinit var poset: PosetDftImpl
 
     @BeforeTest
     fun setUp() {
-        storage = LayeredStorageImpl()
-        poset = PosetDftImpl(storage)
+        counted = CountingLayeredStorage()
+        storage = counted.layered
+        poset = PosetDftImpl(counted)
         poset.setParents(frozen, mapOf("orig" to frozenParent))
         storage.freeze()
     }
@@ -96,5 +103,57 @@ internal class PosetDftImplRevertTest {
         poset.setParents(child, mapOf("p" to frozenParent))
 
         assertEquals(mapOf("p" to frozenParent), poset.getParents(child))
+    }
+
+    @Test
+    fun `revert removes the rows of removed labels only`() {
+        assertEquals(1, poset.compare(frozenParent, frozen))
+        poset.setParents(child, mapOf("p" to frozen))
+        assertEquals(1, poset.compare(frozenParent, child))
+
+        storage.clearActiveLayer()
+
+        val reads =
+            counted.readsDuring {
+                assertEquals(1, poset.compare(frozenParent, frozen))
+                assertNull(poset.compare(frozen, child))
+            }
+        assertEquals(0, reads)
+    }
+
+    @Test
+    fun `compare of a relabeled frozen label is restored after revert`() {
+        poset.setParents(frozen, mapOf("x" to other))
+        assertEquals(1, poset.compare(other, frozen))
+        assertNull(poset.compare(frozenParent, frozen))
+
+        storage.clearActiveLayer()
+
+        assertEquals(1, poset.compare(frozenParent, frozen))
+        assertNull(poset.compare(other, frozen))
+    }
+
+    @Test
+    fun `compare of a frozen label stripped of parents is restored after revert`() {
+        poset.setParents(frozen, emptyMap())
+        assertNull(poset.compare(frozenParent, frozen))
+
+        storage.clearActiveLayer()
+
+        assertEquals(1, poset.compare(frozenParent, frozen))
+    }
+
+    @Test
+    fun `compare of a frozen descendant is restored after its ancestor is relabeled and reverted`() {
+        val grandchild = Label("grandchild")
+        poset.setParents(grandchild, mapOf("p" to frozen))
+        storage.freeze()
+        assertEquals(1, poset.compare(frozenParent, grandchild))
+        poset.setParents(frozen, emptyMap())
+        assertNull(poset.compare(frozenParent, grandchild))
+
+        storage.clearActiveLayer()
+
+        assertEquals(1, poset.compare(frozenParent, grandchild))
     }
 }

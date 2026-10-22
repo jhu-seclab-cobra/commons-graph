@@ -18,7 +18,7 @@ during visibility filtering) — lookup must be constant-time after preparation.
 The hierarchy is a DAG. A cycle is invalid input: preparation detects it and
 raises an error naming a label on the cycle.
 
-### Steps — Prepare closure (on first query after any mutation)
+### Steps — Prepare closure (on first query while no table exists)
 
 1. Initialize an empty ancestor-set table keyed by label node.
 2. For each label node `n`, compute `ancestors(n)` by memoized traversal:
@@ -35,10 +35,25 @@ raises an error naming a label on the cycle.
 2. `compare(a, b)`: equality and `SUPREMUM`/`INFIMUM` bounds resolve first
    (unchanged); otherwise `isAncestor` in both directions; incomparable → null.
 
-### Steps — Invalidate
+### Steps — Maintain closure
 
-1. Any parent mutation (`setParents`) or storage revert discards the closure
-   table. The next query rebuilds it.
+Applies while a table exists; with no table, a mutation does nothing and the next
+query prepares one.
+
+1. `setParents(l, parents)` with the parents `l` already holds (same names, same
+   labels) changes nothing, and the table stays.
+2. Otherwise, a parent label seen for the first time gets an empty row.
+3. If `l` has no child label and is not its own parent, only the row of `l`
+   changes: `ancestors(l)` = union over each parent `p` of `{p} ∪ ancestors(p)`.
+   No other row contains `l`.
+4. If `l` has a child label, the rows of its descendants change too: the table is
+   discarded, and the next query prepares it.
+5. If `l` is its own parent, the table is discarded; the next query raises the
+   cycle error.
+6. A storage revert removes the rows of the removed label nodes. Another row
+   keeps its value unless step 3 or 4 replaced the parents of a label that existed
+   before; the revert may restore those parent edges, so the table is discarded
+   then.
 
 ### Invariants
 
@@ -47,7 +62,8 @@ raises an error naming a label on the cycle.
 - The relation is a strict partial order on a DAG: irreflexive (a node is
   never its own ancestor), transitive by construction (step 2d unions the
   parents' closures).
-- The closure table reflects the hierarchy at the time of the last mutation.
+- The closure table, while it exists, holds one row per label and reflects the
+  hierarchy at the time of the last mutation.
 
 ### Termination
 
@@ -62,6 +78,9 @@ hierarchy depth never consumes call-stack frames.
 - Prepare: O(V · (V + E)) worst case with set unions; V = labels, E = parent
   edges. Label hierarchies are small (tens of labels) — build cost is
   negligible against per-query traversal.
+- Maintain: inserting a label with `k` parents costs O(k · V) for the row.
+  Without step 3, a hierarchy grown one label at a time and queried between
+  insertions would prepare the table once per insertion.
 - Query: O(1) expected (set membership). Space: O(V²) worst case.
 
 ### Rejected alternatives

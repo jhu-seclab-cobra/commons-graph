@@ -127,7 +127,7 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 
 1. Removed nodes = active-layer nodes absent from the frozen layer; removed edges = active-layer edges absent from the frozen layer.
 2. Clear the active layer, tombstones included.
-3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and discards its closure table. Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid.
+3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and drops their closure rows (`spec-poset.md` Maintain closure). Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid.
 
 ### Invariants
 
