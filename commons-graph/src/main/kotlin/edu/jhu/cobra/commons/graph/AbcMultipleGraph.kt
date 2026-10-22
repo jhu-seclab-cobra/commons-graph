@@ -6,7 +6,6 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
-import java.io.Flushable
 
 /**
  * Abstract directed multi-graph allowing multiple edges between the same pair of
@@ -28,9 +27,7 @@ import java.io.Flushable
  * @param E The type of edges in the graph, must extend [AbcEdge].
  */
 @Suppress("TooManyFunctions")
-public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
-    IGraph<N, E>,
-    Flushable {
+public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     public companion object {
         internal const val PROP_NODE_ID = "__nid__"
         internal const val PROP_OWNERS = "__owners__"
@@ -75,13 +72,14 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun addNode(withID: NodeID): N =
         storage.criticalSection {
             if (cache.containsNode(withID)) throw EntityAlreadyExistException(withID)
-            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal))
+            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal, PROP_OWNERS to ownerMark()))
             cache.node(cache.register(withID, storageId))
         }
 
     override fun claimNode(from: AbcNode): N =
         storage.criticalSection {
             cache.entryOf(from.id)?.let { return@criticalSection cache.node(it) }
+            markOwner(from.storageId)
             cache.node(cache.register(from.id, from.storageId))
         }
 
@@ -274,13 +272,22 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     // endregion
 
+    private fun ownerMark(): SetVal = SetVal(setOf(StrVal(graphId)))
+
+    /** Adds this graph to the owner set of the row [storageId]; writes only when the graph is missing from the set. */
+    private fun markOwner(storageId: Int) {
+        val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+        if (existing.contains(StrVal(graphId))) return
+        storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to SetVal(existing.core + StrVal(graphId))))
+    }
+
     /**
      * Rebuilds graph-layer caches from storage state.
      *
-     * Restores the NodeID↔Int index from persisted properties. Uses [PROP_OWNERS]
-     * to determine which nodes belong to this graph (written by [flush]). Falls
-     * back to loading all nodes when [PROP_OWNERS] is absent (first run before
-     * any flush).
+     * Restores the NodeID↔Int index from persisted properties. A node belongs to
+     * this graph when its [PROP_OWNERS] set holds [graphId]; [addNode] and [claimNode]
+     * write that mark when the graph takes the node. A node with no mark belongs
+     * to no graph.
      */
     protected fun rebuild(): Unit =
         storage.criticalSection {
@@ -288,30 +295,8 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             for (storageId in storage.nodeIDs) {
                 val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
                 val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
-                val ownedByThis = owners == null || owners.contains(StrVal(graphId))
-                if (nodeIdVal == null || !ownedByThis) continue
+                if (nodeIdVal == null || owners?.contains(StrVal(graphId)) != true) continue
                 cache.register(nodeIdVal.core, storageId)
-            }
-        }
-
-    /**
-     * Writes this graph's ownership mark ([PROP_OWNERS]) onto every cached node.
-     *
-     * The marks are the sole input [rebuild] uses to reattach nodes to this graph,
-     * so flush is all-or-nothing: a cached node missing from storage means the
-     * graph cache and storage have diverged, and flush fails fast instead of
-     * persisting an incomplete ownership set.
-     *
-     * @throws EntityNotExistException if a cached node no longer exists in storage.
-     */
-    override fun flush(): Unit =
-        storage.criticalSection {
-            for (storageId in cache.storageIds) {
-                val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
-                if (!existing.contains(StrVal(graphId))) {
-                    val updated = SetVal(existing.core + StrVal(graphId))
-                    storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to updated))
-                }
             }
         }
 }

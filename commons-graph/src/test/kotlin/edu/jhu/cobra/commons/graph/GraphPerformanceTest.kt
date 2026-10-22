@@ -22,6 +22,7 @@ import kotlin.test.Test
  * - `benchmark multiple graph population with different storages` -- AbcMultipleGraph population throughput
  * - `benchmark simple graph population with different storages` -- AbcSimpleGraph population throughput
  * - `benchmark graph-level queries with different storages` -- node/edge/adjacency query ops/sec
+ * - `benchmark node creation and claim with different storages` -- addNode and claimNode throughput, claim of a frozen layered node
  * - `benchmark poset label assignment and filtered queries` -- label assign + filtered query ops/sec
  * - `benchmark cold query pattern - each node accessed once` -- cold-cache access pattern
  * - `benchmark mixed access pattern and memory usage` -- hot/cold mix + heap measurement
@@ -218,6 +219,67 @@ internal class GraphPerformanceTest {
             )
             // graph does not need closing
         }
+    }
+
+    private inline fun medianMs(
+        runs: Int,
+        crossinline setup: () -> Unit,
+        crossinline timed: () -> Unit,
+    ): Double {
+        val samples = DoubleArray(runs)
+        for (r in 0 until runs) {
+            setup()
+            System.gc()
+            val start = System.nanoTime()
+            timed()
+            samples[r] = (System.nanoTime() - start) / 1_000_000.0
+        }
+        samples.sort()
+        return samples[runs / 2]
+    }
+
+    @Test
+    fun `benchmark node creation and claim with different storages`() {
+        val count = 50_000
+        println("\n=== Node Creation and Claim (median ms for $count nodes, 2 warmup + 5 measured runs) ===")
+        println(String.format("%-20s %12s %12s %16s", "Storage", "addNode", "claimNode", "claim frozen"))
+        println("-".repeat(64))
+        for (name in storageNames) {
+            repeat(2) { addAll(name, count) }
+            val addMs = medianMs(5, {}, { addAll(name, count) })
+            val claimMs = claimMedian(name, count, freeze = false)
+            val frozenMs = if (name == "LayeredStorage") fmtMs(claimMedian(name, count, freeze = true)) else "-"
+            println(String.format("%-20s %12s %12s %16s", name, fmtMs(addMs), fmtMs(claimMs), frozenMs))
+        }
+    }
+
+    private fun addAll(
+        storageName: String,
+        count: Int,
+    ) {
+        val g = GraphFixtures.TestMultipleGraph(createStorage(storageName), "A")
+        for (i in 0 until count) g.addNode(nodeId(i))
+    }
+
+    private fun claimMedian(
+        storageName: String,
+        count: Int,
+        freeze: Boolean,
+    ): Double {
+        lateinit var claimer: GraphFixtures.TestMultipleGraph
+        lateinit var sources: List<GraphFixtures.TestNode>
+        val setup = {
+            val storage = createStorage(storageName)
+            val adder = GraphFixtures.TestMultipleGraph(storage, "A")
+            sources = List(count) { adder.addNode(nodeId(it)) }
+            if (freeze) (storage as LayeredStorageImpl).freeze()
+            claimer = GraphFixtures.TestMultipleGraph(storage, "B")
+        }
+        repeat(2) {
+            setup()
+            for (n in sources) claimer.claimNode(n)
+        }
+        return medianMs(5, setup) { for (n in sources) claimer.claimNode(n) }
     }
 
     @Test

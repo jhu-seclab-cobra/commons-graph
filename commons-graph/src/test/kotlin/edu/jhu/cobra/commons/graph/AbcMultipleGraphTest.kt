@@ -15,7 +15,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
- * Black-box tests for AbcMultipleGraph: node CRUD and flush guarantees.
+ * Black-box tests for AbcMultipleGraph: node CRUD.
  *
  * - `addNode returns node with correct id` -- verifies addNode output
  * - `addNode registers id in nodeIDs` -- verifies nodeIDs updated
@@ -29,7 +29,6 @@ import kotlin.test.assertTrue
  * - `delNode nonexistent is no-op` -- verifies no-op semantics
  * - `getAllNodes returns all nodes` -- verifies complete iteration
  * - `getAllNodes with predicate filters` -- verifies predicate filtering
- * - `flush throws when a cached node is missing from storage` -- verifies fail-fast flush guarantee
  */
 internal class AbcMultipleGraphTest {
     private lateinit var graph: GraphFixtures.TestMultipleGraph
@@ -139,19 +138,6 @@ internal class AbcMultipleGraphTest {
         val ids = graph.getAllNodes { it.id == NODE_ID_1 }.map { it.id }.toList()
 
         assertEquals(listOf(NODE_ID_1), ids)
-    }
-
-    // endregion
-
-    // region Flush guarantees
-
-    @Test
-    fun `flush throws when a cached node is missing from storage`() {
-        graph.addNode(NODE_ID_1)
-        val storageId = storage.nodeIDs.single()
-        storage.deleteNode(storageId)
-
-        assertFailsWith<EntityNotExistException> { graph.flush() }
     }
 
     // endregion

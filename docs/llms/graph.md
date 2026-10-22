@@ -27,7 +27,6 @@ val n1 = graph.addNode("a")
 val n2 = graph.addNode("b")
 val edge = graph.addEdge("a", "b", "calls")
 edge["weight"] = IntVal(5)
-graph.flush()
 ```
 
 ## API
@@ -52,13 +51,12 @@ graph.flush()
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`, `Flushable`)
+### `AbcMultipleGraph<N, E>` (extends `IGraph`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
 - **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
 - **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
-- **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
-- **`flush()`** -- Persist node ownership to storage. Does not close the storage instances.
+- **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
 
 ### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
 

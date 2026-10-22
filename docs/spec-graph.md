@@ -147,36 +147,44 @@ Property read and adjacency query check at most two layers. Property write updat
 
 ---
 
-## Ownership Persistence (Flush / Rebuild)
+## Ownership Persistence (Mark / Rebuild)
 
 ### Problem
 
-Multiple graph instances may share one storage. Each graph must persist which nodes it owns so a fresh instance can restore only its own nodes. Correct when rebuild restores exactly the flushed nodes.
+Multiple graph instances may share one storage. A graph records in storage that it owns a node at the moment it takes the node, so a fresh instance restores only its own nodes, whatever the other graphs have written. Correct when rebuild restores exactly the nodes this graph added or claimed.
 
-### Steps — Flush
+### Steps — Mark
 
-1. For each node registered in this graph:
-   a. Read the owners property from storage. Default to empty set if absent.
-   b. If this graph's ID is not in the set, add it and write back.
+Add a node:
+
+1. Write the node ID property and the owners property, the set holding this graph's ID, in the one storage call that creates the row.
+2. Register the node in this graph's registry.
+
+Claim a node:
+
+1. If the node ID is registered, return the registered node.
+2. Read the owners property of the row. Default to the empty set if absent.
+3. If this graph's ID is not in the set, add it and write back.
+4. Register the node in this graph's registry.
 
 ### Steps — Rebuild
 
 1. Clear all in-memory node registries.
 2. For each node in storage:
-   a. Read node ID property. Skip if absent.
-   b. Read owners property. If present and this graph's ID not in set, skip.
-   c. If owners absent (pre-flush state), include the node (fallback: load all).
-   d. Register the node in this graph's registry.
+   a. Read the node ID property. Skip if absent.
+   b. Read the owners property. Skip unless it holds this graph's ID.
+   c. Register the node in this graph's registry.
 
 ### Invariants
 
-- Flush is idempotent. Rebuild after flush restores exactly the flushed nodes; without prior flush, restores all.
+- Once add or claim returns, the owners property of the row holds this graph's ID. The set only grows; no graph removes its ID.
+- A claim of a node whose owners property already holds this graph's ID writes nothing.
+- Rebuild restores exactly the nodes whose owners property holds this graph's ID. A row with no owners property belongs to no graph.
 
 ### Termination
 
-Flush iterates once over nodes in this graph. Rebuild iterates once over nodes in storage.
+Mark takes a constant number of storage calls. Rebuild iterates once over nodes in storage.
 
 ### Complexity
 
-- Flush: O(N) where N = nodes in this graph. Rebuild: O(S) where S = nodes in storage.
-
+- Add: O(1) beyond the row creation, one extra property in the same call. Claim: O(1), one read and at most one write. Rebuild: O(S) where S = nodes in storage.

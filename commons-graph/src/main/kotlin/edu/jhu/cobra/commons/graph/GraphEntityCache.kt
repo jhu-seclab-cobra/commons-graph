@@ -31,8 +31,6 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
 
     val entries: Collection<NodeEntry<N>> get() = nodeEntries.values
 
-    val storageIds: Set<Int> get() = nodeByStorageId.keys
-
     fun entryOf(nodeId: NodeID): NodeEntry<N>? = nodeEntries[nodeId]
 
     fun containsNode(nodeId: NodeID): Boolean = nodeId in nodeEntries

@@ -90,6 +90,7 @@ The graph layer maps node identifiers to storage integer IDs. Storage operates o
 **Shared-storage invariants:**
 
 - A node in storage can be registered by multiple graphs. Each graph holds its own typed view of the same storage row, sharing all properties.
+- A row carries an owner set naming every graph that added or claimed it. A graph registers a row only when the set holds its ID; a row with no owner set belongs to no graph.
 - Edge queries return only edges whose both endpoints are registered in the querying graph. Edges belonging to other graphs sharing the same storage are excluded (edge isolation).
 
 ### Graph ↔ Label Hierarchy

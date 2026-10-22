@@ -50,8 +50,8 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addNode` | Creates a new storage row and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
-| `claimNode` | Registers an existing storage row in this graph without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | -- |
+| `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
+| `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | -- |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
 | `delNode` | Removes all associated edges then the node | `whoseID`: NodeID | -- | -- |
 | `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `tag` | `E` | `EntityNotExistException` if src/dst missing |
@@ -88,8 +88,8 @@ Multiple graph instances may share a single `IStorage`. See `model.md` for share
 
 | Method | Behavior |
 |--------|----------|
-| `addNode(withID)` | Creates a new storage row via `storage.addNode()`. Registers in this graph. |
-| `claimNode(from)` | Registers an existing storage row (via `from.storageId`) in this graph. No new storage row created. Returns existing node if already claimed. |
+| `addNode(withID)` | Creates a new storage row via `storage.addNode()` with this graph's ownership mark. Registers in this graph. |
+| `claimNode(from)` | Registers an existing storage row (via `from.storageId`) in this graph and adds this graph to its owner set. No new storage row created. Returns existing node if already claimed. |
 
 **Concurrency:**
 
@@ -105,7 +105,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 **Ownership Persistence:**
 
-`flush()` persists node ownership to storage via a `__owners__` property. `rebuild()` restores nodes belonging to this graph. Graph remains usable after flush. See `spec-graph.md` for the flush/rebuild algorithm.
+`addNode` writes the `__owners__` property, the set holding this graph's ID, in the same storage call that creates the row. `claimNode` adds this graph's ID to the row's owner set when it is absent. `rebuild()` restores the nodes whose owner set holds this graph's ID; a row with no owner set belongs to no graph. See `spec-graph.md` for the mark/rebuild algorithm.
 
 ---
 

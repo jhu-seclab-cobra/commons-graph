@@ -41,7 +41,6 @@ val b = graph.addNode("B")
 val e = graph.addEdge("A", "B", "calls")      // returns MyEdge
 a["weight"] = 42.intVal                        // property access
 graph.getChildren("A")                         // Sequence<MyNode>
-graph.flush()
 ```
 
 ## API

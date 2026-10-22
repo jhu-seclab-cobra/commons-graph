@@ -6,16 +6,19 @@ import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_1
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestMultipleGraph
+import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.SetVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Black-box tests for shared-storage scenarios: claimNode, flush, rebuild, doUseStorage,
+ * Black-box tests for shared-storage scenarios: claimNode, ownership marks, rebuild, doUseStorage,
  * and edge isolation between graphs sharing one IStorage.
  *
  * - `claimNode registers existing storage row` — verifies claim creates a typed view
@@ -23,10 +26,14 @@ import kotlin.test.assertTrue
  * - `claimNode shares properties with original graph` — verifies shared property state
  * - `doUseStorage returns true for bound storage` — verifies positive match
  * - `doUseStorage returns false for different storage` — verifies negative match
- * - `flush writes PROP_OWNERS for each node` — verifies ownership persistence
- * - `flush is idempotent` — verifies repeated flush does not corrupt state
- * - `rebuild restores nodes owned by this graph` — verifies selective restoration
- * - `rebuild without prior flush restores all nodes` — verifies fallback behavior
+ * - `addNode marks the adder as the only owner` — verifies the mark is written at creation
+ * - `claimNode marks the claimer next to the adder` — verifies the claim extends the owner set
+ * - `claimNode of an owned node leaves the owner set unchanged` — verifies a repeated claim adds no second mark
+ * - `claimNode of a layered frozen node marks the claimer` — verifies the mark lands in the active layer
+ * - `rebuild restores nodes owned by this graph` — verifies selective restoration without any flush
+ * - `rebuild skips a row with no owner set` — verifies an unmarked row belongs to no graph
+ * - `rebuild restores a claimed node in both owners` — verifies a shared row loads in every owner
+ * - `a graph built over another graph's nodes loads only its own` — verifies order independence
  * - `rebuild clears stale node entries` — verifies clean rebuild
  * - `getAllEdges excludes edges with foreign endpoints` — verifies edge isolation
  * - `getOutgoingEdges excludes edges to unclaimed nodes` — verifies outgoing isolation
@@ -102,34 +109,52 @@ internal class AbcMultipleGraphSharedStorageTest {
 
     // endregion
 
-    // region flush
+    // region ownership marks
+
+    private fun ownersOf(storageId: Int): Set<String> =
+        (storage.getNodeProperty(storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal)
+            .core
+            .map { (it as StrVal).core }
+            .toSet()
 
     @Test
-    fun `flush writes PROP_OWNERS for each node`() {
-        graphA.addNode(NODE_ID_1)
-        graphA.addNode(NODE_ID_2)
+    fun `addNode marks the adder as the only owner`() {
+        val node = graphA.addNode(NODE_ID_1)
 
-        graphA.flush()
-
-        for (sid in storage.nodeIDs) {
-            val owners = storage.getNodeProperty(sid, AbcMultipleGraph.PROP_OWNERS)
-            assertNotNull(owners)
-        }
+        assertEquals(setOf("GraphA"), ownersOf(node.storageId))
     }
 
     @Test
-    fun `flush is idempotent`() {
-        graphA.addNode(NODE_ID_1)
-        graphA.flush()
+    fun `claimNode marks the claimer next to the adder`() {
+        val original = graphA.addNode(NODE_ID_1)
 
-        graphA.flush()
+        val claimed = graphB.claimNode(original)
 
-        val sid = storage.nodeIDs.first()
-        val owners =
-            storage.getNodeProperty(sid, AbcMultipleGraph.PROP_OWNERS)
-                as edu.jhu.cobra.commons.value.SetVal
-        val ownerList = owners.core.map { (it as edu.jhu.cobra.commons.value.StrVal).core }
-        assertEquals(1, ownerList.count { it == graphA.graphId })
+        assertEquals(setOf("GraphA", "GraphB"), ownersOf(claimed.storageId))
+    }
+
+    @Test
+    fun `claimNode of an owned node leaves the owner set unchanged`() {
+        val original = graphA.addNode(NODE_ID_1)
+        graphB.claimNode(original)
+
+        graphB.claimNode(original)
+        graphA.claimNode(original)
+
+        assertEquals(setOf("GraphA", "GraphB"), ownersOf(original.storageId))
+    }
+
+    @Test
+    fun `claimNode of a layered frozen node marks the claimer`() {
+        val layered = LayeredStorageImpl()
+        val adder = TestMultipleGraph(layered, "GraphA")
+        val original = adder.addNode(NODE_ID_1)
+        layered.freeze()
+
+        val claimed = TestMultipleGraph(layered, "GraphB").claimNode(original)
+
+        val owners = layered.getNodeProperty(claimed.storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal
+        assertEquals(setOf("GraphA", "GraphB"), owners.core.map { (it as StrVal).core }.toSet())
     }
 
     // endregion
@@ -141,8 +166,6 @@ internal class AbcMultipleGraphSharedStorageTest {
         graphA.addNode(NODE_ID_1)
         graphA.addNode(NODE_ID_2)
         graphB.addNode(NODE_ID_3)
-        graphA.flush()
-        graphB.flush()
 
         val freshA = TestMultipleGraph(storage, "GraphA")
         freshA.doRebuild()
@@ -151,21 +174,45 @@ internal class AbcMultipleGraphSharedStorageTest {
     }
 
     @Test
-    fun `rebuild without prior flush restores all nodes`() {
+    fun `rebuild skips a row with no owner set`() {
+        graphA.addNode(NODE_ID_1)
+        storage.addNode(mapOf(AbcMultipleGraph.PROP_NODE_ID to NODE_ID_2.strVal))
+
+        val fresh = TestMultipleGraph(storage, "GraphA")
+        fresh.doRebuild()
+
+        assertEquals(setOf(NODE_ID_1), fresh.nodeIDs)
+    }
+
+    @Test
+    fun `rebuild restores a claimed node in both owners`() {
+        val original = graphA.addNode(NODE_ID_1)
+        graphB.claimNode(original)
+
+        val freshA = TestMultipleGraph(storage, "GraphA").apply { doRebuild() }
+        val freshB = TestMultipleGraph(storage, "GraphB").apply { doRebuild() }
+
+        assertEquals(setOf(NODE_ID_1), freshA.nodeIDs)
+        assertEquals(setOf(NODE_ID_1), freshB.nodeIDs)
+    }
+
+    @Test
+    fun `a graph built over another graph's nodes loads only its own`() {
         graphA.addNode(NODE_ID_1)
         graphA.addNode(NODE_ID_2)
 
-        val fresh = TestMultipleGraph(storage)
-        fresh.doRebuild()
+        val other = TestMultipleGraph(storage, "GraphC")
+        other.doRebuild()
+        other.addNode(NODE_ID_3)
 
-        assertEquals(setOf(NODE_ID_1, NODE_ID_2), fresh.nodeIDs)
+        assertEquals(setOf(NODE_ID_3), other.nodeIDs)
+        assertEquals(setOf(NODE_ID_3), TestMultipleGraph(storage, "GraphC").apply { doRebuild() }.nodeIDs)
     }
 
     @Test
     fun `rebuild clears stale node entries`() {
         graphA.addNode(NODE_ID_1)
         graphA.addNode(NODE_ID_2)
-        graphA.flush()
         graphA.delNode(NODE_ID_2)
 
         val fresh = TestMultipleGraph(storage, "GraphA")

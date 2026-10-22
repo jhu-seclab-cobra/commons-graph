@@ -54,7 +54,6 @@ internal class GraphEntityCacheTest {
         assertTrue(cache.containsStorageId(sid))
         assertSame(entry, cache.entryOf(NODE_ID_1))
         assertEquals(setOf(NODE_ID_1), cache.nodeIds)
-        assertEquals(setOf(sid), cache.storageIds)
         assertEquals(listOf(entry), cache.entries.toList())
     }
 
@@ -147,7 +146,7 @@ internal class GraphEntityCacheTest {
         cache.clear()
 
         assertTrue(cache.nodeIds.isEmpty())
-        assertTrue(cache.storageIds.isEmpty())
+        assertFalse(cache.containsStorageId(src))
         cache.register(NODE_ID_1, src)
         cache.register(NODE_ID_2, dst)
         assertNotSame(before, cache.edge(eid))
