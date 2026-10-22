@@ -81,29 +81,31 @@ public class LayeredStorageImpl(
      */
     public fun clearActiveLayer(): Unit =
         lock.writeLock().withLock {
-            val (removedNodes, removedEdges) = activeOnlyIdsUnlocked()
-            val restoredNodes = promotedNodeIdsUnlocked()
+            val reverted = revertedIdsUnlocked()
             active.clear()
-            notifyRevert(removedNodes, removedEdges, restoredNodes)
+            notifyRevert(reverted.removedNodes, reverted.removedEdges, reverted.restoredNodes)
         }
 
     override fun addRevertListener(listener: RevertListener) {
         revertListeners.add(listener)
     }
 
-    // Promoted entities and tombstoned edges survive a revert in the frozen layer.
-    private fun activeOnlyIdsUnlocked(): Pair<Set<Int>, Set<Int>> {
-        val frozenLayer = frozen ?: return active.nodeIds.toSet() to active.edgeEndpoints.keys.toSet()
-        val nodes = active.nodeIds.filterTo(HashSet()) { !frozenLayer.containsNode(it) }
-        val edges = active.edgeEndpoints.keys.filterTo(HashSet()) { !frozenLayer.containsEdge(it) }
-        return nodes to edges
+    // Promoted entities and tombstoned edges survive a revert in the frozen layer. A promoted
+    // node keeps its frozen properties; only its active copy is dropped.
+    private fun revertedIdsUnlocked(): RevertedIds {
+        val frozenLayer = frozen ?: return RevertedIds(active.nodeIds.toSet(), active.edgeEndpoints.keys.toSet(), emptySet())
+        val removedNodes = HashSet<Int>()
+        val restoredNodes = HashSet<Int>()
+        for (id in active.nodeIds) (if (frozenLayer.containsNode(id)) restoredNodes else removedNodes).add(id)
+        val removedEdges = active.edgeEndpoints.keys.filterTo(HashSet()) { !frozenLayer.containsEdge(it) }
+        return RevertedIds(removedNodes, removedEdges, restoredNodes)
     }
 
-    // A promoted node survives a revert with its frozen properties; its active copy is dropped.
-    private fun promotedNodeIdsUnlocked(): Set<Int> {
-        val frozenLayer = frozen ?: return emptySet()
-        return active.nodeIds.filterTo(HashSet()) { frozenLayer.containsNode(it) }
-    }
+    private class RevertedIds(
+        val removedNodes: Set<Int>,
+        val removedEdges: Set<Int>,
+        val restoredNodes: Set<Int>,
+    )
 
     private fun notifyRevert(
         removedNodes: Set<Int>,
