@@ -102,7 +102,7 @@ storage.criticalSection {
 - Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
 - Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
 - Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
-- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks and never calls the storage.
+- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks, may read the storage, and never writes it.
 - Stop every thread that uses a persistent concurrent backend before calling `close()`.
 
 ## Gotchas

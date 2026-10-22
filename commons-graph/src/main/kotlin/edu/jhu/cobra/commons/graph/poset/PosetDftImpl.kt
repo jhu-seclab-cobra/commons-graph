@@ -46,9 +46,11 @@ public class PosetDftImpl(
     }
 
     // A revert restores the tombstoned parent edges of a surviving label and drops the edges
-    // added to it since, with no signal beyond the removed IDs. So a surviving row is stale
-    // only when setParents changed an existing label; every other surviving row is unchanged,
-    // because a surviving label gains no parent edge without such a call.
+    // added to it since. The notice names removed and promoted nodes, not edges: a label whose
+    // parents were all deleted is tombstoned without promotion, and a promoted label need not
+    // have changed parents. So a surviving row is stale only when setParents changed an existing
+    // label; every other surviving row is unchanged, because a surviving label gains no parent
+    // edge without such a call.
     private fun onRevert(removedNodes: Set<Int>) {
         for (nodeId in removedNodes) {
             ancestorClosure?.remove(nodeId)

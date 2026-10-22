@@ -187,9 +187,9 @@ iteration.
 
 - **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
 - **Exact index (remove on relabel)**: loses completeness when a layered
-  storage reverts the active layer: a revert notification names removed IDs
-  only, not the frozen label sets it restores, so the index would rescan every
-  restored edge.
+  storage reverts the active layer: a revert notification names no edge it
+  restores (a tombstoned edge comes back without any node being promoted), so
+  the index would rescan every restored edge.
 - **Traversal-local write log**: misses carriers written before the current
   traversal under the same deterministic label.
 - **Candidates keyed by `(src, dst, tag)`**: the graph-level identity survives
