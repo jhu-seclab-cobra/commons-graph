@@ -127,7 +127,7 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 
 1. Removed nodes = active-layer nodes absent from the frozen layer; removed edges = active-layer edges absent from the frozen layer.
 2. Clear the active layer, tombstones included.
-3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and drops their closure rows (`spec-poset.md` Maintain closure). Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid.
+3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and drops their closure rows (`spec-poset.md` Maintain closure). Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid. The active copy of a promoted row is dropped with the layer, so an owner mark a claim wrote on a promoted frozen row is dropped too, while the graph's registry keeps the entry ([design-graph.md](design-graph.md) Open Gaps).
 
 ### Invariants
 
@@ -177,7 +177,7 @@ Claim a node:
 
 ### Invariants
 
-- Once add or claim returns, the owners property of the row holds this graph's ID. The set only grows; no graph removes its ID.
+- Once add or claim returns, the owners property of the row holds this graph's ID, until a revert drops the active copy that carried a claim's mark. The set only grows; no graph removes its ID.
 - A claim of a node whose owners property already holds this graph's ID writes nothing.
 - Rebuild restores exactly the nodes whose owners property holds this graph's ID. A row with no owners property belongs to no graph.
 

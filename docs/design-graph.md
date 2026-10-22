@@ -130,3 +130,6 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 Deletion of a non-existent entity is a no-op at the graph level.
 
+## Open Gaps
+
+- **Registry and revert:** `GraphEntityCache` evicts only the removed (active-only) IDs on a revert, so the entry of a promoted frozen node stays after the revert drops the owner mark a claim wrote on its active copy. A later `claimNode` of that node returns at the registry and does not write the mark again; a `rebuild` skips the row. The registry has to follow the revert for promoted nodes.
