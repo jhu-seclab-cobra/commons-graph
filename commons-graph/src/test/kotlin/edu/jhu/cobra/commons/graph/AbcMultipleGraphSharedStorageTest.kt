@@ -37,7 +37,9 @@ import kotlin.test.assertTrue
  * - `the owner set and the node ID stay out of the node property API` — verifies reserved properties stay hidden on a claimed node
  * - `two graphs claiming the same nodes from many threads both end up in every owner set` — verifies the owner mark on the concurrent storage
  * - `a claim into a second graph on the concurrent storage keeps the first graph's mark` — verifies the set grows
- * - `open gap - a revert drops the mark of a claimed frozen node while the registry keeps it` — pins the current revert behavior
+ * - `a revert undoes the claim of a frozen node and a later claim marks it again` — verifies the registry follows the dropped mark
+ * - `a revert keeps a frozen node the graph owned before the freeze after a write promoted it` — verifies a promoted owned node stays
+ * - `a revert keeps the claim another graph made before the freeze` — verifies a revert drops only the marks written after the freeze
  * - `claimNode of a node whose row was deleted raises EntityNotExistException` — verifies a claim needs an existing row
  * - `claimNode of an owned node leaves the owner set unchanged` — verifies a repeated claim adds no second mark
  * - `claimNode of a layered frozen node marks the claimer` — verifies the mark lands in the active layer
@@ -128,6 +130,15 @@ internal class AbcMultipleGraphSharedStorageTest {
             .map { (it as StrVal).core }
             .toSet()
 
+    private fun layeredOwnersOf(
+        layered: LayeredStorageImpl,
+        storageId: Int,
+    ): Set<String> =
+        (layered.getNodeProperty(storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal)
+            .core
+            .map { (it as StrVal).core }
+            .toSet()
+
     @Test
     fun `addNode marks the adder as the only owner`() {
         val node = graphA.addNode(NODE_ID_1)
@@ -204,11 +215,8 @@ internal class AbcMultipleGraphSharedStorageTest {
         assertEquals(null, claimed[AbcMultipleGraph.PROP_OWNERS])
     }
 
-    // Open gap (design-graph.md Open Gaps, registry and revert): the revert drops the mark that the
-    // claim wrote on the promoted copy, while the registry keeps the node. When the registry follows
-    // the revert, this test changes on purpose.
     @Test
-    fun `open gap - a revert drops the mark of a claimed frozen node while the registry keeps it`() {
+    fun `a revert undoes the claim of a frozen node and a later claim marks it again`() {
         val layered = LayeredStorageImpl()
         val adder = TestMultipleGraph(layered, "GraphA")
         val claimer = TestMultipleGraph(layered, "GraphB")
@@ -218,13 +226,43 @@ internal class AbcMultipleGraphSharedStorageTest {
 
         layered.clearActiveLayer()
 
-        val owners = layered.getNodeProperty(original.storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal
-        assertEquals(setOf("GraphA"), owners.core.map { (it as StrVal).core }.toSet())
-        assertTrue(claimer.containNode(NODE_ID_1))
+        assertFalse(claimer.containNode(NODE_ID_1))
+        assertEquals(setOf("GraphA"), layeredOwnersOf(layered, original.storageId))
         claimer.claimNode(original)
-        val afterReclaim = layered.getNodeProperty(original.storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal
-        assertEquals(setOf("GraphA"), afterReclaim.core.map { (it as StrVal).core }.toSet())
-        assertEquals(emptySet(), TestMultipleGraph(layered, "GraphB").apply { doRebuild() }.nodeIDs)
+        assertTrue(claimer.containNode(NODE_ID_1))
+        assertEquals(setOf("GraphA", "GraphB"), layeredOwnersOf(layered, original.storageId))
+        assertEquals(setOf(NODE_ID_1), TestMultipleGraph(layered, "GraphB").apply { doRebuild() }.nodeIDs)
+    }
+
+    @Test
+    fun `a revert keeps a frozen node the graph owned before the freeze after a write promoted it`() {
+        val layered = LayeredStorageImpl()
+        val owner = TestMultipleGraph(layered, "GraphA")
+        val node = owner.addNode(NODE_ID_1)
+        layered.freeze()
+        node["color"] = "red".strVal
+
+        layered.clearActiveLayer()
+
+        assertTrue(owner.containNode(NODE_ID_1))
+        assertEquals(setOf("GraphA"), layeredOwnersOf(layered, node.storageId))
+        assertEquals(setOf(NODE_ID_1), TestMultipleGraph(layered, "GraphA").apply { doRebuild() }.nodeIDs)
+    }
+
+    @Test
+    fun `a revert keeps the claim another graph made before the freeze`() {
+        val layered = LayeredStorageImpl()
+        val original = TestMultipleGraph(layered, "GraphA").addNode(NODE_ID_1)
+        val claimer = TestMultipleGraph(layered, "GraphB")
+        claimer.claimNode(original)
+        layered.freeze()
+        original["color"] = "red".strVal
+        TestMultipleGraph(layered, "GraphC").claimNode(original)
+
+        layered.clearActiveLayer()
+
+        assertTrue(claimer.containNode(NODE_ID_1))
+        assertEquals(setOf("GraphA", "GraphB"), layeredOwnersOf(layered, original.storageId))
     }
 
     // endregion

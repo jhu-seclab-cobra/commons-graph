@@ -97,7 +97,7 @@ Every public operation runs inside `storage.criticalSection` (`design-storage.md
 
 **Revert Coherence:**
 
-The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the cache subscribes as a `RevertListener` at creation and evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache (`spec-graph.md` Revert).
+The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the cache subscribes as a `RevertListener` at creation and evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache. For each restored node ID it registers, it asks the graph whether the row's owner set still holds the graph's ID (the same test `rebuild()` applies) and evicts the node when it does not (`spec-graph.md` Revert).
 
 **Edge Isolation:**
 
@@ -129,7 +129,3 @@ All edge query methods filter by this graph's node registry membership. See `mod
 | `EntityNotExistException` | Adding an edge whose src/dst node is missing; claiming a node whose storage row is absent |
 
 Deletion of a non-existent entity is a no-op at the graph level.
-
-## Open Gaps
-
-- **Registry and revert:** `GraphEntityCache` evicts only the removed (active-only) IDs on a revert, so the entry of a promoted frozen node stays after the revert drops the owner mark a claim wrote on its active copy. A later `claimNode` of that node returns at the registry and does not write the mark again; a `rebuild` skips the row. The registry has to follow the revert for promoted nodes.

@@ -10,12 +10,16 @@ import java.lang.ref.SoftReference
  * Owns the bidirectional NodeID-to-storage-Int mapping and the softly referenced
  * node/edge wrapper objects, recreating a wrapper on demand via the supplied
  * factories when its soft reference has been collected. As a [RevertListener] it
- * evicts the node entries and edge wrappers whose storage IDs a revert removed.
+ * evicts the node entries and edge wrappers whose storage IDs a revert removed, and the
+ * node entries of restored rows whose owner mark no longer names the graph.
+ *
+ * @param isOwned Whether the storage row with the given ID is marked as owned by the graph.
  */
 internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
     private val storage: IStorage,
     private val newNode: () -> N,
     private val newEdge: () -> E,
+    private val isOwned: (Int) -> Boolean,
 ) : RevertListener {
     class NodeEntry<N>(
         val nodeId: NodeID,
@@ -77,14 +81,18 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
         nodeByStorageId.remove(entry.storageId)
     }
 
-    // A removed storage node need not belong to this graph: graphs and posets share storage.
+    // A reverted storage node need not belong to this graph: graphs and posets share storage.
+    // A restored row reads as at the last freeze, so a claim made since then has lost its mark;
+    // the entry leaves with it and the next claim marks the row again.
     override fun onRevert(
         removedNodes: Set<Int>,
         removedEdges: Set<Int>,
+        restoredNodes: Set<Int>,
     ) {
-        for (storageId in removedNodes) {
-            val entry = nodeByStorageId.remove(storageId) ?: continue
-            nodeEntries.remove(entry.nodeId)
+        for (storageId in removedNodes) nodeByStorageId[storageId]?.let(::removeNode)
+        for (storageId in restoredNodes) {
+            val entry = nodeByStorageId[storageId] ?: continue
+            if (!isOwned(storageId)) removeNode(entry)
         }
         for (storageId in removedEdges) edgeCache.remove(storageId)
     }

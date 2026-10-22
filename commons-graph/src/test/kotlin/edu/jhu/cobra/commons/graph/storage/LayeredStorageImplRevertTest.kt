@@ -21,7 +21,8 @@ import kotlin.test.assertTrue
  * - `deleteEdge twice on frozen edge throws EntityNotExistException` -- second delete finds nothing
  * - `clearActiveLayer restores deleted frozen edge` -- revert drops tombstone
  * - `freeze removes deleted frozen edge permanently` -- tombstone applied at merge
- * - `clearActiveLayer notifies active-only nodes and edges` -- promoted entities not reported
+ * - `clearActiveLayer notifies active-only nodes and edges` -- promoted entities not reported as removed
+ * - `clearActiveLayer notifies the promoted frozen nodes as restored` -- promoted nodes reported separately
  * - `clear notifies every node and edge` -- clear is a revert
  */
 internal class LayeredStorageImplRevertTest {
@@ -108,7 +109,7 @@ internal class LayeredStorageImplRevertTest {
     @Test
     fun `clearActiveLayer notifies active-only nodes and edges`() {
         val reverts = mutableListOf<Pair<Set<Int>, Set<Int>>>()
-        storage.addRevertListener { nodes, edges -> reverts += nodes to edges }
+        storage.addRevertListener { nodes, edges, _ -> reverts += nodes to edges }
         storage.setNodeProperties(src, mapOf("k" to "active".strVal))
         storage.setEdgeProperties(edge, mapOf("k" to "active".strVal))
         val node = storage.addNode()
@@ -120,13 +121,25 @@ internal class LayeredStorageImplRevertTest {
     }
 
     @Test
+    fun `clearActiveLayer notifies the promoted frozen nodes as restored`() {
+        val restored = mutableListOf<Set<Int>>()
+        storage.addRevertListener { _, _, nodes -> restored += nodes }
+        storage.setNodeProperties(src, mapOf("k" to "active".strVal))
+        storage.addNode()
+
+        storage.clearActiveLayer()
+
+        assertEquals(listOf(setOf(src)), restored)
+    }
+
+    @Test
     fun `clear notifies every node and edge`() {
-        val reverts = mutableListOf<Pair<Set<Int>, Set<Int>>>()
-        storage.addRevertListener { nodes, edges -> reverts += nodes to edges }
+        val reverts = mutableListOf<Triple<Set<Int>, Set<Int>, Set<Int>>>()
+        storage.addRevertListener { nodes, edges, restored -> reverts += Triple(nodes, edges, restored) }
         val node = storage.addNode()
 
         storage.clear()
 
-        assertEquals(listOf(setOf(src, dst, node) to setOf(edge)), reverts)
+        assertEquals(listOf(Triple(setOf(src, dst, node), setOf(edge), emptySet())), reverts)
     }
 }

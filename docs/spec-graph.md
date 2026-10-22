@@ -125,16 +125,16 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 
 ### Steps — Revert (`clearActiveLayer`)
 
-1. Removed nodes = active-layer nodes absent from the frozen layer; removed edges = active-layer edges absent from the frozen layer.
+1. Removed nodes = active-layer nodes absent from the frozen layer; removed edges = active-layer edges absent from the frozen layer; restored nodes = active-layer nodes present in the frozen layer (promoted).
 2. Clear the active layer, tombstones included.
-3. Notify each revert listener with the removed node and edge sets. A graph evicts the removed IDs from its node registry and edge wrappers; a poset evicts removed label nodes and drops their closure rows (`spec-poset.md` Maintain closure). Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid. The active copy of a promoted row is dropped with the layer, so an owner mark a claim wrote on a promoted frozen row is dropped too, while the graph's registry keeps the entry ([design-graph.md](design-graph.md) Open Gaps).
+3. Notify each revert listener with the removed node, removed edge and restored node sets. A graph evicts the removed IDs from its node registry and edge wrappers; for each restored node it registers, it reads the owner set of the row and evicts the node when the set no longer holds its ID. A poset evicts removed label nodes and drops their closure rows (`spec-poset.md` Maintain closure). Promoted entities and tombstoned edges read from the frozen layer again, so cached wrappers over them stay valid; a claim made since the freeze is undone with the active copy that carried its mark, and the next claim marks the row again.
 
 ### Invariants
 
 - An entity present in the active layer reads exactly its active property set; a property deleted from that set stays deleted.
 - Promotion copies every frozen property into the active layer, so the active copy is complete at promotion time.
 - Frozen layer nodes cannot be deleted. A deleted frozen edge is masked by a tombstone, never removed from the frozen layer.
-- After a revert, storage reads equal the reads right after the last freeze, and every registered graph and poset cache holds only IDs that exist.
+- After a revert, storage reads equal the reads right after the last freeze, and every registered graph and poset cache holds only IDs that exist; a graph registers a node only while the owner set of its row holds the graph's ID.
 - Layer count is always 1 or 2. Global IDs are stable across freezes.
 
 ### Termination
@@ -143,7 +143,7 @@ Property read and adjacency query check at most two layers. Property write updat
 
 ### Complexity
 
-- Property read: O(1) amortized. Adjacency: O(active + frozen edges). Freeze: O(N + E). Revert: O(active nodes + active edges) per listener.
+- Property read: O(1) amortized. Adjacency: O(active + frozen edges). Freeze: O(N + E). Revert: O(active nodes + active edges) per listener, plus one owner-set read per restored node the graph registers.
 
 ---
 
@@ -177,7 +177,7 @@ Claim a node:
 
 ### Invariants
 
-- Once add or claim returns, the owners property of the row holds this graph's ID, until a revert drops the active copy that carried a claim's mark. The set only grows; no graph removes its ID.
+- Once add or claim returns, the owners property of the row holds this graph's ID, until a revert undoes the claim together with the registry entry. The set only grows; no graph removes its ID.
 - A claim of a node whose owners property already holds this graph's ID writes nothing.
 - Rebuild restores exactly the nodes whose owners property holds this graph's ID. A row with no owners property belongs to no graph.
 

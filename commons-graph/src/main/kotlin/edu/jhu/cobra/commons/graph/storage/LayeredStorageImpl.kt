@@ -76,13 +76,15 @@ public class LayeredStorageImpl(
      * Removes all active-layer nodes, edges, properties, metadata, and tombstones.
      * The frozen layer and its ID mappings remain intact, so subsequent
      * reads still resolve against frozen data. Revert listeners receive the
-     * active-only node and edge IDs.
+     * active-only node and edge IDs, and the IDs of the promoted frozen nodes whose
+     * active copy the revert dropped.
      */
     public fun clearActiveLayer(): Unit =
         lock.writeLock().withLock {
             val (removedNodes, removedEdges) = activeOnlyIdsUnlocked()
+            val restoredNodes = promotedNodeIdsUnlocked()
             active.clear()
-            notifyRevert(removedNodes, removedEdges)
+            notifyRevert(removedNodes, removedEdges, restoredNodes)
         }
 
     override fun addRevertListener(listener: RevertListener) {
@@ -97,11 +99,18 @@ public class LayeredStorageImpl(
         return nodes to edges
     }
 
+    // A promoted node survives a revert with its frozen properties; its active copy is dropped.
+    private fun promotedNodeIdsUnlocked(): Set<Int> {
+        val frozenLayer = frozen ?: return emptySet()
+        return active.nodeIds.filterTo(HashSet()) { frozenLayer.containsNode(it) }
+    }
+
     private fun notifyRevert(
         removedNodes: Set<Int>,
         removedEdges: Set<Int>,
+        restoredNodes: Set<Int>,
     ) {
-        for (listener in revertListeners) listener.onRevert(removedNodes, removedEdges)
+        for (listener in revertListeners) listener.onRevert(removedNodes, removedEdges, restoredNodes)
     }
 
     // ============================================================================
@@ -335,7 +344,7 @@ public class LayeredStorageImpl(
             active.clear()
             nodeCounter = 0
             edgeCounter = 0
-            notifyRevert(removedNodes, removedEdges)
+            notifyRevert(removedNodes, removedEdges, emptySet())
         }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {

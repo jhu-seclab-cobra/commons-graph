@@ -42,7 +42,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
 
     // Created on first use: the abstract storage is not initialized during this constructor.
     private val cache by lazy {
-        GraphEntityCache<N, E>(storage, ::newNodeObj, ::newEdgeObj).also { created ->
+        GraphEntityCache<N, E>(storage, ::newNodeObj, ::newEdgeObj, ::holdsOwnerMark).also { created ->
             (storage as? IRevertibleStorage)?.addRevertListener(created)
         }
     }
@@ -276,10 +276,15 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
 
     /** Adds this graph to the owner set of the row [storageId]; writes only when the graph is missing from the set. */
     private fun markOwner(storageId: Int) {
-        val existing = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+        val existing = ownersOf(storageId)
         if (existing.contains(StrVal(graphId))) return
         storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to SetVal(existing.core + StrVal(graphId))))
     }
+
+    private fun ownersOf(storageId: Int): SetVal = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+
+    // The one test of whether a row belongs to this graph, shared by rebuild and the revert eviction.
+    private fun holdsOwnerMark(storageId: Int): Boolean = ownersOf(storageId).contains(StrVal(graphId))
 
     /**
      * Rebuilds graph-layer caches from storage state.
@@ -294,8 +299,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
             cache.clear()
             for (storageId in storage.nodeIDs) {
                 val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
-                val owners = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal
-                if (nodeIdVal == null || owners?.contains(StrVal(graphId)) != true) continue
+                if (nodeIdVal == null || !holdsOwnerMark(storageId)) continue
                 cache.register(nodeIdVal.core, storageId)
             }
         }

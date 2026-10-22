@@ -81,11 +81,11 @@ interface IStorage : Flushable {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addRevertListener` | Registers a listener, notified after every revert with the IDs the revert removed. The storage holds the listener for its own lifetime. | `listener: RevertListener` | -- | -- |
+| `addRevertListener` | Registers a listener, notified after every revert with the IDs the revert removed or restored. The storage holds the listener for its own lifetime. | `listener: RevertListener` | -- | -- |
 
 ### RevertListener
 
-**Responsibility:** `fun interface` receiving one revert notification: `onRevert(removedNodes: Set<Int>, removedEdges: Set<Int>)`. The sets hold exactly the node and edge IDs that existed before the revert and do not exist after it. Invoked inside the storage's `criticalSection`, after the storage state is final; a listener does not call back into the storage.
+**Responsibility:** `fun interface` receiving one revert notification: `onRevert(removedNodes: Set<Int>, removedEdges: Set<Int>, restoredNodes: Set<Int>)`. `removedNodes` and `removedEdges` hold exactly the IDs that existed before the revert and do not exist after it. `restoredNodes` holds the IDs that exist before and after it and whose changes since the last freeze the revert dropped: their properties read as at that freeze again. Invoked inside the storage's `criticalSection`, after the storage state is final; a listener may read the storage and never writes it.
 
 ---
 
@@ -115,7 +115,7 @@ interface IStorage : Flushable {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `freeze` | Merges frozen + active into a new frozen `IStorage`, replaces old frozen layer, resets active layer. Always exactly one frozen layer after freeze. | -- | -- | -- |
-| `clearActiveLayer` | Reverts to the frozen layer: drops every active-layer node, edge, property change, and tombstone. Notifies revert listeners with the active-only node and edge IDs. | -- | -- | -- |
+| `clearActiveLayer` | Reverts to the frozen layer: drops every active-layer node, edge, property change, and tombstone. Notifies revert listeners with the active-only node and edge IDs and the promoted frozen node IDs. `clear` notifies every node and edge as removed and no node as restored. | -- | -- | -- |
 | `layerCount` | Total layers (frozen + active). Always 1 (no frozen) or 2 (one frozen + active). | -- | `Int` | -- |
 
 `clear()` is also a revert: it notifies revert listeners with every node and edge ID it removes.

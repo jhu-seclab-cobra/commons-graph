@@ -42,7 +42,7 @@ public class PosetDftImpl(
     private var existingLabelReparented = false
 
     init {
-        (storage as? IRevertibleStorage)?.addRevertListener { removedNodes, _ -> onRevert(removedNodes) }
+        (storage as? IRevertibleStorage)?.addRevertListener { removedNodes, _, _ -> onRevert(removedNodes) }
     }
 
     // A revert restores the tombstoned parent edges of a surviving label and drops the edges

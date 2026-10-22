@@ -30,15 +30,17 @@ import kotlin.test.assertTrue
  * - `clear empties indexes and edge cache` -- reset
  * - `onRevert drops removed nodes and ignores storage IDs of other graphs` -- revert eviction
  * - `onRevert drops removed edge wrappers so the next call rebinds` -- revert edge eviction
+ * - `onRevert drops a restored node whose row lost the owner mark` -- registry follows a dropped mark
  */
 internal class GraphEntityCacheTest {
     private lateinit var storage: NativeStorageImpl
     private lateinit var cache: GraphEntityCache<TestNode, TestEdge>
+    private val ownedRows = mutableSetOf<Int>()
 
     @BeforeTest
     fun setUp() {
         storage = NativeStorageImpl()
-        cache = GraphEntityCache(storage, { TestNode() }, { TestEdge() })
+        cache = GraphEntityCache(storage, { TestNode() }, { TestEdge() }) { it in ownedRows }
     }
 
     @Test
@@ -160,7 +162,7 @@ internal class GraphEntityCacheTest {
         cache.register(NODE_ID_1, kept)
         cache.register(NODE_ID_2, removed)
 
-        cache.onRevert(setOf(removed, foreign), emptySet())
+        cache.onRevert(setOf(removed, foreign), emptySet(), emptySet())
 
         assertEquals(setOf(NODE_ID_1), cache.nodeIds)
     }
@@ -174,8 +176,23 @@ internal class GraphEntityCacheTest {
         val eid = storage.addEdge(src, dst, EDGE_TAG_1)
         val before = cache.edge(eid)
 
-        cache.onRevert(emptySet(), setOf(eid))
+        cache.onRevert(emptySet(), setOf(eid), emptySet())
 
         assertNotSame(before, cache.edge(eid))
+    }
+
+    @Test
+    fun `onRevert drops a restored node whose row lost the owner mark`() {
+        val marked = storage.addNode()
+        val unmarked = storage.addNode()
+        val foreign = storage.addNode()
+        cache.register(NODE_ID_1, marked)
+        cache.register(NODE_ID_2, unmarked)
+        ownedRows += marked
+
+        cache.onRevert(emptySet(), emptySet(), setOf(marked, unmarked, foreign))
+
+        assertEquals(setOf(NODE_ID_1), cache.nodeIds)
+        assertFalse(cache.containsStorageId(unmarked))
     }
 }
