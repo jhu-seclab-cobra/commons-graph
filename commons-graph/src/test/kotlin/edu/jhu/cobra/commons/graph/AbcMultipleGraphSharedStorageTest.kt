@@ -38,6 +38,7 @@ import kotlin.test.assertTrue
  * - `two graphs claiming the same nodes from many threads both end up in every owner set` — verifies the mark on the concurrent storage
  * - `a claim into a second graph on the concurrent storage keeps the first graph's mark` — verifies the set grows
  * - `a revert undoes the claim of a frozen node and a later claim marks it again` — verifies the registry follows the dropped mark
+ * - `one revert evicts a frozen node claimed by two graphs from both` — verifies every graph cache reads the one notice
  * - `a revert keeps a frozen node the graph owned before the freeze after a write promoted it` — verifies a promoted owned node stays
  * - `a revert keeps the claim another graph made before the freeze` — verifies a revert drops only the marks written after the freeze
  * - `claimNode of a node whose row was deleted raises EntityNotExistException` — verifies a claim needs an existing row
@@ -235,6 +236,24 @@ internal class AbcMultipleGraphSharedStorageTest {
     }
 
     @Test
+    fun `one revert evicts a frozen node claimed by two graphs from both`() {
+        val layered = LayeredStorageImpl()
+        val original = TestMultipleGraph(layered, "GraphA").addNode(NODE_ID_1)
+        layered.freeze()
+        val claimerB = TestMultipleGraph(layered, "GraphB")
+        val claimerC = TestMultipleGraph(layered, "GraphC")
+        claimerB.claimNode(original)
+        claimerC.claimNode(original)
+        assertEquals(setOf("GraphA", "GraphB", "GraphC"), layeredOwnersOf(layered, original.storageId))
+
+        layered.clearActiveLayer()
+
+        assertFalse(claimerB.containNode(NODE_ID_1))
+        assertFalse(claimerC.containNode(NODE_ID_1))
+        assertEquals(setOf("GraphA"), layeredOwnersOf(layered, original.storageId))
+    }
+
+    @Test
     fun `a revert keeps a frozen node the graph owned before the freeze after a write promoted it`() {
         val layered = LayeredStorageImpl()
         val owner = TestMultipleGraph(layered, "GraphA")
@@ -285,30 +304,8 @@ internal class AbcMultipleGraphSharedStorageTest {
         val claimerA = TestMultipleGraph(concur, "GraphA")
         val claimerB = TestMultipleGraph(concur, "GraphB")
         val originals = (0 until CONCURRENT_NODES).map { adder.addNode("n$it") }
-        val workers = Executors.newFixedThreadPool(CONCURRENT_THREADS)
-        val start = CountDownLatch(1)
-        try {
-            val jobs =
-                (0 until CONCURRENT_THREADS).map { worker ->
-                    workers.submit {
-                        start.await()
-                        // Alternate the claim order per worker so both graphs hit each row together.
-                        for (node in originals) {
-                            if (worker % 2 == 0) {
-                                claimerA.claimNode(node)
-                                claimerB.claimNode(node)
-                            } else {
-                                claimerB.claimNode(node)
-                                claimerA.claimNode(node)
-                            }
-                        }
-                    }
-                }
-            start.countDown()
-            jobs.forEach { it.get(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
-        } finally {
-            workers.shutdownNow()
-        }
+
+        claimConcurrently(originals, claimerA, claimerB)
 
         for (node in originals) {
             assertEquals(setOf("GraphO", "GraphA", "GraphB"), concurrentOwnersOf(concur, node.storageId), node.id)
@@ -316,6 +313,33 @@ internal class AbcMultipleGraphSharedStorageTest {
         val expected = originals.map { it.id }.toSet()
         for (id in listOf("GraphO", "GraphA", "GraphB")) {
             assertEquals(expected, TestMultipleGraph(concur, id).apply { doRebuild() }.nodeIDs, id)
+        }
+    }
+
+    // Alternates the claim order per worker so both graphs hit each row together.
+    private fun claimConcurrently(
+        originals: List<AbcNode>,
+        first: TestMultipleGraph,
+        second: TestMultipleGraph,
+    ) {
+        val workers = Executors.newFixedThreadPool(CONCURRENT_THREADS)
+        val start = CountDownLatch(1)
+        try {
+            val jobs =
+                (0 until CONCURRENT_THREADS).map { worker ->
+                    val (head, tail) = if (worker % 2 == 0) first to second else second to first
+                    workers.submit {
+                        start.await()
+                        for (node in originals) {
+                            head.claimNode(node)
+                            tail.claimNode(node)
+                        }
+                    }
+                }
+            start.countDown()
+            jobs.forEach { it.get(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+        } finally {
+            workers.shutdownNow()
         }
     }
 
