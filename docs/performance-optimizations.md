@@ -11,7 +11,7 @@ Optimization log for core module. Benchmarks in [performance-core.md](performanc
 | I3 | AbcMultipleGraph | filterVisitable reads labels once | Halves storage reads + HashSet allocations |
 | I4 | AbcEdge | No meta properties in edge namespace | Cold getNode gap 3.2x → 1.9x |
 | I5 | AbcMultipleGraph | Remove edgeIndex; findEdge via adjacency scan | ~600 MB saved at 1M nodes |
-| I6 | AbcMultipleGraph | BFS keeps storage IDs in its visited set | Int-keyed visited set; edge wrappers come from the entity cache |
+| I6 | AbcMultipleGraph | Withdrawn: BFS read storage adjacency directly | The walk reads the typed edge queries instead (spec-graph.md BFS Traversal) |
 | I7 | AbcEdge | labels uses direct StrVal cast | Avoids toString() + intermediate list |
 | I8 | NativeStorageImpl | Columnar node properties | Memory -6%, incoming +97%, delete +50% |
 | I9 | NativeConcurStorageImpl | Set.copyOf() snapshot properties | Compact array-backed snapshots |

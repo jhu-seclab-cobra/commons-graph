@@ -16,7 +16,7 @@ import java.io.Flushable
  * ("$src-$tag-$dst"). The graph layer maintains bidirectional NodeID↔Int mapping,
  * delegating to IStorage via auto-generated Int IDs. Edge lookups by (src, dst, tag)
  * scan the source node's adjacency list in storage — O(out-degree) per query.
- * BFS traversals read adjacency through the overridable typed edge queries and use Int visited sets for identity-function hashCode.
+ * BFS traversals use Int visited sets for identity-function hashCode.
  *
  * Every public operation runs inside [criticalSection] on [storage], serializing
  * compound (multi-call) sequences against concurrent callers sharing the same
@@ -244,8 +244,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         edgeCond: (E) -> Boolean,
     ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, ::getOutgoingEdges) { it.dstNid }.asSequence() }
 
-    // Reads adjacency through the overridable getIncomingEdges / getOutgoingEdges, so a
-    // subclass that keeps only its own edge types (shared storage) walks only those.
+    // Walks the overridable typed edge queries (spec-graph.md BFS Traversal).
     private fun bfsTraversal(
         of: NodeID,
         edgeCond: (E) -> Boolean,
@@ -260,13 +259,14 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
         val result = mutableListOf<N>()
         while (queue.isNotEmpty()) {
             val current = queue.removeFirst()
-            for (edge in adjacentEdges(current)) {
-                if (!edgeCond(edge)) continue
-                val nextId = neighborId(edge)
-                val next = cache.entryOf(nextId) ?: continue
-                if (!visited.add(next.storageId)) continue
+            val unseen =
+                adjacentEdges(current)
+                    .filter(edgeCond)
+                    .mapNotNull { cache.entryOf(neighborId(it)) }
+                    .filter { visited.add(it.storageId) }
+            for (next in unseen) {
                 result.add(cache.node(next))
-                queue.add(nextId)
+                queue.add(next.nodeId)
             }
         }
         return result
