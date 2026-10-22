@@ -37,10 +37,10 @@ Given a start node, a direction (outgoing for descendants, incoming for ancestor
 ### Steps
 
 1. Initialize a visited set with the start node's storage ID.
-2. Initialize a queue with the start node's storage ID.
+2. Initialize a queue with the start node ID.
 3. While queue is not empty:
-   a. Dequeue a node storage ID.
-   b. Retrieve outgoing (or incoming) edge IDs from storage.
+   a. Dequeue a node ID.
+   b. Read its edges through `getOutgoingEdges` (or `getIncomingEdges`), the overridable queries of this graph, so a graph that keeps only its own edge types on a shared storage walks only those.
    c. For each edge, check the edge condition predicate. Skip if false.
    d. Resolve the opposite endpoint. Skip if not registered in this graph.
    e. If the endpoint storage ID is not in visited, add to visited and enqueue. Yield the node.
@@ -48,7 +48,7 @@ Given a start node, a direction (outgoing for descendants, incoming for ancestor
 
 ### Invariants
 
-- Visited set contains all dequeued storage IDs. No node enqueued twice.
+- Visited set contains every enqueued node's storage ID. No node enqueued twice.
 - Only edges with both endpoints in this graph are traversed (edge isolation).
 
 ### Termination

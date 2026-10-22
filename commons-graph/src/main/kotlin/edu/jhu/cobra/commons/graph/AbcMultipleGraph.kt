@@ -16,7 +16,7 @@ import java.io.Flushable
  * ("$src-$tag-$dst"). The graph layer maintains bidirectional NodeID↔Int mapping,
  * delegating to IStorage via auto-generated Int IDs. Edge lookups by (src, dst, tag)
  * scan the source node's adjacency list in storage — O(out-degree) per query.
- * BFS traversals use Int visited sets for identity-function hashCode.
+ * BFS traversals read adjacency through the overridable typed edge queries and use Int visited sets for identity-function hashCode.
  *
  * Every public operation runs inside [criticalSection] on [storage], serializing
  * compound (multi-call) sequences against concurrent callers sharing the same
@@ -237,34 +237,36 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     override fun getAncestors(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, storage::getIncomingEdges) { it.src }.asSequence() }
+    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, ::getIncomingEdges) { it.srcNid }.asSequence() }
 
     override fun getDescendants(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, storage::getOutgoingEdges) { it.dst }.asSequence() }
+    ): Sequence<N> = storage.criticalSection { bfsTraversal(of, edgeCond, ::getOutgoingEdges) { it.dstNid }.asSequence() }
 
+    // Reads adjacency through the overridable getIncomingEdges / getOutgoingEdges, so a
+    // subclass that keeps only its own edge types (shared storage) walks only those.
     private fun bfsTraversal(
         of: NodeID,
         edgeCond: (E) -> Boolean,
-        adjacentEdges: (Int) -> Set<Int>,
-        neighborId: (IStorage.EdgeStructure) -> Int,
+        adjacentEdges: (NodeID) -> Sequence<E>,
+        neighborId: (E) -> NodeID,
     ): List<N> {
         val startEntry = cache.entryOf(of) ?: return emptyList()
         // Mark at enqueue: a node reachable through several edges (diamond, parallel
         // edges, cycle back to the start) is included at most once, and never the start.
         val visited = hashSetOf(startEntry.storageId)
-        val queue = ArrayDeque<Int>().apply { add(startEntry.storageId) }
+        val queue = ArrayDeque<NodeID>().apply { add(of) }
         val result = mutableListOf<N>()
         while (queue.isNotEmpty()) {
-            val currentInt = queue.removeFirst()
-            for (edgeIntId in adjacentEdges(currentInt)) {
-                val nextInt = neighborId(storage.getEdgeStructure(edgeIntId))
-                val includable =
-                    cache.containsStorageId(nextInt) && edgeCond(cache.edge(edgeIntId)) && visited.add(nextInt)
-                if (!includable) continue
-                result.add(cache.node(nextInt))
-                queue.add(nextInt)
+            val current = queue.removeFirst()
+            for (edge in adjacentEdges(current)) {
+                if (!edgeCond(edge)) continue
+                val nextId = neighborId(edge)
+                val next = cache.entryOf(nextId) ?: continue
+                if (!visited.add(next.storageId)) continue
+                result.add(cache.node(next))
+                queue.add(nextId)
             }
         }
         return result

@@ -61,7 +61,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 | `getAllNodes` / `getAllEdges` | Returns filtered sequence of entities | predicate | `Sequence<N>` / `Sequence<E>` | -- |
 | `getChildren` / `getParents` | Adjacent nodes via outgoing/incoming edges | `of`: NodeID; `edgeCond` | `Sequence<N>` | -- |
 | `getOutgoingEdges` / `getIncomingEdges` | Edges from/to a node | `of`: NodeID | `Sequence<E>` | -- |
-| `getDescendants` / `getAncestors` | BFS traversal of all reachable nodes | `of`: NodeID; `edgeCond` | `Sequence<N>` | -- |
+| `getDescendants` / `getAncestors` | BFS traversal of all reachable nodes through `getOutgoingEdges` / `getIncomingEdges`, so an override that filters edges applies | `of`: NodeID; `edgeCond` | `Sequence<N>` | -- |
 
 ---
 
