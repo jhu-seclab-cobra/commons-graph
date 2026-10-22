@@ -7,10 +7,14 @@ import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_3
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestMultipleGraph
 import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
+import edu.jhu.cobra.commons.graph.storage.NativeConcurStorageImpl
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,6 +35,8 @@ import kotlin.test.assertTrue
  * - `claimNode marks the claimer next to the adder` — verifies the claim extends the owner set
  * - `a later claim grows the owner set and keeps every earlier mark` — verifies the set grows and no graph loses the node
  * - `the owner set and the node ID stay out of the node property API` — verifies reserved properties stay hidden on a claimed node
+ * - `two graphs claiming the same nodes from many threads both end up in every owner set` — verifies the owner mark on the concurrent storage
+ * - `a claim into a second graph on the concurrent storage keeps the first graph's mark` — verifies the set grows
  * - `open gap - a revert drops the mark of a claimed frozen node while the registry keeps it` — pins the current revert behavior
  * - `claimNode of a node whose row was deleted raises EntityNotExistException` — verifies a claim needs an existing row
  * - `claimNode of an owned node leaves the owner set unchanged` — verifies a repeated claim adds no second mark
@@ -223,6 +229,71 @@ internal class AbcMultipleGraphSharedStorageTest {
 
     // endregion
 
+    // region concurrent storage
+
+    private fun concurrentOwnersOf(
+        concurStorage: NativeConcurStorageImpl,
+        storageId: Int,
+    ): Set<String> =
+        (concurStorage.getNodeProperty(storageId, AbcMultipleGraph.PROP_OWNERS) as SetVal)
+            .core
+            .map { (it as StrVal).core }
+            .toSet()
+
+    @Test
+    fun `two graphs claiming the same nodes from many threads both end up in every owner set`() {
+        val concur = NativeConcurStorageImpl()
+        val adder = TestMultipleGraph(concur, "GraphO")
+        val claimerA = TestMultipleGraph(concur, "GraphA")
+        val claimerB = TestMultipleGraph(concur, "GraphB")
+        val originals = (0 until CONCURRENT_NODES).map { adder.addNode("n$it") }
+        val workers = Executors.newFixedThreadPool(CONCURRENT_THREADS)
+        val start = CountDownLatch(1)
+        try {
+            val jobs =
+                (0 until CONCURRENT_THREADS).map { worker ->
+                    workers.submit {
+                        start.await()
+                        // Alternate the claim order per worker so both graphs hit each row together.
+                        for (node in originals) {
+                            if (worker % 2 == 0) {
+                                claimerA.claimNode(node)
+                                claimerB.claimNode(node)
+                            } else {
+                                claimerB.claimNode(node)
+                                claimerA.claimNode(node)
+                            }
+                        }
+                    }
+                }
+            start.countDown()
+            jobs.forEach { it.get(CONCURRENT_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+        } finally {
+            workers.shutdownNow()
+        }
+
+        for (node in originals) {
+            assertEquals(setOf("GraphO", "GraphA", "GraphB"), concurrentOwnersOf(concur, node.storageId), node.id)
+        }
+        val expected = originals.map { it.id }.toSet()
+        for (id in listOf("GraphO", "GraphA", "GraphB")) {
+            assertEquals(expected, TestMultipleGraph(concur, id).apply { doRebuild() }.nodeIDs, id)
+        }
+    }
+
+    @Test
+    fun `a claim into a second graph on the concurrent storage keeps the first graph's mark`() {
+        val concur = NativeConcurStorageImpl()
+        val original = TestMultipleGraph(concur, "GraphA").addNode(NODE_ID_1)
+
+        TestMultipleGraph(concur, "GraphB").claimNode(original)
+
+        assertEquals(setOf("GraphA", "GraphB"), concurrentOwnersOf(concur, original.storageId))
+        assertEquals(setOf(NODE_ID_1), TestMultipleGraph(concur, "GraphA").apply { doRebuild() }.nodeIDs)
+    }
+
+    // endregion
+
     // region rebuild
 
     @Test
@@ -354,4 +425,10 @@ internal class AbcMultipleGraphSharedStorageTest {
     }
 
     // endregion
+
+    private companion object {
+        const val CONCURRENT_NODES = 200
+        const val CONCURRENT_THREADS = 8
+        const val CONCURRENT_TIMEOUT_SECONDS = 60L
+    }
 }
