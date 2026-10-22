@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
  * - `claimNode marks the claimer next to the adder` — verifies the claim extends the owner set
  * - `a later claim grows the owner set and keeps every earlier mark` — verifies the set grows and no graph loses the node
  * - `the owner set and the node ID stay out of the node property API` — verifies reserved properties stay hidden on a claimed node
- * - `two graphs claiming the same nodes from many threads both end up in every owner set` — verifies the owner mark on the concurrent storage
+ * - `two graphs claiming the same nodes from many threads both end up in every owner set` — verifies the mark on the concurrent storage
  * - `a claim into a second graph on the concurrent storage keeps the first graph's mark` — verifies the set grows
  * - `a revert undoes the claim of a frozen node and a later claim marks it again` — verifies the registry follows the dropped mark
  * - `a revert keeps a frozen node the graph owned before the freeze after a write promoted it` — verifies a promoted owned node stays
