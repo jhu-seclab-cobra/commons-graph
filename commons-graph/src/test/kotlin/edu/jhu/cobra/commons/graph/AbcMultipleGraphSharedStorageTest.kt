@@ -14,6 +14,7 @@ import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -28,6 +29,7 @@ import kotlin.test.assertTrue
  * - `doUseStorage returns false for different storage` — verifies negative match
  * - `addNode marks the adder as the only owner` — verifies the mark is written at creation
  * - `claimNode marks the claimer next to the adder` — verifies the claim extends the owner set
+ * - `claimNode of a node whose row was deleted raises EntityNotExistException` — verifies a claim needs an existing row
  * - `claimNode of an owned node leaves the owner set unchanged` — verifies a repeated claim adds no second mark
  * - `claimNode of a layered frozen node marks the claimer` — verifies the mark lands in the active layer
  * - `rebuild restores nodes owned by this graph` — verifies selective restoration without any flush
@@ -142,6 +144,15 @@ internal class AbcMultipleGraphSharedStorageTest {
         graphA.claimNode(original)
 
         assertEquals(setOf("GraphA", "GraphB"), ownersOf(original.storageId))
+    }
+
+    @Test
+    fun `claimNode of a node whose row was deleted raises EntityNotExistException`() {
+        val original = graphA.addNode(NODE_ID_1)
+        graphA.delNode(NODE_ID_1)
+
+        assertFailsWith<EntityNotExistException> { graphB.claimNode(original) }
+        assertFalse(graphB.containNode(NODE_ID_1))
     }
 
     @Test

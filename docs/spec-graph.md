@@ -163,7 +163,7 @@ Add a node:
 Claim a node:
 
 1. If the node ID is registered, return the registered node.
-2. Read the owners property of the row. Default to the empty set if absent.
+2. Read the owners property of the row. Default to the empty set if absent; a row absent from storage raises `EntityNotExistException` and registers nothing.
 3. If this graph's ID is not in the set, add it and write back.
 4. Register the node in this graph's registry.
 

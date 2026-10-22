@@ -51,7 +51,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
-| `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | -- |
+| `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | `EntityNotExistException` if the row is absent from storage |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
 | `delNode` | Removes all associated edges then the node | `whoseID`: NodeID | -- | -- |
 | `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `tag` | `E` | `EntityNotExistException` if src/dst missing |
@@ -126,7 +126,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 | Exception | When raised |
 |-----------|------------|
 | `EntityAlreadyExistException` | Adding a node/edge that already exists; adding a second edge between the same `(src, dst)` pair in `AbcSimpleGraph` |
-| `EntityNotExistException` | Adding an edge whose src/dst node is missing |
+| `EntityNotExistException` | Adding an edge whose src/dst node is missing; claiming a node whose storage row is absent |
 
 Deletion of a non-existent entity is a no-op at the graph level.
 
