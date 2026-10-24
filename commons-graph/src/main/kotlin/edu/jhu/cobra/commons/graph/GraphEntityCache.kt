@@ -1,7 +1,8 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
-import edu.jhu.cobra.commons.graph.storage.RevertListener
+import edu.jhu.cobra.commons.graph.storage.RevertNotice
+import edu.jhu.cobra.commons.value.StrVal
 import java.lang.ref.SoftReference
 
 /**
@@ -9,9 +10,10 @@ import java.lang.ref.SoftReference
  *
  * Owns the bidirectional NodeID-to-storage-Int mapping and the softly referenced
  * node/edge wrapper objects, recreating a wrapper on demand via the supplied
- * factories when its soft reference has been collected. As a [RevertListener] it
- * evicts the node entries and edge wrappers whose storage IDs a revert removed, and the
- * node entries of restored rows whose owner mark no longer names the graph.
+ * factories when its soft reference has been collected. [onRevert] reconciles the registry
+ * with a revert: it evicts the node entries and edge wrappers the revert removed, evicts the
+ * entries of restored rows whose owner mark no longer names the graph, and registers the
+ * restored rows whose owner mark names the graph and have no entry.
  *
  * @param isOwned Whether the storage row with the given ID is marked as owned by the graph.
  */
@@ -20,7 +22,7 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
     private val newNode: () -> N,
     private val newEdge: () -> E,
     private val isOwned: (Int) -> Boolean,
-) : RevertListener {
+) {
     class NodeEntry<N>(
         val nodeId: NodeID,
         val storageId: Int,
@@ -81,20 +83,43 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
         nodeByStorageId.remove(entry.storageId)
     }
 
-    // A reverted storage node need not belong to this graph: graphs and posets share storage.
-    // A restored row reads as at the last freeze, so a claim made since then has lost its mark;
-    // the entry leaves with it and the next claim marks the row again.
-    override fun onRevert(
-        removedNodes: Set<Int>,
-        removedEdges: Set<Int>,
-        restoredNodes: Set<Int>,
-    ) {
-        for (storageId in removedNodes) nodeByStorageId[storageId]?.let(::removeNode)
-        for (storageId in restoredNodes) {
-            val entry = nodeByStorageId[storageId] ?: continue
-            if (!isOwned(storageId)) removeNode(entry)
+    /** Storage IDs of the edges, visible in storage, that touch any node of [storageIds]. */
+    fun incidentEdges(storageIds: Set<Int>): Set<Int> =
+        storageIds.flatMapTo(HashSet()) { storage.getIncomingEdges(it) + storage.getOutgoingEdges(it) }
+
+    /**
+     * Reconciles the registry with [notice] and returns the storage IDs of the nodes it newly registered.
+     *
+     * A reverted storage node need not belong to this graph: graphs and posets share storage. A restored row
+     * reads as at the last freeze, so a claim made since then has lost its mark: the entry leaves with it and
+     * the next claim marks the row again. A restored row that holds this graph's mark and has no entry is
+     * registered.
+     */
+    fun onRevert(notice: RevertNotice): Set<Int> {
+        for (storageId in notice.removed.nodes) nodeByStorageId[storageId]?.let(::removeNode)
+        for (storageId in notice.removed.edges) edgeCache.remove(storageId)
+        val registered = HashSet<Int>()
+        for (storageId in notice.restored.nodes) {
+            val entry = nodeByStorageId[storageId]
+            when {
+                entry != null && !isOwned(storageId) -> removeNode(entry)
+                entry == null && registerRestored(storageId) -> registered.add(storageId)
+            }
         }
-        for (storageId in removedEdges) edgeCache.remove(storageId)
+        return registered
+    }
+
+    private fun registerRestored(storageId: Int): Boolean {
+        if (!isOwned(storageId)) return false
+        val nodeId = storage.getNodeProperty(storageId, AbcMultipleGraph.PROP_NODE_ID) as? StrVal ?: return false
+        register(nodeId.core, storageId)
+        return true
+    }
+
+    /** Replaces every entry by the rows of storage that hold this graph's owner mark. */
+    fun rebuild() {
+        clear()
+        for (storageId in storage.nodeIDs) registerRestored(storageId)
     }
 
     fun clear() {

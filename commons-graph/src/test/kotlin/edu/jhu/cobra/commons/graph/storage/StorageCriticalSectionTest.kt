@@ -102,7 +102,7 @@ internal class StorageCriticalSectionTest {
         val storage = LayeredStorageImpl()
         val lock = storage.criticalSectionLock as ReentrantReadWriteLock.WriteLock
         val heldDuringRevert = mutableListOf<Boolean>()
-        storage.addRevertListener { _, _, _ -> heldDuringRevert.add(lock.isHeldByCurrentThread) }
+        storage.addRevertListener { heldDuringRevert.add(lock.isHeldByCurrentThread) }
         storage.addNode()
         storage.clearActiveLayer()
         storage.addNode()

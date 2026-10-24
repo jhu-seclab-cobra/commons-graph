@@ -36,6 +36,8 @@ internal class TestGraph(
     override fun newNodeObj() = TestNode()
 
     override fun newEdgeObj() = TestEdge()
+
+    override fun onRestoredEdges(ids: Set<Int>) = restoreLabelIndex(ids, ::edgeByStorageId)
 }
 
 /**

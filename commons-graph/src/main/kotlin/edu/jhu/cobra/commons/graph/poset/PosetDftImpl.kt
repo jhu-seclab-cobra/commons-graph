@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph.poset
 
 import edu.jhu.cobra.commons.graph.storage.IRevertibleStorage
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.RevertNotice
 import edu.jhu.cobra.commons.graph.storage.criticalSection
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
@@ -14,13 +15,13 @@ private const val LABEL_PROP = "label"
  *
  * Ancestor queries use a memoized ancestor-closure table, correct on arbitrary
  * DAGs including labels with multiple parents. The table is built lazily on the
- * first query. Once built, [setParents] keeps it when the parents are unchanged, recomputes
- * the row of a label without descendants, new or existing, and discards it otherwise. A cycle in the hierarchy is detected during the
- * build and rejected.
+ * first query. Once built, [setParents] keeps it when the parents are unchanged,
+ * recomputes the row of a label without descendants, new or existing, and discards
+ * it otherwise. A cycle in the hierarchy is detected during the build and rejected.
  * On an [IRevertibleStorage], a revert drops the rows of the removed labels and keeps
- * the other rows, unless [setParents] changed the parents of an existing label since the
- * last revert: the revert may restore its earlier parent edges, so the table is discarded.
- * All caching state is private. Consumers interact only through the [IPoset] interface.
+ * the other rows, unless the revert notice shows a parent edge of a surviving label
+ * removed or exposed again: then the table is discarded. All caching state is private.
+ * Consumers interact only through the [IPoset] interface.
  *
  * Every public operation runs inside [criticalSection] on [storage] — the same
  * lock instance used by graphs sharing this storage — so a caching read/write
@@ -38,27 +39,34 @@ public class PosetDftImpl(
     // Invariant while non-null: one row per label in intToLabel, each equal to the label's ancestors.
     private var ancestorClosure: MutableMap<Int, Set<Int>>? = null
 
-    // Set when setParents changed the parents of an existing label; a revert may undo that change.
-    private var existingLabelReparented = false
-
     init {
-        (storage as? IRevertibleStorage)?.addRevertListener { removedNodes, _, _ -> onRevert(removedNodes) }
+        (storage as? IRevertibleStorage)?.addRevertListener(::onRevert)
     }
 
-    // A revert restores the tombstoned parent edges of a surviving label and drops the edges
-    // added to it since. The notice names removed and promoted nodes, not edges: a label whose
-    // parents were all deleted is tombstoned without promotion, and a promoted label need not
-    // have changed parents. So a surviving row is stale only when setParents changed an existing
-    // label; every other surviving row is unchanged, because a surviving label gains no parent
-    // edge without such a call.
-    private fun onRevert(removedNodes: Set<Int>) {
-        for (nodeId in removedNodes) {
+    private fun onRevert(notice: RevertNotice) {
+        val stale = ancestorClosure != null && parentEdgesChanged(notice)
+        for (nodeId in notice.removed.nodes) {
             ancestorClosure?.remove(nodeId)
             val labelCore = intToLabel.remove(nodeId) ?: continue
             labelIdCache.remove(labelCore)
         }
-        if (existingLabelReparented) ancestorClosure = null
-        existingLabelReparented = false
+        if (stale) ancestorClosure = null
+    }
+
+    // An edge goes child to parent, so a parent edge changes the row of its source label and of that
+    // label's descendants. Such a row survives the revert only when the source label does. A removed
+    // edge is read from the structures before the revert; a restored edge missing there has reappeared,
+    // and one present there kept its source, destination and tag, so its row is unchanged.
+    private fun parentEdgesChanged(notice: RevertNotice): Boolean {
+        val removed =
+            notice.removed.edges.any { edgeId ->
+                val src = notice.edgeStructuresBefore.getValue(edgeId).src
+                src in intToLabel && src !in notice.removed.nodes
+            }
+        return removed ||
+            notice.restored.edges.any { edgeId ->
+                edgeId !in notice.edgeStructuresBefore && storage.getEdgeStructure(edgeId).src in intToLabel
+            }
     }
 
     private fun ensureCache() {
@@ -200,7 +208,6 @@ public class PosetDftImpl(
                 parents.map { (name, parentLabel) ->
                     ensureLabelNode(parentLabel).also { storage.addEdge(storageId, it, name, emptyMap()) }
                 }
-            if (existingId != null) existingLabelReparented = true
             extendOrDiscardClosure(storageId, parentIds, hasDescendants)
         }
 

@@ -33,7 +33,8 @@ import kotlin.concurrent.withLock
  * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl]. Every
  * returned collection is a copy taken under the lock; later writes, [freeze], and
  * [clearActiveLayer] never change it.
- * [criticalSectionLock] is its write lock; revert listeners run while it is held.
+ * [criticalSectionLock] is its write lock; revert listeners run while it is held. [clearActiveLayer] and
+ * [clear] each notify one [RevertNotice] naming the removed, restored and structure-changed entities.
  * Uses internal non-locking helpers to avoid lock re-entrance overhead.
  *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
@@ -75,44 +76,23 @@ public class LayeredStorageImpl(
      *
      * Removes all active-layer nodes, edges, properties, metadata, and tombstones.
      * The frozen layer and its ID mappings remain intact, so subsequent
-     * reads still resolve against frozen data. Revert listeners receive the
-     * active-only node and edge IDs, and the IDs of the promoted frozen nodes whose
-     * active copy the revert dropped.
+     * reads still resolve against frozen data. The revert listeners receive one [RevertNotice]:
+     * the active-only nodes and edges as removed; the promoted frozen nodes and edges, and the
+     * tombstoned frozen edges, as restored; and the structures of the edges visible before.
      */
     public fun clearActiveLayer(): Unit =
         lock.writeLock().withLock {
-            val reverted = revertedIdsUnlocked()
+            val notice = activeLayerDropNotice(active, frozen)
             active.clear()
-            notifyRevert(reverted.removedNodes, reverted.removedEdges, reverted.restoredNodes)
+            notifyRevert(notice)
         }
 
     override fun addRevertListener(listener: RevertListener) {
         revertListeners.add(listener)
     }
 
-    // Promoted entities and tombstoned edges survive a revert in the frozen layer. A promoted
-    // node keeps its frozen properties; only its active copy is dropped.
-    private fun revertedIdsUnlocked(): RevertedIds {
-        val frozenLayer = frozen ?: return RevertedIds(active.nodeIds.toSet(), active.edgeEndpoints.keys.toSet(), emptySet())
-        val removedNodes = HashSet<Int>()
-        val restoredNodes = HashSet<Int>()
-        for (id in active.nodeIds) (if (frozenLayer.containsNode(id)) restoredNodes else removedNodes).add(id)
-        val removedEdges = active.edgeEndpoints.keys.filterTo(HashSet()) { !frozenLayer.containsEdge(it) }
-        return RevertedIds(removedNodes, removedEdges, restoredNodes)
-    }
-
-    private class RevertedIds(
-        val removedNodes: Set<Int>,
-        val removedEdges: Set<Int>,
-        val restoredNodes: Set<Int>,
-    )
-
-    private fun notifyRevert(
-        removedNodes: Set<Int>,
-        removedEdges: Set<Int>,
-        restoredNodes: Set<Int>,
-    ) {
-        for (listener in revertListeners) listener.onRevert(removedNodes, removedEdges, restoredNodes)
+    private fun notifyRevert(notice: RevertNotice) {
+        for (listener in revertListeners) listener.onRevert(notice)
     }
 
     // ============================================================================
@@ -339,14 +319,19 @@ public class LayeredStorageImpl(
 
     override fun clear(): Unit =
         lock.writeLock().withLock {
-            val removedNodes = nodeIdsUnlocked().toSet()
             val removedEdges = edgeIdsUnlocked().toSet()
+            val notice =
+                RevertNotice(
+                    removed = StorageEntityIds(nodeIdsUnlocked().toSet(), removedEdges),
+                    restored = StorageEntityIds(emptySet(), emptySet()),
+                    edgeStructuresBefore = removedEdges.associateWith(::getEdgeStructureUnlocked),
+                )
             frozen?.close()
             frozen = null
             active.clear()
             nodeCounter = 0
             edgeCounter = 0
-            notifyRevert(removedNodes, removedEdges, emptySet())
+            notifyRevert(notice)
         }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {

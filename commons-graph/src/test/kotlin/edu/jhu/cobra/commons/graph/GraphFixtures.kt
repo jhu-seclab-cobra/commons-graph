@@ -52,6 +52,8 @@ object GraphFixtures {
         override fun newNodeObj() = TestNode()
 
         override fun newEdgeObj() = TestEdge()
+
+        override fun onRestoredEdges(ids: Set<Int>) = restoreLabelIndex(ids, ::edgeByStorageId)
     }
 
     class TestMultipleGraph(
@@ -85,6 +87,8 @@ object GraphFixtures {
         override fun newNodeObj() = TestNode()
 
         override fun newEdgeObj() = TestEdge()
+
+        override fun onRestoredEdges(ids: Set<Int>) = restoreLabelIndex(ids, ::edgeByStorageId)
     }
 
     class TestSimpleGraph(

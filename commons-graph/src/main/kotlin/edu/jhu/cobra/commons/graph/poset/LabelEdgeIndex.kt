@@ -6,12 +6,13 @@ import edu.jhu.cobra.commons.graph.AbcEdge
  * Inverted index from a label to the edges of one graph that may carry it.
  *
  * Each label maps to a candidate set that is a superset of the label's current
- * carriers: a label removal never removes a candidate, so a storage revert that
- * restores a removed label (a cleared layered-storage active layer) keeps the
- * index complete without invalidation. Readers verify candidates against storage.
- * Candidates are keyed by edge storage ID: an edge deleted and re-added under the
- * same `(src, dst, tag)` is a separate candidate. The algorithm and its
- * preconditions are specified in spec-poset.md (Label Carrier Index).
+ * carriers: a label removal never removes a candidate, and a candidate leaves only
+ * when a reader finds its edge absent from storage. A storage revert can expose an
+ * absent edge again, or restore the labels of a surviving one, so the graph re-records
+ * the final labels of every edge the revert notice names ([restoreEdges]). Readers
+ * verify candidates against storage. Candidates are keyed by edge storage ID: an edge
+ * deleted and re-added under the same `(src, dst, tag)` is a separate candidate. The
+ * algorithm and its preconditions are specified in spec-poset.md (Label Carrier Index).
  *
  * Owned by one graph instance and mutated only by [PosetTrait]; every member is
  * internal. Not synchronized: [PosetTrait] calls every member inside the owning
@@ -39,6 +40,21 @@ public class LabelEdgeIndex<E : AbcEdge> {
         edge: E,
     ) {
         candidateSets.getOrPut(label) { HashMap() }[edge.storageId] = edge
+    }
+
+    /**
+     * Records every current label of each edge that [resolve] returns for an ID of [ids]; an ID it resolves
+     * to null (an edge outside the graph) is skipped. An index not yet built stays unbuilt, so its first
+     * scan reads the final storage.
+     */
+    internal fun restoreEdges(
+        ids: Set<Int>,
+        resolve: (Int) -> E?,
+    ) {
+        if (!built) return
+        for (edge in ids.mapNotNull(resolve)) {
+            for (label in edge.labels) record(label, edge)
+        }
     }
 
     /** Snapshot of [label]'s candidates, safe to iterate while the index changes. */

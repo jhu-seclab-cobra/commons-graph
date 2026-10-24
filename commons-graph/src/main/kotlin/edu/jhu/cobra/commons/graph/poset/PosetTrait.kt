@@ -26,7 +26,10 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
  * cost O(candidates of the label) instead of a full edge scan (spec-poset.md,
  * Label Carrier Index). Each of these label operations runs inside
  * [storage]'s critical section, so its label read, label write, and index
- * update are one atomic step.
+ * update are one atomic step. A storage revert repairs the index through
+ * [restoreLabelIndex], which the graph calls with the edges the revert restored;
+ * the owning graph's endpoint membership, not the index, decides which candidates
+ * [getLabeledEdges] returns.
  *
  * @param N The node type.
  * @param E The edge type.
@@ -73,14 +76,24 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             if (remaining.isEmpty()) delEdge(src, dst, tag)
         }
 
-    /** Edges carrying [label] directly — no covering through the poset. */
+    /** Edges carrying [label] directly, whose endpoints belong to this graph — no covering through the poset. */
     public fun getLabeledEdges(label: Label): Sequence<E> =
         storage.criticalSection {
             labelIndex.ensureBuilt { getAllEdges() }
             val (stored, deleted) = labelIndex.candidates(label).partition { it.isStored() }
             for (edge in deleted) labelIndex.drop(label, edge)
-            stored.filter { label in it.labels }.asSequence()
+            stored.filter { containNode(it.srcNid) && containNode(it.dstNid) && label in it.labels }.asSequence()
         }
+
+    /**
+     * Re-records the final labels of the edges [ids] that [resolve] maps to an edge of this graph. A graph
+     * that implements this trait calls it from `onRestoredEdges`, so a storage revert that exposes an edge or
+     * its labels again leaves [labelIndex] complete.
+     */
+    public fun restoreLabelIndex(
+        ids: Set<Int>,
+        resolve: (Int) -> E?,
+    ): Unit = storage.criticalSection { labelIndex.restoreEdges(ids, resolve) }
 
     /** On every edge carrying [from] that satisfies [cond], replaces [from] by [to]. */
     public fun relabel(

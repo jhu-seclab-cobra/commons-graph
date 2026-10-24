@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.poset
 
 import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,6 +23,9 @@ import kotlin.test.assertNull
  * - `compare of a reparented frozen label is restored after revert` -- tombstoned edges restored
  * - `compare of a frozen label stripped of parents is restored after revert` -- empty replacement
  * - `compare of a frozen descendant is restored after its ancestor is reparented and reverted` -- descendant rows
+ * - `compare of a parentless frozen label that gained only new parents is restored after revert` -- no restored edge
+ * - `revert keeps the rows when only a parent edge property was promoted` -- promoted edge, same structure
+ * - `revert keeps the rows when a surviving label gains and loses a child` -- removed edge of a removed source
  */
 internal class PosetDftImplRevertTest {
     private val frozen = Label("frozen")
@@ -155,5 +159,40 @@ internal class PosetDftImplRevertTest {
         storage.clearActiveLayer()
 
         assertEquals(1, poset.compare(frozenParent, grandchild))
+    }
+
+    @Test
+    fun `compare of a parentless frozen label that gained only new parents is restored after revert`() {
+        poset.setParents(frozenParent, mapOf("up" to other))
+        assertEquals(1, poset.compare(other, frozen))
+
+        storage.clearActiveLayer()
+
+        assertNull(poset.compare(other, frozen))
+        assertEquals(1, poset.compare(frozenParent, frozen))
+    }
+
+    @Test
+    fun `revert keeps the rows when only a parent edge property was promoted`() {
+        assertEquals(1, poset.compare(frozenParent, frozen))
+        storage.setEdgeProperties(storage.edgeIDs.single(), mapOf("k" to "active".strVal))
+
+        storage.clearActiveLayer()
+
+        val reads = counted.readsDuring { assertEquals(1, poset.compare(frozenParent, frozen)) }
+        assertEquals(0, reads)
+    }
+
+    @Test
+    fun `revert keeps the rows when a surviving label gains and loses a child`() {
+        assertEquals(1, poset.compare(frozenParent, frozen))
+        poset.setParents(child, mapOf("p" to frozenParent))
+        poset.setParents(Label("second"), mapOf("p" to child))
+        assertEquals(1, poset.compare(frozenParent, child))
+
+        storage.clearActiveLayer()
+
+        val reads = counted.readsDuring { assertEquals(1, poset.compare(frozenParent, frozen)) }
+        assertEquals(0, reads)
     }
 }

@@ -2,9 +2,8 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.storage.IRevertibleStorage
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.RevertNotice
 import edu.jhu.cobra.commons.graph.storage.criticalSection
-import edu.jhu.cobra.commons.value.SetVal
-import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 
 /**
@@ -40,10 +39,12 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
 
     public abstract val graphId: String
 
-    // Created on first use: the abstract storage is not initialized during this constructor.
+    // Created on first use: the abstract storage and graph ID are not initialized during this constructor.
+    private val owners by lazy { NodeOwners(storage, graphId) }
+
     private val cache by lazy {
-        GraphEntityCache<N, E>(storage, ::newNodeObj, ::newEdgeObj, ::holdsOwnerMark).also { created ->
-            (storage as? IRevertibleStorage)?.addRevertListener(created)
+        GraphEntityCache<N, E>(storage, ::newNodeObj, ::newEdgeObj, owners::holds).also { created ->
+            (storage as? IRevertibleStorage)?.addRevertListener { notice -> repairAfterRevert(notice) }
         }
     }
 
@@ -54,6 +55,25 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
 
     protected abstract fun newEdgeObj(): E
 
+    /**
+     * Called once per revert that may have changed edges, inside the critical section, after the node registry
+     * is reconciled. [ids] are the visible edges whose presence, properties or endpoint registrations changed.
+     * A graph that derives state from edge properties repairs it here; the default does nothing.
+     */
+    protected open fun onRestoredEdges(ids: Set<Int>) {}
+
+    /** The edge stored under [storageId] when both endpoints are registered in this graph, else null. */
+    protected fun edgeByStorageId(storageId: Int): E? {
+        val (src, dst) = storage.getEdgeStructure(storageId)
+        return if (cache.containsStorageId(src) && cache.containsStorageId(dst)) cache.edge(storageId) else null
+    }
+
+    // Registry first, so edges whose endpoints this graph newly owns resolve; then the derived state.
+    private fun repairAfterRevert(notice: RevertNotice) {
+        val affected = notice.restored.edges + cache.incidentEdges(cache.onRevert(notice))
+        if (affected.isNotEmpty()) onRestoredEdges(affected)
+    }
+
     private fun findEdge(
         src: NodeID,
         dst: NodeID,
@@ -62,8 +82,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
         val srcEntry = cache.entryOf(src) ?: return null
         val dstEntry = cache.entryOf(dst) ?: return null
         return storage.getOutgoingEdges(srcEntry.storageId).firstOrNull { edgeId ->
-            val structure = storage.getEdgeStructure(edgeId)
-            structure.dst == dstEntry.storageId && structure.tag == tag
+            storage.getEdgeStructure(edgeId).let { it.dst == dstEntry.storageId && it.tag == tag }
         }
     }
 
@@ -72,14 +91,14 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
     override fun addNode(withID: NodeID): N =
         storage.criticalSection {
             if (cache.containsNode(withID)) throw EntityAlreadyExistException(withID)
-            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal, PROP_OWNERS to ownerMark()))
+            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal, PROP_OWNERS to owners.initial()))
             cache.node(cache.register(withID, storageId))
         }
 
     override fun claimNode(from: AbcNode): N =
         storage.criticalSection {
             cache.entryOf(from.id)?.let { return@criticalSection cache.node(it) }
-            markOwner(from.storageId)
+            owners.mark(from.storageId)
             cache.node(cache.register(from.id, from.storageId))
         }
 
@@ -272,35 +291,6 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> 
 
     // endregion
 
-    private fun ownerMark(): SetVal = SetVal(setOf(StrVal(graphId)))
-
-    /** Adds this graph to the owner set of the row [storageId]; writes only when the graph is missing from the set. */
-    private fun markOwner(storageId: Int) {
-        val existing = ownersOf(storageId)
-        if (existing.contains(StrVal(graphId))) return
-        storage.setNodeProperties(storageId, mapOf(PROP_OWNERS to SetVal(existing.core + StrVal(graphId))))
-    }
-
-    private fun ownersOf(storageId: Int): SetVal = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
-
-    // The one test of whether a row belongs to this graph, shared by rebuild and the revert eviction.
-    private fun holdsOwnerMark(storageId: Int): Boolean = ownersOf(storageId).contains(StrVal(graphId))
-
-    /**
-     * Rebuilds graph-layer caches from storage state.
-     *
-     * Restores the NodeID↔Int index from persisted properties. A node belongs to
-     * this graph when its [PROP_OWNERS] set holds [graphId]; [addNode] and [claimNode]
-     * write that mark when the graph takes the node. A node with no mark belongs
-     * to no graph.
-     */
-    protected fun rebuild(): Unit =
-        storage.criticalSection {
-            cache.clear()
-            for (storageId in storage.nodeIDs) {
-                val nodeIdVal = storage.getNodeProperty(storageId, PROP_NODE_ID) as? StrVal
-                if (nodeIdVal == null || !holdsOwnerMark(storageId)) continue
-                cache.register(nodeIdVal.core, storageId)
-            }
-        }
+    /** Rebuilds the NodeID-to-storage-ID index from the rows whose [PROP_OWNERS] set holds [graphId]. */
+    protected fun rebuild(): Unit = storage.criticalSection { cache.rebuild() }
 }

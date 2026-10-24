@@ -6,6 +6,9 @@ import edu.jhu.cobra.commons.graph.GraphFixtures.NODE_ID_2
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestEdge
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestNode
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.graph.storage.RevertNotice
+import edu.jhu.cobra.commons.graph.storage.StorageEntityIds
+import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,6 +34,9 @@ import kotlin.test.assertTrue
  * - `onRevert drops removed nodes and ignores storage IDs of other graphs` -- revert eviction
  * - `onRevert drops removed edge wrappers so the next call rebinds` -- revert edge eviction
  * - `onRevert drops a restored node whose row lost the owner mark` -- registry follows a dropped mark
+ * - `onRevert registers an owned restored row that has no entry` -- registry follows a restored mark
+ * - `onRevert returns only the storage IDs it newly registered` -- kept entries are not reported
+ * - `onRevert keeps the entry of an owned restored row` -- no re-registration
  */
 internal class GraphEntityCacheTest {
     private lateinit var storage: NativeStorageImpl
@@ -162,7 +168,7 @@ internal class GraphEntityCacheTest {
         cache.register(NODE_ID_1, kept)
         cache.register(NODE_ID_2, removed)
 
-        cache.onRevert(setOf(removed, foreign), emptySet(), emptySet())
+        cache.onRevert(notice(removedNodes = setOf(removed, foreign)))
 
         assertEquals(setOf(NODE_ID_1), cache.nodeIds)
     }
@@ -176,7 +182,7 @@ internal class GraphEntityCacheTest {
         val eid = storage.addEdge(src, dst, EDGE_TAG_1)
         val before = cache.edge(eid)
 
-        cache.onRevert(emptySet(), setOf(eid), emptySet())
+        cache.onRevert(notice(removedEdges = setOf(eid)))
 
         assertNotSame(before, cache.edge(eid))
     }
@@ -190,9 +196,53 @@ internal class GraphEntityCacheTest {
         cache.register(NODE_ID_2, unmarked)
         ownedRows += marked
 
-        cache.onRevert(emptySet(), emptySet(), setOf(marked, unmarked, foreign))
+        cache.onRevert(notice(restoredNodes = setOf(marked, unmarked, foreign)))
 
         assertEquals(setOf(NODE_ID_1), cache.nodeIds)
         assertFalse(cache.containsStorageId(unmarked))
     }
+
+    @Test
+    fun `onRevert registers an owned restored row that has no entry`() {
+        val row = storage.addNode(mapOf(AbcMultipleGraph.PROP_NODE_ID to NODE_ID_1.strVal))
+        ownedRows += row
+
+        cache.onRevert(notice(restoredNodes = setOf(row)))
+
+        assertEquals(row, cache.entryOf(NODE_ID_1)?.storageId)
+        assertTrue(cache.containsStorageId(row))
+    }
+
+    @Test
+    fun `onRevert returns only the storage IDs it newly registered`() {
+        val kept = storage.addNode(mapOf(AbcMultipleGraph.PROP_NODE_ID to NODE_ID_1.strVal))
+        val added = storage.addNode(mapOf(AbcMultipleGraph.PROP_NODE_ID to NODE_ID_2.strVal))
+        cache.register(NODE_ID_1, kept)
+        ownedRows += listOf(kept, added)
+
+        val registered = cache.onRevert(notice(restoredNodes = setOf(kept, added)))
+
+        assertEquals(setOf(added), registered)
+    }
+
+    @Test
+    fun `onRevert keeps the entry of an owned restored row`() {
+        val row = storage.addNode(mapOf(AbcMultipleGraph.PROP_NODE_ID to NODE_ID_1.strVal))
+        val entry = cache.register(NODE_ID_1, row)
+        ownedRows += row
+
+        cache.onRevert(notice(restoredNodes = setOf(row)))
+
+        assertSame(entry, cache.entryOf(NODE_ID_1))
+    }
+
+    private fun notice(
+        removedNodes: Set<Int> = emptySet(),
+        removedEdges: Set<Int> = emptySet(),
+        restoredNodes: Set<Int> = emptySet(),
+    ) = RevertNotice(
+        removed = StorageEntityIds(removedNodes, removedEdges),
+        restored = StorageEntityIds(restoredNodes, emptySet()),
+        edgeStructuresBefore = emptyMap(),
+    )
 }
