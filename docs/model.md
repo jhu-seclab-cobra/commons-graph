@@ -77,7 +77,7 @@ A marker controlling edge visibility. Wraps a string identifier.
 - Label hierarchy is a DAG. No cycles in parent relationships.
 - Layer count is always 1 (active only) or 2 (active + one frozen). Merge-on-freeze maintains this bound.
 - Storage integer IDs are stable across freeze operations and never reused within one storage lifetime.
-- After a revert, every graph and label hierarchy over the storage holds exactly the entities the storage holds: no registered node, cached edge, or label refers to a removed ID.
+- After a revert, every graph and label hierarchy over the storage holds exactly the entities the storage holds: no registered node, cached edge, or label refers to a removed ID, and a graph's label carrier index lists every edge it owns under each label the edge carries.
 
 ---
 

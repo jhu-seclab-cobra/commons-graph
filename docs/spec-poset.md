@@ -50,10 +50,10 @@ query prepares one.
    discarded, and the next query prepares it.
 5. If `l` is its own parent, the table is discarded; the next query raises the
    cycle error.
-6. A storage revert removes the rows of the removed label nodes. Another row
-   keeps its value unless step 3 or 4 replaced the parents of a label that existed
-   before; the revert may restore those parent edges, so the table is discarded
-   then.
+6. A storage revert removes the rows of the removed label nodes. The table is
+   discarded when the notice removes a parent edge of a surviving label, or
+   restores a label's edge that was absent before the revert. A promoted edge
+   with an unchanged structure changes nothing.
 
 ### Invariants
 
@@ -132,7 +132,15 @@ A label removal leaves `candidates` unchanged.
 
 1. Build when not `built`.
 2. For each `e ∈ candidates(L)`: when `e`'s storage ID no longer exists in
-   storage, drop it from `candidates(L)`; otherwise keep `e` when `L ∈ labels(e)`.
+   storage, drop it from `candidates(L)`; otherwise return `e` when both
+   endpoints belong to the graph and `L ∈ labels(e)`. A candidate whose
+   endpoints the graph does not own stays, so a later claim makes it eligible.
+
+### Steps — Restore (storage revert)
+
+1. When not `built`, do nothing: the first build reads the final storage.
+2. For each restored edge `e` that exists and has both endpoints in the
+   graph, for each `l ∈ labels(e)`: add `e` to `candidates(l)`.
 
 ### Steps — Relabel `from → to` on edges satisfying `cond`
 
@@ -143,20 +151,17 @@ A label removal leaves `candidates` unchanged.
 ### Edge cases
 
 - An edge deleted and re-added under the same `(src, dst, tag)` receives a new
-  storage ID; the old entry drops at the next query and the new one is a
-  separate candidate.
-- Two concurrent label assignments on one edge serialize; neither is lost.
+  storage ID; the old entry drops at the next query.
 
 ### Invariants
 
 - Completeness: every edge currently carrying `L` is in `candidates(L)`,
   provided every label assignment after the build goes through the trait.
-- A storage that reverts writes (a cleared layered-storage active layer)
-  restores only labels an edge held before; the build or a record added the
-  edge to those labels' candidates, and they are never removed while the edge
-  exists. Completeness therefore holds across a revert with no invalidation.
+- A revert can expose an edge again after a query dropped it, or after a build
+  that ran while it was hidden. The notice names every restored edge and
+  Restore re-records its labels, so completeness holds across a revert.
 - Dropping a nonexistent edge is safe: storage IDs are never reused within one
-  storage lifetime, so a dropped edge never exists again under the same ID.
+  storage lifetime.
 - `carriers(L)` equals `{e ∈ E | L ∈ labels(e)}`: the query verifies every
   candidate against storage.
 
@@ -178,7 +183,7 @@ iteration.
 ### Complexity
 
 - Build: O(|E| + Σ|labels(e)|), once per graph instance.
-- Record: O(1) expected.
+- Record: O(1) expected. Restore: O(Σ|labels(e)|) over the restored edges.
 - Query and relabel: O(|candidates(L)|). Candidates exceed carriers only by
   edges that lost `L` (a relabel or a labeled delete); a label relabeled `k`
   times keeps up to `k` generations of such edges.
@@ -186,10 +191,8 @@ iteration.
 ### Rejected alternatives
 
 - **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
-- **Exact index (remove on relabel)**: loses completeness when a layered
-  storage reverts the active layer: a revert notification names no edge it
-  restores (a tombstoned edge comes back without any node being promoted), so
-  the index would rescan every restored edge.
+- **Exact index (remove on relabel)**: needs a removal record per relabel; the
+  superset keeps relabel and restore at O(1) per assignment.
 - **Traversal-local write log**: misses carriers written before the current
   traversal under the same deterministic label.
 - **Candidates keyed by `(src, dst, tag)`**: the graph-level identity survives

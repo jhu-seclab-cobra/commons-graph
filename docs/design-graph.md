@@ -97,7 +97,7 @@ Every public operation runs inside `storage.criticalSection` (`design-storage.md
 
 **Revert Coherence:**
 
-The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the cache subscribes as a `RevertListener` at creation and evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache. For each restored node ID it registers, it asks the graph whether the row's owner set still holds the graph's ID (the same test `rebuild()` applies) and evicts the node when it does not (`spec-graph.md` Revert).
+The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the graph subscribes a `RevertListener` at creation. The listener first reconciles the cache: it evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache, and for each restored node ID it applies the test `rebuild()` applies to a row (the owner set holds the graph's ID and the row has a node ID property), registering or evicting the node accordingly. It then calls `onRestoredEdges(ids)` once with the restored edges and the edges incident to the newly registered nodes (`spec-graph.md` Revert). The default does nothing; a graph that derives state from edge properties overrides it, and `edgeByStorageId` resolves an ID to the graph's edge when both endpoints are registered. A graph with `PosetTrait` overrides it as `restoreLabelIndex(ids, ::edgeByStorageId)`.
 
 **Edge Isolation:**
 

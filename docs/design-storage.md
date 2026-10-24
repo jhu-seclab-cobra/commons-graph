@@ -2,7 +2,7 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `IRevertibleStorage`, `RevertListener`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`
+- **Classes**: `IStorage`, `IStorage.EdgeStructure`, `IRevertibleStorage`, `RevertListener`, `RevertNotice`, `StorageEntityIds`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl`
 - **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `IRevertibleStorage` extends `IStorage`; `LayeredStorageImpl` implements `IRevertibleStorage` (composes an internal `ActiveLayer` + at most one `FrozenLayer` wrapping a frozen `IStorage`) and notifies registered `RevertListener`s
 - **Abstract**: `IStorage` (implemented by all storage types); `IRevertibleStorage` (implemented by `LayeredStorageImpl`); `RevertListener` (implemented by graph and poset caches); per-backend bases `AbcJgraphtStorage`, `AbcMapDBStorage`, `AbcNeo4jStorage` (each extended by a plain and a concurrent subclass)
 - **Exceptions**: `GraphException` (abstract base for all graph-layer failures); `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting a frozen-layer node
@@ -77,15 +77,25 @@ interface IStorage : Flushable {
 
 ### IRevertibleStorage
 
-**Responsibility:** An `IStorage` that removes entities without a `deleteNode`/`deleteEdge` call (a revert). Consumers holding caches keyed by storage IDs subscribe to learn which IDs a revert removed.
+**Responsibility:** An `IStorage` that removes entities, or exposes dropped entities and property images again, without a `deleteNode`/`deleteEdge` call (a revert). Consumers holding state derived from storage IDs subscribe to learn which IDs a revert removed or restored.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addRevertListener` | Registers a listener, notified after every revert with the IDs the revert removed or restored. The storage holds the listener for its own lifetime. | `listener: RevertListener` | -- | -- |
+| `addRevertListener` | Registers a listener, notified after every revert with a `RevertNotice`. The storage holds the listener for its own lifetime. | `listener: RevertListener` | -- | -- |
 
 ### RevertListener
 
-**Responsibility:** `fun interface` receiving one revert notification: `onRevert(removedNodes: Set<Int>, removedEdges: Set<Int>, restoredNodes: Set<Int>)`. `removedNodes` and `removedEdges` hold exactly the IDs that existed before the revert and do not exist after it. `restoredNodes` holds the IDs that exist before and after it and whose changes since the last freeze the revert dropped: their properties read as at that freeze again. Invoked inside the storage's `criticalSection`, after the storage state is final; a listener may read the storage and never writes it.
+**Responsibility:** `fun interface` receiving one revert notification, `onRevert(notice: RevertNotice)`. It is invoked once for every successful revert, an empty one included, inside the storage's `criticalSection`, after the storage state and every ID translation are final. A listener may read the storage and never writes it.
+
+### RevertNotice and StorageEntityIds
+
+**Responsibility:** Data of one revert, in the ID namespace of the notifying storage. Every set and map is a snapshot. `StorageEntityIds(nodes, edges)` holds node IDs and edge IDs.
+
+| Field | Content |
+|-------|---------|
+| `removed` | The IDs visible before the revert and absent after it. |
+| `restored` | The IDs visible after the revert whose presence or stored image the revert exposed again by dropping reverted writes, a promoted row included even when the dropped write left the same value. Disjoint from `removed` for each kind. |
+| `edgeStructuresBefore` | The source, destination and tag, read before the revert, of every affected edge visible before it: the removed edges and the restored edges visible before. A restored edge missing from the map has reappeared; one present in it survived with its stored image restored. |
 
 ---
 
@@ -115,10 +125,10 @@ interface IStorage : Flushable {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `freeze` | Merges frozen + active into a new frozen `IStorage`, replaces old frozen layer, resets active layer. Always exactly one frozen layer after freeze. | -- | -- | -- |
-| `clearActiveLayer` | Reverts to the frozen layer: drops every active-layer node, edge, property change, and tombstone. Notifies revert listeners with the active-only node and edge IDs and the promoted frozen node IDs. `clear` notifies every node and edge as removed and no node as restored. | -- | -- | -- |
+| `clearActiveLayer` | Reverts to the frozen layer: drops every active-layer node, edge, property change, and tombstone. Notifies revert listeners once (`spec-graph.md` Revert): the active-only entities as removed; the promoted frozen nodes, the promoted frozen edges and the tombstoned edges as restored. | -- | -- | -- |
 | `layerCount` | Total layers (frozen + active). Always 1 (no frozen) or 2 (one frozen + active). | -- | `Int` | -- |
 
-`clear()` is also a revert: it notifies revert listeners with every node and edge ID it removes.
+`clear()` is also a revert: it notifies revert listeners with every node and edge it removes, with their edge structures, and restores nothing.
 
 **Edge deletion:** Deleting an active-only edge removes it. Deleting a frozen-layer edge — including one promoted into the active layer — drops the active copy and records a tombstone in the active layer. A tombstoned edge reads as absent everywhere (`containsEdge`, `edgeIDs`, adjacency, structure, properties) and is excluded from `freeze` merges; `clearActiveLayer` drops the tombstone and the frozen edge reads again.
 

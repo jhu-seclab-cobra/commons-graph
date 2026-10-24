@@ -103,6 +103,7 @@ storage.criticalSection {
 - Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
 - Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
 - Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks, may read the storage, and never writes it.
+- A `RevertListener` gets one `RevertNotice(removed, restored, edgeStructuresBefore)` per revert (`clearActiveLayer()` and `clear()`), empty ones included. `removed` and `restored` are `StorageEntityIds(nodes, edges)`. A restored edge missing from `edgeStructuresBefore` has reappeared. A graph over the storage repairs its node registry first, then overrides `onRestoredEdges(ids)` to repair state derived from edge properties.
 - Stop every thread that uses a persistent concurrent backend before calling `close()`.
 
 ## Gotchas
