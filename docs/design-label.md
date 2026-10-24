@@ -10,7 +10,7 @@
 
 The label system provides label-based edge visibility as an optional trait. Concrete graph classes opt in by mixing in `PosetTrait` and providing `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E>`; `AbcMultipleGraph.storage` supplies the trait's `storage`.
 
-See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm and `spec-poset.md` for the label carrier index.
+See `model.md` for label ordering semantics, edge visibility rules, and invariants. See `spec-graph.md` for the visibility filtering algorithm and `spec-poset-label-index.md` for the label carrier index.
 
 ---
 
@@ -96,7 +96,7 @@ Backed by a `ListVal` storage property. The setter is `internal`: label assignme
 
 ### LabelEdgeIndex
 
-**Responsibility:** Per-graph inverted index from a label to the edges that may carry it, keyed by edge storage ID. Owned by one graph instance; mutated only by `PosetTrait` default methods. Algorithm, invariants, and preconditions: `spec-poset.md` (Label Carrier Index).
+**Responsibility:** Per-graph inverted index from a label to the edges that may carry it, keyed by edge storage ID. Owned by one graph instance; mutated only by `PosetTrait` default methods. Algorithm, invariants, and preconditions: `spec-poset-label-index.md`.
 
 **Constructor:** `LabelEdgeIndex<E : AbcEdge>()` — public; every member is `internal`.
 

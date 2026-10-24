@@ -9,7 +9,8 @@
 | [design-storage.md](design-storage.md) | Storage module — IStorage and implementations (Native, Concurrent, Layered) |
 | [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, LabelEdgeIndex, PosetTrait |
 | [spec-graph.md](spec-graph.md) | Algorithms — edge lookup, BFS, visibility filtering, layered queries |
-| [spec-poset.md](spec-poset.md) | Poset queries — DAG-correct ancestor closure, label carrier index |
+| [spec-poset.md](spec-poset.md) | Poset queries — DAG-correct ancestor closure |
+| [spec-poset-label-index.md](spec-poset-label-index.md) | Label carrier index — label to edges, build, record, query, restore |
 | [impl.md](impl.md) | Library APIs — commons-value, JGraphT, MapDB, Neo4j |
 | [performance-core.md](performance-core.md) | Core module benchmarks — NativeStorage, LayeredStorage, graph-level |
 | [performance-optimizations.md](performance-optimizations.md) | Optimization log — completed, rejected, candidates, insights |
