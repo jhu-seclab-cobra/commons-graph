@@ -90,7 +90,7 @@ The poset store uses auto-generated `Int` IDs:
 var labels: Set<Label>
 ```
 
-Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`), which keeps `LabelEdgeIndex` complete.
+Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `setLabels`), which keeps `LabelEdgeIndex` complete.
 
 ---
 
@@ -123,7 +123,7 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 | `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
 | `storage` | `IStorage` | Storage of this graph; its critical section makes each label operation atomic |
 
-**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, and `relabel` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
+**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, `relabel`, and `setLabels` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -131,6 +131,7 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 | `delEdge(src, dst, tag, label)` | Removes label; if the edge carried the label and none remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
 | `getLabeledEdges(label)` | Edges carrying `label` directly (no covering), in O(candidates); materialized inside the critical section | `label` | `Sequence<E>` | -- |
 | `relabel(from, to, cond)` | On every edge carrying `from` with `cond`, replaces `from` by `to`; `from == to` is a no-op | `from`; `to`; `cond` | -- | -- |
+| `setLabels(edge, labels)` | Replaces the edge's whole label set and records the edge under each new label; an empty set keeps the edge with no label | `edge`: E; `labels`: Set<Label> | -- | -- |
 | `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getChildren(of, label, cond)` | Nodes via label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<N>` | -- |
