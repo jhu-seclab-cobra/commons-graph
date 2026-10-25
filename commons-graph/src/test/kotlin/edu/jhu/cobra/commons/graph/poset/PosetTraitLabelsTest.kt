@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * - `getLabeledEdges finds the edge under each new label` -- index records every new label
  * - `getLabeledEdges excludes the edge under a replaced label` -- stale candidate validated on read
  * - `setLabels leaves other carriers of the replaced label indexed` -- only the given edge moves
- * - `setLabels on a labeled edge of another tag leaves it untouched` -- only the given edge changes
+ * - `setLabels leaves the labels of another edge untouched` -- only the given edge changes
  */
 internal class PosetTraitLabelsTest {
     private lateinit var graph: TestGraph
@@ -80,13 +80,13 @@ internal class PosetTraitLabelsTest {
     }
 
     @Test
-    fun `setLabels on a labeled edge of another tag leaves it untouched`() {
-        val rel = graph.addEdge("a", "b", "rel", c)
-        val ctl = graph.addEdge("a", "b", "ctl", c)
+    fun `setLabels leaves the labels of another edge untouched`() {
+        val ab = graph.addEdge("a", "b", "rel", c)
+        val ba = graph.addEdge("b", "a", "rel", c)
 
-        graph.setLabels(rel, setOf(p))
+        graph.setLabels(ab, setOf(p))
 
-        assertEquals(setOf(c), ctl.labels)
-        assertEquals(setOf(p), rel.labels)
+        assertEquals(setOf(c), ba.labels)
+        assertEquals(setOf(p), ab.labels)
     }
 }

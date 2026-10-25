@@ -21,15 +21,13 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
  * bypasses filtering and returns all edges, labeled or not; edges with no
  * labels are otherwise visible only through unfiltered queries.
  *
- * Label assignments go through [addEdge], [delEdge], and [relabel] with a
- * label, which maintain [labelIndex]; [getLabeledEdges] and [relabel] then
- * cost O(candidates of the label) instead of a full edge scan (spec-poset.md,
- * Label Carrier Index). Each of these label operations runs inside
- * [storage]'s critical section, so its label read, label write, and index
- * update are one atomic step. A storage revert repairs the index through
- * [restoreLabelIndex], which the graph calls with the edges the revert restored;
- * the owning graph's endpoint membership, not the index, decides which candidates
- * [getLabeledEdges] returns.
+ * Label assignments go through [addEdge], [delEdge], [relabel] and [setLabels], which maintain
+ * [labelIndex]; [getLabeledEdges] and [relabel] then cost O(candidates of the label) instead of a
+ * full edge scan (spec-poset-label-index.md). Each of these label operations runs inside
+ * [storage]'s critical section, so its label read, label write, and index update are one atomic
+ * step. A storage revert repairs the index through [restoreLabelIndex], which the graph calls
+ * with the edges the revert restored; the owning graph's endpoint membership, not the index,
+ * decides which candidates [getLabeledEdges] returns.
  *
  * @param N The node type.
  * @param E The edge type.
@@ -74,6 +72,17 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             val remaining = edge.labels - label
             edge.labels = remaining
             if (remaining.isEmpty()) delEdge(src, dst, tag)
+        }
+
+    /** Replaces the labels of [edge] with [labels]; the edge stays in the graph even when [labels] is empty. */
+    public fun setLabels(
+        edge: E,
+        labels: Set<Label>,
+    ): Unit =
+        storage.criticalSection {
+            labelIndex.ensureBuilt { getAllEdges() }
+            edge.labels = labels
+            for (label in labels) labelIndex.record(label, edge)
         }
 
     /** Edges carrying [label] directly, whose endpoints belong to this graph — no covering through the poset. */

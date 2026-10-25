@@ -33,9 +33,8 @@ import kotlin.concurrent.withLock
  * Thread-safe: every operation acquires [lock], mirroring [NativeConcurStorageImpl]. Every
  * returned collection is a copy taken under the lock; later writes, [freeze], and
  * [clearActiveLayer] never change it.
- * [criticalSectionLock] is its write lock; revert listeners run while it is held. [clearActiveLayer] and
- * [clear] each notify one [RevertNotice] naming the removed, restored and structure-changed entities.
- * Uses internal non-locking helpers to avoid lock re-entrance overhead.
+ * [criticalSectionLock] is its write lock; revert listeners run while it is held. [clearActiveLayer] and [clear]
+ * each notify one [RevertNotice] naming the removed, restored and structure-changed entities.
  *
  * @param frozenLayerFactory Factory for creating storage instances used as frozen layers.
  * @see FrozenLayerModificationException
@@ -117,8 +116,7 @@ public class LayeredStorageImpl(
     override fun getNodeProperty(
         id: Int,
         name: String,
-    ): IValue? =
-        lock.readLock().withLock { layers.nodeProperty(id, name) }
+    ): IValue? = lock.readLock().withLock { layers.nodeProperty(id, name) }
 
     override fun setNodeProperties(
         id: Int,
@@ -166,6 +164,12 @@ public class LayeredStorageImpl(
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> =
         lock.readLock().withLock { java.util.Map.copyOf(layers.edgeProperties(id)) }
+
+    /** A copy of the edge's properties as [layer] holds them, read under one lock; null when [layer] has no row. */
+    public fun getEdgeProperties(
+        id: Int,
+        layer: StorageLayer,
+    ): Map<String, IValue>? = lock.readLock().withLock { layers.edgeProperties(id, layer)?.toMap() }
 
     override fun getEdgeProperty(
         id: Int,

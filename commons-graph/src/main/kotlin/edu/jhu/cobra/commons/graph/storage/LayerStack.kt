@@ -73,6 +73,17 @@ internal class LayerStack {
         return checkNotNull(frozen?.edgeProperties(id))
     }
 
+    // The row one layer itself holds, or null; a tombstone hides an edge from VISIBLE only.
+    fun edgeProperties(
+        id: Int,
+        layer: StorageLayer,
+    ): Map<String, IValue>? =
+        when (layer) {
+            StorageLayer.VISIBLE -> if (containsEdge(id)) edgeProperties(id) else null
+            StorageLayer.ACTIVE -> if (active.containsEdge(id)) ColumnViewMap(id, active.edgeColumns) else null
+            StorageLayer.FROZEN -> frozen?.edgeProperties(id)
+        }
+
     fun edgeProperty(
         id: Int,
         name: String,
