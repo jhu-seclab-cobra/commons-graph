@@ -130,7 +130,7 @@ interface IStorage : Flushable {
 
 `clear()` is also a revert: it notifies revert listeners with every node and edge it removes, with their edge structures, and restores nothing.
 
-**Edge deletion:** Deleting an active-only edge removes it. Deleting a frozen-layer edge — including one promoted into the active layer — drops the active copy and records a tombstone in the active layer. A tombstoned edge reads as absent everywhere (`containsEdge`, `edgeIDs`, adjacency, structure, properties) and is excluded from `freeze` merges; `clearActiveLayer` drops the tombstone and the frozen edge reads again.
+**Edge deletion:** Deleting an active-only edge removes it. Deleting a frozen-layer edge — including one promoted into the active layer — drops the active copy and records a tombstone in the active layer. A tombstoned edge reads as absent through the ordinary `IStorage` reads (`containsEdge`, `edgeIDs`, adjacency, structure, properties) and is excluded from `freeze` merges; only the `FROZEN` snapshot below still shows its frozen row; `clearActiveLayer` drops the tombstone and the frozen edge reads again.
 
 **Node deletion constraint:** Only nodes that exist solely in the active layer can be deleted. Deleting a frozen-layer node — including one promoted into the active layer — throws `FrozenLayerModificationException`.
 
@@ -138,7 +138,7 @@ interface IStorage : Flushable {
 
 **Layer snapshots:** `getEdgeProperties(id, layer: StorageLayer): Map<String, IValue>?` (concrete class method) returns a copy of one edge's whole property map as one layer holds it, taken under one read lock, so labels and payload belong to the same write. `StorageLayer.VISIBLE` is the ordinary view (null when the edge is absent or tombstoned); `ACTIVE` is the active layer's own row (null when the edge was neither added nor written since the last `freeze` or `clearActiveLayer`); `FROZEN` is the frozen row (null when the edge is not frozen) and ignores tombstones, so a caller can read the row a deletion or write shadows. An id that no layer knows is null in every layer, never an exception.
 
-**Internal composition:** `LayerStack` (internal; holds the two layers and resolves every unlocked read over them: active-authoritative, tombstones hide frozen edges); `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta, edge and meta tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union inside the lock; a public read copies the view's contents before releasing it.
+**Internal composition:** `LayerStack` (internal; holds the two layers and resolves every unlocked read over them: ordinary `IStorage` reads are active-authoritative and tombstones hide frozen edges; a `StorageLayer` snapshot reads one layer); `ActiveLayer` (mutable columnar node/edge properties, endpoints, adjacency, meta, edge and meta tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-layer property reads, frozen-edge ID translation, and cross-layer adjacency union inside the lock; a public read copies the view's contents before releasing it.
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
@@ -191,7 +191,7 @@ All graph-layer exceptions extend the abstract base `GraphException` (extends `E
 
 | Exception | When raised |
 |-----------|------------|
-| `EntityNotExistException` | Accessing/modifying a non-existent node or edge; adding an edge with missing src/dst |
+| `EntityNotExistException` | Accessing/modifying a non-existent node or edge through an `IStorage` accessor (the `StorageLayer` snapshot returns null instead); adding an edge with missing src/dst |
 | `EntityAlreadyExistException` | Graph layer: adding a node/edge whose `NodeID` or `(src, dst, tag)` triple already exists; never raised by `IStorage`, whose IDs are auto-generated |
 | `InvalidPropNameException` | Property name collides with a backend reserved name (Neo4j `__sid__`, `__tag__`, `__meta_id__`) or an exporter structural attribute (GML `nid`/`esrc`/`edst`/`etype`, MapDB `_nid`/`_esrc`/`_edst`/`_etag`) |
 | `FrozenLayerModificationException` | Deleting a frozen-layer node in `LayeredStorageImpl` |
