@@ -88,14 +88,19 @@ internal class PublicationWriteMergeTest {
     @Test
     fun `owner union ignores a stale owner a writer carried unchanged`() {
         // The base no longer holds "old"; the writer's before-image and after-image both carry it.
-        val merged = ownerLaw.merge(ownerSet("ast"), listOf(ownerChange(ownerSet("ast", "old"), ownerSet("ast", "old", "adg"))))
+        val merged =
+            ownerLaw.merge(
+                ownerSet("ast"),
+                listOf(ownerChange(ownerSet("ast", "old"), ownerSet("ast", "old", "adg"))),
+            )
 
         assertEquals(ownerSet("ast", "adg"), merged)
     }
 
     @Test
     fun `owner union on an absent owner set`() {
-        val merged = ownerLaw.merge(null, listOf(ownerChange(null, ownerSet("adg")), ownerChange(null, ownerSet("ccg"))))
+        val merged =
+            ownerLaw.merge(null, listOf(ownerChange(null, ownerSet("adg")), ownerChange(null, ownerSet("ccg"))))
 
         assertEquals(ownerSet("adg", "ccg"), merged)
         assertNull(ownerLaw.merge(null, listOf(ownerChange(null, null))))
@@ -195,7 +200,9 @@ internal class PublicationWriteMergeTest {
         val idLaw = graph.nodePropertyLaw(PROP_NODE_ID)
         val kindLaw = declaring.nodePropertyLaw("kind")
 
-        assertFailsWith<MergeConflictException> { idLaw.merge("a".strVal, listOf(WriterChange<IValue?>("a".strVal, "b".strVal))) }
+        assertFailsWith<MergeConflictException> {
+            idLaw.merge("a".strVal, listOf(WriterChange<IValue?>("a".strVal, "b".strVal)))
+        }
         assertFailsWith<MergeConflictException> { kindLaw.merge(1.intVal, listOf(change(1, 2))) }
         assertFailsWith<MergeConflictException> { kindLaw.merge(1.intVal, listOf(change(1, null))) }
         assertEquals(1.intVal, kindLaw.merge(1.intVal, listOf(change(null, 1))))

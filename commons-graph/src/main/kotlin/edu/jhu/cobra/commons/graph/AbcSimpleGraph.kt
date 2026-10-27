@@ -22,7 +22,8 @@ public abstract class AbcSimpleGraph<N : AbcNode, E : AbcEdge> : AbcMultipleGrap
         }
 
     /** The pair key: at most one edge joins a source and a destination, whatever the tag. */
-    override fun edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>> = mapOf(PAIR_KEY to listOf(edge.src, edge.dst))
+    override fun edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>> =
+        mapOf(PAIR_KEY to listOf(edge.src, edge.dst))
 
     private companion object {
         // Name of the unique-key declaration that limits a source and a destination to one edge.

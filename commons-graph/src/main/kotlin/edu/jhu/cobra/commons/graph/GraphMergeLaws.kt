@@ -46,11 +46,14 @@ public interface GraphMergeLaws {
         for (edge in coalesced) {
             for (key in uniqueKeysOf(edge)) {
                 val holder = holders.putIfAbsent(key, edge)
-                if (holder != null && holder != edge) throw MergeConflictException("edges $holder and $edge share unique key $key")
+                if (holder != null && holder != edge) {
+                    throw MergeConflictException("edges $holder and $edge share unique key $key")
+                }
             }
         }
         return coalesced
     }
 
-    private fun uniqueKeysOf(edge: EdgeKey): List<Pair<String, List<String>>> = edgeUniqueKeys(edge).map { it.key to it.value }
+    private fun uniqueKeysOf(edge: EdgeKey): List<Pair<String, List<String>>> =
+        edgeUniqueKeys(edge).map { it.key to it.value }
 }
