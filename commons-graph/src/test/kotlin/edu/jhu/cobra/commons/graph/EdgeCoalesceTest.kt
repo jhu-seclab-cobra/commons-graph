@@ -1,9 +1,6 @@
 package edu.jhu.cobra.commons.graph
 
-import edu.jhu.cobra.commons.graph.GraphFixtures.TestEdge
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestMultipleGraph
-import edu.jhu.cobra.commons.graph.GraphFixtures.TestNode
-import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,27 +11,17 @@ import kotlin.test.assertFailsWith
  * graph declares (model.md Merge Laws; design-graph.md GraphMergeLaws).
  *
  * - `edge additions of one triple coalesce` -- triple identity
+ * - `two additions of one triple coalesce on a simple graph` -- the pair key leaves one triple alone
  * - `edges with different tags are distinct` -- tag is part of identity
- * - `a declared unique key violation fails the set` -- graph-declared uniqueness
- * - `a declared unique key violation against a present edge fails` -- present edges count
- * - `an addition equal to a present edge coalesces without conflict` -- identity before uniqueness
+ * - `two additions on one pair with different tags fail on a simple graph` -- the simple graph's declared pair key
+ * - `a multiple graph accepts two tags on one pair` -- the default declares no pair key
+ * - `an addition sharing a pair with a present edge fails on a simple graph` -- present edges count
+ * - `an addition equal to a present edge coalesces on a simple graph` -- identity before uniqueness
  * - `the edge key of an edge equals its triple` -- AbcEdge identity
  */
 internal class EdgeCoalesceTest {
-    private class PairKeyGraph(
-        override val storage: IStorage,
-    ) : AbcMultipleGraph<TestNode, TestEdge>() {
-        override val graphId: String = "PairKey"
-
-        override fun newNodeObj() = TestNode()
-
-        override fun newEdgeObj() = TestEdge()
-
-        override fun edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>> = mapOf("pair" to listOf(edge.src, edge.dst))
-    }
-
     private val graph = TestMultipleGraph(NativeStorageImpl())
-    private val declaring = PairKeyGraph(NativeStorageImpl())
+    private val simple = GraphFixtures.createTestSimpleGraph()
 
     private fun key(
         src: String,
@@ -50,6 +37,13 @@ internal class EdgeCoalesceTest {
     }
 
     @Test
+    fun `two additions of one triple coalesce on a simple graph`() {
+        val coalesced = simple.coalesceEdges(listOf(key("a", "b", "t"), key("a", "b", "t")))
+
+        assertEquals(setOf(key("a", "b", "t")), coalesced)
+    }
+
+    @Test
     fun `edges with different tags are distinct`() {
         val coalesced = graph.coalesceEdges(listOf(key("a", "b", "t1"), key("a", "b", "t2")))
 
@@ -57,28 +51,34 @@ internal class EdgeCoalesceTest {
     }
 
     @Test
-    fun `a declared unique key violation fails the set`() {
+    fun `two additions on one pair with different tags fail on a simple graph`() {
         val additions = listOf(key("a", "b", "t1"), key("a", "b", "t2"))
 
         for (order in permutations(additions)) {
-            assertFailsWith<MergeConflictException> { declaring.coalesceEdges(order) }
+            assertFailsWith<MergeConflictException> { simple.coalesceEdges(order) }
         }
-        assertEquals(2, graph.coalesceEdges(additions).size)
     }
 
     @Test
-    fun `a declared unique key violation against a present edge fails`() {
-        val present = listOf(key("a", "b", "t1"))
+    fun `a multiple graph accepts two tags on one pair`() {
+        val additions = listOf(key("a", "b", "t1"), key("a", "b", "t2"))
 
-        assertFailsWith<MergeConflictException> { declaring.coalesceEdges(listOf(key("a", "b", "t2")), present) }
-        assertEquals(setOf(key("a", "c", "t2")), declaring.coalesceEdges(listOf(key("a", "c", "t2")), present))
+        assertEquals(additions.toSet(), graph.coalesceEdges(additions))
     }
 
     @Test
-    fun `an addition equal to a present edge coalesces without conflict`() {
+    fun `an addition sharing a pair with a present edge fails on a simple graph`() {
         val present = listOf(key("a", "b", "t1"))
 
-        assertEquals(setOf(key("a", "b", "t1")), declaring.coalesceEdges(listOf(key("a", "b", "t1")), present))
+        assertFailsWith<MergeConflictException> { simple.coalesceEdges(listOf(key("a", "b", "t2")), present) }
+        assertEquals(setOf(key("a", "c", "t2")), simple.coalesceEdges(listOf(key("a", "c", "t2")), present))
+    }
+
+    @Test
+    fun `an addition equal to a present edge coalesces on a simple graph`() {
+        val present = listOf(key("a", "b", "t1"))
+
+        assertEquals(setOf(key("a", "b", "t1")), simple.coalesceEdges(listOf(key("a", "b", "t1")), present))
     }
 
     @Test
@@ -89,5 +89,4 @@ internal class EdgeCoalesceTest {
 
         assertEquals(key("a", "b", "t"), edge.key)
     }
-
 }
