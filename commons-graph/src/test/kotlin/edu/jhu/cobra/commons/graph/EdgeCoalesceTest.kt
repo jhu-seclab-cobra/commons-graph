@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.GraphFixtures.TestMultipleGraph
+import edu.jhu.cobra.commons.graph.GraphFixtures.permutations
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import kotlin.test.Test
 import kotlin.test.assertEquals

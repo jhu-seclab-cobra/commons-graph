@@ -8,6 +8,14 @@ import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 
 object GraphFixtures {
+    /** Every order of [items]; a merge law's result must be equal for all of them. */
+    fun <T> permutations(items: List<T>): List<List<T>> =
+        if (items.size <= 1) {
+            listOf(items)
+        } else {
+            items.indices.flatMap { i -> permutations(items - items[i]).map { listOf(items[i]) + it } }
+        }
+
     const val NODE_ID_1: NodeID = "node1"
     const val NODE_ID_2: NodeID = "node2"
     const val NODE_ID_3: NodeID = "node3"
