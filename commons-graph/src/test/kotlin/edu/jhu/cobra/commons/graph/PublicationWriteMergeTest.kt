@@ -36,6 +36,7 @@ internal fun <T> permutations(items: List<T>): List<List<T>> =
  * - `owner union of three graphs keeps all three` -- AST, ADG and CCG owner marks on one row
  * - `owner union ignores a stale owner a writer carried unchanged` -- additions only
  * - `owner union on an absent owner set` -- no base set
+ * - `owner union with no changes keeps the base` -- empty change collection
  * - `a revert after the three-owner union restores the first owner only` -- layered storage fixture
  * - `equal property writes are idempotent` -- default law
  * - `differing property writes without a declared law fail` -- default law
@@ -43,6 +44,9 @@ internal fun <T> permutations(items: List<T>): List<List<T>> =
  * - `a write against a base another writer moved fails unless equal` -- stale before-image
  * - `an immutable property cannot be overwritten` -- immutable law
  * - `a declared pure law is applied in every order` -- graph-declared law
+ * - `deletion against an absent property stays absent` -- idempotent absence
+ * - `equal stale writes to the current base are idempotent` -- differing before-images
+ * - `an empty change collection preserves a property` -- no selected changes
  */
 internal class PublicationWriteMergeTest {
     // region owners
@@ -95,6 +99,12 @@ internal class PublicationWriteMergeTest {
 
         assertEquals(ownerSet("adg", "ccg"), merged)
         assertNull(ownerLaw.merge(null, listOf(ownerChange(null, null))))
+    }
+
+    @Test
+    fun `owner union with no changes keeps the base`() {
+        assertEquals(ownerSet("ast"), ownerLaw.merge(ownerSet("ast"), emptyList()))
+        assertNull(ownerLaw.merge(null, emptyList()))
     }
 
     @Test
@@ -202,6 +212,30 @@ internal class PublicationWriteMergeTest {
         assertEquals(setOf<IValue?>(7.intVal), results)
     }
 
+    @Test
+    fun `deletion against an absent property stays absent`() {
+        val law = graph.nodePropertyLaw("p")
+
+        assertNull(law.merge(null, listOf(change(1, null), change(null, null))))
+    }
+
+    @Test
+    fun `equal stale writes to the current base are idempotent`() {
+        val law = graph.nodePropertyLaw("p")
+
+        for (order in permutations(listOf(change(1, 3), change(2, 3)))) {
+            assertEquals(3.intVal, law.merge(3.intVal, order))
+        }
+    }
+
+    @Test
+    fun `an empty change collection preserves a property`() {
+        val law = graph.nodePropertyLaw("p")
+
+        assertEquals(3.intVal, law.merge(3.intVal, emptyList()))
+        assertNull(law.merge(null, emptyList()))
+        assertEquals(3.intVal, PropertyMergeLaw.IMMUTABLE.merge(3.intVal, emptyList()))
+    }
 
     // endregion
 

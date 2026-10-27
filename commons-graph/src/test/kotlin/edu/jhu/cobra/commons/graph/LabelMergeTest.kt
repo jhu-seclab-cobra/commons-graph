@@ -26,6 +26,9 @@ import kotlin.test.assertFailsWith
  * - `creating a present empty labels key preserves presence` -- absent key versus present empty list
  * - `deleting a present empty labels key preserves absence` -- present empty list versus absent key
  * - `opposing labels key creation and deletion fail` -- key presence is a change of its own
+ * - `another writer holding a label does not cancel its addition` -- cross-writer before-image
+ * - `a stale label image neither deletes new base labels nor restores stale labels` -- base differs from before-image
+ * - `no label changes preserve the base` -- empty change collections, set and stored list
  */
 internal class LabelMergeTest {
     private val x = Label("x")
@@ -149,5 +152,30 @@ internal class LabelMergeTest {
         for (order in permutations(changes)) {
             assertFailsWith<MergeConflictException> { law.merge(empty, order) }
         }
+    }
+
+    @Test
+    fun `another writer holding a label does not cancel its addition`() {
+        val changes =
+            listOf(labelChange(setOf(z), setOf(z, x)), labelChange(setOf(z, x), setOf(z, x, y)))
+
+        for (order in permutations(changes)) assertEquals(setOf(x, y, z), PosetTrait.mergeLabels(setOf(z), order))
+    }
+
+    @Test
+    fun `a stale label image neither deletes new base labels nor restores stale labels`() {
+        val change = labelChange(setOf(x, y), setOf(x))
+
+        assertEquals(setOf(x, z), PosetTrait.mergeLabels(setOf(x, z), listOf(change)))
+    }
+
+    @Test
+    fun `no label changes preserve the base`() {
+        val law = TestMultipleGraph(NativeStorageImpl()).edgePropertyLaw("labels")
+        val present = ListVal(listOf(StrVal(x.core)))
+
+        assertEquals(setOf(x), PosetTrait.mergeLabels(setOf(x), emptyList()))
+        assertEquals(null, law.merge(null, emptyList()))
+        assertEquals(present, law.merge(present, emptyList()))
     }
 }

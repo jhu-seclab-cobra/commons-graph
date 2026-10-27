@@ -17,6 +17,9 @@ import kotlin.test.assertFailsWith
  * - `a multiple graph accepts two tags on one pair` -- the default declares no pair key
  * - `an addition sharing a pair with a present edge fails on a simple graph` -- present edges count
  * - `an addition equal to a present edge coalesces on a simple graph` -- identity before uniqueness
+ * - `duplicate additions still conflict with a present pair holder` -- coalescing never bypasses validation
+ * - `present and duplicate added copies of one triple coalesce` -- one identity across present and added
+ * - `no additions coalesce to nothing` -- empty input
  * - `the edge key of an edge equals its triple` -- AbcEdge identity
  */
 internal class EdgeCoalesceTest {
@@ -88,5 +91,25 @@ internal class EdgeCoalesceTest {
         val edge = graph.addEdge("a", "b", "t")
 
         assertEquals(key("a", "b", "t"), edge.key)
+    }
+
+    @Test
+    fun `duplicate additions still conflict with a present pair holder`() {
+        val present = key("a", "b", "old")
+        val added = key("a", "b", "new")
+
+        assertFailsWith<MergeConflictException> { simple.coalesceEdges(listOf(added, added), listOf(present)) }
+    }
+
+    @Test
+    fun `present and duplicate added copies of one triple coalesce`() {
+        val edge = key("a", "b", "t")
+
+        assertEquals(setOf(edge), simple.coalesceEdges(listOf(edge, edge), listOf(edge)))
+    }
+
+    @Test
+    fun `no additions coalesce to nothing`() {
+        assertEquals(emptySet(), simple.coalesceEdges(emptyList()))
     }
 }
