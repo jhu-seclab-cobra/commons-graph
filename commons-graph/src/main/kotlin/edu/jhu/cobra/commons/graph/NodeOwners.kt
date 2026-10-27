@@ -38,7 +38,8 @@ internal class NodeOwners(
             changes: Collection<PropertyChange>,
         ): IValue? {
             val added = changes.flatMapTo(HashSet()) { membersOf(it.after) - membersOf(it.before) }
-            return if (added.isEmpty()) base else SetVal(membersOf(base) + added)
+            val created = base == null && changes.any { it.before == null && it.after != null }
+            return if (added.isEmpty() && !created) base else SetVal(membersOf(base) + added)
         }
 
         private fun membersOf(value: IValue?): Set<IValue> =

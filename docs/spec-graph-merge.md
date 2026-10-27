@@ -33,7 +33,7 @@ Given the base owner set and the owner sets of several writers, find the merged 
 ### Steps
 
 1. For each writer, its added owners are `after - before`.
-2. If no writer added an owner, return the base unchanged (an absent base stays absent).
+2. If no writer added an owner, return the base unchanged; an absent base stays absent unless a writer's before-image lacks the key and its after-image holds it, and then the result is the empty owner set.
 3. Otherwise return the base owners plus the union of the added owners.
 
 ### Invariants

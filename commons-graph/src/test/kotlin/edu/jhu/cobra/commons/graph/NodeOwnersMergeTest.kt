@@ -21,6 +21,7 @@ import kotlin.test.assertNull
  * - `owner union ignores a stale owner a writer carried unchanged` -- additions only
  * - `owner union on an absent owner set` -- no base set
  * - `owner union with no changes keeps the base` -- empty change collection
+ * - `creating a present empty owner key preserves presence` -- absent key versus present empty set
  * - `a revert after the three-owner union restores the first owner only` -- layered storage fixture
  */
 internal class NodeOwnersMergeTest {
@@ -83,6 +84,13 @@ internal class NodeOwnersMergeTest {
     fun `owner union with no changes keeps the base`() {
         assertEquals(ownerSet("ast"), ownerLaw.merge(ownerSet("ast"), emptyList()))
         assertNull(ownerLaw.merge(null, emptyList()))
+    }
+
+    @Test
+    fun `creating a present empty owner key preserves presence`() {
+        val empty = ownerSet()
+
+        assertEquals(empty, ownerLaw.merge(null, listOf(ownerChange(null, empty))))
     }
 
     @Test
