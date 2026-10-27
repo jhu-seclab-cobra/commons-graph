@@ -3,7 +3,9 @@ package edu.jhu.cobra.commons.graph.poset
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcNode
 import edu.jhu.cobra.commons.graph.IGraph
+import edu.jhu.cobra.commons.graph.MergeConflictException
 import edu.jhu.cobra.commons.graph.NodeID
+import edu.jhu.cobra.commons.graph.WriterChange
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.criticalSection
 
@@ -199,4 +201,24 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         edges: Sequence<E>,
         by: Label,
     ): Sequence<E> = edges.filter { edge -> edge.labels.any { covers(by, it) } }
+
+    public companion object {
+        /**
+         * Merges the label sets of several writers on top of [base]. Each writer adds what its after-image
+         * holds beyond its before-image and removes what its before-image held beyond its after-image; a label
+         * a writer leaves unchanged keeps the base state.
+         *
+         * @throws MergeConflictException when one writer adds a label another removes.
+         */
+        public fun mergeLabels(
+            base: Set<Label>,
+            changes: Collection<WriterChange<Set<Label>>>,
+        ): Set<Label> {
+            val added = changes.flatMapTo(HashSet()) { it.after - it.before }
+            val removed = changes.flatMapTo(HashSet()) { it.before - it.after }
+            val opposed = added intersect removed
+            if (opposed.isNotEmpty()) throw MergeConflictException("labels $opposed are added and removed")
+            return (base + added) - removed
+        }
+    }
 }

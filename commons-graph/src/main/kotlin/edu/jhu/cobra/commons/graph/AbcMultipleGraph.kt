@@ -26,7 +26,9 @@ import edu.jhu.cobra.commons.value.strVal
  * @param E The type of edges in the graph, must extend [AbcEdge].
  */
 @Suppress("TooManyFunctions")
-public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
+public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
+    IGraph<N, E>,
+    GraphMergeLaws {
     public companion object {
         internal const val PROP_NODE_ID = "__nid__"
         internal const val PROP_OWNERS = "__owners__"

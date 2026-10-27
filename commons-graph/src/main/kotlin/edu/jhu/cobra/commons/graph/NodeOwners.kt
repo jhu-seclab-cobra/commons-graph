@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.AbcMultipleGraph.Companion.PROP_OWNERS
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.SetVal
 import edu.jhu.cobra.commons.value.StrVal
 
@@ -27,4 +28,24 @@ internal class NodeOwners(
     }
 
     private fun ownersOf(storageId: Int): SetVal = storage.getNodeProperty(storageId, PROP_OWNERS) as? SetVal ?: SetVal()
+
+    companion object {
+        /** The owner law: the base owners plus every owner a writer added to its own before-image. */
+        val LAW: PropertyMergeLaw = PropertyMergeLaw(::unionOwners)
+
+        private fun unionOwners(
+            base: IValue?,
+            changes: Collection<PropertyChange>,
+        ): IValue? {
+            val added = changes.flatMapTo(HashSet()) { membersOf(it.after) - membersOf(it.before) }
+            return if (added.isEmpty()) base else SetVal(membersOf(base) + added)
+        }
+
+        private fun membersOf(value: IValue?): Set<IValue> =
+            when (value) {
+                null -> emptySet()
+                is SetVal -> value.core
+                else -> throw IllegalArgumentException("owners property is not a set: $value")
+            }
+    }
 }

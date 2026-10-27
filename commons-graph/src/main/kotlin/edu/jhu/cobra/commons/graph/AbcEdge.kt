@@ -1,14 +1,25 @@
 package edu.jhu.cobra.commons.graph
 
 import edu.jhu.cobra.commons.graph.poset.Label
+import edu.jhu.cobra.commons.graph.poset.PosetTrait
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.listVal
 
-// Storage property holding an edge's visibility labels; fixed by the entity design (design-entity.md).
-private const val LABELS_PROP = "labels"
+/**
+ * The identity of an edge: its source node ID, destination node ID and tag.
+ *
+ * @property src The source node ID.
+ * @property dst The destination node ID.
+ * @property tag The edge tag.
+ */
+public data class EdgeKey(
+    val src: NodeID,
+    val dst: NodeID,
+    val tag: String,
+)
 
 /**
  * Abstract base class for graph edges with storage-backed property management.
@@ -69,6 +80,9 @@ public abstract class AbcEdge : AbcEntity() {
         this.eTag = tag
     }
 
+    /** The identity of this edge: the `(src, dst, tag)` triple. */
+    public val key: EdgeKey get() = EdgeKey(srcNid, dstNid, eTag)
+
     /**
      * The edge identifier derived from source, tag, and destination.
      * Display form only — the joined string is ambiguous when a component
@@ -121,4 +135,28 @@ public abstract class AbcEdge : AbcEntity() {
     override fun hashCode(): Int = Triple(srcNid, dstNid, eTag).hashCode()
 
     override fun equals(other: Any?): Boolean = other is AbcEdge && srcNid == other.srcNid && dstNid == other.dstNid && eTag == other.eTag
+
+    internal companion object {
+        // Storage property holding an edge's visibility labels; fixed by the entity design (design-entity.md).
+        const val LABELS_PROP = "labels"
+
+        /** The law of [LABELS_PROP]: [PosetTrait.mergeLabels] over the stored label lists. */
+        val LABELS_LAW: PropertyMergeLaw = PropertyMergeLaw(::mergeStoredLabels)
+
+        private fun mergeStoredLabels(
+            base: IValue?,
+            changes: Collection<PropertyChange>,
+        ): IValue? {
+            val baseLabels = labelsOf(base)
+            val merged = PosetTrait.mergeLabels(baseLabels, changes.map { WriterChange(labelsOf(it.before), labelsOf(it.after)) })
+            return if (merged == baseLabels) base else merged.map { it.core }.sorted().listVal
+        }
+
+        private fun labelsOf(value: IValue?): Set<Label> =
+            when (value) {
+                null -> emptySet()
+                is ListVal -> value.core.mapTo(HashSet()) { Label((it as StrVal).core) }
+                else -> throw IllegalArgumentException("labels property is not a list: $value")
+            }
+    }
 }
