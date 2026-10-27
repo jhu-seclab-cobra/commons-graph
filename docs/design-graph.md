@@ -2,10 +2,10 @@
 
 ## Design Overview
 
-- **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `Flushable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
+- **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`, `GraphMergeLaws`, `PropertyMergeLaw`, `WriterChange`, `EdgeKey`
+- **Relationships**: `AbcMultipleGraph` implements `IGraph`, `GraphMergeLaws` and `Flushable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
-- **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; both extend `GraphException`
+- **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `MergeConflictException` raised by a merge law; all extend `GraphException`
 - **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property); `GraphEntityCache` (internal — NodeID↔Int index and soft-referenced entity wrappers).
 
 The graph layer translates domain-level graph operations into coordinated calls on `IStorage`. It does **not** own property storage, serialization, or backend lifecycle.
@@ -121,11 +121,37 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 ---
 
+### GraphMergeLaws
+
+**Responsibility:** The pure merge laws a graph declares for the prospective changes of several writers; `AbcMultipleGraph` implements it. The laws and their rules: `model.md` Merge Laws; the steps: `spec-graph-merge.md`. Every member reads no storage, registers nothing and hooks no graph or storage write; it runs only when a caller invokes it.
+
+| Member | Behavior | Input | Output | Errors |
+|--------|----------|-------|--------|--------|
+| `nodePropertyLaw(name)` | Node ID property: `PropertyMergeLaw.IMMUTABLE`; owner set: union; any other name: `PropertyMergeLaw.EQUAL_OR_FAIL` | `name` | `PropertyMergeLaw` | -- |
+| `edgePropertyLaw(name)` | The labels property: the label law of `PosetTrait.mergeLabels` over stored lists; any other name: `EQUAL_OR_FAIL` | `name` | `PropertyMergeLaw` | -- |
+| `edgeUniqueKeys(edge)` | Declared unique keys of `edge` besides its triple, name to key components; default none. A variant overrides it | `edge`: EdgeKey | `Map<String, List<String>>` | -- |
+| `coalesceEdges(additions, present)` | Coalesces additions by triple, then checks every declared key of the coalesced edges against each other and against `present` | `additions`, `present`: Collection<EdgeKey> | `Set<EdgeKey>` | `MergeConflictException` |
+
+A variant declares its own property law by overriding `nodePropertyLaw` or `edgePropertyLaw` and delegating other names to `super`.
+
+### PropertyMergeLaw and WriterChange
+
+- `WriterChange<T>(before, after)` is one writer's change; `PropertyChange` is `WriterChange<IValue?>`, where null is an absent key.
+- `PropertyMergeLaw.merge(base, changes): IValue?` is the pure law of one property. The companion holds `EQUAL_OR_FAIL`, the default, and `IMMUTABLE`. A declared law must not depend on the order of `changes`.
+- `MergeConflictException(detail)` extends `GraphException`; a conflict fails the whole set, so the caller applies none of it.
+
+### EdgeKey
+
+`EdgeKey(src, dst, tag)` is the graph-level identity of an edge; `AbcEdge.key` returns it for a bound edge. `NodeOwners` holds the owner law (`NodeOwners.LAW`) beside the owner marks it reads and writes.
+
+---
+
 ## Exception / Error Types
 
 | Exception | When raised |
 |-----------|------------|
 | `EntityAlreadyExistException` | Adding a node/edge that already exists; adding a second edge between the same `(src, dst)` pair in `AbcSimpleGraph` |
 | `EntityNotExistException` | Adding an edge whose src/dst node is missing; claiming a node whose storage row is absent |
+| `MergeConflictException` | A merge law meets opposing changes, or `coalesceEdges` meets two edges sharing a declared unique key |
 
 Deletion of a non-existent entity is a no-op at the graph level.

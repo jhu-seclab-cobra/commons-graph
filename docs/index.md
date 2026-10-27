@@ -3,12 +3,13 @@
 | File | Content |
 |------|---------|
 | [concept.md](concept.md) | Concept document — problem, scope, terminology, data flow, scenarios |
-| [model.md](model.md) | Domain model — entity identity, relations, state, invariants |
+| [model.md](model.md) | Domain model — entity identity, relations, state, invariants, merge laws |
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
-| [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph |
+| [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph, GraphMergeLaws, PropertyMergeLaw |
 | [design-storage.md](design-storage.md) | Storage module — IStorage and implementations (Native, Concurrent, Layered) |
-| [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, LabelEdgeIndex, PosetTrait |
+| [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, LabelEdgeIndex, PosetTrait, label merge |
 | [spec-graph.md](spec-graph.md) | Algorithms — edge lookup, BFS, visibility filtering, layered queries |
+| [spec-graph-merge.md](spec-graph-merge.md) | Merge laws — label merge, owner union, property merge, edge coalescing |
 | [spec-poset.md](spec-poset.md) | Poset queries — DAG-correct ancestor closure |
 | [spec-poset-label-index.md](spec-poset-label-index.md) | Label carrier index — label to edges, build, record, query, restore |
 | [impl.md](impl.md) | Library APIs — commons-value, JGraphT, MapDB, Neo4j |

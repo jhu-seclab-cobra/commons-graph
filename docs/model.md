@@ -81,6 +81,20 @@ A marker controlling edge visibility. Wraps a string identifier.
 
 ---
 
+## Merge Laws
+
+A caller may merge the prospective changes of several writers on top of the current value, the base. A writer's change is its before-image (the value it read) and its after-image (the value it wants); an absent key and a present value differ, and a change compares only with its own writer's before-image. The laws below read no storage and run only when a caller asks; they change no write path of a graph or a storage.
+
+- A merge result is a function of the collection of changes, never of the order of the writers. No law selects a winner by arrival order.
+- Labels of an edge: each writer adds the labels its after-image holds beyond its before-image and removes the labels its before-image held beyond its after-image. The result is the base plus all additions minus all removals. A label one writer adds and another removes fails the whole set; a label a writer leaves unchanged keeps its base state.
+- Owners of a node: the result is the base owner set plus every owner a writer added to its own before-image. The set only grows, so the result is the same in either order and a stale owner a writer merely carried is not re-added.
+- Property default law: the writers that change the property must write equal values, and the base must equal that value or every such writer's before-image. Equal writes are idempotent; a differing write, a delete against a set, or a write against a base another writer moved fails the whole set.
+- Immutable property: a set value stays; a write of another value or a delete fails, and an unset property takes one value under the default law. The node ID property is immutable.
+- A graph variant may declare another pure law for a property; it replaces the default law for that property only.
+- Edge identity: additions with one `(src, dst, tag)` triple coalesce into one edge. A graph may declare further unique keys, each a name and key components; two distinct edges, present or added, sharing the components of one declaration fail the whole set. The triple is the only key a graph declares by default.
+
+---
+
 ## Cross-Structure Contracts
 
 ### Graph ↔ Storage

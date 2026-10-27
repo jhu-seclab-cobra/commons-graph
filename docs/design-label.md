@@ -141,6 +141,14 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 
 See `model.md` for the edge visibility rule and `spec-graph.md` for the filtering algorithm.
 
+**Label merge (companion function):**
+
+| Member | Behavior | Input | Output | Errors |
+|--------|----------|-------|--------|--------|
+| `PosetTrait.mergeLabels(base, changes)` | Pure: base plus the writers' additions minus their removals, each against the writer's own before-image (`model.md` Merge Laws; `spec-graph-merge.md`). Reads no storage and does not touch `labelIndex` | `base`: Set<Label>; `changes`: Collection<WriterChange<Set<Label>>> | `Set<Label>` | `MergeConflictException` if a label is added by one writer and removed by another |
+
+The `labels` property of an edge takes this law through `edgePropertyLaw("labels")` (`design-graph.md`), which merges stored label lists and returns them sorted.
+
 ---
 
 ## Exception / Error Types
@@ -148,5 +156,6 @@ See `model.md` for the edge visibility rule and `spec-graph.md` for the filterin
 | Exception | When raised |
 |-----------|------------|
 | `EntityNotExistException` | `addEdge` with missing src/dst node (from `IGraph`) |
+| `MergeConflictException` | `PosetTrait.mergeLabels` with opposing changes to one label |
 
 `delEdge(src, dst, tag, label)` on a non-existent edge is a no-op. Removing a label the edge does not carry — including from an unlabeled edge — is a no-op: only the labeled `delEdge` call that removes the edge's last carried label deletes the edge.
