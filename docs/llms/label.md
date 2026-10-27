@@ -46,6 +46,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
 - **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
+- **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure merge under the label merge law (`model.md` Merge Laws); `MergeConflictException` under that law's conflict rule.
 
 ### Edge Visibility Rules
 

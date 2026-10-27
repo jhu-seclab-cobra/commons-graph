@@ -91,4 +91,4 @@ Given prospective edge additions, already translated to final node IDs and tags,
 
 ### Termination
 
-One pass over the present edges and one over the coalesced edges. Time O(P + A * K) for P present edges, A additions and K declarations.
+One pass over the present edges and one over the coalesced edges. For P present edges, A additions and at most K declarations per edge (K >= 1), time is O((P + A) * K) and auxiliary space is O(A + (P + A) * K), assuming bounded key size and constant-time expected hash operations.

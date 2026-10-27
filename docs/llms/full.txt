@@ -132,7 +132,7 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 Pure declarations for merging the prospective changes of several writers; each writer carries a before-image and an after-image (`WriterChange(before, after)`; null is an absent key). They read no storage and hook no write.
 
 - **`nodePropertyLaw(name: String): PropertyMergeLaw`** -- Node ID property immutable, owner set by union, other names `PropertyMergeLaw.EQUAL_OR_FAIL`.
-- **`edgePropertyLaw(name: String): PropertyMergeLaw`** -- Labels by writer-relative additions and removals, other names `EQUAL_OR_FAIL`.
+- **`edgePropertyLaw(name: String): PropertyMergeLaw`** -- Labels by the label merge law (`model.md` Merge Laws), other names `EQUAL_OR_FAIL`.
 - **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declared unique keys besides the triple; default none. Override to declare.
 - **`coalesceEdges(additions: Collection<EdgeKey>, present: Collection<EdgeKey> = emptyList()): Set<EdgeKey>`** -- Coalesces by `(src, dst, tag)` and validates declared keys.
 - **`PropertyMergeLaw.merge(base: IValue?, changes: Collection<PropertyChange>): IValue?`** -- Merged value or `MergeConflictException`; the result never depends on writer order.
@@ -407,7 +407,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
 - **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
-- **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure label merge: base plus each writer's additions minus its removals, against the writer's own before-image. `MergeConflictException` if one writer adds a label another removes.
+- **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure merge under the label merge law (`model.md` Merge Laws); `MergeConflictException` under that law's conflict rule.
 
 ### Edge Visibility Rules
 

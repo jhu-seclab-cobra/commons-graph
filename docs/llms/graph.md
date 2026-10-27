@@ -72,10 +72,21 @@ Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPos
 - **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
 - **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
 
+### `GraphMergeLaws` (implemented by `AbcMultipleGraph`)
+
+Pure declarations for merging the prospective changes of several writers; each writer carries a before-image and an after-image (`WriterChange(before, after)`; null is an absent key). They read no storage and hook no write.
+
+- **`nodePropertyLaw(name: String): PropertyMergeLaw`** -- Node ID property immutable, owner set by union, other names `PropertyMergeLaw.EQUAL_OR_FAIL`.
+- **`edgePropertyLaw(name: String): PropertyMergeLaw`** -- Labels by the label merge law (`model.md` Merge Laws), other names `EQUAL_OR_FAIL`.
+- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declared unique keys besides the triple; default none. Override to declare.
+- **`coalesceEdges(additions: Collection<EdgeKey>, present: Collection<EdgeKey> = emptyList()): Set<EdgeKey>`** -- Coalesces by `(src, dst, tag)` and validates declared keys.
+- **`PropertyMergeLaw.merge(base: IValue?, changes: Collection<PropertyChange>): IValue?`** -- Merged value or `MergeConflictException`; the result never depends on writer order.
+
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 
 - **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Same constraint: at most one edge per direction.
+- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` fails for two distinct edges on one pair.
 
 ## Gotchas
 

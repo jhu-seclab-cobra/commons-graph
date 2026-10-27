@@ -145,9 +145,9 @@ See `model.md` for the edge visibility rule and `spec-graph.md` for the filterin
 
 | Member | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `PosetTrait.mergeLabels(base, changes)` | Pure: base plus the writers' additions minus their removals, each against the writer's own before-image (`model.md` Merge Laws; `spec-graph-merge.md`). Reads no storage and does not touch `labelIndex` | `base`: Set<Label>; `changes`: Collection<WriterChange<Set<Label>>> | `Set<Label>` | `MergeConflictException` if a label is added by one writer and removed by another |
+| `PosetTrait.mergeLabels(base, changes)` | Applies the [label merge law](model.md#merge-laws); reads no storage and does not touch `labelIndex` | `base`: Set<Label>; `changes`: Collection<WriterChange<Set<Label>>> | `Set<Label>` | `MergeConflictException` under that law's conflict rule |
 
-The `labels` property of an edge takes this law through `edgePropertyLaw("labels")` (`design-graph.md`), which merges stored label lists and returns them sorted.
+The `labels` property of an edge takes this law through `edgePropertyLaw("labels")` (`design-graph.md`), which accepts stored label lists and returns the merged property value.
 
 ---
 
