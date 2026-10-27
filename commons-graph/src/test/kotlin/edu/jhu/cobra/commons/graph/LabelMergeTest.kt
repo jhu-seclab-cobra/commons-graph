@@ -23,6 +23,9 @@ import kotlin.test.assertFailsWith
  * - `opposing changes to one label fail in either order` -- add against remove
  * - `the label result never depends on writer order` -- every permutation
  * - `the labels property law merges stored label lists` -- property-level adapter
+ * - `creating a present empty labels key preserves presence` -- absent key versus present empty list
+ * - `deleting a present empty labels key preserves absence` -- present empty list versus absent key
+ * - `opposing labels key creation and deletion fail` -- key presence is a change of its own
  */
 internal class LabelMergeTest {
     private val x = Label("x")
@@ -121,4 +124,30 @@ internal class LabelMergeTest {
         assertEquals(setOf(x.core, y.core, z.core), (forward as ListVal).core.map { (it as StrVal).core }.toSet())
     }
 
+    @Test
+    fun `creating a present empty labels key preserves presence`() {
+        val law = TestMultipleGraph(NativeStorageImpl()).edgePropertyLaw("labels")
+        val empty = ListVal(emptyList())
+
+        assertEquals(empty, law.merge(null, listOf(WriterChange<IValue?>(null, empty))))
+    }
+
+    @Test
+    fun `deleting a present empty labels key preserves absence`() {
+        val law = TestMultipleGraph(NativeStorageImpl()).edgePropertyLaw("labels")
+        val empty = ListVal(emptyList())
+
+        assertEquals(null, law.merge(empty, listOf(WriterChange<IValue?>(empty, null))))
+    }
+
+    @Test
+    fun `opposing labels key creation and deletion fail`() {
+        val law = TestMultipleGraph(NativeStorageImpl()).edgePropertyLaw("labels")
+        val empty = ListVal(emptyList())
+        val changes = listOf(WriterChange<IValue?>(null, empty), WriterChange<IValue?>(empty, null))
+
+        for (order in permutations(changes)) {
+            assertFailsWith<MergeConflictException> { law.merge(empty, order) }
+        }
+    }
 }

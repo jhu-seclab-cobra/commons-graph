@@ -143,13 +143,29 @@ public abstract class AbcEdge : AbcEntity() {
         /** The law of [LABELS_PROP]: [PosetTrait.mergeLabels] over the stored label lists. */
         val LABELS_LAW: PropertyMergeLaw = PropertyMergeLaw(::mergeStoredLabels)
 
+        /**
+         * Merges stored label lists. Membership follows [PosetTrait.mergeLabels]; key presence is resolved
+         * apart from it: a writer creating the key against a writer deleting it fails, a created key stays
+         * present even when empty, and a deleted key is absent unless the merged labels are not empty.
+         */
         private fun mergeStoredLabels(
             base: IValue?,
             changes: Collection<PropertyChange>,
         ): IValue? {
+            val creates = changes.any { it.before == null && it.after != null }
+            val deletes = changes.any { it.before != null && it.after == null }
+            if (creates && deletes) throw MergeConflictException("labels key is created and deleted")
             val baseLabels = labelsOf(base)
-            val merged = PosetTrait.mergeLabels(baseLabels, changes.map { WriterChange(labelsOf(it.before), labelsOf(it.after)) })
-            return if (merged == baseLabels) base else merged.map { it.core }.sorted().listVal
+            val merged =
+                PosetTrait.mergeLabels(
+                    baseLabels,
+                    changes.map { WriterChange(labelsOf(it.before), labelsOf(it.after)) },
+                )
+            return when {
+                deletes && merged.isEmpty() -> null
+                merged == baseLabels && (base != null || !creates) -> base
+                else -> merged.map { it.core }.sorted().listVal
+            }
         }
 
         private fun labelsOf(value: IValue?): Set<Label> =
