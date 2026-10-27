@@ -91,7 +91,7 @@ A caller may merge the prospective changes of several writers on top of the curr
 - Property default law: the writers that change the property must write equal values, and the base must equal that value or every such writer's before-image. Equal writes are idempotent; a differing write, a delete against a set, or a write against a base another writer moved fails the whole set.
 - Immutable property: a set value stays; a write of another value or a delete fails, and an unset property takes one value under the default law. The node ID property is immutable.
 - A graph variant may declare another pure law for a property; it replaces the default law for that property only.
-- Edge identity: additions with one `(src, dst, tag)` triple coalesce into one edge. A graph may declare further unique keys, each a name and key components; two distinct edges, present or added, sharing the components of one declaration fail the whole set. The triple is the only key a graph declares by default.
+- Edge identity: additions with one `(src, dst, tag)` triple coalesce into one edge. A graph may declare further unique keys, each a name and key components; two distinct edges, present or added, sharing the components of one declaration fail the whole set. A multiple-edge graph declares only the triple; a simple graph also declares the `(src, dst)` pair, the key of its one-edge-per-pair invariant.
 
 ---
 

@@ -118,6 +118,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super; check and insert run in one critical section | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
+| `edgeUniqueKeys(edge)` | Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` rejects two distinct edges on one pair (`model.md` Merge Laws) | `edge`: EdgeKey | `Map<String, List<String>>` | -- |
 
 ---
 
