@@ -48,6 +48,7 @@ See `model.md` for label ordering and structural-bound semantics.
 ```kotlin
 interface IPoset {
     val allLabels: Set<Label>
+    fun resolveLabelId(label: Label): Int?
     fun getParents(label: Label): Map<String, Label>
     fun setParents(label: Label, parents: Map<String, Label>)
     fun getAncestors(label: Label): Sequence<Label>
@@ -58,6 +59,7 @@ interface IPoset {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `allLabels` | All labels registered in the poset, including `INFIMUM` and `SUPREMUM` | -- | `Set<Label>` | -- |
+| `resolveLabelId(label)` | Looks up the existing stored row without creating one; structural bounds have no ID until stored | `label` | Stored `Int` ID, or null when absent | -- |
 | `getParents(label)` | Named parent relationships for a label | `label` | `Map<String, Label>` | -- |
 | `setParents(label, parents)` | Replaces all parent relationships for a label | `label`; `parents` | -- | -- |
 | `getAncestors(label)` | All ancestor labels traversing upwards through parent hierarchy via BFS | `label` | `Sequence<Label>` | -- |

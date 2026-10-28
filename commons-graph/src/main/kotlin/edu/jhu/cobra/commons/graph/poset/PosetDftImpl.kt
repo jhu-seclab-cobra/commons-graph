@@ -81,13 +81,15 @@ public class PosetDftImpl(
         cacheReady = true
     }
 
-    private fun resolveLabelId(label: Label): Int? {
+    override fun resolveLabelId(label: Label): Int? = storage.criticalSection { cachedLabelId(label) }
+
+    private fun cachedLabelId(label: Label): Int? {
         ensureCache()
         return labelIdCache[label.core]
     }
 
     private fun ensureLabelNode(label: Label): Int {
-        resolveLabelId(label)?.let { return it }
+        cachedLabelId(label)?.let { return it }
         val storageId = storage.addNode(mapOf(LABEL_PROP to label.core.strVal))
         labelIdCache[label.core] = storageId
         intToLabel[storageId] = label.core
@@ -181,7 +183,7 @@ public class PosetDftImpl(
 
     override fun getParents(label: Label): Map<String, Label> =
         storage.criticalSection {
-            val storageId = resolveLabelId(label) ?: return@criticalSection emptyMap()
+            val storageId = cachedLabelId(label) ?: return@criticalSection emptyMap()
             val result = LinkedHashMap<String, Label>()
             for (edgeId in storage.getOutgoingEdges(storageId)) {
                 val (_, parentInt, name) = storage.getEdgeStructure(edgeId)
@@ -196,7 +198,7 @@ public class PosetDftImpl(
         parents: Map<String, Label>,
     ): Unit =
         storage.criticalSection {
-            val existingId = resolveLabelId(label)
+            val existingId = cachedLabelId(label)
             if (existingId != null && parentsUnchanged(existingId, parents)) return@criticalSection
             val storageId = existingId ?: ensureLabelNode(label)
             // A label without incoming edges has no descendant row to update.
@@ -221,7 +223,7 @@ public class PosetDftImpl(
         return stored.all { edgeId ->
             val (_, parentInt, name) = storage.getEdgeStructure(edgeId)
             val parent = parents[name] ?: return false
-            parentInt == resolveLabelId(parent)
+            parentInt == cachedLabelId(parent)
         }
     }
 
@@ -247,7 +249,7 @@ public class PosetDftImpl(
 
     override fun getAncestors(label: Label): Sequence<Label> =
         storage.criticalSection {
-            val startId = resolveLabelId(label)
+            val startId = cachedLabelId(label)
             if (startId == null) {
                 emptySequence()
             } else {
@@ -280,8 +282,8 @@ public class PosetDftImpl(
             if (a == b) return@criticalSection 0
             if (a == Label.SUPREMUM || b == Label.INFIMUM) return@criticalSection 1
             if (b == Label.SUPREMUM || a == Label.INFIMUM) return@criticalSection -1
-            val aId = resolveLabelId(a) ?: return@criticalSection null
-            val bId = resolveLabelId(b) ?: return@criticalSection null
+            val aId = cachedLabelId(a) ?: return@criticalSection null
+            val bId = cachedLabelId(b) ?: return@criticalSection null
             if (isAncestor(aId, bId)) return@criticalSection 1
             if (isAncestor(bId, aId)) return@criticalSection -1
             null

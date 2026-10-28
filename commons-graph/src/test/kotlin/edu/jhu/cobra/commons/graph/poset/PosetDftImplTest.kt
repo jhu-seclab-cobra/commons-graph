@@ -1,11 +1,16 @@
 package edu.jhu.cobra.commons.graph.poset
 
 import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.strVal
+import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.graph.storage.LayeredStorageImpl
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 /*
  * Black-box tests for PosetDftImpl: parent assignment, ancestors, and label registry.
@@ -19,6 +24,7 @@ import kotlin.test.assertTrue
  * - `delEdge label on nonexistent edge is no-op`
  * - `label ancestors orphan edge in poset storage skips null intToLabel` -- null parent label
  * - `queryCache survives parents setter during compare sequence` -- B4 regression
+ * - Lookup returns registered opaque identities, leaves missing bounds unallocated, reuses the cache and follows revert.
  */
 internal class PosetDftImplTest {
     private lateinit var graph: TestGraph
@@ -129,6 +135,65 @@ internal class PosetDftImplTest {
         graph.poset.setParents(la, mapOf("p" to lb, "q" to lc))
 
         assertEquals(-1, graph.poset.compare(la, lc))
+    }
+
+    @Test
+    fun `lookup returns an opaque registered identity without allocating missing labels`() {
+        val label = Label("opaque-label")
+        val storage = graph.posetStorage
+        assertNull(graph.poset.resolveLabelId(label))
+        assertNull(graph.poset.resolveLabelId(Label.INFIMUM))
+        assertNull(graph.poset.resolveLabelId(Label.SUPREMUM))
+        assertTrue(storage.nodeIDs.isEmpty())
+        graph.poset.setParents(label, emptyMap())
+        val ids = storage.nodeIDs.toSet()
+        assertEquals(ids.single(), graph.poset.resolveLabelId(label))
+        assertEquals(label.core.strVal, storage.getNodeProperty(ids.single(), "label"))
+        assertNull(graph.poset.resolveLabelId(Label("absent")))
+        assertEquals(ids, storage.nodeIDs)
+        assertTrue(storage.edgeIDs.isEmpty())
+    }
+
+    @Test
+    fun `lookup reuses the existing registry after its one lazy build`() {
+        val base = NativeStorageImpl()
+        val label = Label("opaque-label")
+        val id = base.addNode(mapOf("label" to label.core.strVal))
+        var scans = 0
+        var properties = 0
+        val counted = object : IStorage by base {
+            override val nodeIDs: Set<Int> get() = base.nodeIDs.also { scans++ }
+            override fun getNodeProperty(id: Int, name: String) =
+                base.getNodeProperty(id, name).also { properties++ }
+        }
+        val poset: IPoset = PosetDftImpl(counted)
+        assertEquals(id, poset.resolveLabelId(label))
+        assertEquals(1, scans)
+        assertEquals(1, properties)
+        repeat(3) {
+            assertEquals(id, poset.resolveLabelId(label))
+            assertNull(poset.resolveLabelId(Label("absent")))
+        }
+        assertEquals(1, scans)
+        assertEquals(1, properties)
+    }
+
+    @Test
+    fun `lookup keeps committed identities and evicts reverted labels`() {
+        val storage = LayeredStorageImpl()
+        val poset: IPoset = PosetDftImpl(storage)
+        val parent = Label("parent")
+        val child = Label("child")
+        poset.setParents(parent, emptyMap())
+        val parentId = poset.resolveLabelId(parent)
+        storage.freeze()
+        poset.setParents(child, mapOf("up" to parent))
+        assertTrue(poset.resolveLabelId(child) != null)
+
+        storage.clearActiveLayer()
+
+        assertEquals(parentId, poset.resolveLabelId(parent))
+        assertNull(poset.resolveLabelId(child))
     }
 
     // endregion

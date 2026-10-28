@@ -15,6 +15,9 @@ public interface IPoset {
     /** All labels registered in the poset, including [Label.INFIMUM] and [Label.SUPREMUM]. */
     public val allLabels: Set<Label>
 
+    /** The stored identity of [label], or null when it has no row. Never creates a label. */
+    public fun resolveLabelId(label: Label): Int?
+
     /** Named parent labels forming the basis of a label's position in the poset. */
     public fun getParents(label: Label): Map<String, Label>
 
