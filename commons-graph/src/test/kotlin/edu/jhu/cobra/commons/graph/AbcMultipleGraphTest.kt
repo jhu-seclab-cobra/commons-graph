@@ -44,6 +44,22 @@ internal class AbcMultipleGraphTest {
     // region Node CRUD
 
     @Test
+    fun `claim reads an existing identity without a writable node`() {
+        val source = graph.addNode(NODE_ID_1)
+        val identity = object : NodeIdentity {
+            override val id = source.id
+            override val storageId = source.storageId
+        }
+        val receiver = GraphFixtures.TestMultipleGraph(storage)
+        val claimed = receiver.claimNode(identity)
+        assertEquals(source.id, claimed.id)
+        assertEquals(source.storageId, claimed.storageId)
+        assertEquals(setOf(source.id), receiver.nodeIDs)
+        assertEquals(claimed, receiver.claimNode(identity))
+        assertEquals(1, storage.nodeIDs.size)
+    }
+
+    @Test
     fun `addNode returns node with correct id`() {
         val node = graph.addNode(NODE_ID_1)
 

@@ -1,5 +1,7 @@
 package edu.jhu.cobra.commons.graph
 
+import edu.jhu.cobra.commons.value.IValue
+
 /**
  * Core directed graph interface.
  *
@@ -18,7 +20,7 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
 
     public fun addNode(withID: NodeID): N
 
-    public fun claimNode(from: AbcNode): N
+    public fun claimNode(from: NodeIdentity): N
 
     public fun getNode(whoseID: NodeID): N?
 
@@ -87,4 +89,18 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
     ): Sequence<N>
 
     // endregion
+}
+
+/** The existing identity of a stored node, without property or storage mutation. */
+public interface NodeIdentity {
+    public val id: NodeID
+    public val storageId: Int
+}
+
+/** Fixed node content as data; setters and the backing storage belong to the owner. */
+public interface ReadableNode : NodeIdentity {
+    public val type: IEntity.Type
+    public operator fun get(name: String): IValue?
+    public operator fun contains(name: String): Boolean
+    public fun asMap(): Map<String, IValue>
 }

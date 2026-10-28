@@ -26,7 +26,7 @@ public typealias NodeID = String
  * @see AbcEntity
  * @see IEntity
  */
-public abstract class AbcNode : AbcEntity() {
+public abstract class AbcNode : AbcEntity(), ReadableNode {
     /**
      * Represents the type information for a node.
      */
@@ -37,7 +37,7 @@ public abstract class AbcNode : AbcEntity() {
         private set
 
     /** The storage-internal Int ID, injected by the graph layer via [bind]. */
-    public var storageId: Int = -1
+    override var storageId: Int = -1
         internal set
 
     /** The user-provided node ID, injected by the graph layer via [bind]. */

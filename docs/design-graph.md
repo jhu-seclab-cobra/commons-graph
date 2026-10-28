@@ -18,6 +18,8 @@ The graph layer translates domain-level graph operations into coordinated calls 
 
 ### IGraph
 
+`NodeIdentity` exposes the existing `id: NodeID` and logical `storageId: Int` without a writer. `ReadableNode` adds the node type and read-only fixed-property queries (`get`, `contains`, `asMap`). `AbcNode` implements these contracts; a graph claim needs only `NodeIdentity` and reuses the same cache and owner-mark operation. No additional registry or source wrapper is allocated.
+
 **Responsibility:** Domain-facing contract defining node/edge CRUD and structural traversal. Edges are identified by their `(src: NodeID, dst: NodeID, tag: String)` triple.
 
 **State / Fields:**
@@ -29,7 +31,7 @@ The graph layer translates domain-level graph operations into coordinated calls 
 interface IGraph<N : AbcNode, E : AbcEdge> {
     val nodeIDs: Set<NodeID>
     fun addNode(withID: NodeID): N
-    fun claimNode(from: AbcNode): N
+    fun claimNode(from: NodeIdentity): N
     fun getNode(whoseID: NodeID): N?
     fun containNode(whoseID: NodeID): Boolean
     fun delNode(whoseID: NodeID)
@@ -51,7 +53,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
 | `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
-| `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: AbcNode | `N` | `EntityNotExistException` if the row is absent from storage |
+| `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: NodeIdentity, its existing ID and logical row; AbcNode implements this read-only contract | `N` | `EntityNotExistException` if the row is absent from storage |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
 | `delNode` | Removes all associated edges then the node | `whoseID`: NodeID | -- | -- |
 | `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `tag` | `E` | `EntityNotExistException` if src/dst missing |

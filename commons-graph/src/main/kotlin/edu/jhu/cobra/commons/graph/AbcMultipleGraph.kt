@@ -97,7 +97,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             cache.node(cache.register(withID, storageId))
         }
 
-    override fun claimNode(from: AbcNode): N =
+    override fun claimNode(from: NodeIdentity): N =
         storage.criticalSection {
             cache.entryOf(from.id)?.let { return@criticalSection cache.node(it) }
             owners.mark(from.storageId)
