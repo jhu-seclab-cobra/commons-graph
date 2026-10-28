@@ -24,6 +24,9 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
 
     public fun getNode(whoseID: NodeID): N?
 
+    /** The ID registered for this logical row in this graph, without reading node content. */
+    public fun resolveNodeId(storageId: Int): NodeID?
+
     public fun containNode(whoseID: NodeID): Boolean
 
     public fun delNode(whoseID: NodeID)

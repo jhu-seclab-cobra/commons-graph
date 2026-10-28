@@ -43,6 +43,8 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
 
     fun containsStorageId(storageId: Int): Boolean = storageId in nodeByStorageId
 
+    fun resolveNodeId(storageId: Int): NodeID? = nodeByStorageId[storageId]?.nodeId
+
     fun register(
         nodeId: NodeID,
         storageId: Int,

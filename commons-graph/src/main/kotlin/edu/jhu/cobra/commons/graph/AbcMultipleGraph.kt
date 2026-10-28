@@ -112,6 +112,8 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun containNode(whoseID: NodeID): Boolean = storage.criticalSection { cache.containsNode(whoseID) }
 
+    override fun resolveNodeId(storageId: Int): NodeID? = storage.criticalSection { cache.resolveNodeId(storageId) }
+
     override fun delNode(whoseID: NodeID): Unit =
         storage.criticalSection {
             val entry = cache.entryOf(whoseID) ?: return@criticalSection

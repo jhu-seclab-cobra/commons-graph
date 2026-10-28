@@ -44,6 +44,17 @@ internal class AbcMultipleGraphTest {
     // region Node CRUD
 
     @Test
+    fun `row lookup resolves only this graph's registered identity`() {
+        val node = graph.addNode("opaque/source")
+        val other = GraphFixtures.TestMultipleGraph(storage).addNode("opaque/other")
+        assertEquals(node.id, graph.resolveNodeId(node.storageId))
+        assertNull(graph.resolveNodeId(other.storageId))
+        assertEquals(setOf(node.id), graph.nodeIDs)
+        graph.delNode(node.id)
+        assertNull(graph.resolveNodeId(node.storageId))
+    }
+
+    @Test
     fun `claim reads an existing identity without a writable node`() {
         val source = graph.addNode(NODE_ID_1)
         val identity = object : NodeIdentity {
