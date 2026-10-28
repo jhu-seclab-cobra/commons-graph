@@ -24,6 +24,9 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
 
     public fun getNode(whoseID: NodeID): N?
 
+    /** Reads an existing row by identity without claiming it or changing graph membership. */
+    public fun readNode(from: NodeIdentity): N
+
     /** The ID registered for this logical row in this graph, without reading node content. */
     public fun resolveNodeId(storageId: Int): NodeID?
 

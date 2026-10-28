@@ -110,6 +110,20 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             cache.node(entry)
         }
 
+    override fun readNode(from: NodeIdentity): N =
+        storage.criticalSection {
+            val id = from.id
+            val row = from.storageId
+            cache.entryOf(id)?.let { entry ->
+                require(entry.storageId == row) { "Node $id is not registered at row $row" }
+                return@criticalSection cache.node(entry)
+            }
+            require(storage.containsNode(row) && storage.getNodeProperty(row, PROP_NODE_ID)?.core == id) {
+                "Node $id does not exist at row $row"
+            }
+            newNodeObj().also { it.bind(storage, row, id) }
+        }
+
     override fun containNode(whoseID: NodeID): Boolean = storage.criticalSection { cache.containsNode(whoseID) }
 
     override fun resolveNodeId(storageId: Int): NodeID? = storage.criticalSection { cache.resolveNodeId(storageId) }

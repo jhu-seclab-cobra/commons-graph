@@ -33,6 +33,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
     fun addNode(withID: NodeID): N
     fun claimNode(from: NodeIdentity): N
     fun getNode(whoseID: NodeID): N?
+    fun readNode(from: NodeIdentity): N
     fun resolveNodeId(storageId: Int): NodeID?
     fun containNode(whoseID: NodeID): Boolean
     fun delNode(whoseID: NodeID)
@@ -56,6 +57,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 | `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
 | `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: NodeIdentity, its existing ID and logical row; AbcNode implements this read-only contract | `N` | `EntityNotExistException` if the row is absent from storage |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
+| `readNode` | Reuses the registered wrapper, or reads the given existing row through the node factory without claiming it; no owner write, registry insertion or scan | existing ID and logical row | `N` | `IllegalArgumentException` if the row is absent or its identity differs |
 | `resolveNodeId` | Reads the existing row-to-node entry in this graph's registry; no content read, allocation, scan or second mapping | logical row | `NodeID?`, null for a row this graph has not registered | -- |
 | `delNode` | Removes all associated edges then the node | `whoseID`: NodeID | -- | -- |
 | `addEdge` | Creates an edge with variant-specific pre-checks | `src`, `dst`: NodeID; `tag` | `E` | `EntityNotExistException` if src/dst missing |
