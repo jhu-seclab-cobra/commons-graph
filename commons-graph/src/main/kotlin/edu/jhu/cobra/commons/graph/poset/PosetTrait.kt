@@ -23,13 +23,14 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
  * bypasses filtering and returns all edges, labeled or not; edges with no
  * labels are otherwise visible only through unfiltered queries.
  *
- * Label assignments go through [addEdge], [delEdge], [relabel] and [setLabels], which maintain
- * [labelIndex]; [getLabeledEdges] and [relabel] then cost O(candidates of the label) instead of a
- * full edge scan (spec-poset-label-index.md). Each of these label operations runs inside
- * [storage]'s critical section, so its label read, label write, and index update are one atomic
- * step. A storage revert repairs the index through [restoreLabelIndex], which the graph calls
- * with the edges the revert restored; the owning graph's endpoint membership, not the index,
- * decides which candidates [getLabeledEdges] returns.
+ * Label assignments go through [addEdge], [delEdge], [relabel], [copyLabel] and [setLabels], which
+ * maintain [labelIndex]; [getLabeledEdges] and [relabel] then cost O(candidates of the label) instead
+ * of a full edge scan, and [copyLabel] O(candidates recorded after its cursor)
+ * (spec-poset-label-index.md). Each of these label operations runs inside [storage]'s critical
+ * section, so its label read, label write, and index update are one atomic step. A storage revert
+ * repairs the index through [restoreLabelIndex], which the graph calls with the edges the revert
+ * restored; the owning graph's endpoint membership, not the index, decides which candidates
+ * [getLabeledEdges] and [copyLabel] read as carriers.
  *
  * @param N The node type.
  * @param E The edge type.
@@ -91,9 +92,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     public fun getLabeledEdges(label: Label): Sequence<E> =
         storage.criticalSection {
             labelIndex.ensureBuilt { getAllEdges() }
-            val (stored, deleted) = labelIndex.candidates(label).partition { it.isStored() }
-            for (edge in deleted) labelIndex.drop(label, edge)
-            stored.filter { containNode(it.srcNid) && containNode(it.dstNid) && label in it.labels }.asSequence()
+            carriersAmong(labelIndex.candidates(label), label).asSequence()
         }
 
     /**
@@ -120,6 +119,35 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             }
         }
     }
+
+    /**
+     * Adds [to] beside [from] on every edge that carries [from], satisfies [cond], and was recorded under [from]
+     * after record number [since]; no label is removed, and an edge already carrying [to] is left as it is.
+     * `from == to` changes nothing.
+     *
+     * Returns the record count after the copy. A caller that passes it as [since] to its next copy of [from]
+     * reads only the edges recorded under [from] in between, so a series of copies reads each record of [from]
+     * once. An edge read by one copy is read again only after a new record under [from]: a later loss of [to],
+     * or a [cond] that later holds, does not bring it back by itself.
+     */
+    public fun copyLabel(
+        from: Label,
+        to: Label,
+        since: Long = 0,
+        cond: (E) -> Boolean = { true },
+    ): Long =
+        storage.criticalSection {
+            labelIndex.ensureBuilt { getAllEdges() }
+            if (from != to) {
+                for (edge in carriersAmong(labelIndex.candidatesSince(from, since), from)) {
+                    val labels = edge.labels
+                    if (to in labels || !cond(edge)) continue
+                    edge.labels = labels + to
+                    labelIndex.record(to, edge)
+                }
+            }
+            labelIndex.recordCount
+        }
 
     public fun getOutgoingEdges(
         of: NodeID,
@@ -190,6 +218,17 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
                 }
             }
         }
+
+    // The carriers of [label] among its [candidates]: a candidate whose edge left storage is dropped from the index;
+    // one whose endpoints the graph does not own, or which no longer carries [label], stays indexed and is skipped.
+    private fun carriersAmong(
+        candidates: List<E>,
+        label: Label,
+    ): List<E> {
+        val (stored, deleted) = candidates.partition { it.isStored() }
+        for (edge in deleted) labelIndex.drop(label, edge)
+        return stored.filter { containNode(it.srcNid) && containNode(it.dstNid) && label in it.labels }
+    }
 
     // Pure covering per the interface visibility semantics: by == label or by > label.
     private fun covers(

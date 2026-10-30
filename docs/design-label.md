@@ -92,7 +92,7 @@ The poset store uses auto-generated `Int` IDs:
 var labels: Set<Label>
 ```
 
-Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `setLabels`), which keeps `LabelEdgeIndex` complete.
+Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `copyLabel`, `setLabels`), which keeps `LabelEdgeIndex` complete.
 
 ---
 
@@ -105,8 +105,10 @@ Backed by a `ListVal` storage property. The setter is `internal`: label assignme
 | Member | Behavior |
 |--------|----------|
 | `ensureBuilt(allEdges)` | Scans `allEdges()` once and records each edge under each label it carries; later calls return immediately |
-| `record(label, edge)` | Adds `edge` to the candidates of `label` under `edge.storageId`; an entry under the same storage ID is replaced |
+| `recordCount` | The number of records taken so far; the latest record has this number |
+| `record(label, edge)` | Places `edge` last among the candidates of `label` under `edge.storageId` with the next record number; an entry under the same storage ID is replaced |
 | `candidates(label)` | Snapshot of the candidates of `label` (a superset of its carriers) |
+| `candidatesSince(label, since)` | Snapshot of the candidates of `label` whose latest record is numbered above `since`, latest first; reads only those entries |
 | `drop(label, edge)` | Removes the candidate under `edge.storageId`; only for an edge that no longer exists |
 
 Not synchronized: every member is called inside the owning graph's `storage.criticalSection` (`PosetTrait`), so the index holds no lock of its own and never orders a lock against the storage lock.
@@ -125,7 +127,7 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 | `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
 | `storage` | `IStorage` | Storage of this graph; its critical section makes each label operation atomic |
 
-**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, `relabel`, and `setLabels` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
+**Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, `relabel`, `copyLabel`, and `setLabels` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -133,6 +135,7 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 | `delEdge(src, dst, tag, label)` | Removes label; if the edge carried the label and none remain, deletes edge | `src`, `dst`: NodeID; `tag`; `label` | -- | -- |
 | `getLabeledEdges(label)` | Edges carrying `label` directly (no covering), in O(candidates); materialized inside the critical section | `label` | `Sequence<E>` | -- |
 | `relabel(from, to, cond)` | On every edge carrying `from` with `cond`, replaces `from` by `to`; `from == to` is a no-op | `from`; `to`; `cond` | -- | -- |
+| `copyLabel(from, to, since, cond)` | Adds `to` beside `from` on every edge carrying `from` with `cond` that was recorded under `from` after record `since`; removes no label; `from == to` changes nothing. Returns the record count, the `since` of the caller's next copy of `from`; cost O(1 + records of `from` after `since`) | `from`; `to`; `since`: Long (default 0, every carrier); `cond` | `Long` | -- |
 | `setLabels(edge, labels)` | Replaces the edge's whole label set and records the edge under each new label; an empty set keeps the edge with no label | `edge`: E; `labels`: Set<Label> | -- | -- |
 | `getOutgoingEdges(of, label, cond)` | Label-filtered outgoing edges | `of`; `label`; `cond` | `Sequence<E>` | -- |
 | `getIncomingEdges(of, label, cond)` | Label-filtered incoming edges | `of`; `label`; `cond` | `Sequence<E>` | -- |

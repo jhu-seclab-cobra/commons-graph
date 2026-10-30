@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /*
- * White-box tests for LabelEdgeIndex: candidate bookkeeping per spec-poset.md (Label Carrier Index).
+ * White-box tests for LabelEdgeIndex: candidate bookkeeping per spec-poset-label-index.md.
  *
  * - `ensureBuilt records every label of every scanned edge` -- build step
  * - `ensureBuilt scans only once` -- build runs once per index
@@ -15,6 +15,10 @@ import kotlin.test.assertTrue
  * - `candidates of unknown label is empty` -- boundary
  * - `drop removes only that label candidate` -- nonexistent-edge pruning
  * - `re-added edge is a candidate apart from its deleted predecessor` -- keyed by storage ID
+ * - `record numbers each record` -- record step, record count
+ * - `candidatesSince returns the candidates recorded after the count, latest first` -- query after a count
+ * - `candidatesSince returns a candidate recorded again after the count` -- a repeated record moves the candidate
+ * - `candidatesSince at the record count is empty` -- boundary
  */
 internal class LabelEdgeIndexTest {
     private lateinit var graph: TestGraph
@@ -102,5 +106,53 @@ internal class LabelEdgeIndexTest {
         index.record(Label("x"), readded)
 
         assertEquals(listOf(deleted.storageId, readded.storageId), index.candidates(Label("x")).map { it.storageId })
+    }
+
+    @Test
+    fun `record numbers each record`() {
+        val ab = graph.addEdge("a", "b", "rel")
+
+        index.record(Label("x"), ab)
+        index.record(Label("y"), ab)
+        index.record(Label("x"), ab)
+
+        assertEquals(3, index.recordCount)
+    }
+
+    @Test
+    fun `candidatesSince returns the candidates recorded after the count, latest first`() {
+        val ab = graph.addEdge("a", "b", "rel")
+        val bc = graph.addEdge("b", "c", "rel")
+        val ac = graph.addEdge("a", "c", "rel")
+        index.record(Label("x"), ab)
+        val count = index.recordCount
+
+        index.record(Label("x"), bc)
+        index.record(Label("y"), ab)
+        index.record(Label("x"), ac)
+
+        assertEquals(listOf(ac, bc), index.candidatesSince(Label("x"), count))
+    }
+
+    @Test
+    fun `candidatesSince returns a candidate recorded again after the count`() {
+        val ab = graph.addEdge("a", "b", "rel")
+        val bc = graph.addEdge("b", "c", "rel")
+        index.record(Label("x"), ab)
+        index.record(Label("x"), bc)
+        val count = index.recordCount
+
+        index.record(Label("x"), ab)
+
+        assertEquals(listOf(ab), index.candidatesSince(Label("x"), count))
+        assertEquals(listOf(bc, ab), index.candidates(Label("x")))
+    }
+
+    @Test
+    fun `candidatesSince at the record count is empty`() {
+        index.record(Label("x"), graph.addEdge("a", "b", "rel"))
+
+        assertTrue(index.candidatesSince(Label("x"), index.recordCount).isEmpty())
+        assertTrue(index.candidatesSince(Label("none"), 0).isEmpty())
     }
 }
