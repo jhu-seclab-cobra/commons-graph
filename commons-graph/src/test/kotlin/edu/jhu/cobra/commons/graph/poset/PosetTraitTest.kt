@@ -24,8 +24,33 @@ import kotlin.test.assertTrue
  * - `delEdge with label not on edge retains edge` -- non-matching
  * - `delEdge with label on unlabeled edge retains edge` -- unlabeled boundary
  * - `addEdge with label on non-existent edge creates then labels` -- null path
+ * - `delta visitor sees repeated records and verifies current carriers` -- cursor observes metadata re-recording.
  */
 internal class PosetTraitTest {
+    @Test
+    fun `delta visitor sees repeated records and verifies current carriers`() {
+        graph.addNode("a")
+        graph.addNode("b")
+        val from = Label("from")
+        val to = Label("to")
+        val edge = graph.addEdge("a", "b", "rel", from)
+        graph.copyLabel(from, to)
+        val visited = ArrayList<String>()
+        val cursor = graph.visitLabeledEdgesSince(from) { visited += it.id }
+        assertEquals(listOf(edge.id), visited)
+        graph.setLabels(edge, edge.labels)
+        visited.clear()
+        val next = graph.visitLabeledEdgesSince(from, cursor) { visited += it.id }
+        assertEquals(listOf(edge.id), visited)
+        assertTrue(next > cursor)
+        visited.clear()
+        graph.visitLabeledEdgesSince(from, next) { visited += it.id }
+        assertEquals(emptyList(), visited)
+        graph.delEdge("a", "b", "rel", from)
+        graph.visitLabeledEdgesSince(from) { visited += it.id }
+        assertEquals(emptyList(), visited)
+    }
+
     private lateinit var graph: TestGraph
 
     @BeforeTest

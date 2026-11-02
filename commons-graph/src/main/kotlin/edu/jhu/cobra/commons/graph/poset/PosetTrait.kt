@@ -96,6 +96,18 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         }
 
     /**
+     * Visits the current carriers of [label] recorded after [since], latest first, under one critical section.
+     * Uses the same candidate snapshot and storage verification as [copyLabel]; a repeated record is visited even
+     * when its labels did not change. Returns the record cursor after the visits, including records they add.
+     */
+    public fun visitLabeledEdgesSince(label: Label, since: Long = 0, visit: (E) -> Unit): Long =
+        storage.criticalSection {
+            labelIndex.ensureBuilt { getAllEdges() }
+            carriersAmong(labelIndex.candidatesSince(label, since), label).forEach(visit)
+            labelIndex.recordCount
+        }
+
+    /**
      * Re-records the final labels of the edges [ids] that [resolve] maps to an edge of this graph. A graph
      * that implements this trait calls it from `onRestoredEdges`, so a storage revert that exposes an edge or
      * its labels again leaves [labelIndex] complete.
