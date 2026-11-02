@@ -36,18 +36,22 @@ internal class PosetTraitTest {
         val edge = graph.addEdge("a", "b", "rel", from)
         graph.copyLabel(from, to)
         val visited = ArrayList<String>()
-        val cursor = graph.visitLabeledEdgesSince(from) { visited += it.id }
+        val cursor = graph.visitLabeledEdgesSince(from) { visited += it.id; null }
         assertEquals(listOf(edge.id), visited)
         graph.setLabels(edge, edge.labels)
+        val targetCursor = graph.visitLabeledEdgesSince(to) { null }
         visited.clear()
-        val next = graph.visitLabeledEdgesSince(from, cursor) { visited += it.id }
+        val next = graph.visitLabeledEdgesSince(from, cursor) { visited += it.id; to }
         assertEquals(listOf(edge.id), visited)
         assertTrue(next > cursor)
         visited.clear()
-        graph.visitLabeledEdgesSince(from, next) { visited += it.id }
+        graph.visitLabeledEdgesSince(from, next) { visited += it.id; null }
         assertEquals(emptyList(), visited)
+        graph.visitLabeledEdgesSince(to, targetCursor) { visited += it.id; null }
+        assertEquals(listOf(edge.id), visited)
+        visited.clear()
         graph.delEdge("a", "b", "rel", from)
-        graph.visitLabeledEdgesSince(from) { visited += it.id }
+        graph.visitLabeledEdgesSince(from) { visited += it.id; null }
         assertEquals(emptyList(), visited)
     }
 
