@@ -74,12 +74,8 @@ internal class LayerStack {
     }
 
     private fun activeEdgeProperties(id: Int): Map<String, IValue> {
-        val edits = active.promotedEdgeEdits[id] ?: return ColumnViewMap(id, active.edgeColumns)
-        val result = HashMap(checkNotNull(frozen?.edgeProperties(id)))
-        for ((name, value) in edits) {
-            if (value == null) result.remove(name) else result[name] = value
-        }
-        return result
+        if (id !in active.promotedEdgeEdits) return ColumnViewMap(id, active.edgeColumns)
+        return active.composePromotedEdgeProperties(id, checkNotNull(frozen?.edgeProperties(id)))
     }
 
     // The row one layer itself holds, or null; a tombstone hides an edge from VISIBLE only.

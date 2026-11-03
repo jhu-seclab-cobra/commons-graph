@@ -60,6 +60,17 @@ internal class ActiveLayer {
 
     fun collectEdgeProperties(id: Int): Map<String, IValue> = ColumnarProperties.collectProperties(id, edgeColumns)
 
+    fun composePromotedEdgeProperties(
+        id: Int,
+        frozen: Map<String, IValue>,
+    ): Map<String, IValue> {
+        val result = HashMap(frozen)
+        for ((name, value) in promotedEdgeEdits.getValue(id)) {
+            if (value == null) result.remove(name) else result[name] = value
+        }
+        return result
+    }
+
     fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,

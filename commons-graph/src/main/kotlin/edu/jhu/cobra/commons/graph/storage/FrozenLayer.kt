@@ -221,12 +221,8 @@ internal class FrozenLayer private constructor(
         ): Map<String, IValue> {
             val base = previous.storage.getEdgeProperties(localEdgeId)
             if (!active.containsEdge(globalEdgeId)) return base
-            val edits = active.promotedEdgeEdits[globalEdgeId] ?: return active.collectEdgeProperties(globalEdgeId)
-            val result = HashMap(base)
-            for ((name, value) in edits) {
-                if (value == null) result.remove(name) else result[name] = value
-            }
-            return result
+            if (globalEdgeId !in active.promotedEdgeEdits) return active.collectEdgeProperties(globalEdgeId)
+            return active.composePromotedEdgeProperties(globalEdgeId, base)
         }
 
         private fun transferMetadata(
