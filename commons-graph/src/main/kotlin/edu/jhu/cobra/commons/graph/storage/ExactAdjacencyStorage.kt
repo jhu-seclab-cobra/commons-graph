@@ -35,6 +35,10 @@ public interface ExactAdjacencyReads : IStorage {
 
 /** Exact relation storage supporting both selected reads and first attachment. */
 public interface ExactAdjacencyStorage : ExactAdjacencyReads {
+    /** Configured attachment support; a read-only adapter may retain its read projection while returning null. */
+    public val attachmentProjection: AdjacencyProjection?
+        get() = adjacencyProjection
+
     /**
      * Returns an existing matching edge to [target], or creates one with the fixed projection's tag.
      *

@@ -34,6 +34,13 @@ Other properties remain writable. This fixed-field contract applies only to a st
 
 ### ExactAdjacencyStorage
 
+`attachmentProjection` reports configured attachment support independently of the read projection. Its default
+returns `adjacencyProjection`; forwarding adapters report the underlying attachment capability or null while
+retaining any supported exact reads. This getter adds no state, registration or index. Existing source
+implementations inherit the default; newly compiled adapters must forward the capability they actually provide.
+Existing constructor and single-kind read signatures stay unchanged. Compatibility with unknown precompiled
+external implementations is not asserted by this interface addition.
+
 `getExactOutgoingEdges(source, kind, key)` returns a snapshot of matching existing edge IDs. It creates nothing and
 retains no miss history. Raw `addEdge` retains storage's allocation semantics and can create several physical rows
 with one key; exact selection returns every such row.
