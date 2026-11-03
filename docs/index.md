@@ -7,6 +7,7 @@
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
 | [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph, GraphMergeLaws, PropertyMergeLaw |
 | [design-storage.md](design-storage.md) | Storage module — IStorage and implementations (Native, Concurrent, Layered) |
+| [design-exact-adjacency.md](design-exact-adjacency.md) | Fixed physical relation projection and exact attach access |
 | [design-label.md](design-label.md) | Label system — Label, IPoset, PosetDftImpl, LabelEdgeIndex, PosetTrait, label merge |
 | [spec-graph.md](spec-graph.md) | Algorithms — edge lookup, BFS, visibility filtering, layered queries |
 | [spec-graph-merge.md](spec-graph-merge.md) | Merge laws — label merge, owner union, property merge, edge coalescing |

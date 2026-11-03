@@ -101,7 +101,7 @@ interface IStorage : Flushable {
 
 ### NativeStorageImpl
 
-**Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op.
+**Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op. Optional fixed projection: [exact adjacency access](design-exact-adjacency.md), also supported by `LayeredStorageImpl`.
 
 ---
 

@@ -41,8 +41,9 @@ import kotlin.concurrent.withLock
  */
 @Suppress("TooManyFunctions")
 public class LayeredStorageImpl(
+    projection: AdjacencyProjection? = null,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
-) : IRevertibleStorage {
+) : IRevertibleStorage, ExactAdjacencyStorage {
     private val lock = ReentrantReadWriteLock()
 
     override val criticalSectionLock: Lock get() = lock.writeLock()
@@ -54,6 +55,9 @@ public class LayeredStorageImpl(
 
     private val layers = LayerStack()
     private val active = layers.active
+    private val exact = projection?.let(::ExactAdjacencyIndex)
+
+    internal val indexedEdgeCount: Int get() = lock.readLock().withLock { exact?.size ?: 0 }
 
     // ============================================================================
     // LAYERED STORAGE API
@@ -83,6 +87,7 @@ public class LayeredStorageImpl(
         lock.writeLock().withLock {
             val notice = activeLayerDropNotice(active, layers.frozen)
             active.clear()
+            restoreExactAdjacency(notice)
             notifyRevert(notice)
         }
 
@@ -124,6 +129,7 @@ public class LayeredStorageImpl(
     ): Unit =
         lock.writeLock().withLock {
             if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+            exact?.validateChange(id, properties, layers::nodeProperty)
             layers.promoteNode(id)
             active.setNodeProperties(id, properties)
         }
@@ -134,6 +140,9 @@ public class LayeredStorageImpl(
             // copy would resurrect the frozen one, so the frozen guard runs first.
             if (layers.frozen?.containsNode(id) == true) throw FrozenLayerModificationException(id.toString())
             if (!active.containsNode(id)) throw EntityNotExistException(id.toString())
+            exact?.let { index ->
+                (active.outEdges[id].orEmpty() + active.inEdges[id].orEmpty()).forEach(index::remove)
+            }
             active.removeNode(id)
         }
 
@@ -153,10 +162,12 @@ public class LayeredStorageImpl(
         properties: Map<String, IValue>,
     ): Int =
         lock.writeLock().withLock {
+            val projected = exact?.prepare(IStorage.EdgeStructure(src, dst, tag), layers::nodeProperty)
             layers.promoteNode(src)
             layers.promoteNode(dst)
             val id = edgeCounter++
             active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), properties)
+            exact?.record(id, projected)
             id
         }
 
@@ -202,6 +213,7 @@ public class LayeredStorageImpl(
         lock.writeLock().withLock {
             val frozenEdge = layers.containsFrozenEdge(id)
             if (!frozenEdge && !active.containsEdge(id)) throw EntityNotExistException(id.toString())
+            exact?.remove(id)
             active.removeEdge(id)
             // Dropping only the active copy of a promoted edge would resurrect the
             // frozen one; the tombstone masks it until a revert or freeze.
@@ -221,6 +233,30 @@ public class LayeredStorageImpl(
         lock.readLock().withLock {
             copyAdjacency(id, active.outEdges[id], layers.frozen?.outgoingEdges(id)?.let(layers::withoutTombstones))
         }
+
+    override fun getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int> =
+        lock.readLock().withLock {
+            if (!layers.containsNode(source)) throw EntityNotExistException(source.toString())
+            checkNotNull(exact) { "No exact adjacency projection was configured" }.select(source, kind, key)
+        }
+
+    override fun attachExact(source: Int, target: Int, properties: Map<String, IValue>): Int =
+        lock.writeLock().withLock {
+            if (!layers.containsNode(source)) throw EntityNotExistException(source.toString())
+            if (!layers.containsNode(target)) throw EntityNotExistException(target.toString())
+            val index = checkNotNull(exact) { "No exact adjacency projection was configured" }
+            val structure = IStorage.EdgeStructure(source, target, index.projection.edgeTag)
+            val member = checkNotNull(index.prepare(structure, layers::nodeProperty))
+            index.existing(member) ?: addEdge(source, target, index.projection.edgeTag, properties)
+        }
+
+    private fun restoreExactAdjacency(notice: RevertNotice) {
+        val index = exact ?: return
+        (notice.removed.edges + notice.restored.edges).forEach(index::remove)
+        for (id in notice.restored.edges) {
+            if (layers.containsEdge(id)) index.record(id, index.prepare(layers.edgeStructure(id), layers::nodeProperty))
+        }
+    }
 
     private fun copyAdjacency(
         id: Int,
@@ -271,6 +307,7 @@ public class LayeredStorageImpl(
             layers.frozen?.close()
             layers.frozen = null
             active.clear()
+            exact?.clear()
             nodeCounter = 0
             edgeCounter = 0
             notifyRevert(notice)
