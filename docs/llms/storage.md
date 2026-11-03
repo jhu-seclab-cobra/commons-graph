@@ -61,9 +61,13 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 ### Implementations
 
-- **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
+- **`NativeStorageImpl(projection: AdjacencyProjection? = null)`** -- In-memory, single-threaded; omit the projection for ordinary storage.
 - **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
 - **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The frozen layer is read-only, so the default single-threaded factory stays safe.
+- **`LayeredStorageImpl(projection: AdjacencyProjection?, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Construct with one fixed projection; the factory-only constructor remains available to Kotlin and Java callers.
+- **`AdjacencyProjection(edgeTag: String, kindProperty: String, keyProperty: String)`** -- Select exact adjacency by an edge tag and two fixed destination fields; configure it before creating rows.
+- **`ExactAdjacencyStorage.getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int>`** -- Return matching physical edge IDs; requires a configured projection.
+- **`ExactAdjacencyStorage.attachExact(source: Int, target: Int, properties: Map<String, IValue> = emptyMap()): Int`** -- Reuse or create the projected relation; raises `IllegalArgumentException` for a conflicting target key.
 
 ### `LayeredStorageImpl` Extra API
 

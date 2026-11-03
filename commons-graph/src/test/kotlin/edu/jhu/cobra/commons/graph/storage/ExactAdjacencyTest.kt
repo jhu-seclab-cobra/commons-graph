@@ -8,6 +8,7 @@
  * - `attached fields cannot change`: prevent unsupported mutable rekeying.
  * - `import remaps rows and shares one physical access`: transfer builds the projection during row import.
  * - `keyed access retains only rows and reads only their fixed fields`: count setup, selected work and miss retention.
+ * - `factory constructors preserve published descriptors`: retain source and JVM factory/default construction.
  */
 package edu.jhu.cobra.commons.graph.storage
 
@@ -21,6 +22,41 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 internal class ExactAdjacencyTest {
+    @Test
+    fun `factory constructors preserve published descriptors`() {
+        var calls = 0
+        val factory: () -> IStorage = {
+            calls++
+            NativeStorageImpl()
+        }
+        val positional = LayeredStorageImpl(factory)
+        val named = LayeredStorageImpl(frozenLayerFactory = factory)
+        val trailing = LayeredStorageImpl {
+            calls++
+            NativeStorageImpl()
+        }
+        for (storage in listOf(positional, named, trailing)) {
+            storage.addNode()
+            storage.freeze()
+        }
+        assertEquals(3, calls)
+        val type = LayeredStorageImpl::class.java
+        val factoryDescriptor = type.getConstructor(Function0::class.java)
+        val linked = factoryDescriptor.newInstance(factory)
+        linked.addNode()
+        linked.freeze()
+        assertEquals(4, calls, "the original factory descriptor reaches the supplied factory")
+        val marker = Class.forName("kotlin.jvm.internal.DefaultConstructorMarker")
+        val defaultDescriptor = type.getConstructor(Function0::class.java, Int::class.javaPrimitiveType, marker)
+        val oldDefaultCall = defaultDescriptor.newInstance(null, 1, null)
+        oldDefaultCall.addNode()
+        oldDefaultCall.freeze()
+        assertEquals(2, oldDefaultCall.layerCount, "the old Kotlin default call descriptor remains valid")
+        val javaDefault = type.getConstructor().newInstance()
+        assertEquals(1, javaDefault.layerCount, "Java no-argument construction remains valid")
+        assertEquals(1, LayeredStorageImpl().layerCount, "Kotlin no-argument construction remains valid")
+    }
+
     @Test
     fun `exact selection ignores unrelated siblings`() {
         for (factory in factories) {

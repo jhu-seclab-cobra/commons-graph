@@ -41,9 +41,14 @@ import kotlin.concurrent.withLock
  */
 @Suppress("TooManyFunctions")
 public class LayeredStorageImpl(
-    projection: AdjacencyProjection? = null,
+    projection: AdjacencyProjection?,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IRevertibleStorage, ExactAdjacencyStorage {
+    /** Constructs unconfigured storage through the same initialization as a projected storage. */
+    @JvmOverloads
+    public constructor(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
+        this(projection = null, frozenLayerFactory = frozenLayerFactory)
+
     private val lock = ReentrantReadWriteLock()
 
     override val criticalSectionLock: Lock get() = lock.writeLock()

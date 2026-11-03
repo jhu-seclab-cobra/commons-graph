@@ -21,8 +21,10 @@ One immutable constructor input: `edgeTag`, `kindProperty`, `keyProperty`. The p
 is created. It has no registration method, caller predicate, lazy build or dynamic registry. Edges with another tag
 are not indexed. A matching edge requires both destination fields.
 
-`LayeredStorageImpl` places its optional `projection` before its final `frozenLayerFactory` parameter, keeping
-trailing-lambda and named factory construction. No constructor overload or runtime registration path is added.
+`LayeredStorageImpl(projection, frozenLayerFactory = ...)` initializes projected storage. Its factory-only constructor
+delegates to that same initialization with `projection = null`, preserving positional, trailing-lambda and named
+factory construction. The factory default and `JvmOverloads` retain the original factory, Kotlin default-argument
+and Java no-argument JVM descriptors. No runtime registration or second index path is added.
 
 The exact key is the source integer ID and the complete typed values of those two destination fields. Key hashing
 is followed by equality; a hash collision never identifies two distinct keys. Index keys snapshot the supplied

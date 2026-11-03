@@ -43,244 +43,6 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 ## Labels
 
 - [Labels & Poset](llms/label.md): Label system -- `Label`, `IPoset`, `PosetDftImpl`, `PosetTrait`.
-
-
----
-
-# Referenced Documents
-
-## Source: llms/graph.md
-
-# Graph & Base Classes
-
-> Typed directed graph API with abstract base classes for multi-edge and simple-edge graphs.
-
-## Quick Start
-
-```kotlin
-class MyNode : AbcNode() {
-    enum class MyType : AbcNode.Type { DEFAULT }
-    override val type = MyType.DEFAULT
-}
-class MyEdge : AbcEdge() {
-    enum class MyType : AbcEdge.Type { DEFAULT }
-    override val type = MyType.DEFAULT
-}
-class MyGraph(
-    override val storage: IStorage,
-) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
-    override val graphId = "myGraph"
-    override val poset: IPoset = PosetDftImpl(storage)
-    override fun newNodeObj() = MyNode()
-    override fun newEdgeObj() = MyEdge()
-}
-
-val graph = MyGraph(NativeStorageImpl())
-val n1 = graph.addNode("a")
-val n2 = graph.addNode("b")
-val edge = graph.addEdge("a", "b", "calls")
-edge["weight"] = IntVal(5)
-graph.flush()
-```
-
-## API
-
-### `IGraph<N : AbcNode, E : AbcEdge>`
-
-- **`val nodeIDs: Set<NodeID>`** -- All node IDs in the graph.
-- **`addNode(withID: NodeID): N`** -- Create a node. Raises `EntityAlreadyExistException` if ID exists.
-- **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
-- **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
-- **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
-- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
-- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
-- **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
-- **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
-- **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
-- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
-- **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
-- **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
-- **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
-- **`getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct predecessors via incoming edges.
-- **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
-- **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
-
-### `AbcMultipleGraph<N, E>` (extends `IGraph`, `Flushable`)
-
-- **`abstract val storage: IStorage`** -- Graph data storage backend.
-- **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
-- **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
-- **`protected fun rebuild()`** -- Restore graph caches from storage after deserialization.
-- **`flush()`** -- Persist node ownership to storage. Does not close the storage instances.
-
-### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
-
-Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
-
-- **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
-- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
-- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
-- **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
-- **`getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered incoming edges.
-- **`getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered successors.
-- **`getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered predecessors.
-- **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
-- **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
-
-### `GraphMergeLaws` (implemented by `AbcMultipleGraph`)
-
-Pure declarations for merging the prospective changes of several writers; each writer carries a before-image and an after-image (`WriterChange(before, after)`; null is an absent key). They read no storage and hook no write.
-
-- **`nodePropertyLaw(name: String): PropertyMergeLaw`** -- Node ID property immutable, owner set by union, other names `PropertyMergeLaw.EQUAL_OR_FAIL`.
-- **`edgePropertyLaw(name: String): PropertyMergeLaw`** -- Labels by the label merge law (`model.md` Merge Laws), other names `EQUAL_OR_FAIL`.
-- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declared unique keys besides the triple; default none. Override to declare.
-- **`coalesceEdges(additions: Collection<EdgeKey>, present: Collection<EdgeKey> = emptyList()): Set<EdgeKey>`** -- Coalesces by `(src, dst, tag)` and validates declared keys.
-- **`PropertyMergeLaw.merge(base: IValue?, changes: Collection<PropertyChange>): IValue?`** -- Merged value or `MergeConflictException`; the result never depends on writer order.
-
-### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
-
-- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
-- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Same constraint: at most one edge per direction.
-- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` fails for two distinct edges on one pair.
-
-## Gotchas
-
-- `NodeID` is a `String` typealias. Callers provide node IDs; the graph manages internal `Int` storage IDs.
-- `delNode` cascades to all incident edges. No orphan edges remain.
-- `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
-- `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
-- `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
-- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
-- On a thread-safe storage, each `IGraph`, `PosetTrait`, and `IPoset` call is atomic. A group of calls is not: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
-- Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
-- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
-
----
-
-## Source: llms/storage.md
-
-# Storage Backends
-
-> Pluggable graph storage with auto-generated Int IDs, property management, and adjacency queries.
-
-## Quick Start
-
-```kotlin
-val storage = NativeStorageImpl()
-val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
-val nodeB = storage.addNode()
-val edgeId = storage.addEdge(nodeA, nodeB, "calls")
-storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
-```
-
-## API
-
-### `IStorage` (extends `Flushable`)
-
-#### Node Operations
-
-- **`val nodeIDs: Set<Int>`** -- All node IDs.
-- **`containsNode(id: Int): Boolean`** -- Check node existence.
-- **`addNode(properties: Map<String, IValue> = emptyMap()): Int`** -- Create node, return auto-generated ID.
-- **`getNodeProperties(id: Int): Map<String, IValue>`** -- All properties. Raises `EntityNotExistException` if absent.
-- **`getNodeProperty(id: Int, name: String): IValue?`** -- Single property. Returns `null` if property absent.
-- **`setNodeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete the property.
-- **`deleteNode(id: Int)`** -- Delete node and all incident edges.
-
-#### Edge Operations
-
-- **`val edgeIDs: Set<Int>`** -- All edge IDs.
-- **`containsEdge(id: Int): Boolean`** -- Check edge existence.
-- **`addEdge(src: Int, dst: Int, tag: String, properties: Map<String, IValue> = emptyMap()): Int`** -- Create edge, return auto-generated ID. Raises `EntityNotExistException` if endpoints missing.
-- **`getEdgeStructure(id: Int): EdgeStructure`** -- Returns `EdgeStructure(src: Int, dst: Int, tag: String)`.
-- **`getEdgeProperties(id: Int): Map<String, IValue>`** -- All properties.
-- **`getEdgeProperty(id: Int, name: String): IValue?`** -- Single property.
-- **`setEdgeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete.
-- **`deleteEdge(id: Int)`** -- Delete an edge.
-
-#### Adjacency
-
-- **`getIncomingEdges(id: Int): Set<Int>`** -- Incoming edge IDs to a node.
-- **`getOutgoingEdges(id: Int): Set<Int>`** -- Outgoing edge IDs from a node.
-
-#### Metadata
-
-- **`val metaNames: Set<String>`** -- All metadata property names.
-- **`getMeta(name: String): IValue?`** -- Retrieve metadata value.
-- **`setMeta(name: String, value: IValue?)`** -- Set or delete (`null`) metadata.
-
-#### Lifecycle
-
-- **`clear()`** -- Remove all nodes, edges, and metadata.
-- **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. `target` must be a different storage instance; raises `IllegalArgumentException` if same. Returns node ID mapping (source to target).
-- Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
-
-#### Concurrency
-
-- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds. Non-null on a thread-safe implementation, `null` on a single-threaded one.
-- **`IStorage.criticalSection { ... }: T`** -- Runs the block atomically against every other operation on the same thread-safe storage and returns its result. Runs unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
-
-### Implementations
-
-- **`NativeStorageImpl`** -- In-memory, single-threaded. No constructor parameters.
-- **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
-- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The frozen layer is read-only, so the default single-threaded factory stays safe.
-
-### `LayeredStorageImpl` Extra API
-
-- **`val layerCount: Int`** -- Number of layers (1 = active only, 2 = active + frozen).
-- **`freeze()`** -- Merge active layer into frozen layer. Resets active layer.
-
-### External Backend Modules
-
-- **`JgraphtStorageImpl`** -- JGraphT backend (module: `commons-graph-impl-jgrapht`).
-- **`JgraphtConcurStorageImpl`** -- Concurrent JGraphT backend.
-- **`MapDBStorageImpl`** -- MapDB persistent backend (module: `commons-graph-impl-mapdb`).
-- **`MapDBConcurStorageImpl`** -- Concurrent MapDB backend.
-- **`Neo4jStorageImpl`** -- Neo4j backend (module: `commons-graph-impl-neo4j`).
-- **`Neo4jConcurStorageImpl`** -- Concurrent Neo4j backend.
-
-## Concurrent Use
-
-```kotlin
-val storage = NativeConcurStorageImpl()
-val counter = storage.addNode(mapOf("n" to 0.intVal))
-storage.criticalSection {
-    val n = (storage.getNodeProperty(counter, "n") as IntVal).core
-    storage.setNodeProperties(counter, mapOf("n" to (n + 1).intVal))
-}
-```
-
-| Implementation | Share across threads | Returned maps and sets |
-|----------------|----------------------|------------------------|
-| `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | Never | -- |
-| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl`, `LayeredStorageImpl` | Yes | Copies |
-
-- Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
-- Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
-- Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
-- A copy returned by a thread-safe storage is fixed at the call. Later writes, `freeze()`, and `clearActiveLayer()` do not change it.
-- Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
-- Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
-- Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
-- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks, may read the storage, and never writes it.
-- A `RevertListener` gets one `RevertNotice(removed, restored, edgeStructuresBefore)` per revert (`clearActiveLayer()` and `clear()`), empty ones included. `removed` and `restored` are `StorageEntityIds(nodes, edges)`. A restored edge missing from `edgeStructuresBefore` has reappeared. A graph over the storage repairs its node registry first, then overrides `onRestoredEdges(ids)` to repair state derived from edge properties.
-- Stop every thread that uses a persistent concurrent backend before calling `close()`.
-
-## Gotchas
-
-- All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
-- `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
-- `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs. `target` must be a different storage instance.
-- `deleteNode` cascades to all incident edges in the same storage.
-- `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
-- `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.
-- `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
-
----
-
-## Source: llms/entity.md
-
 # Entities
 
 > Graph entities (nodes, edges) with storage-backed typed property access.
@@ -354,11 +116,107 @@ class MyNode : AbcNode() {
 - `EntityProperty` nullable delegate propagates `null` to `IEntity.set(name, null)`, which removes the property.
 - Property reads and writes go directly to storage. No local caching in the entity object.
 - Each `entity["key"]` read and write is atomic on a thread-safe storage. A read-modify-write is not: wrap `entity["n"] = next(entity["n"])` in `graph.storage.criticalSection { }`.
+# Graph & Base Classes
 
----
+> Typed directed graph API with abstract base classes for multi-edge and simple-edge graphs.
 
-## Source: llms/label.md
+## Quick Start
 
+```kotlin
+class MyNode : AbcNode() {
+    enum class MyType : AbcNode.Type { DEFAULT }
+    override val type = MyType.DEFAULT
+}
+class MyEdge : AbcEdge() {
+    enum class MyType : AbcEdge.Type { DEFAULT }
+    override val type = MyType.DEFAULT
+}
+class MyGraph(
+    override val storage: IStorage,
+) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
+    override val graphId = "myGraph"
+    override val poset: IPoset = PosetDftImpl(storage)
+    override fun newNodeObj() = MyNode()
+    override fun newEdgeObj() = MyEdge()
+}
+
+val graph = MyGraph(NativeStorageImpl())
+val n1 = graph.addNode("a")
+val n2 = graph.addNode("b")
+val edge = graph.addEdge("a", "b", "calls")
+edge["weight"] = IntVal(5)
+```
+
+## API
+
+### `IGraph<N : AbcNode, E : AbcEdge>`
+
+- **`val nodeIDs: Set<NodeID>`** -- All node IDs in the graph.
+- **`addNode(withID: NodeID): N`** -- Create a node. Raises `EntityAlreadyExistException` if ID exists.
+- **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
+- **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
+- **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
+- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
+- **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
+- **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
+- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
+- **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
+- **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
+- **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
+- **`getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct predecessors via incoming edges.
+- **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
+- **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
+
+### `AbcMultipleGraph<N, E>` (extends `IGraph`)
+
+- **`abstract val storage: IStorage`** -- Graph data storage backend.
+- **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
+- **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
+- **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
+
+### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
+
+Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+
+- **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
+- **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
+- **`getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered incoming edges.
+- **`getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered successors.
+- **`getParents(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered predecessors.
+- **`getDescendants(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS descendants.
+- **`getAncestors(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered BFS ancestors.
+
+### `GraphMergeLaws` (implemented by `AbcMultipleGraph`)
+
+Pure declarations for merging the prospective changes of several writers; each writer carries a before-image and an after-image (`WriterChange(before, after)`; null is an absent key). They read no storage and hook no write.
+
+- **`nodePropertyLaw(name: String): PropertyMergeLaw`** -- Node ID property immutable, owner set by union, other names `PropertyMergeLaw.EQUAL_OR_FAIL`.
+- **`edgePropertyLaw(name: String): PropertyMergeLaw`** -- Labels by the label merge law (`model.md` Merge Laws), other names `EQUAL_OR_FAIL`.
+- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declared unique keys besides the triple; default none. Override to declare.
+- **`coalesceEdges(additions: Collection<EdgeKey>, present: Collection<EdgeKey> = emptyList()): Set<EdgeKey>`** -- Coalesces by `(src, dst, tag)` and validates declared keys.
+- **`PropertyMergeLaw.merge(base: IValue?, changes: Collection<PropertyChange>): IValue?`** -- Merged value or `MergeConflictException`; the result never depends on writer order.
+
+### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
+
+- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Same constraint: at most one edge per direction.
+- **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` fails for two distinct edges on one pair.
+
+## Gotchas
+
+- `NodeID` is a `String` typealias. Callers provide node IDs; the graph manages internal `Int` storage IDs.
+- `delNode` cascades to all incident edges. No orphan edges remain.
+- `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
+- `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
+- `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
+- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
+- On a thread-safe storage, each `IGraph`, `PosetTrait`, and `IPoset` call is atomic. A group of calls is not: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
+- Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
+- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
 # Labels & Poset
 
 > Label hierarchy (partial order set) for edge visibility control.
@@ -395,7 +253,7 @@ val visible = graph.getOutgoingEdges("a", v2)
 
 ### `PosetTrait<N, E>` (interface, extends `IGraph`)
 
-Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, and `relabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
+Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, `relabel`, and `copyLabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
 
 - **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge, assign label, record it in `labelIndex`.
 - **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
@@ -407,6 +265,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
 - **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
+- **`fun copyLabel(from, to, since = 0L, cond = { true }): Long`** -- Add `to` beside `from` on every edge carrying `from` that satisfies `cond` and was recorded under `from` after record `since`; no label is removed. Returns the record count: pass it as `since` to the next copy of `from` so that copy reads only the edges recorded under `from` in between. No-op when `from == to`.
 - **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure merge under the label merge law (`model.md` Merge Laws); `MergeConflictException` under that law's conflict rule.
 
 ### Edge Visibility Rules
@@ -421,9 +280,127 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
-- Edge labels change only through `addEdge`/`delEdge`/`relabel` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
+- Edge labels change only through `addEdge`/`delEdge`/`relabel`/`copyLabel`/`setLabels` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
 - Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
 - Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. Each step is atomic; the whole iteration is not. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`.
+# Storage Backends
 
----
+> Pluggable graph storage with auto-generated Int IDs, property management, and adjacency queries.
 
+## Quick Start
+
+```kotlin
+val storage = NativeStorageImpl()
+val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
+val nodeB = storage.addNode()
+val edgeId = storage.addEdge(nodeA, nodeB, "calls")
+storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
+```
+
+## API
+
+### `IStorage` (extends `Flushable`)
+
+#### Node Operations
+
+- **`val nodeIDs: Set<Int>`** -- All node IDs.
+- **`containsNode(id: Int): Boolean`** -- Check node existence.
+- **`addNode(properties: Map<String, IValue> = emptyMap()): Int`** -- Create node, return auto-generated ID.
+- **`getNodeProperties(id: Int): Map<String, IValue>`** -- All properties. Raises `EntityNotExistException` if absent.
+- **`getNodeProperty(id: Int, name: String): IValue?`** -- Single property. Returns `null` if property absent.
+- **`setNodeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete the property.
+- **`deleteNode(id: Int)`** -- Delete node and all incident edges.
+
+#### Edge Operations
+
+- **`val edgeIDs: Set<Int>`** -- All edge IDs.
+- **`containsEdge(id: Int): Boolean`** -- Check edge existence.
+- **`addEdge(src: Int, dst: Int, tag: String, properties: Map<String, IValue> = emptyMap()): Int`** -- Create edge, return auto-generated ID. Raises `EntityNotExistException` if endpoints missing.
+- **`getEdgeStructure(id: Int): EdgeStructure`** -- Returns `EdgeStructure(src: Int, dst: Int, tag: String)`.
+- **`getEdgeProperties(id: Int): Map<String, IValue>`** -- All properties.
+- **`getEdgeProperty(id: Int, name: String): IValue?`** -- Single property.
+- **`setEdgeProperties(id: Int, properties: Map<String, IValue?>)`** -- Update properties. `null` values delete.
+- **`deleteEdge(id: Int)`** -- Delete an edge.
+
+#### Adjacency
+
+- **`getIncomingEdges(id: Int): Set<Int>`** -- Incoming edge IDs to a node.
+- **`getOutgoingEdges(id: Int): Set<Int>`** -- Outgoing edge IDs from a node.
+
+#### Metadata
+
+- **`val metaNames: Set<String>`** -- All metadata property names.
+- **`getMeta(name: String): IValue?`** -- Retrieve metadata value.
+- **`setMeta(name: String, value: IValue?)`** -- Set or delete (`null`) metadata.
+
+#### Lifecycle
+
+- **`clear()`** -- Remove all nodes, edges, and metadata.
+- **`transferTo(target: IStorage): Map<Int, Int>`** -- Copy all data to target. `target` must be a different storage instance; raises `IllegalArgumentException` if same. Returns node ID mapping (source to target).
+- Persistent backends (`MapDBStorageImpl`, `Neo4jStorageImpl` and their concurrent variants) implement `AutoCloseable`. Call `close()` to release resources. `IStorage` itself is not closeable.
+
+#### Concurrency
+
+- **`val criticalSectionLock: Lock?`** -- The lock `criticalSection` holds. Non-null on a thread-safe implementation, `null` on a single-threaded one.
+- **`IStorage.criticalSection { ... }: T`** -- Runs the block atomically against every other operation on the same thread-safe storage and returns its result. Runs unguarded on a single-threaded one. Reentrant: a nested `criticalSection` on the same storage and thread proceeds.
+
+### Implementations
+
+- **`NativeStorageImpl(projection: AdjacencyProjection? = null)`** -- In-memory, single-threaded; omit the projection for ordinary storage.
+- **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
+- **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The frozen layer is read-only, so the default single-threaded factory stays safe.
+- **`LayeredStorageImpl(projection: AdjacencyProjection?, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Construct with one fixed projection; the factory-only constructor remains available to Kotlin and Java callers.
+- **`AdjacencyProjection(edgeTag: String, kindProperty: String, keyProperty: String)`** -- Select exact adjacency by an edge tag and two fixed destination fields; configure it before creating rows.
+- **`ExactAdjacencyStorage.getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int>`** -- Return matching physical edge IDs; requires a configured projection.
+- **`ExactAdjacencyStorage.attachExact(source: Int, target: Int, properties: Map<String, IValue> = emptyMap()): Int`** -- Reuse or create the projected relation; raises `IllegalArgumentException` for a conflicting target key.
+
+### `LayeredStorageImpl` Extra API
+
+- **`val layerCount: Int`** -- Number of layers (1 = active only, 2 = active + frozen).
+- **`freeze()`** -- Merge active layer into frozen layer. Resets active layer.
+
+### External Backend Modules
+
+- **`JgraphtStorageImpl`** -- JGraphT backend (module: `commons-graph-impl-jgrapht`).
+- **`JgraphtConcurStorageImpl`** -- Concurrent JGraphT backend.
+- **`MapDBStorageImpl`** -- MapDB persistent backend (module: `commons-graph-impl-mapdb`).
+- **`MapDBConcurStorageImpl`** -- Concurrent MapDB backend.
+- **`Neo4jStorageImpl`** -- Neo4j backend (module: `commons-graph-impl-neo4j`).
+- **`Neo4jConcurStorageImpl`** -- Concurrent Neo4j backend.
+
+## Concurrent Use
+
+```kotlin
+val storage = NativeConcurStorageImpl()
+val counter = storage.addNode(mapOf("n" to 0.intVal))
+storage.criticalSection {
+    val n = (storage.getNodeProperty(counter, "n") as IntVal).core
+    storage.setNodeProperties(counter, mapOf("n" to (n + 1).intVal))
+}
+```
+
+| Implementation | Share across threads | Returned maps and sets |
+|----------------|----------------------|------------------------|
+| `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, `Neo4jStorageImpl` | Never | -- |
+| `NativeConcurStorageImpl`, `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl`, `Neo4jConcurStorageImpl`, `LayeredStorageImpl` | Yes | Copies |
+
+- Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
+- Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
+- Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
+- A copy returned by a thread-safe storage is fixed at the call. Later writes, `freeze()`, and `clearActiveLayer()` do not change it.
+- Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
+- Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
+- Take the locks of two storages in one fixed order on every thread. Nesting `a.criticalSection { b.criticalSection { } }` on one thread and the reverse on another deadlocks. So do `a.transferTo(b)` and `b.transferTo(a)` running at the same time.
+- Revert listeners on `LayeredStorageImpl` run while the lock is held. A listener never blocks, may read the storage, and never writes it.
+- A `RevertListener` gets one `RevertNotice(removed, restored, edgeStructuresBefore)` per revert (`clearActiveLayer()` and `clear()`), empty ones included. `removed` and `restored` are `StorageEntityIds(nodes, edges)`. A restored edge missing from `edgeStructuresBefore` has reappeared. A graph over the storage repairs its node registry first, then overrides `onRestoredEdges(ids)` to repair state derived from edge properties.
+- Stop every thread that uses a persistent concurrent backend before calling `close()`.
+
+## Gotchas
+
+- All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
+- `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
+- `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs. `target` must be a different storage instance.
+- `deleteNode` cascades to all incident edges in the same storage.
+- `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
+- `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.
+- `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
