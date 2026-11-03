@@ -19,6 +19,8 @@ import java.util.Collections
 public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactAdjacencyStorage {
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
+    override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
+
     internal val indexedEdgeCount: Int get() = exact?.size ?: 0
     // Auto-increment counters
     private var nodeCounter: Int = 0
@@ -178,6 +180,12 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
     override fun getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int> {
         if (!containsNode(source)) throw EntityNotExistException(source.toString())
         return checkNotNull(exact) { "No exact adjacency projection was configured" }.select(source, kind, key)
+    }
+
+    override fun getExactOutgoingEdges(source: Int, kinds: Set<IValue>, key: IValue): Set<Int> {
+        if (!containsNode(source)) throw EntityNotExistException(source.toString())
+        val index = checkNotNull(exact) { "No exact adjacency projection was configured" }
+        return kinds.flatMapTo(LinkedHashSet()) { index.select(source, it, key) }
     }
 
     override fun attachExact(source: Int, target: Int, properties: Map<String, IValue>): Int {

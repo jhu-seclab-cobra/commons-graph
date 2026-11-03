@@ -82,6 +82,8 @@ public class LayeredStorageImpl(
     private val active = layers.active
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
+    override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
+
     internal val indexedEdgeCount: Int get() = lock.readLock().withLock { exact?.size ?: 0 }
 
     // ============================================================================
@@ -266,6 +268,13 @@ public class LayeredStorageImpl(
         lock.readLock().withLock {
             if (!layers.containsNode(source)) throw EntityNotExistException(source.toString())
             checkNotNull(exact) { "No exact adjacency projection was configured" }.select(source, kind, key)
+        }
+
+    override fun getExactOutgoingEdges(source: Int, kinds: Set<IValue>, key: IValue): Set<Int> =
+        lock.readLock().withLock {
+            if (!layers.containsNode(source)) throw EntityNotExistException(source.toString())
+            val index = checkNotNull(exact) { "No exact adjacency projection was configured" }
+            kinds.flatMapTo(LinkedHashSet()) { index.select(source, it, key) }
         }
 
     override fun attachExact(source: Int, target: Int, properties: Map<String, IValue>): Int =

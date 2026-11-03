@@ -20,10 +20,21 @@ public data class AdjacencyProjection(
  * Full adjacency and raw edge allocation retain [IStorage] semantics. Exact operations require the constructor's
  * projection; they neither install a projection after population nor rebuild an index on first use.
  */
-public interface ExactAdjacencyStorage : IStorage {
+public interface ExactAdjacencyReads : IStorage {
+    /** The constructor-fixed projection, or null when exact operations are not configured. */
+    public val adjacencyProjection: AdjacencyProjection?
+        get() = null
+
     /** Returns existing edge IDs for one source, destination kind and complete typed key. */
     public fun getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int>
 
+    /** Selects all requested kinds in one operation; physical result iteration order is unspecified. */
+    public fun getExactOutgoingEdges(source: Int, kinds: Set<IValue>, key: IValue): Set<Int>
+
+}
+
+/** Exact relation storage supporting both selected reads and first attachment. */
+public interface ExactAdjacencyStorage : ExactAdjacencyReads {
     /**
      * Returns an existing matching edge to [target], or creates one with the fixed projection's tag.
      *

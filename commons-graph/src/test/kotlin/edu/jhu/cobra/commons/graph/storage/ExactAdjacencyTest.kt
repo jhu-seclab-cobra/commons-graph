@@ -1,3 +1,18 @@
+/*
+ * Selected NAME relation tests:
+ * - projection readiness follows constructor through delegation.
+ * - factory constructors preserve published descriptors.
+ * - exact selection ignores unrelated siblings.
+ * - first attachment ignores unrelated siblings.
+ * - same key in other containers stays unrelated.
+ * - colliding keys stay distinct.
+ * - freeze and rollback restore exact rows.
+ * - multi kind selection preserves all physical members through delegation freeze and rollback.
+ * - conflicting attach leaves storage unchanged.
+ * - attached fields cannot change.
+ * - import remaps rows and shares one physical access.
+ * - keyed access retains only rows and reads only their fixed fields.
+ */
 /* Fixed exact relation reads and first attachment on the existing storage representation.
  * - `exact selection ignores unrelated siblings`: preserve one selected row without sibling work.
  * - `first attachment ignores unrelated siblings`: create one member and relation without sibling work.
@@ -22,6 +37,22 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 internal class ExactAdjacencyTest {
+    @Test
+    fun `projection readiness follows constructor through delegation`() {
+        val declaration = AdjacencyProjection("contains", "kind", "key")
+        for (storage in listOf(NativeStorageImpl(), LayeredStorageImpl())) {
+            storage.addNode()
+            assertEquals(null, storage.adjacencyProjection)
+        }
+        for (storage in listOf(NativeStorageImpl(declaration), LayeredStorageImpl(declaration))) {
+            val delegated = object : ExactAdjacencyStorage by storage {}
+            assertEquals(declaration, delegated.adjacencyProjection)
+            val source = storage.addNode()
+            assertEquals(emptySet(), delegated.getExactOutgoingEdges(source, "kind".strVal, "key".strVal))
+            assertEquals(emptySet(), delegated.getExactOutgoingEdges(source, setOf("kind".strVal), "key".strVal))
+        }
+    }
+
     @Test
     fun `factory constructors preserve published descriptors`() {
         var calls = 0
@@ -55,6 +86,19 @@ internal class ExactAdjacencyTest {
         val javaDefault = type.getConstructor().newInstance()
         assertEquals(1, javaDefault.layerCount, "Java no-argument construction remains valid")
         assertEquals(1, LayeredStorageImpl().layerCount, "Kotlin no-argument construction remains valid")
+        val projectionDescriptor = type.getConstructor(AdjacencyProjection::class.java, Function0::class.java)
+        val configured = projectionDescriptor.newInstance(PROJECTION, factory)
+        assertEquals(PROJECTION, configured.adjacencyProjection)
+        val projectionDefaults = type.getConstructor(
+            AdjacencyProjection::class.java, Function0::class.java, Int::class.javaPrimitiveType, marker,
+        )
+        val defaultProjectedCall = projectionDefaults.newInstance(PROJECTION, null, 2, null)
+        val originalRead = ExactAdjacencyStorage::class.java.getMethod(
+            "getExactOutgoingEdges", Int::class.javaPrimitiveType, IValue::class.java, IValue::class.java,
+        )
+        val source = defaultProjectedCall.addNode()
+        assertEquals(emptySet<Int>(), originalRead.invoke(defaultProjectedCall, source, FUNCTION, key("absent")))
+        assertEquals(null, LayeredStorageImpl(null).adjacencyProjection)
     }
 
     @Test
@@ -145,6 +189,29 @@ internal class ExactAdjacencyTest {
     }
 
     @Test
+    fun `multi kind selection preserves all physical members through delegation freeze and rollback`() {
+        for (storage in listOf(NativeStorageImpl(PROJECTION), LayeredStorageImpl(PROJECTION))) {
+            val source = storage.addNode()
+            val kinds = linkedSetOf<IValue>(FUNCTION, "property".strVal)
+            val edges = kinds.map { kind ->
+                val node = storage.addNode(mapOf(KIND to kind, KEY to key("selected")))
+                storage.addEdge(source, node, PROJECTION.edgeTag, emptyMap())
+            }.toSet()
+            val delegated = object : ExactAdjacencyStorage by storage {}
+            val counted = Counted(delegated)
+            assertEquals(edges, counted.getExactOutgoingEdges(source, kinds, key("selected")))
+            assertEquals(listOf(0, 0, 0, 0, 0, edges.size), counted.counts())
+            assertEquals(edges, delegated.getExactOutgoingEdges(source, kinds.reversed().toSet(), key("selected")))
+            if (storage !is LayeredStorageImpl) continue
+            storage.freeze()
+            storage.deleteEdge(edges.first())
+            assertEquals(edges - edges.first(), delegated.getExactOutgoingEdges(source, kinds, key("selected")))
+            storage.clearActiveLayer()
+            assertEquals(edges, delegated.getExactOutgoingEdges(source, kinds, key("selected")))
+        }
+    }
+
+    @Test
     fun `conflicting attach leaves storage unchanged`() {
         for (factory in factories) {
             val fixture = fixture(factory(), 8, false)
@@ -186,6 +253,8 @@ internal class ExactAdjacencyTest {
             assertEquals(1, selected.size)
             val repeated = second.getExactOutgoingEdges(mapping.getValue(source.source), FUNCTION, key("selected"))
             assertEquals(selected, repeated)
+            assertEquals(selected, first.getExactOutgoingEdges(mapping.getValue(source.source), setOf(FUNCTION), key("selected")))
+            assertEquals(selected, second.getExactOutgoingEdges(mapping.getValue(source.source), setOf(FUNCTION), key("selected")))
             val edge = target.getEdgeStructure(selected.single())
             assertEquals(mapping.getValue(source.storage.getEdgeStructure(source.edge).dst), edge.dst)
             assertEquals(target.getOutgoingEdges(edge.src), selected)
@@ -253,6 +322,7 @@ internal class ExactAdjacencyTest {
     private class Fixture(val storage: IStorage, val source: Int, val edge: Int)
 
     private class Counted(private val base: IStorage) : ExactAdjacencyStorage, IStorage by base {
+        override val adjacencyProjection: AdjacencyProjection? get() = (base as ExactAdjacencyReads).adjacencyProjection
         private var adjacencyReads = 0
         private var adjacencyItems = 0
         private var structures = 0
@@ -262,6 +332,9 @@ internal class ExactAdjacencyTest {
 
         override fun getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int> =
             (base as ExactAdjacencyStorage).getExactOutgoingEdges(source, kind, key).also { selected += it.size }
+
+        override fun getExactOutgoingEdges(source: Int, kinds: Set<IValue>, key: IValue): Set<Int> =
+            (base as ExactAdjacencyStorage).getExactOutgoingEdges(source, kinds, key).also { selected += it.size }
 
         override fun attachExact(source: Int, target: Int, properties: Map<String, IValue>): Int =
             (base as ExactAdjacencyStorage).attachExact(source, target, properties)

@@ -2,7 +2,7 @@
 
 ## Design Overview
 
-- **Classes:** public `AdjacencyProjection`, `ExactAdjacencyStorage`; internal `ExactAdjacencyIndex`.
+- **Classes:** public `AdjacencyProjection`, `ExactAdjacencyReads`, `ExactAdjacencyStorage`; internal `ExactAdjacencyIndex`.
 - **Relationships:** `NativeStorageImpl` and `LayeredStorageImpl` implement `ExactAdjacencyStorage`, optionally
   selecting one fixed projection in their constructor. Each storage owns one physical index over its existing edges.
 - **Data holders:** `AdjacencyProjection` holds an edge tag and two destination property names. The index identifies
@@ -81,6 +81,15 @@ its ordinary collision-dependent worst case. The index retains O(E + K) entries 
 keys, plus their actual key bytes; repeated misses allocate no retained entry. Existing node-deletion and freeze/import
 passes retain their existing scopes, with bounded added index work per row they already handle.
 
+## Read Capability
+
+`ExactAdjacencyReads` exposes the nullable constructor-fixed `adjacencyProjection` and `getExactOutgoingEdges`.
+A null declaration means the access has not configured exact reads. Native and Layered return the declaration of
+their existing index; there is no independent registration or first-query rebuild. `ExactAdjacencyStorage` extends
+this read capability with `attachExact`. A read-only interpretation access need not claim attachment support.
+The required multi-kind `getExactOutgoingEdges(source, kinds, key)` overload unions only the requested buckets in one storage operation. Its physical result order is unspecified; it is not K completed runtime folds. Delegating wrappers forward both overloads and the declaration. The single-kind and constructor JVM descriptors remain; an old external implementer binary is not claimed to implement the added method. Existing constructors and unconfigured rows
+retain their behavior; consumers must distinguish unavailable capability from a supported empty result.
+
 ## Exception / Error Types
 
 `EntityNotExistException`, `IllegalArgumentException` and `IllegalStateException` have the conditions stated above.
@@ -89,6 +98,5 @@ falling back to a table scan.
 
 ## Open Gaps
 
-The optional physical access is not implemented for other backends, `NativeConcurStorageImpl` or interpretation
-buffers. No graph or language consumer is routed through it. Acquired identity/property reads, matching supplier
+The optional physical access is not implemented for other backends, `NativeConcurStorageImpl`. Acquired identity/property reads, matching supplier
 effects, held-buffer visibility, publication uniqueness and domain-level insert rollback remain separate contracts.
