@@ -85,10 +85,9 @@ internal class FrozenLayer private constructor(
     companion object {
         /**
          * Builds a new frozen layer by copying [previous] (when present) and overlaying
-         * [active] into [merged]. For an entity present in the active layer, its active
-         * property set replaces the frozen one wholesale — promotion copied all frozen
-         * properties, so a property absent from the active copy was deleted and stays
-         * deleted. Edges tombstoned in [active] are not transferred.
+         * [active] into [merged]. A promoted edge contributes only its explicit edits;
+         * all other properties still come from the previous frozen row. Edges tombstoned
+         * in [active] are not transferred.
          */
         fun merge(
             previous: FrozenLayer?,
@@ -220,8 +219,14 @@ internal class FrozenLayer private constructor(
             localEdgeId: Int,
             globalEdgeId: Int,
         ): Map<String, IValue> {
-            if (active.containsEdge(globalEdgeId)) return active.collectEdgeProperties(globalEdgeId)
-            return previous.storage.getEdgeProperties(localEdgeId)
+            val base = previous.storage.getEdgeProperties(localEdgeId)
+            if (!active.containsEdge(globalEdgeId)) return base
+            val edits = active.promotedEdgeEdits[globalEdgeId] ?: return active.collectEdgeProperties(globalEdgeId)
+            val result = HashMap(base)
+            for ((name, value) in edits) {
+                if (value == null) result.remove(name) else result[name] = value
+            }
+            return result
         }
 
         private fun transferMetadata(

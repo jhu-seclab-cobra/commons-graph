@@ -30,6 +30,9 @@ import kotlin.test.assertTrue
  * - `getOutgoingEdges throws EntityNotExistException for absent node` -- missing entity
  * - `setNodeProperties with null removes last property and cleans column` -- column cleanup
  * - `setEdgeProperties with null removes last property and cleans column` -- column cleanup
+ * - `setEdgeProperties on frozen edge avoids full row` -- one-cell promotion does not copy unrelated properties
+ * - `promoted edge point layers preserve inheritance` -- exact layers, deletion, revert and freeze agree
+ * - `promoted edge transfer composes edits` -- a copied row includes inherited values and explicit deletion
  */
 internal class LayeredStorageImplPropertyTest {
     private lateinit var storage: LayeredStorageImpl
@@ -154,6 +157,88 @@ internal class LayeredStorageImplPropertyTest {
         storage.setEdgeProperties(edge, mapOf("only" to null))
         assertNull(storage.getEdgeProperty(edge, "only"))
         assertTrue(storage.getEdgeProperties(edge).isEmpty())
+    }
+
+    @Test
+    fun `setEdgeProperties on frozen edge avoids full row`() {
+        val costs = listOf(0, 2, 4, 8).map { unrelated ->
+            var rowReads = 0
+            var rowEntries = 0
+            val pointStorage = LayeredStorageImpl {
+                val backing = NativeStorageImpl()
+                object : IStorage by backing {
+                    override fun getEdgeProperties(id: Int): Map<String, edu.jhu.cobra.commons.value.IValue> {
+                        val row = backing.getEdgeProperties(id)
+                        rowReads++
+                        rowEntries += row.size
+                        return row
+                    }
+                }
+            }
+            val n1 = pointStorage.addNode()
+            val n2 = pointStorage.addNode()
+            val frozen = mutableMapOf("selected" to "old".strVal)
+            repeat(unrelated) { frozen["unrelated-$it"] = "value".strVal }
+            val edge = pointStorage.addEdge(n1, n2, "rel", frozen)
+            pointStorage.freeze()
+            rowReads = 0
+            rowEntries = 0
+
+            pointStorage.setEdgeProperties(edge, mapOf("selected" to "new".strVal))
+
+            rowReads to rowEntries
+        }
+
+        assertEquals(List(4) { 0 to 0 }, costs)
+    }
+
+    @Test
+    fun `promoted edge point layers preserve inheritance`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("selected" to "old".strVal, "other" to "kept".strVal))
+        storage.freeze()
+        val before = StorageLayer.entries.map { storage.getEdgeProperty(edge, "selected", it) }
+        storage.setEdgeProperties(edge, mapOf("selected" to "new".strVal))
+        val afterWrite = StorageLayer.entries.map { storage.getEdgeProperty(edge, "selected", it) }
+        val inherited = storage.getEdgeProperty(edge, "other", StorageLayer.ACTIVE)
+        val row = storage.getEdgeProperties(edge, StorageLayer.ACTIVE)
+        storage.setEdgeProperties(edge, mapOf("other" to null))
+        val afterDelete = storage.getEdgeProperties(edge)
+        storage.clearActiveLayer()
+        val afterRevert = storage.getEdgeProperties(edge)
+        storage.setEdgeProperties(edge, mapOf("selected" to "new".strVal, "other" to null))
+        storage.freeze()
+        val afterFreeze = storage.getEdgeProperties(edge)
+
+        assertEquals(
+            listOf(
+                listOf("old".strVal, null, "old".strVal),
+                listOf("new".strVal, "new".strVal, "old".strVal),
+                null,
+                mapOf("selected" to "new".strVal, "other" to "kept".strVal),
+                mapOf("selected" to "new".strVal),
+                mapOf("selected" to "old".strVal, "other" to "kept".strVal),
+                mapOf("selected" to "new".strVal),
+            ),
+            listOf(before, afterWrite, inherited, row, afterDelete, afterRevert, afterFreeze),
+        )
+    }
+
+    @Test
+    fun `promoted edge transfer composes edits`() {
+        val n1 = storage.addNode()
+        val n2 = storage.addNode()
+        val edge = storage.addEdge(n1, n2, "rel", mapOf("selected" to "old".strVal,
+            "inherited" to "kept".strVal, "deleted" to "gone".strVal))
+        storage.freeze()
+        storage.setEdgeProperties(edge, mapOf("selected" to "new".strVal, "deleted" to null))
+        val copy = NativeStorageImpl()
+
+        storage.transferTo(copy)
+
+        assertEquals(mapOf("selected" to "new".strVal, "inherited" to "kept".strVal),
+            copy.getEdgeProperties(copy.edgeIDs.single()))
     }
 
     // endregion

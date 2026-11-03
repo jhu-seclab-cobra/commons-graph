@@ -68,9 +68,18 @@ internal class LayerStack {
     }
 
     fun edgeProperties(id: Int): Map<String, IValue> {
-        if (active.containsEdge(id)) return ColumnViewMap(id, active.edgeColumns)
+        if (active.containsEdge(id)) return activeEdgeProperties(id)
         if (!containsFrozenEdge(id)) throw EntityNotExistException(id.toString())
         return checkNotNull(frozen?.edgeProperties(id))
+    }
+
+    private fun activeEdgeProperties(id: Int): Map<String, IValue> {
+        val edits = active.promotedEdgeEdits[id] ?: return ColumnViewMap(id, active.edgeColumns)
+        val result = HashMap(checkNotNull(frozen?.edgeProperties(id)))
+        for ((name, value) in edits) {
+            if (value == null) result.remove(name) else result[name] = value
+        }
+        return result
     }
 
     // The row one layer itself holds, or null; a tombstone hides an edge from VISIBLE only.
@@ -80,7 +89,7 @@ internal class LayerStack {
     ): Map<String, IValue>? =
         when (layer) {
             StorageLayer.VISIBLE -> if (containsEdge(id)) edgeProperties(id) else null
-            StorageLayer.ACTIVE -> if (active.containsEdge(id)) ColumnViewMap(id, active.edgeColumns) else null
+            StorageLayer.ACTIVE -> if (active.containsEdge(id)) activeEdgeProperties(id) else null
             StorageLayer.FROZEN -> frozen?.edgeProperties(id)
         }
 
@@ -89,9 +98,36 @@ internal class LayerStack {
         name: String,
     ): IValue? =
         when {
-            active.containsEdge(id) -> active.edgeColumns[name]?.get(id)
+            active.containsEdge(id) -> visibleActiveEdgeProperty(id, name)
             containsFrozenEdge(id) -> frozen?.edgeProperty(id, name)
             else -> throw EntityNotExistException(id.toString())
+        }
+
+    private fun visibleActiveEdgeProperty(
+        id: Int,
+        name: String,
+    ): IValue? {
+        val edits = active.promotedEdgeEdits[id] ?: return active.edgeColumns[name]?.get(id)
+        return if (name in edits) edits[name] else frozen?.edgeProperty(id, name)
+    }
+
+    private fun localActiveEdgeProperty(
+        id: Int,
+        name: String,
+    ): IValue? {
+        val edits = active.promotedEdgeEdits[id]
+        return if (edits == null) active.edgeColumns[name]?.get(id) else edits[name]
+    }
+
+    fun edgeProperty(
+        id: Int,
+        name: String,
+        layer: StorageLayer,
+    ): IValue? =
+        when (layer) {
+            StorageLayer.VISIBLE -> if (containsEdge(id)) edgeProperty(id, name) else null
+            StorageLayer.ACTIVE -> if (active.containsEdge(id)) localActiveEdgeProperty(id, name) else null
+            StorageLayer.FROZEN -> frozen?.edgeProperty(id, name)
         }
 
     fun metaNames(): Set<String> {

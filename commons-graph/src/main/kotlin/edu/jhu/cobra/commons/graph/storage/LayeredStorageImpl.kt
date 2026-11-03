@@ -19,9 +19,9 @@ import kotlin.concurrent.withLock
  * the active layer, keeping query depth at O(1).
  *
  * Query resolution:
- * - Properties: the active copy is authoritative for entities present in the active
- *   layer — promotion copies all frozen properties, and a property deleted from the
- *   copy stays deleted. Frozen-only entities read from the frozen layer.
+ * - Properties: active nodes hold complete rows. A promoted frozen edge holds
+ *   explicit property edits; unchanged names resolve through the frozen layer,
+ *   and an explicit null masks a frozen name.
  * - Adjacency: returns the union of both layers.
  *
  * Deleting a frozen-layer edge — including one promoted into the active layer — records
@@ -176,19 +176,24 @@ public class LayeredStorageImpl(
         name: String,
     ): IValue? = lock.readLock().withLock { layers.edgeProperty(id, name) }
 
+    /** Reads one property in the chosen layer without collecting the edge row. */
+    public fun getEdgeProperty(
+        id: Int,
+        name: String,
+        layer: StorageLayer,
+    ): IValue? = lock.readLock().withLock { layers.edgeProperty(id, name, layer) }
+
     override fun setEdgeProperties(
         id: Int,
         properties: Map<String, IValue?>,
     ): Unit =
         lock.writeLock().withLock {
             if (!active.containsEdge(id)) {
-                // Promote the frozen edge by copying all frozen properties, making the
-                // active copy authoritative for subsequent reads and deletions.
-                val frozenProps = layers.edgeProperties(id)
                 val structure = layers.edgeStructure(id)
                 layers.promoteNode(structure.src)
                 layers.promoteNode(structure.dst)
-                active.addEdge(id, structure, frozenProps)
+                active.addEdge(id, structure, emptyMap())
+                active.promotedEdgeEdits[id] = HashMap()
             }
             active.setEdgeProperties(id, properties)
         }

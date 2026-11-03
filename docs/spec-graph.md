@@ -93,12 +93,12 @@ Input edge sequence is finite. Per edge, label set is finite. Ancestor lookup te
 
 ### Problem
 
-Given a layered storage with one active layer and at most one frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when the active layer is authoritative for every entity present in it, and frozen values are visible only for frozen-only entities.
+Given a layered storage with one active layer and at most one frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when active node rows and active-only edge rows are authoritative, while a promoted frozen edge's explicit property edits override its frozen row one name at a time.
 
 ### Steps — Property read
 
-1. If the entity is present in the active layer, read from the active layer only.
-2. Otherwise, read from the frozen layer (translating global ID to frozen-local ID).
+1. If an active node or active-only edge holds the entity, read its active property. For a promoted frozen edge, use its explicit edit for that name, including a deletion marker; otherwise use the frozen property through its translated ID.
+2. For a frozen-only entity, read from the frozen layer (translating global ID to frozen-local ID).
 3. If neither layer has the entity, raise an error.
 
 ### Steps — Adjacency query
@@ -115,12 +115,12 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 ### Steps — Property write (cross-layer)
 
 1. If entity exists in active layer, update directly.
-2. If entity exists only in frozen layer, promote it: copy all frozen properties into the active layer, then update.
+2. If an edge exists only in the frozen layer, promote its structure and record only the named edits in active storage; a null edit masks the inherited property. A frozen node still promotes its complete property row.
 
 ### Steps — Freeze
 
 1. Transfer frozen-layer data into a new storage instance.
-2. Transfer active-layer data into the same instance; for an entity present in both layers, the active property set replaces the frozen one wholesale. Tombstoned edges are not transferred.
+2. Transfer active-layer data into the same instance; an active node row replaces its frozen row, while a promoted edge composes its explicit edits over the frozen row, including deletions. Tombstoned edges are not transferred.
 3. Replace old frozen layer with merged storage. Clear active layer.
 
 ### Steps — Revert (`clearActiveLayer`)
@@ -131,8 +131,8 @@ Given a layered storage with one active layer and at most one frozen layer, reso
 
 ### Invariants
 
-- An entity present in the active layer reads exactly its active property set; a property deleted from that set stays deleted.
-- Promotion copies every frozen property into the active layer, so the active copy is complete at promotion time.
+- An active node or active-only edge reads its active property set. A promoted edge reads its explicit edits over frozen properties; a deleted name stays absent.
+- Promotion copies frozen node properties. Promoted frozen edges retain only their explicit property edits; whole-row reads compose the same image a complete active copy would hold.
 - Frozen layer nodes cannot be deleted. A deleted frozen edge is masked by a tombstone, never removed from the frozen layer.
 - After a revert, storage reads equal the reads right after the last freeze, and every registered graph and poset cache holds only IDs that exist; a graph registers a node only while the owner set of its row holds the graph's ID, and its label carrier index holds a candidate for every label of every edge it owns.
 - Layer count is always 1 or 2. Global IDs are stable across freezes.

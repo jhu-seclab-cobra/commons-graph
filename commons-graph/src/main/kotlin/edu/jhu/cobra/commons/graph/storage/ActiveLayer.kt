@@ -12,6 +12,9 @@ import edu.jhu.cobra.commons.value.IValue
 internal class ActiveLayer {
     val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
     val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
+
+    // Explicit writes to edges inherited from the frozen layer. Null masks a frozen property.
+    val promotedEdgeEdits = HashMap<Int, MutableMap<String, IValue?>>()
     val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
     val outEdges = HashMap<Int, MutableSet<Int>>()
     val inEdges = HashMap<Int, MutableSet<Int>>()
@@ -68,7 +71,12 @@ internal class ActiveLayer {
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ColumnarProperties.setColumnarProperties(id, properties, edgeColumns)
+        val promoted = promotedEdgeEdits[id]
+        if (promoted == null) {
+            ColumnarProperties.setColumnarProperties(id, properties, edgeColumns)
+        } else {
+            promoted.putAll(properties)
+        }
     }
 
     fun removeNode(id: Int) {
@@ -84,6 +92,7 @@ internal class ActiveLayer {
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
         ColumnarProperties.removeEntityFromColumns(id, edgeColumns)
+        promotedEdgeEdits.remove(id)
     }
 
     fun clear() {
@@ -91,6 +100,7 @@ internal class ActiveLayer {
         inEdges.clear()
         edgeEndpoints.clear()
         edgeColumns.clear()
+        promotedEdgeEdits.clear()
         nodeColumns.clear()
         metaProperties.clear()
         deletedMetaNames.clear()
