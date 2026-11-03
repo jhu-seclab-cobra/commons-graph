@@ -42,7 +42,7 @@ import kotlin.concurrent.withLock
 @Suppress("TooManyFunctions")
 public class LayeredStorageImpl(
     projection: AdjacencyProjection?,
-    override val propertyFamilies: EdgePropertyFamilies,
+    propertyFamilies: EdgePropertyFamilies?,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
 ) : IRevertibleStorage, ExactAdjacencyStorage, LayeredEdgeReads {
     /** Constructs unconfigured storage through the same initialization as a projected storage. */
@@ -67,7 +67,18 @@ public class LayeredStorageImpl(
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
-    private val layers = LayerStack(propertyFamilies)
+    private var boundFamilies = propertyFamilies
+    override val propertyFamilies: EdgePropertyFamilies? get() = lock.readLock().withLock { boundFamilies }
+
+    override fun bindPropertyFamilies(families: EdgePropertyFamilies) {
+        lock.writeLock().withLock {
+            val bound = boundFamilies
+            if (bound == null) boundFamilies = families
+            else check(bound == families) { "Conflicting edge property family declaration" }
+        }
+    }
+
+    private val layers = LayerStack { boundFamilies }
     private val active = layers.active
     private val exact = projection?.let(::ExactAdjacencyIndex)
 

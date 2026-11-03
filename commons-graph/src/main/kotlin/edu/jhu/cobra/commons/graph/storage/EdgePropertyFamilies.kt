@@ -2,20 +2,27 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.value.IValue
 
-/** Immutable schema mapping: a member and its anchor share one physical storage layer. */
-public fun interface EdgePropertyFamilies {
-    /** The anchor for [name] on [tag], including the anchor itself; null for a nonfamily property. */
-    public fun anchor(tag: String, name: String): String?
-
+/** One immutable physical-layer family declaration. */
+public data class EdgePropertyFamilies(
+    public val edgeTag: String,
+    public val memberPrefix: String,
+    public val anchorName: String,
+) {
     public companion object {
-        /** The default schema declares no property families. */
-        public val NONE: EdgePropertyFamilies = EdgePropertyFamilies { _, _ -> null }
+        /** An unbound storage declares no property family. */
+        public val NONE: EdgePropertyFamilies? = null
     }
+}
+
+/** The anchor for a declared member (including the anchor itself), or null for an ordinary property. */
+public fun EdgePropertyFamilies?.anchor(tag: String, name: String): String? {
+    if (this == null || tag != edgeTag) return null
+    return if (name == anchorName || name.startsWith(memberPrefix)) anchorName else null
 }
 
 /** Layer-selected edge points and explicit ACTIVE presence, including null edits. */
 public interface LayeredEdgeReads {
-    public val propertyFamilies: EdgePropertyFamilies
+    public val propertyFamilies: EdgePropertyFamilies?
 
     /** Whether the writable layer explicitly holds [name]; an explicit null still returns true. */
     public fun hasActiveEdgeProperty(id: Int, name: String): Boolean

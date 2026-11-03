@@ -9,7 +9,7 @@ import edu.jhu.cobra.commons.value.IValue
  * metadata, and edge/metadata tombstones, all keyed by global IDs. Columnar bookkeeping is delegated to
  * [ColumnarProperties].
  */
-internal class ActiveLayer(private val families: EdgePropertyFamilies = EdgePropertyFamilies.NONE) {
+internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = { null }) {
     val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
     val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
 
@@ -66,9 +66,10 @@ internal class ActiveLayer(private val families: EdgePropertyFamilies = EdgeProp
     ): Map<String, IValue> {
         val edits = promotedEdgeEdits.getValue(id)
         val tag = edgeEndpoints.getValue(id).tag
+        val family = families()
         val result = HashMap<String, IValue>()
         for ((name, value) in frozen) {
-            val anchor = families.anchor(tag, name)
+            val anchor = family.anchor(tag, name)
             if (anchor == null || anchor !in edits) result[name] = value
         }
         for ((name, value) in edits) {

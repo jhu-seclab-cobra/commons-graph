@@ -18,6 +18,9 @@ import java.util.concurrent.locks.Lock
  */
 @Suppress("TooManyFunctions")
 public interface IStorage : Flushable {
+    /** Binds a physical-layer schema; flat stores have no inherited family and need no binding. */
+    public fun bindPropertyFamilies(families: EdgePropertyFamilies): Unit {}
+
     // ============================================================================
     // NODE OPERATIONS
     // ============================================================================

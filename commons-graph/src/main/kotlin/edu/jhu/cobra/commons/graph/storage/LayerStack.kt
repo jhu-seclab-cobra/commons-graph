@@ -10,7 +10,7 @@ import edu.jhu.cobra.commons.value.IValue
  * the frozen layer; an edge the active layer tombstoned reads as absent. Not synchronized: the owning storage
  * calls every member under its lock.
  */
-internal class LayerStack(private val families: EdgePropertyFamilies) {
+internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
     val active = ActiveLayer(families)
     var frozen: FrozenLayer? = null
 
@@ -105,7 +105,7 @@ internal class LayerStack(private val families: EdgePropertyFamilies) {
     ): IValue? {
         val edits = active.promotedEdgeEdits[id] ?: return active.edgeColumns[name]?.get(id)
         if (name in edits) return edits[name]
-        val anchor = families.anchor(active.edgeEndpoints.getValue(id).tag, name)
+        val anchor = families().anchor(active.edgeEndpoints.getValue(id).tag, name)
         return if (anchor != null && anchor in edits) null else frozen?.edgeProperty(id, name)
     }
 

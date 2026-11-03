@@ -1,8 +1,9 @@
 /** Layer-local property family selection.
+ * - `binding reaches an existing layer stack and rejects conflicting tuples` — one stable construction owner.
  * - `freeze replaces a family and preserves nonfamily properties` — physical snapshot and repeated freezes.
  * - `explicit null and rollback retain their layer meaning` — null presence, deletion, rollback.
  * - `nonfamily edits and other tags do not claim a family` — unchanged sparse fallback.
- * - `selected reads and writes do not visit unrelated frozen properties` — fixed-target classification counts.
+ * - `selected reads and writes do not visit unrelated frozen properties` — fixed-target physical reads.
  */
 package edu.jhu.cobra.commons.graph.storage
 
@@ -10,18 +11,42 @@ import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 internal class EdgePropertyFamiliesTest {
-    private val families = EdgePropertyFamilies { tag, name ->
-        if (tag == "call" && (name == "members" || name.startsWith("input:"))) "members" else null
-    }
+    private val families = EdgePropertyFamilies("call", "input:", "members")
 
     private fun edge(storage: LayeredStorageImpl, tag: String = "call"): Int =
         storage.addEdge(storage.addNode(), storage.addNode(), tag,
             mapOf("members" to "A".strVal, "input:A" to "a".strVal, "certainty" to "fixed".strVal))
+
+    @Test
+    fun `binding reaches an existing layer stack and rejects conflicting tuples`() {
+        val storage = LayeredStorageImpl(null)
+        val id = edge(storage)
+        storage.freeze()
+        val delegated = object : IStorage by storage {}
+        delegated.bindPropertyFamilies(families)
+        storage.bindPropertyFamilies(families.copy())
+        assertEquals(families, storage.propertyFamilies)
+        val before = storage.getEdgeProperties(id)
+        for (conflict in listOf(families.copy(edgeTag = "other"), families.copy(memberPrefix = "other:"),
+            families.copy(anchorName = "other"))) {
+            assertFailsWith<IllegalStateException> { delegated.bindPropertyFamilies(conflict) }
+            assertEquals(families, storage.propertyFamilies)
+            assertEquals(before, storage.getEdgeProperties(id))
+        }
+        storage.setEdgeProperties(id, mapOf("members" to "B".strVal, "input:B" to "b".strVal))
+        storage.freeze()
+        assertNull(storage.getEdgeProperty(id, "input:A"))
+        storage.clearActiveLayer()
+        assertEquals(families, storage.propertyFamilies)
+        storage.clear()
+        assertEquals(families, storage.propertyFamilies)
+    }
 
     @Test
     fun `freeze replaces a family and preserves nonfamily properties`() {
@@ -84,14 +109,9 @@ internal class EdgePropertyFamiliesTest {
     @Test
     fun `selected reads and writes do not visit unrelated frozen properties`() {
         val rows = listOf(0, 2, 4, 8).map { unrelated ->
-            var classifications = 0
             var points = 0
             var rowReads = 0
-            val counted = EdgePropertyFamilies { tag, name ->
-                classifications++
-                families.anchor(tag, name)
-            }
-            val storage = LayeredStorageImpl(propertyFamilies = counted, frozenLayerFactory = {
+            val storage = LayeredStorageImpl(propertyFamilies = families, frozenLayerFactory = {
                 val base = NativeStorageImpl()
                 object : IStorage by base {
                     override fun getEdgeProperty(id: Int, name: String): IValue? =
@@ -103,12 +123,12 @@ internal class EdgePropertyFamiliesTest {
             val id = edge(storage)
             repeat(unrelated) { storage.setEdgeProperties(id, mapOf("input:other_$it" to "x".strVal)) }
             storage.freeze()
-            classifications = 0; points = 0; rowReads = 0
+            points = 0; rowReads = 0
             assertEquals("a".strVal, storage.getEdgeProperty(id, "input:A"))
             storage.setEdgeProperties(id, mapOf("members" to "B".strVal, "input:B" to "b".strVal))
             assertNull(storage.getEdgeProperty(id, "input:A"))
             assertEquals("b".strVal, storage.getEdgeProperty(id, "input:B"))
-            listOf(classifications, points, rowReads)
+            listOf(points, rowReads)
         }
         println("EDGE_FAMILY_FIXED $rows")
         assertEquals(List(rows.size) { rows.first() }, rows)
