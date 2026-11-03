@@ -42,12 +42,21 @@ import kotlin.concurrent.withLock
 @Suppress("TooManyFunctions")
 public class LayeredStorageImpl(
     projection: AdjacencyProjection?,
+    override val propertyFamilies: EdgePropertyFamilies,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
-) : IRevertibleStorage, ExactAdjacencyStorage {
+) : IRevertibleStorage, ExactAdjacencyStorage, LayeredEdgeReads {
     /** Constructs unconfigured storage through the same initialization as a projected storage. */
     @JvmOverloads
     public constructor(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
-        this(projection = null, frozenLayerFactory = frozenLayerFactory)
+        this(projection = null, propertyFamilies = EdgePropertyFamilies.NONE, frozenLayerFactory = frozenLayerFactory)
+
+    /** Preserves the projected constructor and its default-factory source/JVM entry points. */
+    public constructor(projection: AdjacencyProjection?, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
+        this(projection, EdgePropertyFamilies.NONE, frozenLayerFactory)
+
+    /** Constructs layered storage with a fixed property-family schema. */
+    public constructor(propertyFamilies: EdgePropertyFamilies, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
+        this(projection = null, propertyFamilies = propertyFamilies, frozenLayerFactory = frozenLayerFactory)
 
     private val lock = ReentrantReadWriteLock()
 
@@ -58,7 +67,7 @@ public class LayeredStorageImpl(
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
-    private val layers = LayerStack()
+    private val layers = LayerStack(propertyFamilies)
     private val active = layers.active
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
@@ -193,11 +202,14 @@ public class LayeredStorageImpl(
     ): IValue? = lock.readLock().withLock { layers.edgeProperty(id, name) }
 
     /** Reads one property in the chosen layer without collecting the edge row. */
-    public fun getEdgeProperty(
+    override fun getEdgeProperty(
         id: Int,
         name: String,
         layer: StorageLayer,
     ): IValue? = lock.readLock().withLock { layers.edgeProperty(id, name, layer) }
+
+    override fun hasActiveEdgeProperty(id: Int, name: String): Boolean =
+        lock.readLock().withLock { active.containsEdge(id) && active.hasEdgeProperty(id, name) }
 
     override fun setEdgeProperties(
         id: Int,

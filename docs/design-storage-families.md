@@ -1,0 +1,6 @@
+# Storage property families
+
+`EdgePropertyFamilies.anchor(tag, name)` is a fixed schema declaration returning a member's anchor, including the anchor itself, or null for a nonfamily property. The default declaration is empty. `LayeredEdgeReads` exposes this declaration, a layer-selected point read, and `hasActiveEdgeProperty(id, name)`, which distinguishes an explicit null edit from no edit. Existing constructors remain available; the configured constructor accepts the declaration without storing domain names in commons.
+
+On a promoted edge, an explicit anchor edit makes that family belong to ACTIVE. A visible member reads its explicit ACTIVE edit, or absence when its anchor is explicitly active, otherwise the frozen property. Later anchor writes do not reset other ACTIVE members. Whole-row composition and freeze use the same `ActiveLayer.composePromotedEdgeProperties` fold: while already copying frozen properties, omit members whose anchors have explicit active edits, then apply every active edit, null removals included. Nonfamily properties keep sparse fallback. No family state exists beside the sparse edits; rollback drops ownership with those edits. Point selection adds one fixed declaration lookup and one anchor lookup; full composition adds constant work per property already visited. Freeze physically retains only the composed survivors.
+
