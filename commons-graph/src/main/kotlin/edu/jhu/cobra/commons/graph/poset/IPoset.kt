@@ -7,7 +7,8 @@ package edu.jhu.cobra.commons.graph.poset
  * by ancestry: [compare] returns positive when [a] is an ancestor of [b],
  * negative when [a] is a descendant, zero when equal, null when incomparable.
  *
- * [Label.INFIMUM] and [Label.SUPREMUM] are structural bounds and should not be assigned to edges.
+ * [Label.INFIMUM] and [Label.SUPREMUM] are structural bounds. An edge carrying [Label.INFIMUM] is
+ * visible under every label; [Label.SUPREMUM] is never assigned to edges.
  *
  * @see PosetDftImpl
  */
