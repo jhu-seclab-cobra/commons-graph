@@ -21,7 +21,7 @@ A directed connection between two nodes identified by the triple of source node 
 
 A marker controlling edge visibility. Wraps a string identifier.
 
-- `INFIMUM`: greatest lower bound — below all labels in the poset. Structural bound only; never assigned to edges.
+- `INFIMUM`: greatest lower bound — below all labels in the poset. An edge may carry it: such an edge is visible under every label, and a query under `INFIMUM` sees only the edges that carry it.
 - `SUPREMUM`: least upper bound — above all labels in the poset. Structural bound only; never assigned to edges.
 - A label's ordering is not intrinsic — it is defined by the poset structure.
 
@@ -73,7 +73,7 @@ A marker controlling edge visibility. Wraps a string identifier.
 - In a multiple-edge graph variant, multiple edges between the same `(src, dst)` pair are allowed if tags differ.
 - `NodeID` is unique within a graph. Adding a duplicate is rejected.
 - Edge `(src, dst, tag)` is unique within a graph. Adding a duplicate is rejected.
-- `INFIMUM` and `SUPREMUM` are never assigned to edges. They are structural bounds only.
+- `SUPREMUM` is never assigned to edges. It is a structural bound only.
 - Label hierarchy is a DAG. No cycles in parent relationships.
 - Layer count is always 1 (active only) or 2 (active + one frozen). Merge-on-freeze maintains this bound.
 - Storage integer IDs are stable across freeze operations and never reused within one storage lifetime.
@@ -113,4 +113,4 @@ The label hierarchy is backed by a dedicated storage instance separate from the 
 
 ### Edge Visibility Rule
 
-An edge is visible under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy (pure covering). Covered labels never shadow one another: every edge carrying at least one covered label is visible. `SUPREMUM` bypasses filtering and sees every edge, labeled or not. `INFIMUM` is below all labels. Edges with no labels are otherwise visible only when no label filter is applied.
+An edge is visible under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy (pure covering). Covered labels never shadow one another: every edge carrying at least one covered label is visible. `SUPREMUM` bypasses filtering and sees every edge, labeled or not. `INFIMUM` is below all labels, so an edge carrying it is visible under every label and a query under `INFIMUM` sees only the edges carrying it. Edges with no labels are otherwise visible only when no label filter is applied.

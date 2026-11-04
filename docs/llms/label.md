@@ -53,12 +53,12 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 
 - An edge is visitable under label `by` if at least one of its labels `l` satisfies `by == l` or `by > l` in the poset hierarchy.
 - `Label.SUPREMUM` disables label filtering -- all edges pass.
-- `Label.INFIMUM` is below all labels -- as a query label it matches no labeled edge.
+- `Label.INFIMUM` is below all labels -- an edge carrying it is visible under every label; as a query label it matches only the edges carrying it.
 - Edges with no labels are visible only when no label filter is applied.
 
 ## Gotchas
 
-- Never assign `Label.INFIMUM` or `Label.SUPREMUM` to edges. They are structural bounds for the poset hierarchy.
+- Never assign `Label.SUPREMUM` to edges. It is a structural bound for the poset hierarchy.
 - `setParents` replaces all parents. Merge with existing parents if appending: `poset.setParents(label, poset.getParents(label) + mapOf("new" to parentLabel))`.
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 - Edge labels change only through `addEdge`/`delEdge`/`relabel`/`copyLabel`/`setLabels` (the `labels` setter is internal). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
