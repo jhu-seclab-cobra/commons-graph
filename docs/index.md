@@ -2,6 +2,7 @@
 
 | File | Content |
 |------|---------|
+| [glossary/glossary.md](glossary/glossary.md) | Glossary — layered storage, labels and the label hierarchy |
 | [concept.md](concept.md) | Concept document — problem, scope, terminology, data flow, scenarios |
 | [model.md](model.md) | Domain model — entity identity, relations, state, invariants, merge laws |
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
