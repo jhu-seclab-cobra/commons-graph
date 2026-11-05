@@ -39,7 +39,7 @@ public class LabelEdgeIndex<E : AbcEdge> {
     internal fun ensureBuilt(allEdges: () -> Sequence<E>) {
         if (built) return
         for (edge in allEdges()) {
-            for (label in edge.labels) record(label, edge)
+            for (label in edge.storedLabels) record(label, edge)
         }
         built = true
     }
@@ -68,7 +68,7 @@ public class LabelEdgeIndex<E : AbcEdge> {
     ) {
         if (!built) return
         for (edge in ids.mapNotNull(resolve)) {
-            for (label in edge.labels) record(label, edge)
+            for (label in edge.storedLabels) record(label, edge)
         }
     }
 

@@ -91,15 +91,23 @@ public abstract class AbcEdge : AbcEntity() {
     override val id: String get() = "$srcNid-$eTag-$dstNid"
 
     /**
-     * Visibility labels assigned to this edge.
+     * Visibility labels of this edge: the labels [edu.jhu.cobra.commons.graph.poset.PosetTrait] filters
+     * adjacency queries by. By default they are the [storedLabels]; an edge type whose graph implies
+     * further labels from its own records overrides this to return them as well.
+     */
+    public open val labels: Set<Label>
+        get() = storedLabels
+
+    /**
+     * Labels stored on this edge.
      *
      * The setter is internal: assignments go through
      * [edu.jhu.cobra.commons.graph.poset.PosetTrait], which keeps the owning
      * graph's label index complete.
      *
-     * @return Set of labels currently assigned.
+     * @return Set of labels currently stored.
      */
-    public var labels: Set<Label>
+    public var storedLabels: Set<Label>
         get() {
             val raw = storage.getEdgeProperty(storageId, LABELS_PROP) as? ListVal ?: return emptySet()
             return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }

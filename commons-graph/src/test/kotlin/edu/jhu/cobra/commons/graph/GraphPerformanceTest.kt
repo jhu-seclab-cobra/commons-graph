@@ -305,7 +305,7 @@ internal class GraphPerformanceTest {
                 benchmarkMs(warmup = 1, measured = 3) {
                     var idx = 0
                     for (edge in g.getAllEdges().take(nodeCount * edgesPerNode)) {
-                        edge.labels = setOf(labels[idx % labelCount])
+                        edge.storedLabels = setOf(labels[idx % labelCount])
                         idx++
                     }
                 }

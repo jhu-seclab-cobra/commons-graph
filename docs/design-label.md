@@ -3,7 +3,7 @@
 ## Design Overview
 
 - **Classes**: `Label`, `LabelID`, `IPoset`, `PosetDftImpl`, `LabelEdgeIndex`, `PosetTrait`
-- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `LabelEdgeIndex` is the per-graph label → edges index `PosetTrait` maintains; `AbcEdge.labels` stores label assignments (see `design-entity.md`)
+- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `LabelEdgeIndex` is the per-graph label → edges index `PosetTrait` maintains; `AbcEdge.storedLabels` stores label assignments and `AbcEdge.labels` returns the visibility labels (see `design-entity.md`)
 - **Abstract**: `IPoset` (implemented by `PosetDftImpl`); `PosetTrait` (mixed in by concrete graph classes)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
 - **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation), `LabelEdgeIndex` (label carrier index).
@@ -84,15 +84,16 @@ The poset store uses auto-generated `Int` IDs:
 
 ---
 
-### AbcEdge.labels
+### AbcEdge.labels and AbcEdge.storedLabels
 
-**Responsibility:** Stores the set of visibility labels assigned to an edge.
+**Responsibility:** `storedLabels` stores the set of labels assigned to an edge; `labels` returns the visibility labels `PosetTrait` filters by.
 
 ```kotlin
-var labels: Set<Label>
+open val labels: Set<Label>      // default: storedLabels
+var storedLabels: Set<Label>     // setter internal
 ```
 
-Backed by a `ListVal` storage property. The setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `copyLabel`, `setLabels`), which keeps `LabelEdgeIndex` complete.
+`storedLabels` is backed by a `ListVal` storage property. Its setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `copyLabel`, `setLabels`), which keeps `LabelEdgeIndex` complete. `labels` returns `storedLabels` unless an edge type overrides it to add the labels its graph implies from its own records; the visibility filter reads `labels`, while the label assignments, `getLabeledEdges`, `visitLabeledEdgesSince` and `LabelEdgeIndex` read `storedLabels`, so a label an edge only implies has no carrier in the index and a write never stores it.
 
 ---
 

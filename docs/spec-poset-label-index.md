@@ -6,7 +6,8 @@ hierarchy queries: `spec-poset.md`.
 ## Problem
 
 Given a label `L`, return the edges that carry `L` directly (`L ∈ labels(e)`,
-no covering), and move `L` to another label on those edges or add another
+no covering; `labels(e)` is the stored label set `AbcEdge.storedLabels`
+throughout this spec), and move `L` to another label on those edges or add another
 label beside it. Callers copy a label once per control-flow merge, and a
 merge can repeat for the same label; a full edge scan per call costs O(|E|)
 and makes a whole analysis quadratic. Lookup must cost O(carriers(L)), not

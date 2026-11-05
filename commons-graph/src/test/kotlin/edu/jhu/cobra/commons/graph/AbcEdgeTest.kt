@@ -112,7 +112,7 @@ internal class AbcEdgeTest {
     fun `labels set and get round-trips`() {
         val labels = setOf(Label("v1"), Label("v2"))
 
-        edge.labels = labels
+        edge.storedLabels = labels
 
         assertEquals(labels, edge.labels)
     }

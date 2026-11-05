@@ -16,8 +16,10 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
  * with poset visibility filtering.
  *
  * Visibility semantics (pure covering): an edge is visible under a query label
- * `by` iff at least one of its labels `l` satisfies `by == l` or `by > l` per
- * [IPoset.compare]. Covered labels never shadow one another — every edge
+ * `by` iff at least one of its [AbcEdge.labels] `l` satisfies `by == l` or `by > l` per
+ * [IPoset.compare]. Every label operation below reads and writes [AbcEdge.storedLabels]; an
+ * edge type whose [AbcEdge.labels] add implied labels keeps them out of the index and the
+ * writes. Covered labels never shadow one another — every edge
  * carrying at least one covered label is returned, regardless of which other
  * covered labels coexist in the same adjacency result. [Label.SUPREMUM]
  * bypasses filtering and returns all edges, labeled or not; edges with no
@@ -55,7 +57,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         storage.criticalSection {
             labelIndex.ensureBuilt { getAllEdges() }
             val edge = getEdge(src, dst, tag) ?: addEdge(src, dst, tag)
-            edge.labels = edge.labels + label
+            edge.storedLabels = edge.storedLabels + label
             labelIndex.record(label, edge)
             edge
         }
@@ -71,9 +73,9 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             labelIndex.ensureBuilt { getAllEdges() }
             val edge = getEdge(src, dst, tag) ?: return@criticalSection
             // A label the edge does not carry is a no-op: an unlabeled edge must not be deleted.
-            if (label !in edge.labels) return@criticalSection
-            val remaining = edge.labels - label
-            edge.labels = remaining
+            if (label !in edge.storedLabels) return@criticalSection
+            val remaining = edge.storedLabels - label
+            edge.storedLabels = remaining
             if (remaining.isEmpty()) delEdge(src, dst, tag)
         }
 
@@ -84,7 +86,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     ): Unit =
         storage.criticalSection {
             labelIndex.ensureBuilt { getAllEdges() }
-            edge.labels = labels
+            edge.storedLabels = labels
             for (label in labels) labelIndex.record(label, edge)
         }
 
@@ -106,7 +108,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             labelIndex.ensureBuilt { getAllEdges() }
             carriersAmong(labelIndex.candidatesSince(label, since), label).forEach { edge ->
                 visit(edge)?.let { target ->
-                    if (target !in edge.labels) edge.labels = edge.labels + target
+                    if (target !in edge.storedLabels) edge.storedLabels = edge.storedLabels + target
                     labelIndex.record(target, edge)
                 }
             }
@@ -132,7 +134,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
         if (from == to) return
         storage.criticalSection {
             for (edge in getLabeledEdges(from).filter(cond)) {
-                edge.labels = edge.labels - from + to
+                edge.storedLabels = edge.storedLabels - from + to
                 labelIndex.record(to, edge)
             }
         }
@@ -158,9 +160,9 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
             labelIndex.ensureBuilt { getAllEdges() }
             if (from != to) {
                 for (edge in carriersAmong(labelIndex.candidatesSince(from, since), from)) {
-                    val labels = edge.labels
+                    val labels = edge.storedLabels
                     if (to in labels || !cond(edge)) continue
-                    edge.labels = labels + to
+                    edge.storedLabels = labels + to
                     labelIndex.record(to, edge)
                 }
             }
@@ -245,7 +247,7 @@ public interface PosetTrait<N : AbcNode, E : AbcEdge> : IGraph<N, E> {
     ): List<E> {
         val (stored, deleted) = candidates.partition { it.isStored() }
         for (edge in deleted) labelIndex.drop(label, edge)
-        return stored.filter { containNode(it.srcNid) && containNode(it.dstNid) && label in it.labels }
+        return stored.filter { containNode(it.srcNid) && containNode(it.dstNid) && label in it.storedLabels }
     }
 
     // Pure covering per the interface visibility semantics: by == label or by > label.

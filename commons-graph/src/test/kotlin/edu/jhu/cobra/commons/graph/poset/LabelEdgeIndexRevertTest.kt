@@ -187,7 +187,7 @@ internal class LabelEdgeIndexRevertTest {
         val graph = LabeledMultiGraph(storage, "labeled")
         graph.addNode("source")
         graph.addNode("destination")
-        graph.addEdge("source", "destination", "relation").labels = setOf(label)
+        graph.addEdge("source", "destination", "relation").storedLabels = setOf(label)
         storage.freeze()
         graph.delEdge("source", "destination", "relation")
         val counts = mutableListOf(graph.getLabeledEdges(label).count())
@@ -204,7 +204,7 @@ internal class LabelEdgeIndexRevertTest {
         val graph = LabeledMultiGraph(storage, "labeled")
         graph.addNode("source")
         graph.addNode("destination")
-        graph.addEdge("source", "destination", "relation").labels = setOf(label)
+        graph.addEdge("source", "destination", "relation").storedLabels = setOf(label)
         storage.freeze()
         graph.delEdge("source", "destination", "relation")
 
