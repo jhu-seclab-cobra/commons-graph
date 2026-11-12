@@ -16,8 +16,6 @@ The storage layer is the **backend-agnostic directed property graph engine**. It
 
 Persistent backends persist graph-level metadata with the same lifetime as entity data: wherever entity data survives (reopen of the same storage path, export/import round-trip), metadata written via `setMeta` survives with it. Backend-specific meta persistence mechanics: `impl.md`.
 
----
-
 ## Class / Type Specifications
 
 ### IStorage
@@ -32,6 +30,9 @@ Persistent backends persist graph-level metadata with the same lifetime as entit
 val tagGroup: (String) -> String
 fun getIncomingEdges(id: Int, group: String): Set<Int>
 fun getOutgoingEdges(id: Int, group: String): Set<Int>
+fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int>
+fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int>
+fun getEdges(src: Int, dst: Int, tag: String? = null): Set<Int>
 fun findEdge(src: Int, dst: Int, tag: String): Int?
 ```
 
@@ -40,9 +41,9 @@ The directional overloads copy only matching IDs under the storage's existing gu
 encounter order in the full adjacency. A missing node throws `EntityNotExistException`; a supported
 miss returns an empty set. `findEdge` retains complete-tag identity and returns null for absent
 endpoints or a missing triple. Raw storage can hold duplicate triples; lookup returns the first visible row.
-Core storages own directional group buckets and a complete-triple lookup, retaining only IDs and structural
-keys, O(V + E) entries. `TagAdjacencyIndex` is internal to the core module; singleton memberships share
-one ID holder per edge, while larger buckets retain their encounter order. Writes update the index
+Core storages own directional group buckets and a shared pair/triple lookup, retaining only primitive IDs
+and structural keys, O(V + E) entries. Internal `TagAdjacencyIndex` stores singleton IDs inline in primitive
+slots and allocates a primitive array only from the second membership. Writes update the index
 under the same guard as the physical adjacency. No edge property participates in group membership.
 Native adjacency preserves insertion order; layered adjacency keeps frozen records before active-only
 records, and promotions do not move a frozen record. The selected overloads use that same order.
@@ -50,14 +51,15 @@ Default implementations on `IStorage` filter full adjacency under `criticalSecti
 external backend modules to retain their existing representation and linear scan cost.
 Native and concurrent storage accept `tagGroup` in construction; layered storage accepts it beside its
 projection. The default frozen factory receives the same function; a custom factory with another
-function gets one frozen structural index owned by `FrozenLayer`. Freeze rebuilds only through its
+function gets one frozen structural index, with directional ranks preserving that backend's order.
+`getEdges` copies all rows of a pair, or of its complete tag; absent endpoints return an empty set.
+Fixed-set group reads merge only the selected heads in directional encounter order. Freeze rebuilds through its
 existing entity transfer, clear releases all entries, and revert drops active buckets with active rows.
 A property promotion records its existing structure in the active buckets; tombstones mask frozen IDs.
 
 For example, `NativeStorageImpl(tagGroup = { it.substringBefore('@') })` followed by
 `addEdge(a, b, "write@1")` lets `getIncomingEdges(b, "write")` return that ID while
 `findEdge(a, b, "write")` remains null. Bounds and equality: [spec-graph.md](spec-graph.md).
-
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -103,8 +105,6 @@ For example, `NativeStorageImpl(tagGroup = { it.substringBefore('@') })` followe
 
 **Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op. Optional fixed projection: [exact adjacency access](design-exact-adjacency.md), also supported by `LayeredStorageImpl`. **Name pool:** each `RowProperties` store keeps every property name set since its last `clear` and gives every row the same `String` instance for one name; a name stays in the pool after the last row holding it drops it. The pool therefore holds at most the distinct property names written into the store since its last `clear`: for `NativeStorageImpl` and `NativeConcurStorageImpl` since their last `clear()`, for the active layer of `LayeredStorageImpl` since the last `freeze`, `clearActiveLayer` or `clear`, and a frozen layer is a new storage built at each `freeze`. A program bounds it by the distinct property names its analysis writes.
 
----
-
 ### NativeConcurStorageImpl
 
 **Responsibility:** Thread-safe in-memory `IStorage` with `ReentrantReadWriteLock`. `flush()` is a no-op.
@@ -113,8 +113,6 @@ For example, `NativeStorageImpl(tagGroup = { it.substringBefore('@') })` followe
 - Writes are exclusive (write lock); only writes add names to the name pool, so every read and write of the property rows and the name pool holds the lock
 - `nodeIDs` and `edgeIDs` return snapshot copies for thread safety
 - `criticalSectionLock` is the write lock
-
----
 
 ### LayeredStorageImpl
 
@@ -144,8 +142,6 @@ See `spec-graph.md` for layered query resolution (active-authoritative property 
 
 **Thread safety:** every operation holds one `ReentrantReadWriteLock` — reads shared, writes (including `freeze`, `clearActiveLayer`, and `clear`) exclusive. `criticalSectionLock` is the write lock; revert listeners run while it is held. Like `NativeConcurStorageImpl`, every collection it returns (property maps, adjacency sets, `nodeIDs`, `edgeIDs`, `metaNames`) is a copy taken under the read lock: later writes, `freeze`, and `clearActiveLayer` do not change it, and a caller reads it outside the lock.
 
----
-
 ### Storage critical section
 
 **Responsibility:** `IStorage.criticalSection(action)` runs `action` holding the storage's `criticalSectionLock`, or runs it unguarded when that is `null`. A thread-safe `IStorage` makes each single call atomic; a graph-layer step that makes several calls (allocate an ID then persist it, check-then-create, read-modify-write, a multi-edge traversal) runs inside `criticalSection` so the sequence is atomic as a unit. Every graph and poset sharing one storage serializes through that storage's lock; a nested call on the same thread does not block, and every storage call inside the section re-enters the same lock.
@@ -163,8 +159,6 @@ A caller holding a storage's read lock never enters its critical section (a read
 
 A section that holds two storages' locks at once (a `criticalSection` nested inside another storage's, or `transferTo`, which holds the source's read lock while writing the target) deadlocks against a thread taking the same two locks in the opposite order. Callers take the locks of any two storages in one fixed order.
 
----
-
 ### Backend base classes
 
 Each backend module folds its plain and concurrent implementations into one abstract base holding the full engine; subclasses supply only the guard strategy:
@@ -177,13 +171,9 @@ Each backend module folds its plain and concurrent implementations into one abst
 
 Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through and leave `criticalSectionLock` `null`; concurrent subclasses guard with a `ReentrantReadWriteLock` and expose its write lock as `criticalSectionLock`. `NativeStorageImpl` and `NativeConcurStorageImpl` remain separate classes: they differ in read-path strategy (live views vs snapshot copies) per `performance-optimizations.md`.
 
----
-
 ### CSV export/import (`storage.nio`)
 
 `NativeCsvIOImpl` (public object) exposes `isValidFile`/`export`/`import`; the CSV format constants and escaping live in internal `NativeCsvFormat`, streaming write in internal `NativeCsvWriter`, streaming read in internal `NativeCsvReader` (with `NodeRecord`/`EdgeRecord` data holders).
-
----
 
 ## Exception / Error Types
 

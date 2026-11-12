@@ -25,11 +25,16 @@ One finite hash lookup in core storage; backend defaults scan the finite outgoin
 
 Expected O(1) core lookup and duplicate check; n same-source graph insertions cost expected O(n).
 Backend defaults retain O(out-degree) lookup. Hashing includes the bytes of the complete tag.
+Pair/triple snapshots cost expected O(1 + matching rows); first-row lookup reads one indexed ID.
 Group adjacency returns only IDs whose immutable tag maps to the requested group, in the order
 of the full directional adjacency. It costs expected O(1 + matches) and O(matches) result space;
-no unrelated group is enumerated. Retained structural entries are O(V + E), independent of queries.
+no unrelated group is enumerated. For G requested groups, merging selected heads costs O(G + G * matches),
+which is O(1 + matches) for a fixed set. Retained structural entries are O(V + E), independent of queries.
 Layered reads merge only the matching frozen and active incidences and hide frozen tombstones.
 All mutable operations update membership under their existing lock; properties never change it.
+Directional buckets retain primitive singleton IDs inline and grow arrays geometrically from the second ID.
+Pair rows keep complete tags separate; deleting the first duplicate exposes the next visible row.
+New IDs append in constant amortized time; reinserting a reverted ID can shift matching pair IDs only.
 
 ---
 
