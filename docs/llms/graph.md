@@ -66,11 +66,11 @@ fun main() {
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`)
+### `AbcMultipleGraph<N, E>` (implements `IGraph` and `GraphMergeLaws`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
-- **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
-- **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
+- **`protected abstract fun newNodeObj(): N`** -- Factory for an unbound node instance.
+- **`protected abstract fun newEdgeObj(): E`** -- Factory for an unbound edge instance.
 - **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
 
 ### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
@@ -79,7 +79,7 @@ Concrete graph classes mix in `PosetTrait` and provide `poset` and `labelIndex`.
 
 - **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
-- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge if removing that label leaves no stored labels; an absent label is a no-op.
 - **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered incoming edges.
 - **`getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered successors.
@@ -110,7 +110,7 @@ Pure declarations for merging the prospective changes of several writers; each w
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
-- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
+- `AbcMultipleGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
 - On a thread-safe storage, individual graph and poset operations are atomic; labeled traversal sequences are lazy and their whole iteration is not. A group of calls is not atomic: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
 - Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
-- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
+- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`); its poset storage must also be thread-safe or externally synchronized. The Quick Start uses a single-threaded poset storage. Concurrency rules: `llms/storage.md`, Concurrent Use.

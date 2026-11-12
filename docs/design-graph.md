@@ -99,7 +99,7 @@ Multiple graph instances may share a single `IStorage`. See `model.md` for share
 
 **Concurrency:**
 
-Every public operation runs inside `storage.criticalSection` (`design-storage.md`), so a compound operation is atomic against other callers sharing the storage. Sequence-returning queries materialize their result inside the critical section.
+Node/edge CRUD and structural queries run inside `storage.criticalSection` (`design-storage.md`), so each is atomic against other callers sharing a thread-safe storage. Sequence-returning structural queries materialize their result inside the critical section. Pure merge-law declarations read no storage and require no storage lock.
 
 **Revert Coherence:**
 

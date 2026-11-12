@@ -56,6 +56,20 @@ fun main() {
 
 `IGraph<N, E>` provides `addNode(withID: NodeID): N`, `addEdge(src: NodeID, dst: NodeID, tag: String): E`, and traversal queries such as `getChildren(of: NodeID): Sequence<N>`. `NodeID` is a `String` alias. `AbcMultipleGraph` implements this interface; `AbcSimpleGraph` restricts each directed node pair to one edge. `PosetTrait` adds label-aware operations. `IStorage` provides storage operations and `flush()`; resource lifecycle belongs to the storage owner. See the [graph API](docs/llms/graph.md), [storage API](docs/llms/storage.md), and [label API](docs/llms/label.md) for signatures and parameters.
 
+## Citation
+
+It requests that every project using the library cite the project's associated paper.
+
+```bibtex
+@inproceedings{xu2026cobra,
+  title     = {CoBrA: Context-, Branch-sensitive Static Analysis for Detecting Taint-style Vulnerabilities in PHP Web Applications},
+  author    = {Xu, Yichao and Kang, Mingqing and Thimmaiah, Neil and Gjomemo, Rigel and Venkatakrishnan, V. N. and Cao, Yinzhi},
+  booktitle = {Proceedings of the 48th IEEE/ACM International Conference on Software Engineering (ICSE)},
+  year      = {2026},
+  address   = {Rio de Janeiro, Brazil}
+}
+```
+
 ## Documentation
 
 - [Concepts](docs/concept.md) — scope and graph concepts.

@@ -5,6 +5,10 @@
 ## Quick Start
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.strVal
+
 val storage = NativeStorageImpl()
 val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
 val nodeB = storage.addNode()
@@ -86,6 +90,11 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 ## Concurrent Use
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeConcurStorageImpl
+import edu.jhu.cobra.commons.graph.storage.criticalSection
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.intVal
+
 val storage = NativeConcurStorageImpl()
 val counter = storage.addNode(mapOf("n" to 0.intVal))
 storage.criticalSection {

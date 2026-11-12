@@ -4,7 +4,17 @@
 
 ## Quick Start
 
+- Use `MyGraph` from [Graph & Base Classes](graph.md#quick-start).
+
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.strVal
+
+val graph = MyGraph(NativeStorageImpl())
+graph.addNode("a")
+graph.addNode("b")
 val node = graph.addNode("myNode")
 node["color"] = "red".strVal
 val color = node["color"] as? StrVal
@@ -20,7 +30,7 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 
 ### `IEntity` (sealed interface)
 
-- **`val id: String`** -- Unique identifier. For nodes: user-provided `NodeID`. For edges: `"$src-$tag-$dst"`.
+- **`val id: String`** -- For nodes: user-provided `NodeID`. For edges: display string `"$src-$tag-$dst"`; use the `(srcNid, dstNid, eTag)` triple for identity because delimiters can occur in components.
 - **`val type: IEntity.Type`** -- Entity type information. `IEntity.Type` has `val name: String`.
 - **`operator get(name: String): IValue?`** -- Retrieve property. Returns `null` if absent.
 - **`operator set(name: String, value: IValue?)`** -- Set property. Pass `null` to remove.
@@ -31,18 +41,18 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 ### `AbcEntity` (sealed class, implements `IEntity`)
 
 - **`inline fun <reified T : IValue> getTypeProp(name: String): T?`** -- Type-safe property retrieval. Returns `null` on type mismatch.
-- **`protected fun EntityProperty(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for non-nullable typed property with default.
-- **`protected fun EntityProperty(optName: String? = null): ReadWriteProperty`** -- Delegate for nullable typed property.
-- **`protected fun EntityType(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for enum-based `IEntity.Type` property.
+- **`protected inline fun <reified T : IValue> EntityProperty(optName: String? = null, default: T): ReadWriteProperty<IEntity, T>`** -- Delegate for non-nullable typed property with default.
+- **`protected inline fun <reified T : IValue?> EntityProperty(optName: String? = null): ReadWriteProperty<IEntity, T?>`** -- Delegate for nullable typed property.
+- **`protected inline fun <reified T : IEntity.Type> EntityType(optName: String? = null, default: T): ReadWriteProperty<IEntity, T>`** -- Delegate for enum-based `IEntity.Type` property.
 
-### `AbcNode` (extends `AbcEntity`)
+### `AbcNode` (abstract class, extends `AbcEntity`)
 
 - **`val nodeId: NodeID`** -- User-provided node identifier (same as `id`).
 - **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
 - **`abstract val type: AbcNode.Type`** -- Node type. Subclasses implement `AbcNode.Type` as an enum.
 - **`fun doUseStorage(target: IStorage): Boolean`** -- Check if node is bound to a specific storage.
 
-### `AbcEdge` (extends `AbcEntity`)
+### `AbcEdge` (abstract class, extends `AbcEntity`)
 
 - **`val srcNid: NodeID`** -- Source node ID.
 - **`val dstNid: NodeID`** -- Destination node ID.
@@ -54,6 +64,10 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 ### Property Delegate Usage
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.StrVal
+
 class MyNode : AbcNode() {
     enum class MyType : AbcNode.Type { FUNC, CLASS }
     override var type: MyType by EntityType(default = MyType.FUNC)

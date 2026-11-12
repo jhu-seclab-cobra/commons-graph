@@ -53,7 +53,17 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 
 ## Quick Start
 
+- Use `MyGraph` from [Graph & Base Classes](graph.md#quick-start).
+
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.StrVal
+import edu.jhu.cobra.commons.value.strVal
+
+val graph = MyGraph(NativeStorageImpl())
+graph.addNode("a")
+graph.addNode("b")
 val node = graph.addNode("myNode")
 node["color"] = "red".strVal
 val color = node["color"] as? StrVal
@@ -69,7 +79,7 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 
 ### `IEntity` (sealed interface)
 
-- **`val id: String`** -- Unique identifier. For nodes: user-provided `NodeID`. For edges: `"$src-$tag-$dst"`.
+- **`val id: String`** -- For nodes: user-provided `NodeID`. For edges: display string `"$src-$tag-$dst"`; use the `(srcNid, dstNid, eTag)` triple for identity because delimiters can occur in components.
 - **`val type: IEntity.Type`** -- Entity type information. `IEntity.Type` has `val name: String`.
 - **`operator get(name: String): IValue?`** -- Retrieve property. Returns `null` if absent.
 - **`operator set(name: String, value: IValue?)`** -- Set property. Pass `null` to remove.
@@ -80,18 +90,18 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 ### `AbcEntity` (sealed class, implements `IEntity`)
 
 - **`inline fun <reified T : IValue> getTypeProp(name: String): T?`** -- Type-safe property retrieval. Returns `null` on type mismatch.
-- **`protected fun EntityProperty(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for non-nullable typed property with default.
-- **`protected fun EntityProperty(optName: String? = null): ReadWriteProperty`** -- Delegate for nullable typed property.
-- **`protected fun EntityType(optName: String? = null, default: T): ReadWriteProperty`** -- Delegate for enum-based `IEntity.Type` property.
+- **`protected inline fun <reified T : IValue> EntityProperty(optName: String? = null, default: T): ReadWriteProperty<IEntity, T>`** -- Delegate for non-nullable typed property with default.
+- **`protected inline fun <reified T : IValue?> EntityProperty(optName: String? = null): ReadWriteProperty<IEntity, T?>`** -- Delegate for nullable typed property.
+- **`protected inline fun <reified T : IEntity.Type> EntityType(optName: String? = null, default: T): ReadWriteProperty<IEntity, T>`** -- Delegate for enum-based `IEntity.Type` property.
 
-### `AbcNode` (extends `AbcEntity`)
+### `AbcNode` (abstract class, extends `AbcEntity`)
 
 - **`val nodeId: NodeID`** -- User-provided node identifier (same as `id`).
 - **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
 - **`abstract val type: AbcNode.Type`** -- Node type. Subclasses implement `AbcNode.Type` as an enum.
 - **`fun doUseStorage(target: IStorage): Boolean`** -- Check if node is bound to a specific storage.
 
-### `AbcEdge` (extends `AbcEntity`)
+### `AbcEdge` (abstract class, extends `AbcEntity`)
 
 - **`val srcNid: NodeID`** -- Source node ID.
 - **`val dstNid: NodeID`** -- Destination node ID.
@@ -103,6 +113,10 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 ### Property Delegate Usage
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.StrVal
+
 class MyNode : AbcNode() {
     enum class MyType : AbcNode.Type { FUNC, CLASS }
     override var type: MyType by EntityType(default = MyType.FUNC)
@@ -188,11 +202,11 @@ fun main() {
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
 - **`getAncestors(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive predecessors.
 
-### `AbcMultipleGraph<N, E>` (extends `IGraph`)
+### `AbcMultipleGraph<N, E>` (implements `IGraph` and `GraphMergeLaws`)
 
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
-- **`abstract fun newNodeObj(): N`** -- Factory for node instances. No-arg constructor required.
-- **`abstract fun newEdgeObj(): E`** -- Factory for edge instances. No-arg constructor required.
+- **`protected abstract fun newNodeObj(): N`** -- Factory for an unbound node instance.
+- **`protected abstract fun newEdgeObj(): E`** -- Factory for an unbound edge instance.
 - **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
 
 ### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
@@ -201,7 +215,7 @@ Concrete graph classes mix in `PosetTrait` and provide `poset` and `labelIndex`.
 
 - **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
-- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge when no labels remain.
+- **`delEdge(src: NodeID, dst: NodeID, tag: String, label: Label)`** -- Remove a label from an edge. Deletes the edge if removing that label leaves no stored labels; an absent label is a no-op.
 - **`getOutgoingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`getIncomingEdges(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<E>`** -- Label-filtered incoming edges.
 - **`getChildren(of: NodeID, label: Label, cond: (E) -> Boolean = { true }): Sequence<N>`** -- Label-filtered successors.
@@ -232,22 +246,29 @@ Pure declarations for merging the prospective changes of several writers; each w
 - `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
-- `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
+- `AbcMultipleGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
 - On a thread-safe storage, individual graph and poset operations are atomic; labeled traversal sequences are lazy and their whole iteration is not. A group of calls is not atomic: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
 - Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
-- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
+- Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`); its poset storage must also be thread-safe or externally synchronized. The Quick Start uses a single-threaded poset storage. Concurrency rules: `llms/storage.md`, Concurrent Use.
 # Labels & Poset
 
 > Label hierarchy (partial order set) for edge visibility control.
 
 ## Quick Start
 
+- Use `MyGraph` from [Graph & Base Classes](graph.md#quick-start).
+
 ```kotlin
+import edu.jhu.cobra.commons.graph.poset.Label
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+
 val graph = MyGraph(NativeStorageImpl())
+graph.addNode("a")
+graph.addNode("b")
 val v1 = Label("v1")
 val v2 = Label("v2")
 
-graph.poset.setParents(v2, mapOf("base" to v1))
+graph.poset.setParents(v1, mapOf("base" to v2))
 val edge = graph.addEdge("a", "b", "calls", v1)
 val visible = graph.getOutgoingEdges("a", v2)
 ```
@@ -275,14 +296,14 @@ val visible = graph.getOutgoingEdges("a", v2)
 Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, `relabel`, and `copyLabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
 
 - **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge, assign label, record it in `labelIndex`.
-- **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
+- **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if removing that label leaves no stored labels. An absent label is a no-op.
 - **`fun getOutgoingEdges(of, label, cond): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`fun getIncomingEdges(of, label, cond): Sequence<E>`** -- Label-filtered incoming edges.
 - **`fun getChildren(of, label, cond): Sequence<N>`** -- Nodes via label-filtered outgoing edges.
 - **`fun getParents(of, label, cond): Sequence<N>`** -- Nodes via label-filtered incoming edges.
 - **`fun getDescendants(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
-- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
+- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). The first index use scans all graph edges; subsequent calls scan the retained candidates for `label`.
 - **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
 - **`fun copyLabel(from, to, since = 0L, cond = { true }): Long`** -- Add `to` beside `from` on every edge carrying `from` that satisfies `cond` and was recorded under `from` after record `since`; no label is removed. Returns the record count: pass it as `since` to the next copy of `from` so that copy reads only the edges recorded under `from` in between. No-op when `from == to`.
 - **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure merge under the label merge law (`model.md` Merge Laws); `MergeConflictException` under that law's conflict rule.
@@ -301,7 +322,7 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 - Edge labels change only through `addEdge`/`delEdge`/`relabel`/`copyLabel`/`setLabels` (the `storedLabels` setter is internal; `labels` is read-only). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
 - Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
-- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. Each step is atomic; the whole iteration is not. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`.
+- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. The underlying storage calls are individually atomic on thread-safe storage; label filtering and the whole iteration are not one atomic operation. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`. Keep the poset hierarchy unchanged during traversal, or synchronize its writers with the same enclosing critical section.
 # Storage Backends
 
 > Pluggable graph storage with auto-generated Int IDs, property management, and adjacency queries.
@@ -309,6 +330,10 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 ## Quick Start
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.strVal
+
 val storage = NativeStorageImpl()
 val nodeA = storage.addNode(mapOf("name" to "foo".strVal))
 val nodeB = storage.addNode()
@@ -390,6 +415,11 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 ## Concurrent Use
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.storage.NativeConcurStorageImpl
+import edu.jhu.cobra.commons.graph.storage.criticalSection
+import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.value.intVal
+
 val storage = NativeConcurStorageImpl()
 val counter = storage.addNode(mapOf("n" to 0.intVal))
 storage.criticalSection {

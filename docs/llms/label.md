@@ -4,12 +4,19 @@
 
 ## Quick Start
 
+- Use `MyGraph` from [Graph & Base Classes](graph.md#quick-start).
+
 ```kotlin
+import edu.jhu.cobra.commons.graph.poset.Label
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+
 val graph = MyGraph(NativeStorageImpl())
+graph.addNode("a")
+graph.addNode("b")
 val v1 = Label("v1")
 val v2 = Label("v2")
 
-graph.poset.setParents(v2, mapOf("base" to v1))
+graph.poset.setParents(v1, mapOf("base" to v2))
 val edge = graph.addEdge("a", "b", "calls", v1)
 val visible = graph.getOutgoingEdges("a", v2)
 ```
@@ -37,14 +44,14 @@ val visible = graph.getOutgoingEdges("a", v2)
 Label-filtered graph operations as default methods. Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset` and `override val labelIndex: LabelEdgeIndex<E> = LabelEdgeIndex()`; `AbcMultipleGraph.storage` supplies `val storage: IStorage`. Labeled `addEdge`/`delEdge`, `getLabeledEdges`, `relabel`, and `copyLabel` run inside `storage.criticalSection`, so they are atomic on a thread-safe storage.
 
 - **`fun addEdge(src, dst, tag, label): E`** -- Create or reuse edge, assign label, record it in `labelIndex`.
-- **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if no labels remain.
+- **`fun delEdge(src, dst, tag, label)`** -- Remove label; delete edge if removing that label leaves no stored labels. An absent label is a no-op.
 - **`fun getOutgoingEdges(of, label, cond): Sequence<E>`** -- Label-filtered outgoing edges.
 - **`fun getIncomingEdges(of, label, cond): Sequence<E>`** -- Label-filtered incoming edges.
 - **`fun getChildren(of, label, cond): Sequence<N>`** -- Nodes via label-filtered outgoing edges.
 - **`fun getParents(of, label, cond): Sequence<N>`** -- Nodes via label-filtered incoming edges.
 - **`fun getDescendants(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
 - **`fun getAncestors(of, label, cond): Sequence<N>`** -- BFS via label-filtered edges.
-- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). Cost O(edges ever labeled `label`), not O(|E|).
+- **`fun getLabeledEdges(label): Sequence<E>`** -- Edges that directly carry `label` (no poset covering). The first index use scans all graph edges; subsequent calls scan the retained candidates for `label`.
 - **`fun relabel(from, to, cond = { true })`** -- On every edge carrying `from` that satisfies `cond`, replace `from` with `to`. No-op when `from == to`.
 - **`fun copyLabel(from, to, since = 0L, cond = { true }): Long`** -- Add `to` beside `from` on every edge carrying `from` that satisfies `cond` and was recorded under `from` after record `since`; no label is removed. Returns the record count: pass it as `since` to the next copy of `from` so that copy reads only the edges recorded under `from` in between. No-op when `from == to`.
 - **`PosetTrait.mergeLabels(base: Set<Label>, changes: Collection<WriterChange<Set<Label>>>): Set<Label>`** -- Pure merge under the label merge law (`model.md` Merge Laws); `MergeConflictException` under that law's conflict rule.
@@ -63,4 +70,4 @@ Label-filtered graph operations as default methods. Concrete graph classes mix i
 - `compare` returns `null` for incomparable labels. Always handle the `null` case.
 - Edge labels change only through `addEdge`/`delEdge`/`relabel`/`copyLabel`/`setLabels` (the `storedLabels` setter is internal; `labels` is read-only). Label writes through generic property `set`, direct storage writes, or another graph instance over the same storage are invisible to `labelIndex`.
 - Never reuse a graph instance after `storage.clear()`: storage IDs restart and the index is not reset.
-- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. Each step is atomic; the whole iteration is not. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`.
+- Label-filtered `getOutgoingEdges`, `getIncomingEdges`, `getChildren`, `getParents`, `getDescendants`, and `getAncestors` are lazy. The underlying storage calls are individually atomic on thread-safe storage; label filtering and the whole iteration are not one atomic operation. Collect a list before modifying the graph mid-iteration. While other threads write, collect it inside the critical section: `graph.storage.criticalSection { graph.getDescendants(id, label).toList() }`. Keep the poset hierarchy unchanged during traversal, or synchronize its writers with the same enclosing critical section.
