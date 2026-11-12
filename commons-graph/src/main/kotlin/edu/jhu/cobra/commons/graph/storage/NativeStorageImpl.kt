@@ -7,9 +7,10 @@ import java.util.Collections
 /**
  * In-memory graph storage using Int-keyed HashMaps with auto-generated IDs.
  *
- * O(1) average time for all operations. Not thread-safe.
+ * O(1) average time for structure operations; a property operation costs the entity's own property count.
+ * Not thread-safe.
  * Uses split incoming/outgoing adjacency sets for directional edge queries.
- * Node and edge properties use columnar layout: one HashMap per property name.
+ * Node and edge properties are kept per entity: one row of names and values per node or edge.
  * Adjacency queries return unmodifiable views without allocation.
  *
  * @constructor Creates a new empty storage instance.
@@ -26,11 +27,11 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
-    // Columnar node property storage: one HashMap per property name (column)
-    internal val nodeColumns = ColumnarProperties()
+    // Node property rows: each node holds its own names and values
+    internal val nodeColumns = RowProperties()
 
-    // Columnar edge property storage
-    internal val edgeColumns = ColumnarProperties()
+    // Edge property rows
+    internal val edgeColumns = RowProperties()
 
     // Edge endpoint index (edge ID -> src, dst, tag)
     private val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
