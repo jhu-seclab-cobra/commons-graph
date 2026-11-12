@@ -19,7 +19,7 @@ internal class ActiveLayer(
 
     // Explicit writes to edges inherited from the frozen layer. Null masks a frozen property.
     val promotedEdgeEdits = HashMap<Int, MutableMap<String, IValue?>>()
-    val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
+    val edgeEndpoints = LinkedHashMap<Int, IStorage.EdgeStructure>()
     val outEdges = HashMap<Int, MutableSet<Int>>()
     val inEdges = HashMap<Int, MutableSet<Int>>()
     val metaProperties = HashMap<String, IValue>()

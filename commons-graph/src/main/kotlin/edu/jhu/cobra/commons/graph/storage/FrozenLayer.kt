@@ -18,8 +18,23 @@ internal class FrozenLayer private constructor(
     private val edgeGlobalToLocal: Map<Int, Int>,
     private val edgeLocalToGlobal: Map<Int, Int>,
 ) {
-    private val tagAdjacency = if (storage.tagGroup === tagGroup) null else TagAdjacencyIndex(tagGroup).also { index ->
-        for (id in storage.edgeIDs) index.add(id, storage.getEdgeStructure(id))
+    private val tagAdjacency = if (storage.tagGroup === tagGroup) null else indexAdjacency(tagGroup)
+
+    private fun indexAdjacency(tagGroup: (String) -> String): TagAdjacencyIndex {
+        val incomingOrder = HashMap<Int, Int>()
+        val outgoingOrder = HashMap<Int, Int>()
+        val index = TagAdjacencyIndex(tagGroup, incomingOrder::getValue, outgoingOrder::getValue)
+        for (node in storage.nodeIDs) {
+            for (id in storage.getIncomingEdges(node)) {
+                incomingOrder[id] = incomingOrder.size
+                index.addIncoming(id, storage.getEdgeStructure(id))
+            }
+            for (id in storage.getOutgoingEdges(node)) {
+                outgoingOrder[id] = outgoingOrder.size
+                index.addOutgoing(id, storage.getEdgeStructure(id))
+            }
+        }
+        return index
     }
 
     private val edgeStructureCache = HashMap<Int, IStorage.EdgeStructure>()
@@ -91,6 +106,16 @@ internal class FrozenLayer private constructor(
         MappedEdgeSet(selected, edgeLocalToGlobal, edgeGlobalToLocal)
     }
 
+    fun incomingEdges(globalId: Int, groups: Set<String>): Set<Int>? = nodeGlobalToLocal[globalId]?.let { local ->
+        val selected = tagAdjacency?.incoming(local, groups) ?: storage.getIncomingEdges(local, groups)
+        MappedEdgeSet(selected, edgeLocalToGlobal, edgeGlobalToLocal)
+    }
+
+    fun outgoingEdges(globalId: Int, groups: Set<String>): Set<Int>? = nodeGlobalToLocal[globalId]?.let { local ->
+        val selected = tagAdjacency?.outgoing(local, groups) ?: storage.getOutgoingEdges(local, groups)
+        MappedEdgeSet(selected, edgeLocalToGlobal, edgeGlobalToLocal)
+    }
+
     // Frozen storages produced by the factory may hold external resources (file-backed
     // storages); discarding one without closing leaks its handle.
     fun close() {
@@ -147,7 +172,7 @@ internal class FrozenLayer private constructor(
                 if (previous != null) {
                     mergePreviousNodes(previous, oldToNew)
                 } else {
-                    HashMap<Int, Int>() to HashMap()
+                    LinkedHashMap<Int, Int>() to LinkedHashMap()
                 }
             for (globalId in active.nodeIds) {
                 if (globalId in g2l) continue
@@ -164,8 +189,8 @@ internal class FrozenLayer private constructor(
             previous: FrozenLayer,
             oldToNew: Map<Int, Int>,
         ): Pair<HashMap<Int, Int>, HashMap<Int, Int>> {
-            val g2l = HashMap<Int, Int>()
-            val l2g = HashMap<Int, Int>()
+            val g2l = LinkedHashMap<Int, Int>()
+            val l2g = LinkedHashMap<Int, Int>()
             for ((globalId, oldLocalId) in previous.nodeGlobalToLocal) {
                 val newLocalId = oldToNew.getValue(oldLocalId)
                 g2l[globalId] = newLocalId
@@ -185,7 +210,7 @@ internal class FrozenLayer private constructor(
                 if (previous != null) {
                     mergePreviousEdges(previous, active, merged, oldToNewNode)
                 } else {
-                    HashMap<Int, Int>() to HashMap()
+                    LinkedHashMap<Int, Int>() to LinkedHashMap()
                 }
             for ((globalEdgeId, structure) in active.edgeEndpoints) {
                 if (globalEdgeId in g2l) continue
@@ -208,10 +233,9 @@ internal class FrozenLayer private constructor(
             merged: IStorage,
             oldToNewNode: Map<Int, Int>,
         ): Pair<HashMap<Int, Int>, HashMap<Int, Int>> {
-            val g2l = HashMap<Int, Int>()
-            val l2g = HashMap<Int, Int>()
-            for (localEdgeId in previous.storage.edgeIDs) {
-                val globalEdgeId = previous.edgeLocalToGlobal.getValue(localEdgeId)
+            val g2l = LinkedHashMap<Int, Int>()
+            val l2g = LinkedHashMap<Int, Int>()
+            for ((globalEdgeId, localEdgeId) in previous.edgeGlobalToLocal) {
                 // Edges tombstoned in the active layer stay deleted in the merged layer.
                 if (globalEdgeId in active.deletedEdgeIds) continue
                 val structure = previous.storage.getEdgeStructure(localEdgeId)

@@ -229,6 +229,24 @@ public interface IStorage : Flushable {
         getOutgoingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) == group }
     }
 
+    /** Copies incoming IDs selected by any group, in full-adjacency order. */
+    public fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = criticalSection {
+        getIncomingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) in groups }
+    }
+
+    /** Copies outgoing IDs selected by any group, in full-adjacency order. */
+    public fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = criticalSection {
+        getOutgoingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) in groups }
+    }
+
+    /** Copies the matching pair's IDs in adjacency order; null [tag] selects every complete tag. */
+    public fun getEdges(src: Int, dst: Int, tag: String? = null): Set<Int> = criticalSection {
+        if (!containsNode(src) || !containsNode(dst)) emptySet() else getOutgoingEdges(src).filterTo(LinkedHashSet()) {
+            val edge = getEdgeStructure(it)
+            edge.dst == dst && (tag == null || edge.tag == tag)
+        }
+    }
+
     /** An edge between two endpoints, or null when absent. */
     public fun findEdge(src: Int, dst: Int): Int? = criticalSection {
         if (!containsNode(src) || !containsNode(dst)) null else getOutgoingEdges(src).firstOrNull {

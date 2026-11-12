@@ -1,5 +1,6 @@
 /* Tag group adjacency tests:
  * selected buckets ignore unrelated groups and preserve complete-tag identity.
+ * duplicate lookup work grows linearly for same-source insertion.
  * duplicate storage rows remain independently removable.
  */
 package edu.jhu.cobra.commons.graph.storage
@@ -13,7 +14,9 @@ internal class TagAdjacencyIndexTest {
     fun `selected buckets ignore unrelated groups and preserve complete tags`() {
         for (size in listOf(1, 4, 16, 64)) {
             var classifications = 0
-            val index = TagAdjacencyIndex { classifications++; it.substringBefore('@') }
+            val inspected = ArrayList<Int>()
+            val index = TagAdjacencyIndex(tagGroup = { classifications++; it.substringBefore('@') },
+                onRead = inspected::add)
             val pairs = EdgePairIndex()
             val wanted = IStorage.EdgeStructure(0, 1, "BIND_WITH@n:w1")
             index.add(0, wanted)
@@ -25,7 +28,28 @@ internal class TagAdjacencyIndexTest {
             assertEquals(0, pairs.find(wanted))
             assertNull(pairs.find(wanted.copy(tag = "BIND_WITH")))
             assertEquals(before, classifications)
+            assertEquals(listOf(0, 0), inspected)
         }
+    }
+
+    @Test
+    fun `duplicate lookup work is linear across same source insertions`() {
+        val counts = listOf(1, 4, 16, 64).map { size ->
+            var probes = 0
+            val index = EdgePairIndex { probes++ }
+            var inspected = 0
+            repeat(size) { target ->
+                val structure = IStorage.EdgeStructure(0, target + 1, "tag")
+                val before = probes
+                assertNull(index.find(structure))
+                inspected += probes - before
+                index.add(target, structure)
+            }
+            println("sameSourceEdges=$size duplicateLookupProbes=$inspected")
+            kotlin.test.assertTrue(inspected <= 4 * size, "Hash probes must stay linear: $size -> $inspected")
+            inspected
+        }
+        assertEquals(1, counts.first())
     }
 
     @Test

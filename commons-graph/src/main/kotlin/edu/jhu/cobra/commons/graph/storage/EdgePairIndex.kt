@@ -1,21 +1,27 @@
 package edu.jhu.cobra.commons.graph.storage
 
 // Pair and complete-tag lookup share the same rows. Null slots terminate probes; deletion closes the probe cluster.
-internal class EdgePairIndex {
-    private class Tags(val firstTag: String, var firstIds: TagAdjacencyIndex.EdgeIds) {
+internal class EdgePairIndex(private val onProbe: () -> Unit = {}) {
+    private class Tags(
+        val firstTag: String,
+        var firstIds: TagAdjacencyIndex.EdgeIds,
+        val allIds: TagAdjacencyIndex.EdgeIds = TagAdjacencyIndex.EdgeIds(firstIds.first()),
+    ) {
         var others: HashMap<String, TagAdjacencyIndex.EdgeIds>? = null
 
         fun find(tag: String): Int? = if (tag == firstTag) firstIds.first() else others?.get(tag)?.first()
 
         fun add(id: Int, tag: String) {
+            allIds.add(id)
             if (tag == firstTag) firstIds = firstIds.add(id)
             else {
                 val rest = others ?: HashMap<String, TagAdjacencyIndex.EdgeIds>().also { others = it }
-                rest[tag] = rest[tag]?.add(id) ?: TagAdjacencyIndex.Single(id)
+                rest[tag] = rest[tag]?.add(id) ?: TagAdjacencyIndex.EdgeIds(id)
             }
         }
 
         fun remove(id: Int, tag: String): Tags? {
+            allIds.remove(id)
             if (tag != firstTag) {
                 val remaining = others?.get(tag)?.remove(id)
                 if (remaining == null) others?.remove(tag) else others?.set(tag, remaining)
@@ -28,7 +34,7 @@ internal class EdgePairIndex {
                 return this
             }
             val next = others?.entries?.firstOrNull() ?: return null
-            val replacement = Tags(next.key, next.value)
+            val replacement = Tags(next.key, next.value, allIds)
             others?.remove(next.key)
             replacement.others = others?.takeIf { it.isNotEmpty() }
             return replacement
@@ -47,15 +53,24 @@ internal class EdgePairIndex {
         val row = rows[slot]
         if (row == null) {
             keys[slot] = key
-            rows[slot] = Tags(structure.tag, TagAdjacencyIndex.Single(id))
+            rows[slot] = Tags(structure.tag, TagAdjacencyIndex.EdgeIds(id))
             size++
         } else row.add(id, structure.tag)
     }
 
-    fun find(src: Int, dst: Int): Int? = rows[slot(pairKey(src, dst))]?.firstIds?.first()
+    fun find(src: Int, dst: Int): Int? = rows[slot(pairKey(src, dst))]?.allIds?.first()
 
     fun find(structure: IStorage.EdgeStructure): Int? =
         rows[slot(pairKey(structure.src, structure.dst))]?.find(structure.tag)
+
+    fun snapshot(src: Int, dst: Int, tag: String?): Set<Int> {
+        val row = rows[slot(pairKey(src, dst))] ?: return emptySet()
+        return when (tag) {
+            null -> row.allIds.snapshot()
+            row.firstTag -> row.firstIds.snapshot()
+            else -> row.others?.get(tag)?.snapshot().orEmpty()
+        }
+    }
 
     fun remove(id: Int, structure: IStorage.EdgeStructure) {
         val slot = slot(pairKey(structure.src, structure.dst))
@@ -82,7 +97,11 @@ internal class EdgePairIndex {
 
     private fun slot(key: Long): Int {
         var candidate = hash(key) and (rows.size - 1)
-        while (rows[candidate] != null && keys[candidate] != key) candidate = (candidate + 1) and (rows.size - 1)
+        onProbe()
+        while (rows[candidate] != null && keys[candidate] != key) {
+            candidate = (candidate + 1) and (rows.size - 1)
+            onProbe()
+        }
         return candidate
     }
 

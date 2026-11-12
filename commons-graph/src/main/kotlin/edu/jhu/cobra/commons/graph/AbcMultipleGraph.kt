@@ -257,6 +257,20 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
             .map { cache.edge(it) }.asSequence()
     }
 
+    override fun getOutgoingEdges(of: NodeID, groups: Set<String>): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getOutgoingEdges(entry.storageId, groups)
+            .filter { cache.containsStorageId(storage.getEdgeStructure(it).dst) }
+            .map { cache.edge(it) }.asSequence()
+    }
+
+    override fun getIncomingEdges(of: NodeID, groups: Set<String>): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getIncomingEdges(entry.storageId, groups)
+            .filter { cache.containsStorageId(storage.getEdgeStructure(it).src) }
+            .map { cache.edge(it) }.asSequence()
+    }
+
     override fun getParents(
         of: NodeID,
         edgeCond: (E) -> Boolean,

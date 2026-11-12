@@ -216,6 +216,20 @@ public class NativeStorageImpl(
         tagAdjacency.outgoing(id, group)
     }
 
+    override fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = run {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.incoming(id, groups)
+    }
+
+    override fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = run {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.outgoing(id, groups)
+    }
+
+    override fun getEdges(src: Int, dst: Int, tag: String?): Set<Int> = run {
+        pairs.snapshot(src, dst, tag)
+    }
+
     override fun findEdge(src: Int, dst: Int): Int? = run { pairs.find(src, dst) }
 
     override fun findEdge(src: Int, dst: Int, tag: String): Int? = run {

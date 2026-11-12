@@ -297,6 +297,22 @@ public class LayeredStorageImpl(
             layers.frozen?.outgoingEdges(id, group)?.let(layers::withoutTombstones))
     }
 
+    override fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.incoming(id, groups),
+            layers.frozen?.incomingEdges(id, groups)?.let(layers::withoutTombstones))
+    }
+
+    override fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.outgoing(id, groups),
+            layers.frozen?.outgoingEdges(id, groups)?.let(layers::withoutTombstones))
+    }
+
+    override fun getEdges(src: Int, dst: Int, tag: String?): Set<Int> = lock.readLock().withLock {
+        pairs.snapshot(src, dst, tag)
+    }
+
     override fun findEdge(src: Int, dst: Int): Int? = lock.readLock().withLock { pairs.find(src, dst) }
 
     override fun findEdge(src: Int, dst: Int, tag: String): Int? = lock.readLock().withLock {

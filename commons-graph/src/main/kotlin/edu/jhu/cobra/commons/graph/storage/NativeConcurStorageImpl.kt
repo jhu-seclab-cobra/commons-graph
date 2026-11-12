@@ -238,6 +238,20 @@ public class NativeConcurStorageImpl(
         tagAdjacency.outgoing(id, group)
     }
 
+    override fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.incoming(id, groups)
+    }
+
+    override fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.outgoing(id, groups)
+    }
+
+    override fun getEdges(src: Int, dst: Int, tag: String?): Set<Int> = lock.readLock().withLock {
+        pairs.snapshot(src, dst, tag)
+    }
+
     override fun findEdge(src: Int, dst: Int): Int? = lock.readLock().withLock { pairs.find(src, dst) }
 
     override fun findEdge(src: Int, dst: Int, tag: String): Int? = lock.readLock().withLock {
