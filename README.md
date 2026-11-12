@@ -1,16 +1,12 @@
-# COBRA.COMMONS.GRAPH
+# commons-graph
 
-> Common Graph — backend-agnostic graph abstraction for COBRA.
+> Common graph abstractions and storage for Kotlin.
 
-Directed property graph library for Kotlin/JVM with pluggable storage backends.
-
-[![codecov](https://codecov.io/gh/jhu-seclab-cobra/commons-graph/branch/main/graph/badge.svg)](https://codecov.io/gh/jhu-seclab-cobra/commons-graph)
-[![JitPack](https://jitpack.io/v/jhu-seclab-cobra/commons-graph.svg)](https://jitpack.io/#jhu-seclab-cobra/commons-graph)
-[![License](https://img.shields.io/github/license/jhu-seclab-cobra/commons-graph)](./LICENSE)
+A directed property graph library for Kotlin/JVM with pluggable storage and edge labels.
 
 ## Install
 
-Java 21+. Add JitPack and the modules you need:
+Use JDK 21 and add JitPack and the core module to a Gradle Kotlin build:
 
 ```kotlin
 repositories {
@@ -18,109 +14,58 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph:<version>")
-    // Optional backends:
-    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-jgrapht:<version>")
-    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-mapdb:<version>")
-    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph-impl-neo4j:<version>")
+    implementation("com.github.jhu-seclab-cobra.commons-graph:jhu-seclab-cobra-commons-graph:main-SNAPSHOT")
 }
 ```
+
+Replace `main-SNAPSHOT` with a tagged release version once one is published. Optional storage modules use the same group and version, with artifact names `jhu-seclab-cobra-commons-graph-impl-jgrapht`, `jhu-seclab-cobra-commons-graph-impl-mapdb`, and `jhu-seclab-cobra-commons-graph-impl-neo4j`.
 
 ## Usage
 
 ```kotlin
-val graph = object : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcMultipleGraph
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+
+class Node : AbcNode() {
+    enum class Kind : AbcNode.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+}
+class Edge : AbcEdge() {
+    enum class Kind : AbcEdge.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+}
+class Graph : AbcMultipleGraph<Node, Edge>() {
+    override val graphId = "example"
     override val storage = NativeStorageImpl()
-    override val poset: IPoset = PosetDftImpl(storage)
-    override fun newNodeObj() = MyNode()
-    override fun newEdgeObj() = MyEdge()
+    override fun newNodeObj() = Node()
+    override fun newEdgeObj() = Edge()
 }
 
-val a = graph.addNode("A")                    // returns MyNode (NodeID is String)
-val b = graph.addNode("B")
-val e = graph.addEdge("A", "B", "calls")      // returns MyEdge
-a["weight"] = 42.intVal                        // property access
-graph.getChildren("A")                         // Sequence<MyNode>
+fun main() {
+    val graph = Graph()
+    graph.addNode("a")
+    graph.addNode("b")
+    graph.addEdge("a", "b", "calls")
+    println(graph.getChildren("a").map { it.id }.toList())
+}
 ```
 
 ## API
 
-**Core Interfaces**
-
-| Interface | Description |
-|-----------|-------------|
-| `IGraph<N: AbcNode, E: AbcEdge>` | Domain graph contract. String `NodeID` identifiers. `addNode(withID)`, `addEdge(src, dst, tag)`, traversal queries. |
-| `IStorage` | Storage engine contract. Auto-generated `Int` IDs. `addNode(): Int`, `addEdge(src, dst, tag): Int`, adjacency, properties. |
-| `IPoset` | Label partial-order contract. `getParents`, `getAncestors`, `compare`. |
-
-**Abstract Classes**
-
-| Class | Description |
-|-------|-------------|
-| `AbcMultipleGraph` | Implements `IGraph` + `Flushable`. Mix in `PosetTrait` for label-aware edges. |
-| `AbcSimpleGraph` | Extends `AbcMultipleGraph`. Enforces single edge per source-destination direction. |
-| `AbcNode` | Lightweight node wrapper. Bound to storage via `bind()`. |
-| `AbcEdge` | Lightweight edge wrapper. Resolves source, destination, tag lazily. |
-
-**Storage Implementations**
-
-| Implementation | Persistence | Thread-Safe | Use Case |
-|----------------|-------------|-------------|----------|
-| `NativeStorageImpl` | No | No | Default in-memory |
-| `NativeConcurStorageImpl` | No | Yes | Multi-threaded in-memory |
-| `LayeredStorageImpl` | No | No | Phase-based freeze-and-stack |
-| `JgraphtStorageImpl` | No | No | JGraphT algorithm access |
-| `MapDBStorageImpl` | File | No | Graphs exceeding heap |
-| `Neo4jStorageImpl` | Disk | No | Embedded Neo4j persistence |
-
-**Supporting Types**
-
-| Type | Description |
-|------|-------------|
-| `Label` | Value class wrapping `String`. `INFIMUM`/`SUPREMUM` sentinels. |
-| `PosetTrait<N, E>` | Graph trait adding label-filtered operations via pluggable `IPoset`. |
-| `PosetDftImpl` | Default `IPoset` implementation with a memoized ancestor closure. |
-| `NodeID` | Typealias for `String`. User-facing node identifier. |
-
-**Exceptions**
-
-| Exception | Trigger |
-|-----------|---------|
-| `EntityNotExistException` | Operation on missing node or edge |
-| `EntityAlreadyExistException` | Duplicate node or edge creation |
-| `InvalidPropNameException` | Property name collides with a backend or exporter reserved name |
-| `FrozenLayerModificationException` | Write to frozen layer |
+`IGraph<N, E>` provides `addNode(withID: NodeID): N`, `addEdge(src: NodeID, dst: NodeID, tag: String): E`, and traversal queries such as `getChildren(of: NodeID): Sequence<N>`. `NodeID` is a `String` alias. `AbcMultipleGraph` implements this interface; `AbcSimpleGraph` restricts each directed node pair to one edge. `PosetTrait` adds label-aware operations. `IStorage` provides storage operations and `flush()`; resource lifecycle belongs to the storage owner. See the [graph API](docs/llms/graph.md), [storage API](docs/llms/storage.md), and [label API](docs/llms/label.md) for signatures and parameters.
 
 ## Documentation
 
-- [Concepts and terminology](docs/concept.md) — problem, scope, data flow, scenarios.
-- [Domain model](docs/model.md) — entities, relations, state transitions, invariants.
-- [Design: entities](docs/design-entity.md) — IEntity, AbcNode, AbcEdge, property delegates.
-- [Design: graph](docs/design-graph.md) — IGraph, AbcMultipleGraph, AbcSimpleGraph.
-- [Design: storage](docs/design-storage.md) — IStorage and backend implementations.
-- [Design: labels](docs/design-label.md) — IPoset, PosetDftImpl, PosetTrait.
-- [Algorithms: graph](docs/spec-graph.md) — edge lookup, BFS, visibility filtering, layered queries.
-- [Algorithms: poset](docs/spec-poset.md) — ancestor closure over the label hierarchy.
-- [Full docs index](docs/index.md) — all documentation files.
+- [Concepts](docs/concept.md) — scope and graph concepts.
+- [Graph design](docs/design-graph.md) — graph interfaces and behavior.
+- [Documentation index](docs/index.md) — all library documentation.
 
 ## For Agents
 
-Agent-consumable documentation index at `docs/llms.txt` (llmstxt.org format).
-
-## Citation
-
-If you use this repository in your research, please cite our paper:
-
-```bibtex
-@inproceedings{xu2026cobra,
-  title     = {CoBrA: Context-, Branch-sensitive Static Analysis for Detecting Taint-style Vulnerabilities in PHP Web Applications},
-  author    = {Xu, Yichao and Kang, Mingqing and Thimmaiah, Neil and Gjomemo, Rigel and Venkatakrishnan, V. N. and Cao, Yinzhi},
-  booktitle = {Proceedings of the 48th IEEE/ACM International Conference on Software Engineering (ICSE)},
-  year      = {2026},
-  address   = {Rio de Janeiro, Brazil}
-}
-```
+Agent-consumable documentation index at [docs/llms.txt](docs/llms.txt) (llmstxt.org format).
 
 ## License
 
-GPL-2.0. See [LICENSE](./LICENSE).
+GPL-2.0; see [LICENSE](LICENSE).
