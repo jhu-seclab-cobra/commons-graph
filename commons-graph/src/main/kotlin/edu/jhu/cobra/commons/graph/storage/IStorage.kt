@@ -216,6 +216,51 @@ public interface IStorage : Flushable {
      */
     public fun getOutgoingEdges(id: Int): Set<Int>
 
+    /** The fixed pure grouping of complete tags; the default keeps the complete tag. */
+    public val tagGroup: (String) -> String get() = IDENTITY_TAG_GROUP
+
+    /** A copy of incoming IDs whose immutable tag belongs to [group], in full-adjacency order. */
+    public fun getIncomingEdges(id: Int, group: String): Set<Int> = criticalSection {
+        getIncomingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) == group }
+    }
+
+    /** A copy of outgoing IDs whose immutable tag belongs to [group], in full-adjacency order. */
+    public fun getOutgoingEdges(id: Int, group: String): Set<Int> = criticalSection {
+        getOutgoingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) == group }
+    }
+
+    /** Copies incoming IDs selected by any group, in full-adjacency order. */
+    public fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = criticalSection {
+        getIncomingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) in groups }
+    }
+
+    /** Copies outgoing IDs selected by any group, in full-adjacency order. */
+    public fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = criticalSection {
+        getOutgoingEdges(id).filterTo(LinkedHashSet()) { tagGroup(getEdgeStructure(it).tag) in groups }
+    }
+
+    /** Copies the matching pair's IDs in adjacency order; null [tag] selects every complete tag. */
+    public fun getEdges(src: Int, dst: Int, tag: String? = null): Set<Int> = criticalSection {
+        if (!containsNode(src) || !containsNode(dst)) emptySet() else getOutgoingEdges(src).filterTo(LinkedHashSet()) {
+            val edge = getEdgeStructure(it)
+            edge.dst == dst && (tag == null || edge.tag == tag)
+        }
+    }
+
+    /** An edge between two endpoints, or null when absent. */
+    public fun findEdge(src: Int, dst: Int): Int? = criticalSection {
+        if (!containsNode(src) || !containsNode(dst)) null else getOutgoingEdges(src).firstOrNull {
+            getEdgeStructure(it).dst == dst
+        }
+    }
+
+    /** The first edge with the complete triple, or null when either endpoint or the edge is absent. */
+    public fun findEdge(src: Int, dst: Int, tag: String): Int? = criticalSection {
+        if (!containsNode(src) || !containsNode(dst)) null else getOutgoingEdges(src).firstOrNull {
+            getEdgeStructure(it).let { edge -> edge.dst == dst && edge.tag == tag }
+        }
+    }
+
     // ============================================================================
     // METADATA OPERATIONS
     // ============================================================================
@@ -274,3 +319,6 @@ public interface IStorage : Flushable {
      */
     public val criticalSectionLock: Lock? get() = null
 }
+
+// Unconfigured storages preserve complete-tag equality.
+internal val IDENTITY_TAG_GROUP: (String) -> String = { it }

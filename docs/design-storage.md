@@ -44,6 +44,14 @@ interface IStorage : Flushable {
     fun deleteEdge(id: Int)
     fun getIncomingEdges(id: Int): Set<Int>
     fun getOutgoingEdges(id: Int): Set<Int>
+    val tagGroup: (String) -> String
+    fun getIncomingEdges(id: Int, group: String): Set<Int>
+    fun getOutgoingEdges(id: Int, group: String): Set<Int>
+    fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int>
+    fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int>
+    fun getEdges(src: Int, dst: Int, tag: String? = null): Set<Int>
+    fun findEdge(src: Int, dst: Int): Int?
+    fun findEdge(src: Int, dst: Int, tag: String): Int?
     val metaNames: Set<String>
     fun getMeta(name: String): IValue?
     fun setMeta(name: String, value: IValue?)
@@ -70,6 +78,8 @@ interface IStorage : Flushable {
 | `transferTo` | Copies all data into `target`; returns node ID mapping. `target` must be a different storage instance. | `target` | `Map<Int, Int>` | `IllegalArgumentException` if `target` is the receiver |
 | `flush` | Persists buffered data. No-op for in-memory implementations. | -- | -- | -- |
 | `criticalSectionLock` | The lock `criticalSection` holds: the exclusive half of the implementation's own read-write lock. `null` for an implementation that is not thread-safe. | -- | `Lock?` | -- |
+
+Structural selection, constructor settings and index lifecycle: [Storage structural access](design-storage-access.md).
 
 ### IRevertibleStorage
 

@@ -12,8 +12,9 @@ import edu.jhu.cobra.commons.value.strVal
  *
  * Node IDs are user-provided mandatory strings. Edge IDs are deterministic
  * ("$src-$tag-$dst"). The graph layer maintains bidirectional NodeID↔Int mapping,
- * delegating to IStorage via auto-generated Int IDs. Edge lookups by (src, dst, tag)
- * scan the source node's adjacency list in storage — O(out-degree) per query.
+ * delegating to IStorage via auto-generated Int IDs. Exact triple lookups use
+ * storage selection. Subclasses narrow enumerated edge visibility only through
+ * [isEdgeVisible]; whole-adjacency overrides are not a supported way to hide edges.
  * BFS traversals use Int visited sets for identity-function hashCode.
  *
  * Every public operation runs inside [criticalSection] on [storage], serializing
@@ -58,16 +59,30 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     protected abstract fun newEdgeObj(): E
 
     /**
+     * Whether [edge] belongs to this graph's enumerated view; the default accepts every edge.
+     *
+     * Override this declaration to narrow full/grouped adjacency, all-edge reads, restored-edge resolution
+     * and simple-pair duplicate checks. Whole-adjacency overrides do not declare visibility.
+     * This classification must be side-effect-free, read only fixed edge fields and never traverse adjacency.
+     * Both endpoints are registered before it is called, inside the existing storage critical section.
+     *
+     * @param edge A bound edge of the shared storage.
+     * @return True when this graph's enumerated view includes the edge.
+     */
+    protected open fun isEdgeVisible(edge: E): Boolean = true
+
+    /**
      * Called once per revert that may have changed edges, inside the critical section, after the node registry
      * is reconciled. [ids] are the visible edges whose presence, properties or endpoint registrations changed.
      * A graph that derives state from edge properties repairs it here; the default does nothing.
      */
     protected open fun onRestoredEdges(ids: Set<Int>) {}
 
-    /** The edge stored under [storageId] when both endpoints are registered in this graph, else null. */
+    /** The visible edge under [storageId] with both endpoints registered, or null. */
     protected fun edgeByStorageId(storageId: Int): E? {
         val (src, dst) = storage.getEdgeStructure(storageId)
-        return if (cache.containsStorageId(src) && cache.containsStorageId(dst)) cache.edge(storageId) else null
+        if (!cache.containsStorageId(src) || !cache.containsStorageId(dst)) return null
+        return cache.edge(storageId).takeIf(::isEdgeVisible)
     }
 
     // Registry first, so edges whose endpoints this graph newly owns resolve; then the derived state.
@@ -83,9 +98,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ): Int? {
         val srcEntry = cache.entryOf(src) ?: return null
         val dstEntry = cache.entryOf(dst) ?: return null
-        return storage.getOutgoingEdges(srcEntry.storageId).firstOrNull { edgeId ->
-            storage.getEdgeStructure(edgeId).let { it.dst == dstEntry.storageId && it.tag == tag }
-        }
+        return storage.findEdge(srcEntry.storageId, dstEntry.storageId, tag)
     }
 
     // region Node operations
@@ -204,46 +217,42 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun getAllEdges(doSatisfy: (E) -> Boolean): Sequence<E> =
         storage.criticalSection {
-            storage.edgeIDs
-                .filter { edgeId ->
-                    val structure = storage.getEdgeStructure(edgeId)
-                    cache.containsStorageId(structure.src) && cache.containsStorageId(structure.dst)
-                }.map { cache.edge(it) }
-                .filter(doSatisfy)
-                .asSequence()
+            storage.edgeIDs.mapNotNull(::edgeByStorageId).filter(doSatisfy).asSequence()
         }
 
     // endregion
 
     // region Graph structure queries
 
-    override fun getOutgoingEdges(of: NodeID): Sequence<E> =
-        storage.criticalSection {
-            val entry = cache.entryOf(of)
-            if (entry == null) {
-                emptySequence()
-            } else {
-                storage
-                    .getOutgoingEdges(entry.storageId)
-                    .filter { cache.containsStorageId(storage.getEdgeStructure(it).dst) }
-                    .map { cache.edge(it) }
-                    .asSequence()
-            }
-        }
+    override fun getOutgoingEdges(of: NodeID): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getOutgoingEdges(entry.storageId).mapNotNull(::edgeByStorageId).asSequence()
+    }
 
-    override fun getIncomingEdges(of: NodeID): Sequence<E> =
-        storage.criticalSection {
-            val entry = cache.entryOf(of)
-            if (entry == null) {
-                emptySequence()
-            } else {
-                storage
-                    .getIncomingEdges(entry.storageId)
-                    .filter { cache.containsStorageId(storage.getEdgeStructure(it).src) }
-                    .map { cache.edge(it) }
-                    .asSequence()
-            }
-        }
+    override fun getIncomingEdges(of: NodeID): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getIncomingEdges(entry.storageId).mapNotNull(::edgeByStorageId).asSequence()
+    }
+
+    override fun getOutgoingEdges(of: NodeID, group: String): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getOutgoingEdges(entry.storageId, group).mapNotNull(::edgeByStorageId).asSequence()
+    }
+
+    override fun getIncomingEdges(of: NodeID, group: String): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getIncomingEdges(entry.storageId, group).mapNotNull(::edgeByStorageId).asSequence()
+    }
+
+    override fun getOutgoingEdges(of: NodeID, groups: Set<String>): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getOutgoingEdges(entry.storageId, groups).mapNotNull(::edgeByStorageId).asSequence()
+    }
+
+    override fun getIncomingEdges(of: NodeID, groups: Set<String>): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getIncomingEdges(entry.storageId, groups).mapNotNull(::edgeByStorageId).asSequence()
+    }
 
     override fun getParents(
         of: NodeID,

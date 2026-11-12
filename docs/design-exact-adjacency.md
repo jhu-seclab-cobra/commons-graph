@@ -19,7 +19,8 @@
 
 One immutable constructor input: `edgeTag`, `kindProperty`, `keyProperty`. The projection is present before any row
 is created. It has no registration method, caller predicate, lazy build or dynamic registry. Edges with another tag
-are not indexed. A matching edge requires both destination fields.
+are not indexed by this projection; general tag-group adjacency is a separate storage operation
+([storage design](design-storage.md#istorage)). A matching edge requires both destination fields.
 
 `LayeredStorageImpl(projection, frozenLayerFactory = ...)` configures the projection; the factory-only constructor selects null. Supported construction forms include positional, trailing-lambda and named factories, Kotlin default arguments, the factory JVM descriptor and Java no-argument construction.
 

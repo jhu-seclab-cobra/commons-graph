@@ -46,6 +46,15 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - **`getIncomingEdges(id: Int): Set<Int>`** -- Incoming edge IDs to a node.
 - **`getOutgoingEdges(id: Int): Set<Int>`** -- Outgoing edge IDs from a node.
 
+- **`val tagGroup: (String) -> String`** -- Constructor-fixed pure mapping of a complete immutable tag to its Tag group; default identity.
+- **`getIncomingEdges(id: Int, group: String): Set<Int>`** -- Copies selected IDs in full directional encounter order; raises `EntityNotExistException` for a missing node.
+- **`getOutgoingEdges(id: Int, group: String): Set<Int>`** -- Copies selected IDs in full directional encounter order; raises `EntityNotExistException` for a missing node.
+- **`getIncomingEdges(id: Int, groups: Set<String>): Set<Int>`** -- Copies IDs selected by any requested Tag group in full directional encounter order.
+- **`getOutgoingEdges(id: Int, groups: Set<String>): Set<Int>`** -- Copies IDs selected by any requested Tag group in full directional encounter order.
+- **`getEdges(src: Int, dst: Int, tag: String? = null): Set<Int>`** -- Copies pair IDs, optionally restricted to the complete tag; returns empty for missing endpoints or matches.
+- **`findEdge(src: Int, dst: Int): Int?`** -- First pair ID, or null for missing endpoints or matches.
+- **`findEdge(src: Int, dst: Int, tag: String): Int?`** -- First complete-triple ID, or null for missing endpoints or matches.
+
 **Metadata**
 
 - **`val metaNames: Set<String>`** -- All metadata property names.
@@ -65,10 +74,11 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 ### Implementations
 
-- **`NativeStorageImpl(projection: AdjacencyProjection? = null)`** -- In-memory, single-threaded; omit the projection for ordinary storage.
-- **`NativeConcurStorageImpl`** -- In-memory, thread-safe. No constructor parameters.
+- **`NativeStorageImpl(projection: AdjacencyProjection? = null, tagGroup: (String) -> String = { it })`** -- In-memory, single-threaded; omit the projection for ordinary storage.
+- **`NativeConcurStorageImpl(tagGroup: (String) -> String = { it })`** -- In-memory, thread-safe.
 - **`LayeredStorageImpl(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Freeze-and-stack for phased pipelines. Thread-safe. The Frozen layer is read-only, so the default single-threaded factory stays safe.
 - **`LayeredStorageImpl(projection: AdjacencyProjection?, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() })`** -- Construct with one fixed projection; the factory-only constructor remains available to Kotlin and Java callers.
+- **`LayeredStorageImpl(projection: AdjacencyProjection?, tagGroup: (String) -> String, frozenLayerFactory: () -> IStorage = { NativeStorageImpl(tagGroup = tagGroup) })`** -- Construct with fixed Tag group selection and the same default frozen grouping.
 - **`AdjacencyProjection(edgeTag: String, kindProperty: String, keyProperty: String)`** -- Select exact adjacency by an edge tag and two fixed destination fields; configure it before creating rows.
 - **`ExactAdjacencyStorage.getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int>`** -- Return matching physical edge IDs; requires a configured projection.
 - **`ExactAdjacencyReads.getExactOutgoingEdges(source: Int, kinds: Set<IValue>, key: IValue): Set<Int>`** -- Selects the requested kinds in one operation.
@@ -95,8 +105,9 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 ## Configuration
 
-- `NativeStorageImpl` accepts `projection: AdjacencyProjection? = null`; null selects ordinary Storage.
+- `NativeStorageImpl` accepts `projection: AdjacencyProjection? = null`; null selects ordinary Storage. `NativeStorageImpl` and `NativeConcurStorageImpl` accept `tagGroup: (String) -> String = { it }`.
 - `LayeredStorageImpl` accepts `frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }`, with an overload accepting `projection: AdjacencyProjection?`; its Frozen layer is read-only.
+- Select the `LayeredStorageImpl` overload with `projection` and `tagGroup` for custom grouping; keep the function pure and fixed for the Storage lifetime.
 - Configure projected destination fields before creating projected Edges and keep them unchanged while such an Edge exists.
 - Bind an optional `EdgePropertyFamilies` declaration once, before or after import; unequal rebinding fails.
 
@@ -116,6 +127,8 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - All graph-layer exceptions (`EntityNotExistException`, `EntityAlreadyExistException`, `InvalidPropNameException`, `FrozenLayerModificationException`) extend `GraphException`. Catch `GraphException` to handle any graph failure uniformly.
 - `IStorage` IDs are auto-generated `Int` values. Never hard-code or predict them.
 - `transferTo` remaps IDs. The returned `Map<Int, Int>` maps source IDs to new target IDs. `target` must be a different storage instance.
+- A Tag group never changes complete-tag identity: grouping `write@1` as `write` does not make an exact lookup of `write` match it.
+- Native directional reads preserve insertion order; layered reads place frozen rows before active-only rows, and property promotion retains frozen order.
 - `deleteNode` cascades to all incident edges in the same storage.
 - `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
 - `LayeredStorageImpl.freeze()` merges active + frozen into a new Frozen layer. Active layer properties overlay Frozen layer properties for the same entity.

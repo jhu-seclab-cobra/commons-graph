@@ -43,7 +43,8 @@ import kotlin.concurrent.withLock
 public class LayeredStorageImpl(
     projection: AdjacencyProjection?,
     propertyFamilies: EdgePropertyFamilies?,
-    private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
+    override val tagGroup: (String) -> String,
+    private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl(tagGroup = tagGroup) },
 ) : IRevertibleStorage, ExactAdjacencyStorage, LayeredEdgeReads {
     /** Constructs unconfigured storage through the same initialization as a projected storage. */
     @JvmOverloads
@@ -57,6 +58,20 @@ public class LayeredStorageImpl(
     /** Constructs layered storage with a fixed property-family schema. */
     public constructor(propertyFamilies: EdgePropertyFamilies, frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
         this(projection = null, propertyFamilies = propertyFamilies, frozenLayerFactory = frozenLayerFactory)
+
+    /** Constructs grouped storage; the function is fixed, pure and independent of edge properties. */
+    public constructor(
+        projection: AdjacencyProjection?,
+        tagGroup: (String) -> String,
+        frozenLayerFactory: () -> IStorage = { NativeStorageImpl(tagGroup = tagGroup) },
+    ) : this(projection, EdgePropertyFamilies.NONE, tagGroup, frozenLayerFactory)
+
+    /** Constructs storage with the default complete-tag grouping. */
+    public constructor(
+        projection: AdjacencyProjection?,
+        propertyFamilies: EdgePropertyFamilies?,
+        frozenLayerFactory: () -> IStorage = { NativeStorageImpl() },
+    ) : this(projection, propertyFamilies, IDENTITY_TAG_GROUP, frozenLayerFactory)
 
     private val lock = ReentrantReadWriteLock()
 
@@ -78,8 +93,11 @@ public class LayeredStorageImpl(
         }
     }
 
-    private val layers = LayerStack { boundFamilies }
+    private val layers = LayerStack(tagGroup) { boundFamilies }
     private val active = layers.active
+    // Frozen factories may change encounter order. Active-only IDs follow every frozen rank.
+    private val pairOrder = FrozenEdgeOrder()
+    private val pairs = EdgePairIndex(order = pairOrder::rank)
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
     override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
@@ -94,10 +112,11 @@ public class LayeredStorageImpl(
 
     public fun freeze() {
         lock.writeLock().withLock {
-            val merged = FrozenLayer.merge(layers.frozen, active, frozenLayerFactory())
+            val merged = FrozenLayer.merge(layers.frozen, active, frozenLayerFactory(), tagGroup)
             layers.frozen?.close()
             layers.frozen = merged
             active.clear()
+            rebuildPairs(merged)
         }
     }
 
@@ -114,6 +133,7 @@ public class LayeredStorageImpl(
         lock.writeLock().withLock {
             val notice = activeLayerDropNotice(active, layers.frozen)
             active.clear()
+            restorePairs(notice)
             restoreExactAdjacency(notice)
             notifyRevert(notice)
         }
@@ -170,6 +190,8 @@ public class LayeredStorageImpl(
             exact?.let { index ->
                 (active.outEdges[id].orEmpty() + active.inEdges[id].orEmpty()).forEach(index::remove)
             }
+            for (edge in active.outEdges[id].orEmpty() + active.inEdges[id].orEmpty())
+                pairs.remove(edge, active.edgeEndpoints.getValue(edge))
             active.removeNode(id)
         }
 
@@ -194,6 +216,7 @@ public class LayeredStorageImpl(
             layers.promoteNode(dst)
             val id = edgeCounter++
             active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), properties)
+            pairs.add(id, layers.edgeStructure(id))
             exact?.record(id, projected)
             id
         }
@@ -243,6 +266,7 @@ public class LayeredStorageImpl(
         lock.writeLock().withLock {
             val frozenEdge = layers.containsFrozenEdge(id)
             if (!frozenEdge && !active.containsEdge(id)) throw EntityNotExistException(id.toString())
+            pairs.remove(id, layers.edgeStructure(id))
             exact?.remove(id)
             active.removeEdge(id)
             // Dropping only the active copy of a promoted edge would resurrect the
@@ -263,6 +287,56 @@ public class LayeredStorageImpl(
         lock.readLock().withLock {
             copyAdjacency(id, active.outEdges[id], layers.frozen?.outgoingEdges(id)?.let(layers::withoutTombstones))
         }
+
+    override fun getIncomingEdges(id: Int, group: String): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.incoming(id, group),
+            layers.frozen?.incomingEdges(id, group)?.let(layers::withoutTombstones))
+    }
+
+    override fun getOutgoingEdges(id: Int, group: String): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.outgoing(id, group),
+            layers.frozen?.outgoingEdges(id, group)?.let(layers::withoutTombstones))
+    }
+
+    override fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.incoming(id, groups),
+            layers.frozen?.incomingEdges(id, groups)?.let(layers::withoutTombstones))
+    }
+
+    override fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int> = lock.readLock().withLock {
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        copyAdjacency(id, active.tagAdjacency.outgoing(id, groups),
+            layers.frozen?.outgoingEdges(id, groups)?.let(layers::withoutTombstones))
+    }
+
+    override fun getEdges(src: Int, dst: Int, tag: String?): Set<Int> = lock.readLock().withLock {
+        pairs.snapshot(src, dst, tag)
+    }
+
+    override fun findEdge(src: Int, dst: Int): Int? = lock.readLock().withLock { pairs.find(src, dst) }
+
+    override fun findEdge(src: Int, dst: Int, tag: String): Int? = lock.readLock().withLock {
+        pairs.find(IStorage.EdgeStructure(src, dst, tag))
+    }
+
+    // Freeze already visits all edges; build ranks once so scalar reads keep constant expected work.
+    private fun rebuildPairs(frozen: FrozenLayer) {
+        pairs.clear()
+        pairOrder.reset(frozen.edgeIds.size)
+        var rank = 0
+        for (node in frozen.nodeIds) for (id in frozen.outgoingEdges(node).orEmpty()) {
+            pairOrder.add(id, rank++)
+            pairs.add(id, checkNotNull(frozen.edgeStructure(id)))
+        }
+    }
+
+    private fun restorePairs(notice: RevertNotice) {
+        for ((id, structure) in notice.edgeStructuresBefore) pairs.remove(id, structure)
+        for (id in notice.restored.edges) if (layers.containsEdge(id)) pairs.add(id, layers.edgeStructure(id))
+    }
 
     override fun getExactOutgoingEdges(source: Int, kind: IValue, key: IValue): Set<Int> =
         lock.readLock().withLock {
@@ -301,7 +375,7 @@ public class LayeredStorageImpl(
         frozenEdges: Set<Int>?,
     ): Set<Int> {
         if (activeEdges == null && frozenEdges == null) throw EntityNotExistException(id.toString())
-        return java.util.Set.copyOf(UnionSet(frozenEdges.orEmpty(), activeEdges.orEmpty()))
+        return java.util.Collections.unmodifiableSet(LinkedHashSet(UnionSet(frozenEdges.orEmpty(), activeEdges.orEmpty())))
     }
 
     // ============================================================================
@@ -344,6 +418,8 @@ public class LayeredStorageImpl(
             layers.frozen?.close()
             layers.frozen = null
             active.clear()
+            pairs.clear()
+            pairOrder.clear()
             exact?.clear()
             nodeCounter = 0
             edgeCounter = 0

@@ -9,13 +9,17 @@ import edu.jhu.cobra.commons.value.IValue
  * metadata, and edge/metadata tombstones, all keyed by global IDs. Property rows are kept in
  * one [RowProperties] store per entity kind.
  */
-internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = { null }) {
+internal class ActiveLayer(
+    private val families: () -> EdgePropertyFamilies? = { null },
+    tagGroup: (String) -> String = IDENTITY_TAG_GROUP,
+) {
+    val tagAdjacency = TagAdjacencyIndex(tagGroup)
     val nodeRows = RowProperties()
     val edgeRows = RowProperties()
 
     // Explicit writes to edges inherited from the frozen layer. Null masks a frozen property.
     val promotedEdgeEdits = HashMap<Int, MutableMap<String, IValue?>>()
-    val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
+    val edgeEndpoints = LinkedHashMap<Int, IStorage.EdgeStructure>()
     val outEdges = HashMap<Int, MutableSet<Int>>()
     val inEdges = HashMap<Int, MutableSet<Int>>()
     val metaProperties = HashMap<String, IValue>()
@@ -36,8 +40,8 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
         id: Int,
         properties: Map<String, IValue>,
     ) {
-        outEdges[id] = HashSet()
-        inEdges[id] = HashSet()
+        outEdges[id] = LinkedHashSet()
+        inEdges[id] = LinkedHashSet()
         nodeRows.set(id, properties)
     }
 
@@ -47,6 +51,7 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
         properties: Map<String, IValue>,
     ) {
         edgeEndpoints[id] = structure
+        tagAdjacency.add(id, structure)
         outEdges.getValue(structure.src).add(id)
         inEdges.getValue(structure.dst).add(id)
         edgeRows.set(id, properties)
@@ -106,6 +111,7 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
 
     fun removeEdge(id: Int) {
         val edge = edgeEndpoints.remove(id) ?: return
+        tagAdjacency.remove(id, edge)
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
         edgeRows.remove(id)
@@ -113,6 +119,7 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
     }
 
     fun clear() {
+        tagAdjacency.clear()
         outEdges.clear()
         inEdges.clear()
         edgeEndpoints.clear()

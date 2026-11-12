@@ -29,3 +29,10 @@ Layered Storage: the composition of an immutable Frozen layer and a mutable Acti
 - **Example:** An Active layer holding node `c` over a Frozen layer holding `a` → a new Frozen layer holding `a` and `c`, and an empty Active layer.
 - **Source:** `storage/LayeredStorageImpl.kt` `freeze`
 - **Reference:** none
+
+## Structural Access
+
+### Tag group
+- **Definition:** The string a storage's constructor-fixed pure function assigns to an immutable complete edge tag for directional adjacency selection.
+- **Example:** `tagGroup = { it.substringBefore('@') }` maps `write@1` and `write@2` to `write`.
+- **Source:** `storage/IStorage.kt` `tagGroup`; `docs/design-storage.md` IStorage

@@ -10,21 +10,31 @@ Given `(src, dst, tag)`, find the storage edge ID or determine it is absent. Cor
 
 1. Look up `src` in node registry to get `srcStorageId`. If absent, return absent.
 2. Look up `dst` to get `dstStorageId`. If absent, return absent.
-3. For each outgoing edge of `srcStorageId`, retrieve structure `(eSrc, eDst, eTag)`.
-4. If `eDst == dstStorageId` and `eTag == tag`, return this edge ID.
-5. If no match, return absent.
+3. For a simple-graph insertion, read the indexed pair's first row. Reject it if the graph's per-edge visibility declaration accepts it; if hidden, inspect only the remaining indexed pair rows and reject on a visible row. Keep this check and insertion in the existing critical section.
+4. Ask storage for the exact complete triple and return its first stored edge ID, or absent. Insertion creates a row only when that triple is absent; the visibility declaration does not alter structural triple identity.
 
 ### Invariants
 
-- At most one edge matches a given `(src, dst, tag)` triple (uniqueness from model.md).
+- Graph edge identity remains the complete `(src, dst, tag)` triple.
+- Storage creation and deletion update the triple access in the same guarded operation.
 
 ### Termination
 
-Outgoing edge set is finite. Exits on first match or after exhausting the set.
+One finite hash lookup in core storage; backend defaults scan the finite outgoing adjacency.
 
 ### Complexity
 
-- Time: O(D) edge checks for source out-degree D, plus backend lookup costs. Auxiliary space includes the backend’s returned outgoing-edge collection, O(D) when it is copied.
+Exact triple lookup and its duplicate check cost expected O(1) in core storage. The simple-graph pair check also costs expected O(1) when absent or its first row is visible; with a hidden first row it visits only P matching pair rows, O(1 + P). Across n distinct successful same-source targets and H such foreign pair rows, total work is O(n + H), hence expected O(n) for bounded pair multiplicity; unrelated source degree is never scanned.
+Backend defaults retain O(out-degree) lookup. Hashing includes the bytes of the complete tag.
+Pair/triple snapshots cost expected O(1 + matching rows); first-row lookup reads one indexed ID.
+Group adjacency returns only IDs whose immutable tag maps to the requested group, in the order of the full directional adjacency. It costs expected O(1 + matches) and O(matches) result space;
+no unrelated group is enumerated. For G requested groups, merging selected heads costs O(G + G * matches),
+which is O(1 + matches) for a fixed set. Retained structural entries are O(V + E), independent of queries.
+Layered reads merge only the matching frozen and active incidences and hide frozen tombstones.
+All mutable operations update membership under their existing lock; properties never change it.
+Directional buckets retain primitive singleton IDs inline and grow arrays geometrically from the second ID.
+Pair rows keep complete tags separate; deleting the first duplicate exposes the next visible row.
+New IDs append in constant amortized time. Removal scans/shifts matching bucket IDs; reinserting a reverted ID can shift matching pair IDs. A cascade sums that work over its incident edges.
 
 ---
 
@@ -40,7 +50,7 @@ Given a start node, a direction (outgoing for descendants, incoming for ancestor
 2. Initialize a queue with the start node ID.
 3. While queue is not empty:
    a. Dequeue a node ID.
-   b. Read its edges through `getOutgoingEdges` (or `getIncomingEdges`), the overridable queries of this graph, so a graph that keeps only its own edge types on a shared storage walks only those.
+   b. Read the graph's visible outgoing (or incoming) adjacency, which applies its per-edge visibility declaration after endpoint registration; the walk never includes a hidden shared-storage edge.
    c. For each edge, check the edge condition predicate. Skip if false.
    d. Resolve the opposite endpoint. Skip if not registered in this graph.
    e. If the endpoint storage ID is not in visited, add to visited and enqueue. Yield the node.

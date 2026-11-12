@@ -10,6 +10,7 @@
 | [design-graph.md](design-graph.md) | Graph interfaces and pure merge declarations |
 | [design-label.md](design-label.md) | Label hierarchy, label operations and index |
 | [design-storage.md](design-storage.md) | Storage contracts and implementation structure |
+| [design-storage-access.md](design-storage-access.md) | Tag group selection, pair lookup and encounter order |
 | [design-storage-concurrency.md](design-storage-concurrency.md) | Compound operations and synchronization constraints |
 | [design-storage-families.md](design-storage-families.md) | Fixed property-family declarations and layer access |
 | [design-gaps-graph.md](design-gaps-graph.md) | Graph Open Gaps |

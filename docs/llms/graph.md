@@ -34,6 +34,10 @@ fun connect(graph: IGraph<*, *>): String {
 - **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Snapshot sequence of edges, optionally filtered.
 - **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
 - **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
+- **`getIncomingEdges(of: NodeID, group: String): Sequence<E>`** -- Incoming visible edges in the requested Tag group.
+- **`getOutgoingEdges(of: NodeID, group: String): Sequence<E>`** -- Outgoing visible edges in the requested Tag group.
+- **`getIncomingEdges(of: NodeID, groups: Set<String>): Sequence<E>`** -- Incoming visible edges selected by any requested Tag group.
+- **`getOutgoingEdges(of: NodeID, groups: Set<String>): Sequence<E>`** -- Outgoing visible edges selected by any requested Tag group.
 - **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
 - **`getParents(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct predecessors via incoming edges.
 - **`getDescendants(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- BFS transitive successors.
@@ -44,6 +48,7 @@ fun connect(graph: IGraph<*, *>): String {
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
 - **`protected abstract fun newNodeObj(): N`** -- Factory for an unbound node instance.
 - **`protected abstract fun newEdgeObj(): E`** -- Factory for an unbound edge instance.
+- **`protected open fun isEdgeVisible(edge: E): Boolean`** -- Declare enumerated edge visibility here; do not hide edges in whole-adjacency overrides.
 - **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
 
 ### `GraphMergeLaws` (implemented by `AbcMultipleGraph`)
@@ -58,20 +63,22 @@ fun connect(graph: IGraph<*, *>): String {
 
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 
-- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
-- The labeled `addEdge` overload requires `PosetTrait`; the same one-edge-per-direction constraint applies.
+- **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if a visible edge from `src` to `dst` exists, regardless of tag.
+- The labeled `addEdge` overload requires `PosetTrait`; the same one-visible-edge-per-direction constraint applies.
 - **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` fails for two distinct edges on one pair.
 
 ## Configuration
 
 - Supply a unique `graphId: String`, an `IStorage` and the two entity factories in an `AbcMultipleGraph` subclass; construction is shown in [Graph design](../design-graph.md#caller-examples).
+- Override `isEdgeVisible` to narrow full/grouped adjacency, all-edge reads and restored-edge resolution; read only fixed edge fields, introduce no side effect and never traverse adjacency. Whole-adjacency overrides do not declare visibility.
 - Supply `poset: IPoset` and `labelIndex: LabelEdgeIndex<E>` when implementing `PosetTrait`; construct them as shown in [Label design](../design-label.md).
 
 ## Gotchas
 
+- Enumerated edges have both endpoints registered and pass `isEdgeVisible`; caller predicates see only those edges. Exact-tag CRUD retains complete-triple identity even for a hidden edge. Selected queries preserve full directional encounter order.
 - `NodeID` is a `String` typealias. Callers provide node IDs; the graph manages internal `Int` storage IDs.
 - `delNode` cascades to all incident edges. No orphan edges remain.
-- `AbcSimpleGraph` enforces one edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
+- `AbcSimpleGraph` enforces one visible edge per direction per node pair. The `tag` distinguishes the edge but the constraint is on `(src, dst)`.
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - `AbcMultipleGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see [Label API](label.md)).

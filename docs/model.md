@@ -69,7 +69,7 @@ An [Edge](glossary/glossary-graph.md#edge) carries typed properties and optional
 
 - Every edge has exactly one source node and one destination node. Both must exist in the graph.
 - Deleting a node removes all incident edges. No orphan edges.
-- In a simple graph variant, at most one edge exists per directed `(src, dst)` pair, regardless of tag.
+- In a simple graph variant, at most one visible edge exists per directed `(src, dst)` pair, regardless of tag.
 - In a multiple-edge graph variant, multiple edges between the same `(src, dst)` pair are allowed if tags differ.
 - The application-supplied Node identifier is unique within a graph. Adding a duplicate is rejected.
 - Edge `(src, dst, tag)` is unique within a graph. Adding a duplicate is rejected.
@@ -107,7 +107,7 @@ The graph layer maps node identifiers to storage integer IDs. Storage operates o
 
 - A node in storage can be registered by multiple graphs. Each graph holds its own typed view of the same storage row, sharing all properties.
 - A row carries an owner set naming every graph that added or claimed it. A graph registers a row only when the set holds its ID; a row with no owner set belongs to no graph. A revert drops an owner mark that a claim wrote on a promoted frozen row, and the claiming graph drops the registry entry with it, so the registry and a rebuild agree after every revert.
-- Edge queries return only edges whose both endpoints are registered in the querying graph. Edges belonging to other graphs sharing the same storage are excluded (edge isolation).
+- Edge enumeration and the simple-graph pair constraint include only edges with both endpoints registered in the querying graph and accepted by its per-edge visibility declaration (edge isolation). Hidden edges of another graph do not occupy that visible pair. Explicit exact-tag operations retain structural edge identity.
 
 ### Graph ↔ Label hierarchy
 

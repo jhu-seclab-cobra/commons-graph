@@ -79,6 +79,7 @@ AbcMultipleGraph
 +-- abstract graphId: String                <- graph identifier for ownership tracking
 +-- newNodeObj(): N                         <- subclass entity factory (protected abstract)
 +-- newEdgeObj(): E                         <- subclass entity factory (protected abstract)
++-- isEdgeVisible(edge: E): Boolean         <- per-edge enumeration declaration (protected open)
 +-- cache: GraphEntityCache<N, E>           <- NodeID↔Int index + entity wrappers (private, created on first use)
 ```
 
@@ -103,11 +104,13 @@ The cache is created on the first graph operation, when `storage` is initialized
 
 The listener reconciles the cache: it evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache, and for each restored node ID it applies the test `rebuild()` applies to a row (the owner set holds the graph's ID and the row has a node ID property), registering or evicting the node accordingly.
 
-After registry reconciliation it calls `onRestoredEdges(ids)` once with the restored edges and the edges incident to the newly registered nodes (`spec-storage.md` Revert). The default does nothing; a graph that derives state from edge properties overrides it, and `edgeByStorageId` resolves an ID to the graph's edge when both endpoints are registered. A graph with `PosetTrait` overrides it as `restoreLabelIndex(ids, ::edgeByStorageId)`.
+After registry reconciliation it calls `onRestoredEdges(ids)` once with the restored edges and the edges incident to the newly registered nodes (`spec-storage.md` Revert). The default does nothing; a graph that derives state from edge properties overrides it, and `edgeByStorageId` resolves an ID only when both endpoints are registered and the edge passes the visibility declaration. A graph with `PosetTrait` overrides it as `restoreLabelIndex(ids, ::edgeByStorageId)`.
 
 **Edge Isolation:**
 
-All edge query methods filter by this graph's node registry membership. See `model.md` for the edge isolation invariant.
+Full incoming/outgoing adjacency, their single/fixed-set group overloads, `getAllEdges` and restored-edge resolution apply the protected `isEdgeVisible(edge: E): Boolean` declaration after checking both endpoints in this graph's registry, inside the existing storage critical section. The default accepts every edge. The declaration is side-effect-free, reads only the edge's fixed fields and must not traverse adjacency; it introduces no index or write. Filtering retains the selected storage encounter order, and a caller predicate is applied only to visible edges. Exact-tag CRUD retains structural triple identity; label queries further filter the visible adjacency.
+
+A subclass narrows enumerated edge visibility only by overriding `isEdgeVisible`; overriding whole adjacency or `getAllEdges` is not a supported way to hide edges. A selected-query override may route compatible tag groups, but delegates visibility to the base declaration. The same declaration decides whether an indexed pair candidate prevents a simple-graph insertion. See `model.md` for edge isolation and `spec-graph.md` for the pair check.
 
 **Ownership Persistence:**
 
@@ -121,7 +124,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super; check and insert run in one critical section | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
+| `addEdge(src, dst, tag)` | Rejects if a visible edge from `src` to `dst` already exists, then delegates to super; check and insert run in one critical section | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if a visible edge from src to dst exists |
 | `edgeUniqueKeys(edge)` | Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` rejects two distinct edges on one pair (`model.md` Merge Laws) | `edge`: EdgeKey | `Map<String, List<String>>` | -- |
 
 ### GraphMergeLaws
@@ -159,6 +162,8 @@ Deletion of a non-existent entity is a no-op at the graph level.
 
 ## Caller Examples
 
+A subclass that owns tag `a` declares `override fun isEdgeVisible(edge: Edge): Boolean = edge.eTag == "a"` alongside its existing factories. On shared registered endpoints, an existing tag `b` edge is absent from its full, grouped and all-edge enumerations. A simple graph using that declaration may add the first tag `a` edge to those endpoints; another visible edge on the pair is rejected. A direct exact-tag operation still addresses the explicitly named structural triple.
+
 ```kotlin
 import edu.jhu.cobra.commons.graph.AbcEdge
 import edu.jhu.cobra.commons.graph.AbcMultipleGraph
@@ -178,13 +183,13 @@ class ExampleGraph : AbcMultipleGraph<ExampleNode, ExampleEdge>() {
     override val graphId = "example"
     override fun newNodeObj() = ExampleNode()
     override fun newEdgeObj() = ExampleEdge()
+    override fun isEdgeVisible(edge: ExampleEdge) = edge.eTag == "calls"
 }
 val graph = ExampleGraph()
 graph.addNode("a")
 graph.addNode("b")
 check(graph.addEdge("a", "b", "calls").dstNid == "b")
 ```
-
 
 ## Open Gaps
 
