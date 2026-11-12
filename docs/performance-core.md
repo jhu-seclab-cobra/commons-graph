@@ -4,7 +4,7 @@ Paired design: `design-storage.md`
 
 ## Current Baseline
 
-macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Median of 3-5 iterations after JIT warmup. Separate JVM per implementation. JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`. Int-keyed storage (identity-function hashCode). NativeStorageImpl uses columnar layout -- one `HashMap<Int, IValue>` per property name (O(K) columns, K << N), plus, per entity holding properties, the list of its column names, so a whole-row read or removal costs O(properties of the row) and not O(K) when K grows.
+macOS (Apple Silicon), Temurin 21.0.6+7-LTS, G1GC. Median of 3-5 iterations after JIT warmup. Separate JVM per implementation. JVM flags: `-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=32m -XX:InitiatingHeapOccupancyPercent=45`. Int-keyed storage (identity-function hashCode). NativeStorageImpl, NativeConcurStorageImpl and the active layer of LayeredStorageImpl keep one exactly sized array of names and values per entity holding properties (`RowProperties`), so a whole-row read or removal costs O(properties of the row), a named read scans the row's names, and no operation visits another entity's row.
 
 ```bash
 ./gradlew :jhu-seclab-cobra-commons-graph:test --tests "*.StoragePerformanceTest" -PincludePerformanceTests -Pbenchmark.impl=NativeStorageImpl --rerun

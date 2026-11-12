@@ -14,9 +14,9 @@ import kotlin.test.assertTrue
  * Black-box tests for LayeredStorageImpl: active-layer property reads and promoted-entity reads.
  *
  * - `getNodeProperties for active-only node returns its properties` -- active-only path
- * - `getNodeProperties get returns null when column exists but lacks entity` -- column miss
- * - `getNodeProperties containsKey returns false when column exists but lacks entity` -- column miss
- * - `getNodeProperties isEmpty returns true when columns exist but none contain entity` -- empty view
+ * - `getNodeProperties get returns null when another node holds the name` -- name miss
+ * - `getNodeProperties containsKey returns false when another node holds the name` -- name miss
+ * - `getNodeProperties isEmpty returns true when only other nodes hold properties` -- empty view
  * - `getNodeProperties size counts every property` -- property count
  * - `getEdgeProperties for active-only edge returns its properties` -- active-only edge path
  * - `promoted node with no new writes keeps frozen property count` -- copy-only size
@@ -50,16 +50,16 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `getNodeProperties get returns null when column exists but lacks entity`() {
+    fun `getNodeProperties get returns null when another node holds the name`() {
         val n1 = storage.addNode(mapOf("shared_col" to "val1".strVal))
         val n2 = storage.addNode()
-        // n2 has no properties, but "shared_col" column exists from n1
+        // n2 has no properties; only n1 holds "shared_col"
         val props = storage.getNodeProperties(n2)
         assertNull(props["shared_col"])
     }
 
     @Test
-    fun `getNodeProperties containsKey returns false when column exists but lacks entity`() {
+    fun `getNodeProperties containsKey returns false when another node holds the name`() {
         val n1 = storage.addNode(mapOf("col" to "val".strVal))
         val n2 = storage.addNode()
         val props = storage.getNodeProperties(n2)
@@ -67,7 +67,7 @@ internal class LayeredStorageImplPropertyViewTest {
     }
 
     @Test
-    fun `getNodeProperties isEmpty returns true when columns exist but none contain entity`() {
+    fun `getNodeProperties isEmpty returns true when only other nodes hold properties`() {
         val n1 = storage.addNode(mapOf("col" to "val".strVal))
         val n2 = storage.addNode()
         val props = storage.getNodeProperties(n2)

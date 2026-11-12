@@ -130,7 +130,7 @@ public abstract class AbcEdge : AbcEntity() {
 
     override fun contains(name: String): Boolean = storage.getEdgeProperty(storageId, name) != null
 
-    // Columnar storages return live views; copying here upholds the IEntity
+    // Some storages return live views; copying here upholds the IEntity
     // snapshot contract regardless of the backing storage.
     override fun asMap(): Map<String, IValue> = storage.getEdgeProperties(storageId).toMap()
 

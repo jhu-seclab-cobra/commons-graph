@@ -24,7 +24,7 @@ internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
     fun containsNode(id: Int): Boolean = active.containsNode(id) || frozen?.containsNode(id) == true
 
     fun nodeProperties(id: Int): Map<String, IValue> {
-        if (active.containsNode(id)) return active.nodeColumns.view(id)
+        if (active.containsNode(id)) return active.nodeRows.view(id)
         return frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
     }
 
@@ -33,13 +33,13 @@ internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
         name: String,
     ): IValue? =
         when {
-            active.containsNode(id) -> active.nodeColumns[id, name]
+            active.containsNode(id) -> active.nodeRows[id, name]
             frozen?.containsNode(id) == true -> frozen?.nodeProperty(id, name)
             else -> throw EntityNotExistException(id.toString())
         }
 
     // Writes always land in the active layer; a frozen node is promoted by copying
-    // its frozen properties into the active columns first.
+    // its frozen properties into its active row first.
     fun promoteNode(id: Int) {
         if (active.containsNode(id)) return
         val props = frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
@@ -74,7 +74,7 @@ internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
     }
 
     private fun activeEdgeProperties(id: Int): Map<String, IValue> {
-        if (id !in active.promotedEdgeEdits) return active.edgeColumns.view(id)
+        if (id !in active.promotedEdgeEdits) return active.edgeRows.view(id)
         return active.composePromotedEdgeProperties(id, checkNotNull(frozen?.edgeProperties(id)))
     }
 
@@ -103,7 +103,7 @@ internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
         id: Int,
         name: String,
     ): IValue? {
-        val edits = active.promotedEdgeEdits[id] ?: return active.edgeColumns[id, name]
+        val edits = active.promotedEdgeEdits[id] ?: return active.edgeRows[id, name]
         if (name in edits) return edits[name]
         val anchor = families().anchor(active.edgeEndpoints.getValue(id).tag, name)
         return if (anchor != null && anchor in edits) null else frozen?.edgeProperty(id, name)
@@ -114,7 +114,7 @@ internal class LayerStack(private val families: () -> EdgePropertyFamilies?) {
         name: String,
     ): IValue? {
         val edits = active.promotedEdgeEdits[id]
-        return if (edits == null) active.edgeColumns[id, name] else edits[name]
+        return if (edits == null) active.edgeRows[id, name] else edits[name]
     }
 
     fun edgeProperty(

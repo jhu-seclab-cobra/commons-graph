@@ -174,7 +174,7 @@ internal class LayeredStorageImplAdjacencyTest {
         storage.freeze()
         // Promote node to active layer by writing a different property
         storage.setNodeProperties(node, mapOf("active_key" to "active_val".strVal))
-        // Promotion copied "frozen_key" into the active columns; reads never leave the active copy
+        // Promotion copied "frozen_key" into the active row; reads never leave the active copy
         assertEquals("frozen_val", (storage.getNodeProperty(node, "frozen_key") as StrVal).core)
         assertEquals("active_val", (storage.getNodeProperty(node, "active_key") as StrVal).core)
         assertNull(storage.getNodeProperty(node, "nonexistent"))
@@ -188,7 +188,7 @@ internal class LayeredStorageImplAdjacencyTest {
         storage.freeze()
         // Promote edge to active layer by writing a different property
         storage.setEdgeProperties(edge, mapOf("active_key" to "active_val".strVal))
-        // Promotion copied "frozen_key" into the active columns; reads never leave the active copy
+        // Promotion copied "frozen_key" into the active row; reads never leave the active copy
         assertEquals("frozen_val", (storage.getEdgeProperty(edge, "frozen_key") as StrVal).core)
         assertEquals("active_val", (storage.getEdgeProperty(edge, "active_key") as StrVal).core)
         assertNull(storage.getEdgeProperty(edge, "nonexistent"))

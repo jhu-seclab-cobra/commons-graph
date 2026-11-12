@@ -135,10 +135,10 @@ internal class LayeredStorageImplSnapshotTest {
     }
 
     private companion object {
-        // Enough reads to hit a concurrent column insertion; unguarded views failed ~0.3% of reads.
+        // Enough reads to overlap many concurrent row writes.
         const val READS = 50_000
 
-        // Keeps the writer adding new columns, which rehashes the column map under a reader.
+        // Keeps the writer adding new names, which replaces the node's row and grows the name pool under a reader.
         const val DISTINCT_KEYS = 5_000
     }
 }

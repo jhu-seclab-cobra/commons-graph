@@ -11,7 +11,7 @@ import kotlin.concurrent.withLock
  *
  * Concurrent reads, exclusive writes. Suitable for read-heavy workloads.
  * Uses internal non-locking helpers to avoid lock re-entrance overhead.
- * Int-based keys throughout with columnar property storage.
+ * Int-based keys throughout; each node and edge keeps one row of its own property names and values.
  * Adjacency uses snapshot-on-demand: mutable sets for O(1) writes,
  * cached immutable snapshots for O(1) repeated reads (invalidated on write).
  *
@@ -28,17 +28,14 @@ public class NativeConcurStorageImpl : IStorage {
     private var nodeCounter: Int = 0
     private var edgeCounter: Int = 0
 
-    // Deduplicates property key strings across entities
-    private val keyPool = HashMap<String, String>()
-
-    // Columnar node property storage: one HashMap per property name (column); guarded by [lock]
-    internal val nodeColumns = ColumnarProperties(::internKey)
+    // Node property rows, with their name pool; every read and write holds [lock]
+    private val nodeRows = RowProperties()
 
     // Edge endpoint index (edge ID -> src, dst, tag)
     private val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
 
-    // Columnar edge property storage; guarded by [lock]
-    internal val edgeColumns = ColumnarProperties(::internKey)
+    // Edge property rows, with their name pool; every read and write holds [lock]
+    private val edgeRows = RowProperties()
 
     /**
      * Adjacency entry: mutable set for O(1) writes, cached snapshot for repeated reads.
@@ -79,18 +76,16 @@ public class NativeConcurStorageImpl : IStorage {
     private val metaProperties = HashMap<String, IValue>()
 
     // Internal helpers (callers must hold appropriate lock)
-    private fun internKey(key: String): String = keyPool.getOrPut(key) { key }
+    private fun collectNodeProperties(id: Int): Map<String, IValue> = nodeRows.collect(id)
 
-    private fun collectNodeProperties(id: Int): Map<String, IValue> = nodeColumns.collect(id)
-
-    private fun collectEdgeProperties(id: Int): Map<String, IValue> = edgeColumns.collect(id)
+    private fun collectEdgeProperties(id: Int): Map<String, IValue> = edgeRows.collect(id)
 
     private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
         edgeEndpoints.remove(eid)
-        edgeColumns.remove(eid)
+        edgeRows.remove(eid)
     }
 
     // ============================================================================
@@ -107,7 +102,7 @@ public class NativeConcurStorageImpl : IStorage {
             val id = nodeCounter++
             outEdges[id] = AdjEntry()
             inEdges[id] = AdjEntry()
-            nodeColumns.set(id, properties)
+            nodeRows.set(id, properties)
             id
         }
 
@@ -123,7 +118,7 @@ public class NativeConcurStorageImpl : IStorage {
     ): IValue? =
         lock.readLock().withLock {
             if (id !in outEdges) throw EntityNotExistException(id.toString())
-            nodeColumns[id, name]
+            nodeRows[id, name]
         }
 
     override fun setNodeProperties(
@@ -132,7 +127,7 @@ public class NativeConcurStorageImpl : IStorage {
     ): Unit =
         lock.writeLock().withLock {
             if (id !in outEdges) throw EntityNotExistException(id.toString())
-            nodeColumns.set(id, properties)
+            nodeRows.set(id, properties)
         }
 
     override fun deleteNode(id: Int): Unit =
@@ -144,7 +139,7 @@ public class NativeConcurStorageImpl : IStorage {
             for (eid in inEdgeIds) deleteIncidentEdge(eid)
             outEdges.remove(id)
             inEdges.remove(id)
-            nodeColumns.remove(id)
+            nodeRows.remove(id)
         }
 
     // ============================================================================
@@ -169,7 +164,7 @@ public class NativeConcurStorageImpl : IStorage {
             edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
             outEdges.getValue(src).add(id)
             inEdges.getValue(dst).add(id)
-            edgeColumns.set(id, properties)
+            edgeRows.set(id, properties)
             id
         }
 
@@ -190,7 +185,7 @@ public class NativeConcurStorageImpl : IStorage {
     ): IValue? =
         lock.readLock().withLock {
             if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-            edgeColumns[id, name]
+            edgeRows[id, name]
         }
 
     override fun setEdgeProperties(
@@ -199,7 +194,7 @@ public class NativeConcurStorageImpl : IStorage {
     ): Unit =
         lock.writeLock().withLock {
             if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-            edgeColumns.set(id, properties)
+            edgeRows.set(id, properties)
         }
 
     override fun deleteEdge(id: Int): Unit =
@@ -254,10 +249,9 @@ public class NativeConcurStorageImpl : IStorage {
             outEdges.clear()
             inEdges.clear()
             edgeEndpoints.clear()
-            edgeColumns.clear()
-            nodeColumns.clear()
+            edgeRows.clear()
+            nodeRows.clear()
             metaProperties.clear()
-            keyPool.clear()
             nodeCounter = 0
             edgeCounter = 0
         }

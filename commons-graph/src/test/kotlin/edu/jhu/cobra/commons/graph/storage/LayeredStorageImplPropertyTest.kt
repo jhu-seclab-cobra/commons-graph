@@ -28,8 +28,8 @@ import kotlin.test.assertTrue
  * - `getEdgeStructure throws EntityNotExistException for absent edge` -- missing entity
  * - `getIncomingEdges throws EntityNotExistException for absent node` -- missing entity
  * - `getOutgoingEdges throws EntityNotExistException for absent node` -- missing entity
- * - `setNodeProperties with null removes last property and cleans column` -- column cleanup
- * - `setEdgeProperties with null removes last property and cleans column` -- column cleanup
+ * - `setNodeProperties with null removes last property and empties the row` -- row cleanup
+ * - `setEdgeProperties with null removes last property and empties the row` -- row cleanup
  * - `setEdgeProperties on frozen edge avoids full row` -- one-cell promotion does not copy unrelated properties
  * - `promoted edge point layers preserve inheritance` -- exact layers, deletion, revert and freeze agree
  * - `promoted edge transfer composes edits` -- a copied row includes inherited values and explicit deletion
@@ -142,7 +142,7 @@ internal class LayeredStorageImplPropertyTest {
     // region Property null-delete cleanup
 
     @Test
-    fun `setNodeProperties with null removes last property and cleans column`() {
+    fun `setNodeProperties with null removes last property and empties the row`() {
         val node = storage.addNode(mapOf("only" to "v".strVal))
         storage.setNodeProperties(node, mapOf("only" to null))
         assertNull(storage.getNodeProperty(node, "only"))
@@ -150,7 +150,7 @@ internal class LayeredStorageImplPropertyTest {
     }
 
     @Test
-    fun `setEdgeProperties with null removes last property and cleans column`() {
+    fun `setEdgeProperties with null removes last property and empties the row`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val edge = storage.addEdge(n1, n2, "rel", mapOf("only" to "v".strVal))

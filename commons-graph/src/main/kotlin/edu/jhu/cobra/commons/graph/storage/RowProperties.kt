@@ -3,23 +3,27 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.value.IValue
 
 /**
- * Row property store of one entity kind: each entity with properties holds one exactly sized
- * array of its own names and values, `[name0, value0, name1, value1, ...]`, in the order the names
- * were first set. An entity without properties has no row. Names are kept once per store, so rows
- * share one String per name.
+ * Property rows of one entity kind, shared by [NativeStorageImpl], [NativeConcurStorageImpl], and the
+ * active layer of [LayeredStorageImpl].
  *
- * A row read, an emptiness check and an entity removal touch only that entity's row; a named read
- * scans the row's names.
+ * Each entity with properties holds one exactly sized array of its own names and values,
+ * `[name0, value0, name1, value1, ...]`, in the order the names were first set; a name deleted and
+ * set again moves to the end. An entity without properties has no row. Every read and write of an
+ * entity looks up that entity's row once and never visits another row; a named read scans the
+ * row's names.
  *
- * Not thread-safe; the owning storage guards every call.
+ * The store keeps one instance per property name, so rows share one String per name. The name pool
+ * keeps every name ever set until [clear], so it holds at most the distinct property names of the
+ * store.
  *
- * @param internKey maps a new property name to the instance the store keeps (identity by default).
+ * Not thread-safe; the owning storage guards every call, the name pool included.
+ *
+ * @param rows the row table, keyed by entity id (a test passes a counting map).
  */
 internal class RowProperties(
-    private val internKey: (String) -> String = { it },
+    private val rows: HashMap<Int, Array<Any?>> = HashMap(),
 ) {
     private val names = HashMap<String, String>()
-    private val rows = HashMap<Int, Array<Any?>>()
 
     /** The value of property [name] of entity [id], or null. */
     operator fun get(
@@ -54,7 +58,8 @@ internal class RowProperties(
 
     /**
      * Applies property updates for [id]. Non-null values are set; null values delete the property.
-     * Takes O(names of the row) per updated name and one row copy when a name is added or deleted.
+     * Takes O(properties of the row) per updated name and one row copy per deleted name and per
+     * call that adds a name.
      */
     fun set(
         id: Int,
@@ -67,8 +72,8 @@ internal class RowProperties(
         for ((name, value) in properties) {
             val at = if (row == null) -1 else indexOf(row, name, row.size)
             when {
-                value == null -> if (at >= 0) row = without(row!!, at)
-                at >= 0 -> row!![at + 1] = value
+                value == null -> if (at >= 0) row = without(checkNotNull(row), at)
+                at >= 0 -> checkNotNull(row)[at + 1] = value
                 else -> added++
             }
         }
@@ -77,10 +82,9 @@ internal class RowProperties(
         if (row == null || row.isEmpty()) rows.remove(id) else rows[id] = row
     }
 
-    /** Snapshots all properties of entity [id] into a plain map. */
+    /** Snapshots all properties of entity [id] into a plain map, in first-set order. */
     fun collect(id: Int): Map<String, IValue> {
-        val row = rows[id] ?: return HashMap()
-        val result = HashMap<String, IValue>(row.size)
+        val result = LinkedHashMap<String, IValue>()
         copyInto(id, result)
         return result
     }
@@ -96,19 +100,6 @@ internal class RowProperties(
     fun clear() {
         rows.clear()
         names.clear()
-    }
-
-    /**
-     * Throws [IllegalStateException] when a row is empty, lists a name twice, or holds a name
-     * instance other than the store's.
-     */
-    fun checkRows() {
-        for ((id, row) in rows) {
-            check(row.isNotEmpty()) { "Entity $id has an empty row" }
-            val rowNames = row.indices.step(2).map { row[it] as String }
-            check(rowNames.size == rowNames.toSet().size) { "Entity $id lists a name twice: $rowNames" }
-            for (name in rowNames) check(names[name] === name) { "Entity $id holds a name the store does not keep" }
-        }
     }
 
     // Index of [name] among the names of [row] before [end], or -1.
@@ -131,7 +122,7 @@ internal class RowProperties(
         return result
     }
 
-    // [row] grown by the [added] non-null names of [properties] it does not hold.
+    // [row] grown by the [added] names with non-null values in [properties] that it does not hold.
     private fun withAdded(
         row: Array<Any?>?,
         properties: Map<String, IValue?>,
@@ -142,7 +133,7 @@ internal class RowProperties(
         var next = old
         for ((name, value) in properties) {
             if (value == null || indexOf(result, name, old) >= 0) continue
-            result[next++] = names.getOrPut(name) { internKey(name) }
+            result[next++] = names.getOrPut(name) { name }
             result[next++] = value
         }
         return result
@@ -151,8 +142,8 @@ internal class RowProperties(
 
 /**
  * Lazy read-only map view over one entity's properties in a [RowProperties] store.
- * Entries are materialized once on first access and cached; size and emptiness reuse the cache
- * when present.
+ * `get` and `containsKey` read the row on each call; entries are materialized once on first access,
+ * in first-set order, and cached; size and emptiness reuse the cache when present.
  */
 internal class RowViewMap(
     private val entityId: Int,

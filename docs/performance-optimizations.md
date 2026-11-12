@@ -13,16 +13,16 @@ Optimization log for core module. Benchmarks in [performance-core.md](performanc
 | I5 | AbcMultipleGraph | Remove edgeIndex; findEdge via adjacency scan | ~600 MB saved at 1M nodes |
 | I6 | AbcMultipleGraph | Withdrawn: BFS read storage adjacency directly | The walk reads the typed edge queries instead (spec-graph.md BFS Traversal) |
 | I7 | AbcEdge | labels uses direct StrVal cast | Avoids toString() + intermediate list |
-| I8 | NativeStorageImpl | Columnar node properties | Memory -6%, incoming +97%, delete +50% |
+| I8 | RowProperties | One exactly sized row of names and values per entity, in every in-memory storage | Retained heap per entity against one column per property name, 200K nodes + 200K edges with k properties each (NativeStorageImpl): k=0 -4%, k=1 +13%, k=3 -7%, k=6 -25%; a row read and a row removal visit only that row |
 | I9 | NativeConcurStorageImpl | Set.copyOf() snapshot properties | Compact array-backed snapshots |
 | I12 | NativeConcurStorageImpl | Snapshot-on-demand adjacency | Outgoing +683%, incoming +831% |
-| I14 | NativeStorageImpl | ColumnViewMap.entries lazy cache | Eliminates repeated allocation |
+| I14 | NativeStorageImpl | RowViewMap.entries lazy cache | Eliminates repeated allocation |
 | I15 | AbcNode | hashCode() avoids toString() | Cold getNode +270% |
 | I16 | NativeStorageImpl | Eliminate double HashMap lookup | Outgoing +15%, incoming +10% |
 | I17 | AbcMultipleGraph | Label.changes avoids intermediate list | One less allocation per read/write |
 | I18 | LayeredStorageImpl | MappedEdgeSet.contains() O(1) | Outgoing +29%, incoming +21% |
 | I19 | LayeredStorageImpl | Frozen edge structure cache | Eliminates repeated translation |
-| I20 | LayeredStorageImpl | ColumnViewMap entries cache | Matches I14 pattern |
+| I20 | LayeredStorageImpl | RowViewMap entries cache | Matches I14 pattern |
 | I21 | LayeredStorageImpl | Eliminate double HashMap lookups | One fewer lookup per query |
 | I22 | PosetDftImpl | Memoized ancestor closure for O(1) compare | O(1) ancestor check; one row added per new label, rebuilt only when a label with children changes parents; DAG-correct (spec-poset.md) |
 
@@ -57,7 +57,7 @@ Cold 29.73M vs warm 57.60M (1.9x). Reduced from 3.2x by I4. Proposed: eliminate 
 ## Key Insights
 
 1. **NativeStorageImpl is fastest single-threaded.** Property read 51M, edge queries 102M/106M.
-2. **Columnar storage reduces memory and improves GC paths.** O(K) columns vs O(N) maps.
+2. **Per-entity rows bound every property operation by the entity's own properties.** A row read, an emptiness check and a removal look up one row and visit no other; with 3 or more properties per entity the rows take less heap than one column per property name, and with 1 property they take one array per entity more.
 3. **LayeredStorage property read approaches NativeStorage in single-layer mode.**
 4. **Cold vs warm gap ~2x.** Down from 3.2x via `AbcNode.hashCode()` fix (I15).
 5. **findEdge via storage adjacency scan — O(out-degree).** Replaced 3-layer nested HashMap. ~600 MB saved at 1M nodes.

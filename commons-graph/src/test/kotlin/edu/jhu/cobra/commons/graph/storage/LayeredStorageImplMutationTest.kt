@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
  * - `transferTo copies nodes and edges from both layers` -- frozen present
  * - `transferTo copies metadata from both layers` -- metadata transfer
  * - `transferTo same instance throws IllegalArgumentException` -- self-transfer guard
- * - `deleteNode removes incident edges and cleans up edge columns` -- edge column cleanup
+ * - `deleteNode removes incident edges and their properties` -- edge row cleanup
  * - `deleteNode with no incident edges succeeds` -- empty outSet/inSet
  */
 internal class LayeredStorageImplMutationTest {
@@ -217,10 +217,10 @@ internal class LayeredStorageImplMutationTest {
 
     // endregion
 
-    // region Edge deletion and column cleanup
+    // region Edge deletion and row cleanup
 
     @Test
-    fun `deleteNode removes incident edges and cleans up edge columns`() {
+    fun `deleteNode removes incident edges and their properties`() {
         val n1 = storage.addNode()
         val n2 = storage.addNode()
         val n3 = storage.addNode()

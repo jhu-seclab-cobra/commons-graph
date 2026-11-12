@@ -6,7 +6,7 @@
 - **Relationships**: `NativeStorageImpl` implements `IStorage`; `NativeConcurStorageImpl` implements `IStorage`; `IRevertibleStorage` extends `IStorage`; `LayeredStorageImpl` implements `IRevertibleStorage` (composes an internal `ActiveLayer` + at most one `FrozenLayer` wrapping a frozen `IStorage`) and notifies registered `RevertListener`s
 - **Abstract**: `IStorage` (implemented by all storage types); `IRevertibleStorage` (implemented by `LayeredStorageImpl`); `RevertListener` (implemented by graph and poset caches); per-backend bases `AbcJgraphtStorage`, `AbcMapDBStorage`, `AbcNeo4jStorage` (each extended by a plain and a concurrent subclass)
 - **Exceptions**: `GraphException` (abstract base for all graph-layer failures); `EntityNotExistException` raised on missing entity access; `FrozenLayerModificationException` raised when deleting a frozen-layer node
-- **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (composes internal `ActiveLayer` + at most one `FrozenLayer`). Helpers: `ColumnarProperties` (internal — the columnar property store of one entity kind: one column per property name, and for each entity the names of the columns that hold it, kept equal to the columns by every set, delete, row removal and clear; a row read and a row removal visit only the entity's own columns, so their cost is O(properties of the row) whatever the number of columns; the owning storage guards it).
+- **Dependency roles**: Data holders: `EdgeStructure`. Orchestrator: `IStorage` implementations. Composer: `LayeredStorageImpl` (composes internal `ActiveLayer` + at most one `FrozenLayer`). Helpers: `RowProperties` (internal — the property store of one entity kind: each entity with properties holds one exactly sized row of its own names and values in first-set order, and an entity without properties holds no row; every read and write of an entity looks up that entity's row once and never visits another row, so a row read and a row removal cost O(properties of the row) and a named read scans the row's names; the store keeps one instance per property name in a name pool; the owning storage guards every call, the name pool included).
 
 The storage layer is the **backend-agnostic directed property graph engine**. It manages nodes and edges identified by auto-generated `Int` IDs, per-node and per-edge properties, adjacency indices (incoming/outgoing edge sets per node), edge structural metadata (source, destination, tag), and graph-level metadata. It does not know about domain types (`Label`).
 
@@ -22,7 +22,7 @@ Persistent backends persist graph-level metadata with the same lifetime as entit
 
 ### IStorage
 
-**Responsibility:** Minimum capability contract for all storage backends. All entity IDs are auto-generated `Int` values. Extends `Flushable` for persistent backends.
+**Responsibility:** Minimum capability contract for all storage backends. All entity IDs are auto-generated `Int` values. Extends `Flushable` for persistent backends. `IStorage` promises no iteration order for the maps `getNodeProperties` and `getEdgeProperties` return. `NativeStorageImpl` and `NativeConcurStorageImpl` iterate an entity's properties in the order their names were first set; a name deleted and set again moves to the end. `LayeredStorageImpl` promises no order for any of its property reads.
 
 **Methods:**
 
@@ -101,7 +101,7 @@ interface IStorage : Flushable {
 
 ### NativeStorageImpl
 
-**Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op. Optional fixed projection: [exact adjacency access](design-exact-adjacency.md), also supported by `LayeredStorageImpl`.
+**Responsibility:** Pure in-memory `IStorage` implementation. Not thread-safe. `flush()` is a no-op. Optional fixed projection: [exact adjacency access](design-exact-adjacency.md), also supported by `LayeredStorageImpl`. **Name pool:** each `RowProperties` store keeps every property name set since its last `clear` and gives every row the same `String` instance for one name; a name stays in the pool after the last row holding it drops it. The pool therefore holds at most the distinct property names written into the store since its last `clear`: for `NativeStorageImpl` and `NativeConcurStorageImpl` since their last `clear()`, for the active layer of `LayeredStorageImpl` since the last `freeze`, `clearActiveLayer` or `clear`, and a frozen layer is a new storage built at each `freeze`. A program bounds it by the distinct property names its analysis writes.
 
 ---
 
@@ -109,8 +109,8 @@ interface IStorage : Flushable {
 
 **Responsibility:** Thread-safe in-memory `IStorage` with `ReentrantReadWriteLock`. `flush()` is a no-op.
 
-- Multiple concurrent reads allowed (read lock)
-- Writes are exclusive (write lock)
+- Multiple concurrent reads allowed (read lock); a property read returns a copy taken under the read lock, in first-set order
+- Writes are exclusive (write lock); only writes add names to the name pool, so every read and write of the property rows and the name pool holds the lock
 - `nodeIDs` and `edgeIDs` return snapshot copies for thread safety
 - `criticalSectionLock` is the write lock
 
@@ -138,7 +138,7 @@ interface IStorage : Flushable {
 
 **Layer snapshots:** One private nullable declaration slot in `LayeredStorageImpl` supplies a stable accessor to `LayerStack` and `ActiveLayer`; each point or fold captures it once under the storage lock. Family selection follows [Property families](design-storage-families.md). `getEdgeProperties(id, layer: StorageLayer): Map<String, IValue>?` (concrete class method) returns a copy of one edge's whole property map as one layer holds it, taken under one read lock, so labels and payload belong to the same write. `StorageLayer.VISIBLE` is the ordinary view (null when the edge is absent or tombstoned); `ACTIVE` returns the complete image of an added or promoted edge (null when neither was added nor written since the last `freeze` or `clearActiveLayer`); `FROZEN` returns the frozen row (null when the edge is not frozen) and ignores tombstones. `getEdgeProperty(id, name, layer)` reads one named property under the same lock without collecting a row: `VISIBLE` resolves explicit active edits over frozen values, `ACTIVE` returns only a name explicitly written since the last freeze on a promoted edge, and `FROZEN` reads the frozen value even behind a tombstone. An id that no layer knows is null in every layer, never an exception.
 
-**Internal composition:** `LayerStack` (internal; holds the two layers and resolves every unlocked read over them: ordinary `IStorage` reads use active edits before frozen values and tombstones hide frozen edges); `ActiveLayer` (mutable columnar properties for active-only entities, sparse named edits and deletion markers for promoted frozen edges, endpoints, adjacency, meta and tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`ColumnViewMap` over one entity's column names, shared with the native backends, `MappedEdgeSet`, `UnionSet`) implement active-only property reads, frozen-edge ID translation, and cross-layer adjacency union inside the lock; a public collection read copies the view's contents before releasing it.
+**Internal composition:** `LayerStack` (internal; holds the two layers and resolves every unlocked read over them: ordinary `IStorage` reads use active edits before frozen values and tombstones hide frozen edges); `ActiveLayer` (mutable property rows for active-only and promoted nodes and active-only edges, sparse named edits and deletion markers for promoted frozen edges, endpoints, adjacency, meta and tombstones — global IDs); `FrozenLayer` (immutable snapshot wrapping a frozen `IStorage`, owns global↔local ID maps, built by its companion merge builder during `freeze`); lazy view types (`RowViewMap` over one entity's row, shared with `NativeStorageImpl`, `MappedEdgeSet`, `UnionSet`) implement active-only property reads, frozen-edge ID translation, and cross-layer adjacency union inside the lock; a public collection read copies the view's contents before releasing it.
 
 See `spec-graph.md` for layered query resolution (active-authoritative property reads, adjacency merge, promotion writes) and `model.md` for layered storage invariants.
 
