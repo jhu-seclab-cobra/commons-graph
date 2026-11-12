@@ -13,6 +13,8 @@ They accept directed graphs as maps of nodes to their outgoing neighbours, witho
 labels or a storage backend. Their names and input types differ because `tarjanScc` accepts any key type,
 while `immediateDominators` uses the library's `NodeID`.
 
+Algorithm steps and bounds: [Graph algorithms](spec-algorithm.md).
+
 ## Class / Type Specifications
 
 ### `TarjanSearch<K>` (private)

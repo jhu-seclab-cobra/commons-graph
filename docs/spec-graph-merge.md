@@ -22,7 +22,11 @@ Given the base label set and the label changes of several writers, find the merg
 
 ### Termination
 
-One pass over the writers. Time O(W * L) for W writers and L labels per image.
+One finite pass over W writers and their finite label sets.
+
+### Complexity
+
+Expected O((W + 1) * L) time and space for at most L labels per image, the base included, assuming constant-time label hashing and set operations.
 
 ## Owner Union
 
@@ -43,7 +47,11 @@ Given the base owner set and the owner sets of several writers, find the merged 
 
 ### Termination
 
-One pass over the writers. Time O(W * S) for owner sets of size S.
+One finite pass over W writers and their finite owner sets.
+
+### Complexity
+
+Expected O((W + 1) * S) time and space for at most S owners per image, the base included, assuming constant-time owner hashing and set operations.
 
 ## Property Merge
 
@@ -69,7 +77,11 @@ Given the base value of one property and the changes of several writers, find th
 
 ### Termination
 
-One pass over the writers. Time O(W).
+One finite pass over W writers.
+
+### Complexity
+
+Expected O(1 + W * C) time and O(W) auxiliary space for Value hash/equality cost C; a Value may contain an unbounded collection, so C is not assumed constant.
 
 ## Edge Coalescing
 
@@ -91,4 +103,8 @@ Given prospective edge additions, already translated to final node IDs and tags,
 
 ### Termination
 
-One pass over the present edges and one over the coalesced edges. For P present edges, A additions and at most K declarations per edge (K >= 1), time is O((P + A) * K) and auxiliary space is O(A + (P + A) * K), assuming bounded key size and constant-time expected hash operations.
+One finite pass over the present edges and one over the coalesced edges.
+
+### Complexity
+
+For P present edges, A additions and at most K declarations per edge (K >= 1), time is O((P + A) * K) and auxiliary space is O(A + (P + A) * K), assuming bounded key size and constant-time expected hash operations.

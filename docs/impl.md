@@ -2,52 +2,53 @@
 
 ## APIs
 
-### commons-value 0.1.1
+### commons-value 0.2.0
 
-**[IValue]** Top-level value type interface; subtypes: `NullVal`, `StrVal`, `IntVal`, `FloatVal`, `ListVal`, `SetVal`, `MapVal`.
-**[StrVal]** `StrVal(core: String)` / `"text".strVal` -- string value.
-**[IntVal]** `IntVal(core: Long)` / `42.intVal` -- integer value (Int/Long stored as Long).
-**[FloatVal]** `FloatVal(core: Double)` / `3.14.floatVal` -- floating-point value (Float/Double stored as Double).
-**[ListVal]** `ListVal(vararg vals)` / `listOf(v1, v2).listVal` -- ordered list value.
-**[SetVal]** Duplicate-free set value.
-**[MapVal]** Key-value mapping value; `add(key, value)` is mutable.
-**[NullVal]** Null value -- distinct from Kotlin `null` (`NullVal` = "present but empty"; `null` = key absent).
-**[DftByteArraySerializerImpl]** `serialize(value): ByteArray` / `deserialize(bytes): IValue` -- binary serializer for MapDB/Neo4j.
-**[DftCharBufferSerializerImpl]** `serialize(value): CharBuffer` / `deserialize(buf): IValue` -- text serializer for GML/CSV IO.
-**[ListVal?.orEmpty()]** / **[SetVal?.orEmpty()]** / **[MapVal?.orEmpty()]** -- returns empty collection value for `null`.
+- **[IValue]** `import edu.jhu.cobra.commons.value.IValue` — Top-level value type interface; subtypes: `NullVal`, `StrVal`, `IntVal`, `FloatVal`, `ListVal`, `SetVal`, `MapVal`.
+- **[StrVal]** `import edu.jhu.cobra.commons.value.StrVal` — `StrVal(core: String)` / `"text".strVal` -- string value.
+- **[IntVal]** `import edu.jhu.cobra.commons.value.IntVal` — `IntVal(core: Long)` / `42.intVal` -- integer value (Int/Long stored as Long).
+- **[FloatVal]** `import edu.jhu.cobra.commons.value.FloatVal` — `FloatVal(core: Double)` / `3.14.floatVal` -- floating-point value (Float/Double stored as Double).
+- **[ListVal]** `import edu.jhu.cobra.commons.value.ListVal` — `ListVal(vararg vals)` / `listOf(v1, v2).listVal` -- ordered list value.
+- **[SetVal]** `import edu.jhu.cobra.commons.value.SetVal` — Duplicate-free set value.
+- **[MapVal]** `import edu.jhu.cobra.commons.value.MapVal` — Key-value mapping value; `put(key, value)` and indexed assignment mutate the map.
+- **[NullVal]** `import edu.jhu.cobra.commons.value.NullVal` — Null value -- distinct from Kotlin `null` (`NullVal` = "present but empty"; `null` = key absent).
+- **[DftByteArraySerializerImpl]** `import edu.jhu.cobra.commons.value.serializer.DftByteArraySerializerImpl` — `serialize(value): ByteArray` / `deserialize(bytes): IValue` -- binary serializer for MapDB/Neo4j.
+- **[DftCharBufferSerializerImpl]** `import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl` — `serialize(value): CharBuffer` / `deserialize(buf): IValue` -- text serializer for GML/CSV IO.
+- **[commons-value]** `import edu.jhu.cobra.commons.value.orEmpty` — `ListVal?.orEmpty()` / `SetVal?.orEmpty()` / `MapVal?.orEmpty()` -- returns empty collection value for `null`.
 
 ### JGraphT 1.5.3
 
-**[DirectedPseudograph]** `DirectedPseudograph(String::class.java)` -- allows self-loops and parallel edges; used by `JgraphtStorageImpl`.
-**[Graph]** `addVertex(v)` / `removeVertex(v)` / `addEdge(src, dst, edge)` / `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` -- O(1) adjacency.
-**[GmlExporter]** / **[GmlImporter]** -- GML IO with attribute providers/consumers.
-**[SupplierUtil]** `createIntegerSupplier()` / `createStringSupplier()` -- auto-incrementing suppliers for GML IO.
+- **[DirectedPseudograph]** `import org.jgrapht.graph.DirectedPseudograph` — `DirectedPseudograph(String::class.java)` -- allows self-loops and parallel edges; used by `JgraphtStorageImpl`.
+- **[Graph]** `import org.jgrapht.Graph` — `addVertex(v)` / `removeVertex(v)` / `addEdge(src, dst, edge)` / `incomingEdgesOf(v)` / `outgoingEdgesOf(v)` -- O(1) adjacency.
+- **[GmlExporter]** `import org.jgrapht.nio.gml.GmlExporter` — GML export with attribute providers.
+- **[GmlImporter]** `import org.jgrapht.nio.gml.GmlImporter` — GML import with attribute consumers.
+- **[SupplierUtil]** `import org.jgrapht.util.SupplierUtil` — `createIntegerSupplier()` / `createStringSupplier()` -- auto-incrementing suppliers for GML IO.
 
 ### MapDB 3.1.0
 
-**[DBMaker]** `memoryDB()` / `fileDB(file)` -- config: `concurrencyDisable()`, `fileMmapEnableIfSupported()`, `closeOnJvmShutdown()`, `make()`.
-**[DB]** `hashMap(name, keySerializer, valueSerializer)` / `indexTreeList(name)` -- `.createOrOpen()` / `.create()`, `.counterEnable()` makes `size` O(1).
-**[Serializer]** `STRING` / `BYTE_ARRAY` -- custom: `serialize(DataOutput2, T)` / `deserialize(DataInput2, Int): T`.
+- **[DBMaker]** `import org.mapdb.DBMaker` — `memoryDB()` / `fileDB(file)` -- config: `concurrencyDisable()`, `fileMmapEnableIfSupported()`, `closeOnJvmShutdown()`, `make()`.
+- **[DB]** `import org.mapdb.DB` — `hashMap(name, keySerializer, valueSerializer)` / `indexTreeList(name)` -- `.createOrOpen()` / `.create()`, `.counterEnable()` makes `size` O(1).
+- **[Serializer]** `import org.mapdb.Serializer` — `STRING` / `BYTE_ARRAY` -- custom: `serialize(DataOutput2, T)` / `deserialize(DataInput2, Int): T`.
 
 ### Neo4j 2026.08.0
 
-**[DatabaseManagementServiceBuilder]** `DatabaseManagementServiceBuilder(path).build()` -- creates `DatabaseManagementService`.
-**[GraphDatabaseService]** `database.beginTx()` -- all reads and writes require a transaction since Neo4j 5.x.
-**[Transaction]** `tx.commit()` / `tx.close()` / `tx.findNode(label, key, value)` / `tx.createNode(label)`.
-**[Node]** `setProperty` / `getProperty` / `getRelationships(Direction)` / `delete()` / `createRelationshipTo(other, type)`.
-**[Relationship]** `delete()` / `startNode` / `endNode` / `type`.
+- **[DatabaseManagementServiceBuilder]** `import org.neo4j.dbms.api.DatabaseManagementServiceBuilder` — `DatabaseManagementServiceBuilder(path).build()` -- creates `DatabaseManagementService`.
+- **[GraphDatabaseService]** `import org.neo4j.graphdb.GraphDatabaseService` — `database.beginTx()` -- all reads and writes require a transaction.
+- **[Transaction]** `import org.neo4j.graphdb.Transaction` — `tx.commit()` / `tx.close()` / `tx.findNode(label, key, value)` / `tx.createNode(label)`.
+- **[Node]** `import org.neo4j.graphdb.Node` — `setProperty` / `getProperty` / `getRelationships(Direction)` / `delete()` / `createRelationshipTo(other, type)`.
+- **[Relationship]** `import org.neo4j.graphdb.Relationship` — `delete()` / `startNode` / `endNode` / `type`.
 
 ## Libraries
 
-- `com.github.jhu-seclab-cobra:commons-value:0.1.1` -- `IValue` type system, serializers
-- `org.jgrapht:jgrapht-core:1.5.3` -- graph data structures
-- `org.jgrapht:jgrapht-io:1.5.3` -- GML import/export
-- `org.mapdb:mapdb:3.1.0` -- embedded off-heap storage
-- `org.neo4j:neo4j:2026.08.0` -- embedded graph database
+- `com.github.jhu-seclab-cobra:commons-value:0.2.0` -- `IValue` type system and serializers; alias `libs.cobra.commons.value`
+- `org.jgrapht:jgrapht-core:1.5.3` -- graph data structures; alias `libs.jgrapht.core`
+- `org.jgrapht:jgrapht-io:1.5.3` -- GML import/export; alias `libs.jgrapht.io`
+- `org.mapdb:mapdb:3.1.0` -- embedded off-heap storage; alias `libs.mapdb.core`
+- `org.neo4j:neo4j:2026.08.0` -- embedded graph database; alias `libs.neo4j.core`
 
 ## Developer Instructions
 
-- `MapVal.add(key, value)` is mutable; in MapDB off-heap storage, re-`put` after modification.
+- `MapVal.put(key, value)` mutates the map; in MapDB off-heap storage, re-`put` after modification.
 - `incomingEdgesOf` / `outgoingEdgesOf` return internal Set references; copy before modification.
 - `getAllEdges(from, to)` returns `null` when a vertex does not exist; validate before calling.
 - `removeVertex(id)` automatically removes all incident edges.

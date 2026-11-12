@@ -10,9 +10,7 @@ no covering; `labels(e)` is the stored label set `AbcEdge.storedLabels`
 throughout this spec), and move `L` to another label on those edges or add another
 label beside it. Callers copy a label once per control-flow merge, and a
 merge can repeat for the same label; a full edge scan per call costs O(|E|)
-and makes a whole analysis quadratic. Lookup must cost O(carriers(L)), not
-O(|E|), and a repeated copy must cost O(edges recorded under `L` since the
-previous copy), not O(carriers(L)).
+and makes a whole analysis quadratic. After the initial build, lookup costs O(candidates(L)), including retained edges that lost `L`; a repeated copy reads only candidates recorded under `L` since the previous cursor.
 
 ## State
 
@@ -94,8 +92,7 @@ not bring it back by itself; a caller that needs those cases copies from
 - A revert can expose an edge again after a query dropped it, or after a build
   that ran while it was hidden. The notice names every restored edge and
   Restore re-records its labels, so completeness holds across a revert.
-- Dropping a nonexistent edge is safe: storage IDs are never reused within one
-  storage lifetime.
+- Dropping a nonexistent edge is safe: storage IDs are not reused between clear calls, and the graph is discarded after clear.
 - `carriers(L)` equals `{e ∈ E | L ∈ labels(e)}`: the query verifies every
   candidate against storage.
 - Every edge that still exists and was recorded under `L` after record `s`
@@ -129,21 +126,4 @@ extend the iteration.
   `s` visits each record of `from` once in total; the first copy, with `s = 0`,
   visits every candidate. Each entry adds one record number to memory.
 
-## Rejected alternatives
-
-- **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
-- **Full candidate scan per copy**: O(|candidates(from)|) per merge; a label
-  copied once per arrival of each nested branch rescans its earlier carriers
-  each time.
-- **Cursor kept by the index per `(from, to)` pair**: the index would hold
-  caller state that the caller's `cond` and its own run boundaries decide.
-- **Append-only record log per label**: every repeated record of one edge
-  stays in the log, so a first copy visits each edge once per record instead
-  of once.
-- **Exact index (remove on relabel)**: needs a removal record per relabel; the
-  superset keeps relabel and restore at O(1) per assignment.
-- **Traversal-local write log**: misses carriers written before the current
-  traversal under the same deterministic label.
-- **Candidates keyed by `(src, dst, tag)`**: the graph-level identity survives
-  a delete and re-add while the storage ID does not; the stale entry shadows
-  the re-added edge, and the query drops both.
+Rationale: [concept](concept.md#label-carrier-queries).

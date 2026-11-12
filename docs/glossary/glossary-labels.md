@@ -22,12 +22,12 @@ Labels: the markers that scope edge visibility, their two bounds, and the partia
 - **Is a:** `Label`
 - **Definition:** The greatest lower bound of every Label hierarchy, below every other label: an edge that carries it is visible under every label, and a query under it sees only the edges that carry it.
 - **Example:** `graph.addEdge("a", "b", "seed", Label.INFIMUM)` → the edge `(a, b, seed)` is visible to a query under `ctx` and under every other label.
-- **Source:** `poset/Label.kt` `Label.INFIMUM`; `poset/PosetDftImpl.kt` `PosetDftImpl.compare`; `docs/model.md` Label, Edge Visibility Rule
+- **Source:** `poset/Label.kt` `Label` `INFIMUM`; `poset/PosetDftImpl.kt` `PosetDftImpl` `compare`; `docs/model.md` Label, Edge Visibility Rule
 - **Reference:** none
 
 ### `Label.SUPREMUM`
 - **Is a:** `Label`
 - **Definition:** The least upper bound of every Label hierarchy, above every other label: a query under it applies no label filter and sees every edge, labeled or not.
 - **Example:** `graph.getOutgoingEdges("a", Label.SUPREMUM)` → every outgoing edge of `a`.
-- **Source:** `poset/Label.kt` `Label.SUPREMUM`; `poset/PosetTrait.kt` `PosetTrait.getOutgoingEdges`
+- **Source:** `poset/Label.kt` `Label` `SUPREMUM`; `poset/PosetTrait.kt` `PosetTrait` `getOutgoingEdges`
 - **Reference:** none

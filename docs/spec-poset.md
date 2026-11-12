@@ -1,6 +1,6 @@
 # Algorithm Specification — Poset Queries
 
-Ancestor queries in the label hierarchy resolve through a memoized ancestor
+Ancestor queries in the Label hierarchy resolve through a memoized ancestor
 closure, correct on arbitrary DAGs. Label-carrier queries (which edges carry a
 label) resolve through a per-graph inverted index, specified in
 `spec-poset-label-index.md`.
@@ -9,10 +9,10 @@ label) resolve through a per-graph inverted index, specified in
 
 ### Problem
 
-Given labels `a`, `b` in the label hierarchy (edges child→parent), decide
+Given labels `a`, `b` in the Label hierarchy (edges child→parent), decide
 whether `a > b` (`a` is a strict ancestor of `b`). Correct on arbitrary DAGs,
 including labels with multiple parents. Queries are hot (called per edge×label
-during visibility filtering) — lookup must be constant-time after preparation.
+during visibility filtering) — lookup uses expected constant-time set membership after preparation.
 
 ### Precondition
 
@@ -34,7 +34,7 @@ raises an error naming a label on the cycle.
 
 1. `isAncestor(a, b)` = `a ∈ ancestors(b)`.
 2. `compare(a, b)`: equality and `SUPREMUM`/`INFIMUM` bounds resolve first
-   (unchanged); otherwise `isAncestor` in both directions; incomparable → null.
+   ; otherwise `isAncestor` in both directions; incomparable → null.
 
 ### Steps — Maintain closure
 
@@ -77,20 +77,10 @@ hierarchy depth never consumes call-stack frames.
 ### Complexity
 
 - Prepare: O(V · (V + E)) worst case with set unions; V = labels, E = parent
-  edges. Label hierarchies are small (tens of labels) — build cost is
-  negligible against per-query traversal.
+  edges. No fixed label-count bound is enforced; the quadratic closure space and preparation cost apply to arbitrary input sizes.
 - Maintain: inserting a label with `k` parents costs O(k · V) for the row.
   Without step 3, a hierarchy grown one label at a time and queried between
   insertions would prepare the table once per insertion.
 - Query: O(1) expected (set membership). Space: O(V²) worst case.
 
-### Rejected alternatives
-
-- **DFS interval labeling**: O(1) query but correct only on trees — in a DAG a
-  label reachable through two parents receives one interval, so containment
-  tests against the other parent report false negatives.
-- **Per-query BFS**: correct, no invalidation state, but O(V + E) on the hot
-  visibility-filtering path.
-- **Multi-interval labeling**: correct on DAGs, but interval-set size is
-  unbounded in the worst case and the implementation complexity exceeds the
-  closure table with no asymptotic gain at this scale.
+Rationale: [concept](concept.md#label-hierarchy-queries).

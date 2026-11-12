@@ -3,7 +3,7 @@
 ## Design Overview
 
 - **Classes**: `Label`, `LabelID`, `IPoset`, `PosetDftImpl`, `LabelEdgeIndex`, `PosetTrait`
-- **Relationships**: `IPoset` defines the pure label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `LabelEdgeIndex` is the per-graph label → edges index `PosetTrait` maintains; `AbcEdge.storedLabels` stores label assignments and `AbcEdge.labels` returns the visibility labels (see `design-entity.md`)
+- **Relationships**: `IPoset` defines the pure Label hierarchy contract; `PosetDftImpl` implements `IPoset` with private caches; `PosetTrait` extends `IGraph` and provides label-filtered graph operations as default methods via a pluggable `IPoset`; `LabelEdgeIndex` is the per-graph label → edges index `PosetTrait` maintains; `AbcEdge.storedLabels` stores label assignments and `AbcEdge.labels` returns the visibility labels (see `design-entity.md`)
 - **Abstract**: `IPoset` (implemented by `PosetDftImpl`); `PosetTrait` (mixed in by concrete graph classes)
 - **Exceptions**: `EntityNotExistException` raised by `addEdge` on missing src/dst node
 - **Dependency roles**: Data holders: `Label`. Orchestrator: `PosetTrait` (bridges poset to graph). Helpers: `IStorage` (poset store for label DAG persistence), `PosetDftImpl` (default `IPoset` implementation), `LabelEdgeIndex` (label carrier index).
@@ -73,7 +73,7 @@ interface IPoset {
 
 **Constructor:** `PosetDftImpl(storage: IStorage)`
 
-When `storage` is an `IRevertibleStorage`, the constructor subscribes a `RevertListener`: a revert evicts the removed label nodes from the label↔`Int` caches and drops their closure rows; the other rows stay unless the notice shows a parent edge of a surviving label removed or exposed again, which discards the closure (`spec-poset.md` Maintain closure, `spec-graph.md` Revert).
+When `storage` is an `IRevertibleStorage`, the constructor subscribes a `RevertListener`: a revert evicts the removed label nodes from the label↔`Int` caches and drops their closure rows; the other rows stay unless the notice shows a parent edge of a surviving label removed or exposed again, which discards the closure (`spec-poset.md` Maintain closure, `spec-storage.md` Revert).
 
 The poset store uses auto-generated `Int` IDs:
 
@@ -124,13 +124,17 @@ Not synchronized: every member is called inside the owning graph's `storage.crit
 
 | Field | Type | Content |
 |-------|------|---------|
-| `poset` | `IPoset` | Pluggable poset module for label hierarchy operations |
+| `poset` | `IPoset` | Pluggable poset module for Label hierarchy operations |
 | `labelIndex` | `LabelEdgeIndex<E>` | Label carrier index of this graph instance |
 | `storage` | `IStorage` | Storage of this graph; its critical section makes each label operation atomic |
 
 **Label-filtered methods (default implementations):** `addEdge`/`delEdge` with a label, `getLabeledEdges`, `relabel`, `copyLabel`, and `setLabels` each run inside `storage.criticalSection`: the label read, label write, and index update are one atomic step. The label-filtered queries below (`getOutgoingEdges` through `getAncestors`) return lazy sequences over atomic graph calls: each step is atomic, and an iteration is atomic as a whole only when the caller runs it inside `storage.criticalSection`.
 
-`visitLabeledEdgesSince(label, since, visit): Long` visits only the current carriers whose latest record is after the cursor, latest first, under one critical section. It shares the label index's candidate snapshot and storage verification with `copyLabel`, including the initial build when needed. It visits a repeated record even when its labels are unchanged and returns the cursor after callbacks finish, including their new records. A callback returns the label whose contribution it added, or null when it added none. The visitor adds that label when absent and records only its contribution, including metadata added under a label the carrier already held. Existing labels are not replayed. A caller can synchronize labeled content without accessing the index.
+`visitLabeledEdgesSince(label, since, visit): Long` visits only the current carriers whose latest record is after the cursor, latest first, under one critical section. It shares the label index's candidate snapshot and storage verification with `copyLabel`, including the initial build when needed.
+
+It visits a repeated record even when its labels are unchanged and returns the cursor after callbacks finish, including their new records.
+
+A callback returns the label whose contribution it added, or null when it added none. The visitor adds that label when absent and records only its contribution, including metadata added under a label the carrier already held. Existing labels are not replayed. A caller can synchronize labeled content without accessing the index.
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -168,14 +172,21 @@ The `labels` property of an edge takes this law through `edgePropertyLaw("labels
 
 `delEdge(src, dst, tag, label)` on a non-existent edge is a no-op. Removing a label the edge does not carry — including from an unlabeled edge — is a no-op: only the labeled `delEdge` call that removes the edge's last carried label deletes the edge.
 
+## Caller Examples
+
+```kotlin
+import edu.jhu.cobra.commons.graph.poset.Label
+import edu.jhu.cobra.commons.graph.poset.PosetDftImpl
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+
+val hierarchy = PosetDftImpl(NativeStorageImpl())
+val child = Label("child")
+val parent = Label("parent")
+hierarchy.setParents(child, mapOf("context" to parent))
+check(hierarchy.compare(parent, child) == 1)
+```
+
+
 ## Open Gaps
 
-- **Reparenting a label with descendants discards the closure.**
-  `PosetDftImpl.setParents` keeps the ancestor closure when the parents are
-  unchanged and extends it by one row for a label without child labels
-  ([spec-poset.md](spec-poset.md) Steps — Maintain closure). When the label has
-  a child label, the whole closure is discarded and the next query rebuilds it
-  in O(V · (V + E)). A workload that alternates such reparenting with queries
-  rebuilds the closure once per reparenting; the spec's estimate of tens of
-  labels is an assumption, not a bound the library enforces. Open question:
-  whether to update the rows of the label's descendants in place.
+[Open questions](design-gaps-label.md).

@@ -21,10 +21,7 @@ One immutable constructor input: `edgeTag`, `kindProperty`, `keyProperty`. The p
 is created. It has no registration method, caller predicate, lazy build or dynamic registry. Edges with another tag
 are not indexed. A matching edge requires both destination fields.
 
-`LayeredStorageImpl(projection, frozenLayerFactory = ...)` initializes projected storage. Its factory-only constructor
-delegates to that same initialization with `projection = null`, preserving positional, trailing-lambda and named
-factory construction. The factory default and `JvmOverloads` retain the original factory, Kotlin default-argument
-and Java no-argument JVM descriptors. No runtime registration or second index path is added.
+`LayeredStorageImpl(projection, frozenLayerFactory = ...)` configures the projection; the factory-only constructor selects null. Supported construction forms include positional, trailing-lambda and named factories, Kotlin default arguments, the factory JVM descriptor and Java no-argument construction.
 
 The exact key is the source integer ID and the complete typed values of those two destination fields. Key hashing
 is followed by equality; a hash collision never identifies two distinct keys. Index keys snapshot the supplied
@@ -34,12 +31,7 @@ Other properties remain writable. This fixed-field contract applies only to a st
 
 ### ExactAdjacencyStorage
 
-`attachmentProjection` reports configured attachment support independently of the read projection. Its default
-returns `adjacencyProjection`; forwarding adapters report the underlying attachment capability or null while
-retaining any supported exact reads. This getter adds no state, registration or index. Existing source
-implementations inherit the default; newly compiled adapters must forward the capability they actually provide.
-Existing constructor and single-kind read signatures stay unchanged. Compatibility with unknown precompiled
-external implementations is not asserted by this interface addition.
+`attachmentProjection` reports attachment support independently of exact reads. Its default is `adjacencyProjection`; forwarding adapters return the underlying attachment capability or null while preserving supported reads. Implementers supply every required query overload; binary compatibility with precompiled implementations lacking those members is not guaranteed.
 
 `getExactOutgoingEdges(source, kind, key)` returns a snapshot of matching existing edge IDs. It creates nothing and
 retains no miss history. Raw `addEdge` retains storage's allocation semantics and can create several physical rows
@@ -94,8 +86,7 @@ passes retain their existing scopes, with bounded added index work per row they 
 A null declaration means the access has not configured exact reads. Native and Layered return the declaration of
 their existing index; there is no independent registration or first-query rebuild. `ExactAdjacencyStorage` extends
 this read capability with `attachExact`. A read-only interpretation access need not claim attachment support.
-The required multi-kind `getExactOutgoingEdges(source, kinds, key)` overload unions only the requested buckets in one storage operation. Its physical result order is unspecified; it is not K completed runtime folds. Delegating wrappers forward both overloads and the declaration. The single-kind and constructor JVM descriptors remain; an old external implementer binary is not claimed to implement the added method. Existing constructors and unconfigured rows
-retain their behavior; consumers must distinguish unavailable capability from a supported empty result.
+The multi-kind `getExactOutgoingEdges(source, kinds, key)` overload unions only the requested buckets in one Storage operation, with unspecified result order. Delegating wrappers forward both overloads and the projection declaration; unavailable capability and a supported empty result are distinct.
 
 ## Exception / Error Types
 
@@ -103,7 +94,21 @@ retain their behavior; consumers must distinguish unavailable capability from a 
 Unconfigured storages keep all existing `IStorage` behavior; their exact operations reject use rather than silently
 falling back to a table scan.
 
+## Caller Examples
+
+```kotlin
+import edu.jhu.cobra.commons.graph.storage.AdjacencyProjection
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.StrVal
+
+val storage = NativeStorageImpl(AdjacencyProjection("member", "kind", "key"))
+val source = storage.addNode()
+val target = storage.addNode(mapOf("kind" to StrVal("field"), "key" to StrVal("x")))
+val edge = storage.attachExact(source, target)
+check(storage.getExactOutgoingEdges(source, StrVal("field"), StrVal("x")) == setOf(edge))
+```
+
 ## Open Gaps
 
-The optional physical access is not implemented for other backends, `NativeConcurStorageImpl`. Acquired identity/property reads, matching supplier
-effects, held-buffer visibility, publication uniqueness and domain-level insert rollback remain separate contracts.
+- Which measured caller requires exact adjacency in NativeConcurStorageImpl or an external backend? These implementations expose no projection.
+- How should a caller integrate acquired property reads, supplier effects and buffered writes with exact attachment? This Storage operation owns physical attachment only, not held-buffer visibility, publication uniqueness or rollback of domain-level insertion.

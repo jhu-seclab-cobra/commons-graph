@@ -62,7 +62,7 @@ sealed interface IEntity {
 | `get` | Returns a property value by name | `name`: property name | `IValue?` | -- |
 | `set` | Sets a property value (null removes it) | `name`: property name; `value`: IValue or null | -- | -- |
 | `contains` | Checks property existence | `name`: property name | `Boolean` | -- |
-| `asMap` | Returns all properties as an immutable map snapshot | -- | `Map<String, IValue>` | -- |
+| `asMap` | Returns a shallow property-map snapshot; contained Value objects keep their mutability | -- | `Map<String, IValue>` | -- |
 | `update` | Updates multiple properties at once (null values remove) | `props`: map of name->value | -- | -- |
 
 ---
@@ -137,3 +137,33 @@ abstract class AbcEdge : AbcEntity() {
 |-----------|------------|
 | `EntityNotExistException` | Node/edge does not exist in storage (from storage layer) |
 
+
+## Caller Examples
+
+```kotlin
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcMultipleGraph
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.StrVal
+
+class NamedNode : AbcNode() {
+    enum class Kind : AbcNode.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+    var name: StrVal by EntityProperty(default = StrVal())
+}
+class NamedEdge : AbcEdge() {
+    enum class Kind : AbcEdge.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+}
+class NamedGraph : AbcMultipleGraph<NamedNode, NamedEdge>() {
+    override val storage = NativeStorageImpl()
+    override val graphId = "named"
+    override fun newNodeObj() = NamedNode()
+    override fun newEdgeObj() = NamedEdge()
+}
+val graph = NamedGraph()
+val node = graph.addNode("a")
+node.name = StrVal("alice")
+check(node.name.core == "alice")
+```

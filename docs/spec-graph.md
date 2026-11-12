@@ -24,7 +24,7 @@ Outgoing edge set is finite. Exits on first match or after exhausting the set.
 
 ### Complexity
 
-- Time: O(out-degree of src). Space: O(1).
+- Time: O(D) edge checks for source out-degree D, plus backend lookup costs. Auxiliary space includes the backend’s returned outgoing-edge collection, O(D) when it is copied.
 
 ---
 
@@ -89,64 +89,6 @@ Input edge sequence is finite. Per edge, label set is finite. Ancestor lookup te
 
 ---
 
-## Layered Query Resolution
-
-### Problem
-
-Given a layered storage with one active layer and at most one frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when active node rows and active-only edge rows are authoritative, while a promoted frozen edge's explicit property edits override its frozen row one name at a time.
-
-### Steps — Property read
-
-1. If an active node or active-only edge holds the entity, read its active property. For a promoted frozen edge, use its explicit edit for that name, including a deletion marker; otherwise use the frozen property through its translated ID.
-2. For a frozen-only entity, read from the frozen layer (translating global ID to frozen-local ID).
-3. If neither layer has the entity, raise an error.
-
-### Steps — Adjacency query
-
-1. Retrieve edge IDs from active layer for the node.
-2. Retrieve edge IDs from frozen layer (translating to global IDs), minus tombstoned edges.
-3. Return the union of both sets.
-
-### Steps — Edge delete
-
-1. Active-only edge: remove it.
-2. Frozen edge (promoted or not): remove the active copy when present, then record a tombstone. Containment, ID enumeration, and property/structure reads treat a tombstoned edge as absent.
-
-### Steps — Property write (cross-layer)
-
-1. If entity exists in active layer, update directly.
-2. If an edge exists only in the frozen layer, promote its structure and record only the named edits in active storage; a null edit masks the inherited property. A frozen node still promotes its complete property row.
-
-### Steps — Freeze
-
-1. Transfer frozen-layer data into a new storage instance.
-2. Transfer active-layer data into the same instance; an active node row replaces its frozen row, while a promoted edge composes its explicit edits over the frozen row, including deletions. Tombstoned edges are not transferred.
-3. Replace old frozen layer with merged storage. Clear active layer.
-
-### Steps — Revert (`clearActiveLayer`)
-
-1. Removed nodes and edges = active-layer ones absent from the frozen layer. Restored nodes = active-layer nodes present in the frozen layer (promoted). Restored edges = active-layer edges present in the frozen layer (promoted) and tombstoned edges. Edge structures before = the structures of the removed edges and the promoted edges; a tombstoned edge was invisible, so it has none.
-2. Clear the active layer, tombstones included.
-3. Notify each revert listener once with the `RevertNotice`. A graph repairs in a fixed order. First it reconciles its node registry: it evicts the removed nodes and edge wrappers; for each restored node it reads the owner set and the node ID property of the row, registers the node when the set holds the graph's ID and it is missing, and evicts it when the set no longer holds the ID. Then it passes the restored edges, with the edges incident to every node it newly registered, to its edge-derived state; a labeled graph re-records the final labels of those edges in its label carrier index (`spec-poset-label-index.md`). A poset evicts removed label nodes and drops closure rows that the notice shows stale (`spec-poset.md` Maintain closure). A claim made since the freeze is undone with the active copy that carried its mark, and the next claim marks the row again.
-
-### Invariants
-
-- An active node or active-only edge reads its active property set. A promoted edge reads its explicit edits over frozen properties; a deleted name stays absent.
-- Promotion copies frozen node properties. Promoted frozen edges retain only their explicit property edits; whole-row reads compose the same image a complete active copy would hold.
-- Frozen layer nodes cannot be deleted. A deleted frozen edge is masked by a tombstone, never removed from the frozen layer.
-- After a revert, storage reads equal the reads right after the last freeze, and every registered graph and poset cache holds only IDs that exist; a graph registers a node only while the owner set of its row holds the graph's ID, and its label carrier index holds a candidate for every label of every edge it owns.
-- Layer count is always 1 or 2. Global IDs are stable across freezes.
-
-### Termination
-
-Property read and adjacency query check at most two layers. Property write updates one layer. Freeze transfers all data — bounded by total entity count.
-
-### Complexity
-
-- Property read: O(1) amortized. Adjacency: O(active + frozen edges). Freeze: O(N + E). Revert: O(active nodes + active edges + tombstones) per listener, plus one owner-set read per restored node and one label read per restored edge a labeled graph re-records.
-
----
-
 ## Ownership Persistence (Mark / Rebuild)
 
 ### Problem
@@ -187,4 +129,4 @@ Mark takes a constant number of storage calls. Rebuild iterates once over nodes 
 
 ### Complexity
 
-- Add: O(1) beyond the row creation, one extra property in the same call. Claim: O(1), one read and at most one write. Rebuild: O(S) where S = nodes in storage.
+- Add writes one extra owner property in the row-creation call. Claim reads one owner property and writes it at most once, with O(G) owner-set copying for G existing owners plus the selected backend’s property-access cost. Rebuild visits S storage nodes and reads each row’s identifier and owner property; its cost includes those property reads.

@@ -12,8 +12,6 @@ The graph layer translates domain-level graph operations into coordinated calls 
 
 `AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. See `spec-graph.md` for edge lookup and traversal algorithms.
 
----
-
 ## Class / Type Specifications
 
 ### IGraph
@@ -69,8 +67,6 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 | `getOutgoingEdges` / `getIncomingEdges` | Edges from/to a node | `of`: NodeID | `Sequence<E>` | -- |
 | `getDescendants` / `getAncestors` | BFS traversal of all reachable nodes (typed edge queries: [spec-graph.md](spec-graph.md#bfs-traversal-descendants--ancestors)) | `of`: NodeID; `edgeCond` | `Sequence<N>` | -- |
 
----
-
 ### AbcMultipleGraph
 
 **Responsibility:** Canonical `IGraph` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `PosetTrait` when mixed in by concrete graph classes.
@@ -103,7 +99,11 @@ Node/edge CRUD and structural queries run inside `storage.criticalSection` (`des
 
 **Revert Coherence:**
 
-The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the graph subscribes a `RevertListener` at creation. The listener first reconciles the cache: it evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache, and for each restored node ID it applies the test `rebuild()` applies to a row (the owner set holds the graph's ID and the row has a node ID property), registering or evicting the node accordingly. It then calls `onRestoredEdges(ids)` once with the restored edges and the edges incident to the newly registered nodes (`spec-graph.md` Revert). The default does nothing; a graph that derives state from edge properties overrides it, and `edgeByStorageId` resolves an ID to the graph's edge when both endpoints are registered. A graph with `PosetTrait` overrides it as `restoreLabelIndex(ids, ::edgeByStorageId)`.
+The cache is created on the first graph operation, when `storage` is initialized. When `storage` is an `IRevertibleStorage`, the graph subscribes a `RevertListener` at creation.
+
+The listener reconciles the cache: it evicts the removed node IDs from the `NodeID`↔`Int` index and the removed edge IDs from the wrapper cache, and for each restored node ID it applies the test `rebuild()` applies to a row (the owner set holds the graph's ID and the row has a node ID property), registering or evicting the node accordingly.
+
+After registry reconciliation it calls `onRestoredEdges(ids)` once with the restored edges and the edges incident to the newly registered nodes (`spec-storage.md` Revert). The default does nothing; a graph that derives state from edge properties overrides it, and `edgeByStorageId` resolves an ID to the graph's edge when both endpoints are registered. A graph with `PosetTrait` overrides it as `restoreLabelIndex(ids, ::edgeByStorageId)`.
 
 **Edge Isolation:**
 
@@ -112,8 +112,6 @@ All edge query methods filter by this graph's node registry membership. See `mod
 **Ownership Persistence:**
 
 `addNode` writes the `__owners__` property, the set holding this graph's ID, in the same storage call that creates the row. `claimNode` adds this graph's ID to the row's owner set when it is absent. `rebuild()` restores the nodes whose owner set holds this graph's ID; a row with no owner set belongs to no graph. See `spec-graph.md` for the mark/rebuild algorithm.
-
----
 
 ### AbcSimpleGraph
 
@@ -125,8 +123,6 @@ All edge query methods filter by this graph's node registry membership. See `mod
 |--------|----------|-------|--------|--------|
 | `addEdge(src, dst, tag)` | Rejects if any edge from `src` to `dst` already exists, then delegates to super; check and insert run in one critical section | `src`, `dst`: NodeID; `tag`: String | `E` | `EntityAlreadyExistException` if any edge from src to dst exists |
 | `edgeUniqueKeys(edge)` | Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` rejects two distinct edges on one pair (`model.md` Merge Laws) | `edge`: EdgeKey | `Map<String, List<String>>` | -- |
-
----
 
 ### GraphMergeLaws
 
@@ -151,8 +147,6 @@ A variant declares its own property law by overriding `nodePropertyLaw` or `edge
 
 `EdgeKey(src, dst, tag)` is the graph-level identity of an edge; `AbcEdge.key` returns it for a bound edge. `NodeOwners` holds the owner law (`NodeOwners.LAW`) beside the owner marks it reads and writes.
 
----
-
 ## Exception / Error Types
 
 | Exception | When raised |
@@ -163,22 +157,35 @@ A variant declares its own property law by overriding `nodePropertyLaw` or `edge
 
 Deletion of a non-existent entity is a no-op at the graph level.
 
+## Caller Examples
+
+```kotlin
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcMultipleGraph
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+
+class ExampleNode : AbcNode() {
+    enum class Kind : AbcNode.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+}
+class ExampleEdge : AbcEdge() {
+    enum class Kind : AbcEdge.Type { DEFAULT }
+    override val type = Kind.DEFAULT
+}
+class ExampleGraph : AbcMultipleGraph<ExampleNode, ExampleEdge>() {
+    override val storage = NativeStorageImpl()
+    override val graphId = "example"
+    override fun newNodeObj() = ExampleNode()
+    override fun newEdgeObj() = ExampleEdge()
+}
+val graph = ExampleGraph()
+graph.addNode("a")
+graph.addNode("b")
+check(graph.addEdge("a", "b", "calls").dstNid == "b")
+```
+
+
 ## Open Gaps
 
-- **Edge lookup by triple reads every outgoing edge of the source.**
-  `AbcMultipleGraph.findEdge` scans `getOutgoingEdges(src)`, and a labeled
-  `PosetTrait.addEdge` of a new edge runs that scan twice: through `getEdge` and
-  through the duplicate check of `AbcMultipleGraph.addEdge`. Adding D edges from
-  one source therefore costs Θ(D²) edge-structure reads. Scanning the smaller of
-  the source's outgoing and the destination's incoming edges needs a degree
-  read, which `LayeredStorageImpl` answers by copying the adjacency set in
-  O(degree); the exact adjacency projection
-  ([design-exact-adjacency.md](design-exact-adjacency.md)) covers only its one
-  configured edge tag. Open question: which index answers a triple lookup for
-  every tag at a cost independent of the source's out-degree.
-- **Owner marks hold one set per node row.** `NodeOwners` stores each node row's
-  owners as one `SetVal` holding one `StrVal` per graph; no row shares it with
-  another, `NodeOwners.mark` copies the set to add a graph, and
-  `NodeOwners.holds` allocates a `StrVal` per check. Edge rows carry no owner
-  set. Open question: whether storages that many graphs share need a compact
-  owner representation.
+[Open questions](design-gaps-graph.md).
