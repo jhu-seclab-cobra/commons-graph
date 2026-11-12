@@ -34,7 +34,7 @@ Layered reads merge only the matching frozen and active incidences and hide froz
 All mutable operations update membership under their existing lock; properties never change it.
 Directional buckets retain primitive singleton IDs inline and grow arrays geometrically from the second ID.
 Pair rows keep complete tags separate; deleting the first duplicate exposes the next visible row.
-New IDs append in constant amortized time; reinserting a reverted ID can shift matching pair IDs only.
+New IDs append in constant amortized time. Removal scans/shifts matching bucket IDs; reinserting a reverted ID can shift matching pair IDs. A cascade sums that work over its incident edges.
 
 ---
 

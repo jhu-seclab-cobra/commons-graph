@@ -7,7 +7,7 @@ import java.util.Collections
 /**
  * In-memory graph storage using Int-keyed HashMaps with auto-generated IDs.
  *
- * O(1) average time for structure operations; a property operation costs the entity's own property count.
+ * Expected O(1) insertion and lookup; removal scans matching ID buckets; property access scans its row.
  * Not thread-safe.
  * Uses split incoming/outgoing adjacency sets for directional edge queries.
  * Node and edge properties are kept per entity: one row of names and values per node or edge.

@@ -43,7 +43,7 @@ miss returns an empty set. `findEdge` retains complete-tag identity and returns 
 endpoints or a missing triple. Raw storage can hold duplicate triples; lookup returns the first visible row.
 Core storages own directional group buckets and a shared pair/triple lookup, retaining only primitive IDs
 and structural keys, O(V + E) entries. Internal `TagAdjacencyIndex` stores singleton IDs inline in primitive
-slots and allocates a primitive array only from the second membership. Writes update the index
+slots and allocates a primitive array only from the second membership. Removal scans/shifts matching buckets; writes update the index
 under the same guard as the physical adjacency. No edge property participates in group membership.
 Native adjacency preserves insertion order; layered adjacency keeps frozen records before active-only
 records, and promotions do not move a frozen record. The selected overloads use that same order.
