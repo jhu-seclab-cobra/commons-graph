@@ -5,6 +5,7 @@
 | [glossary/glossary.md](glossary/glossary.md) | Glossary — layered storage, labels and the label hierarchy |
 | [concept.md](concept.md) | Concept document — problem, scope, terminology, data flow, scenarios |
 | [model.md](model.md) | Domain model — entity identity, relations, state, invariants, merge laws |
+| [design-algorithm.md](design-algorithm.md) | Graph algorithms — strongly connected components and immediate dominators |
 | [design-entity.md](design-entity.md) | Entity module — InternalID, NodeID, IEntity, AbcEntity, AbcNode, AbcEdge |
 | [design-graph.md](design-graph.md) | Graph module — IGraph, AbcMultipleGraph, AbcSimpleGraph, GraphMergeLaws, PropertyMergeLaw |
 | [design-storage.md](design-storage.md) | Storage module — IStorage and implementations (Native, Concurrent, Layered) |
@@ -25,3 +26,4 @@
 | [research/java-graph-typed-node-edge-patterns-libraries-1.md](research/java-graph-typed-node-edge-patterns-libraries-1.md) | Library analysis — JGraphT, Neo4j embedded, Gremlin/TinkerPop |
 | [research/java-graph-typed-node-edge-patterns-libraries-2.md](research/java-graph-typed-node-edge-patterns-libraries-2.md) | Library analysis — MapDB, JanusGraph, commons-graph |
 | [llms.txt](llms.txt) | LLM-consumable entry point — links the llms/ module docs |
+| [references.bib](references.bib) | Bibliography |

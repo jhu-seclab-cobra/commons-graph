@@ -6,12 +6,15 @@ Established vocabulary of commons-graph. Every term names one concept, and a con
 
 Source locations are relative to `commons-graph/src/main/kotlin/edu/jhu/cobra/commons/graph/`. A Source that names a document starts at the repository root.
 
+Literature citations resolve in `docs/references.bib`.
+
 ## Files
 
 | File | Concern |
 |------|---------|
 | [glossary-storage.md](glossary-storage.md) | Layered storage, its frozen and active layers and the freeze operation |
 | [glossary-labels.md](glossary-labels.md) | Labels, their bounds and the label hierarchy |
+| [glossary-algorithm.md](glossary-algorithm.md) | Graph search, components and dominators |
 
 ## Imported Terms
 

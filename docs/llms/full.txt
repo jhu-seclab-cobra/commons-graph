@@ -32,6 +32,10 @@ commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identi
 
 - [Graph & Base Classes](llms/graph.md): `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph` -- node/edge CRUD, traversal, label-filtered queries.
 
+## Graph Algorithms
+
+- [Graph Algorithms](design-algorithm.md): `tarjanScc`, `immediateDominators` — public contracts and caller examples.
+
 ## Storage
 
 - [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs, `criticalSection`, concurrent-use rules.
