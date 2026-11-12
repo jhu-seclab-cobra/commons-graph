@@ -95,7 +95,9 @@ public class LayeredStorageImpl(
 
     private val layers = LayerStack(tagGroup) { boundFamilies }
     private val active = layers.active
-    private val pairs = EdgePairIndex()
+    // Frozen factories may change encounter order. Active-only IDs follow every frozen rank.
+    private val pairOrder = HashMap<Int, Int>()
+    private val pairs = EdgePairIndex(order = { pairOrder[it]?.toLong() ?: (Int.MAX_VALUE.toLong() + 1 + it) })
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
     override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
@@ -114,6 +116,7 @@ public class LayeredStorageImpl(
             layers.frozen?.close()
             layers.frozen = merged
             active.clear()
+            rebuildPairs(merged)
         }
     }
 
@@ -319,6 +322,16 @@ public class LayeredStorageImpl(
         pairs.find(IStorage.EdgeStructure(src, dst, tag))
     }
 
+    // Freeze already visits all edges; build ranks once so scalar reads keep constant expected work.
+    private fun rebuildPairs(frozen: FrozenLayer) {
+        pairs.clear()
+        pairOrder.clear()
+        for (node in frozen.nodeIds) for (id in frozen.outgoingEdges(node).orEmpty()) {
+            pairOrder[id] = pairOrder.size
+            pairs.add(id, checkNotNull(frozen.edgeStructure(id)))
+        }
+    }
+
     private fun restorePairs(notice: RevertNotice) {
         for ((id, structure) in notice.edgeStructuresBefore) pairs.remove(id, structure)
         for (id in notice.restored.edges) if (layers.containsEdge(id)) pairs.add(id, layers.edgeStructure(id))
@@ -405,6 +418,7 @@ public class LayeredStorageImpl(
             layers.frozen = null
             active.clear()
             pairs.clear()
+            pairOrder.clear()
             exact?.clear()
             nodeCounter = 0
             edgeCounter = 0

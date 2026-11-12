@@ -156,12 +156,12 @@ internal class TagAdjacencyIndex(
     internal class EdgeIds(private var firstId: Int) {
         private var more: IntArray? = null
 
-        fun add(id: Int): EdgeIds = apply {
-            // Ordinary IDs increase. A revert can reinsert an earlier frozen ID at its original position.
-            if (id < firstId) {
-                more = insert(more, firstId)
+        fun add(id: Int, order: (Int) -> Long = Int::toLong): EdgeIds = apply {
+            // Reverts reinsert a frozen row at its adjacency rank; ordinary storage uses increasing IDs.
+            if (order(id) < order(firstId)) {
+                more = insert(more, firstId, order)
                 firstId = id
-            } else more = insert(more, id)
+            } else more = insert(more, id, order)
         }
 
         fun remove(id: Int): EdgeIds? {
@@ -205,10 +205,10 @@ internal class TagAdjacencyIndex(
             return ids
         }
 
-        fun insert(previous: IntArray?, id: Int): IntArray {
+        fun insert(previous: IntArray?, id: Int, order: (Int) -> Long): IntArray {
             val ids = append(previous, id)
             var index = ids[0]
-            while (index > 1 && ids[index - 1] > id) {
+            while (index > 1 && order(ids[index - 1]) > order(id)) {
                 ids[index] = ids[index - 1]
                 index--
             }

@@ -1,7 +1,10 @@
 package edu.jhu.cobra.commons.graph.storage
 
 // Pair and complete-tag lookup share the same rows. Null slots terminate probes; deletion closes the probe cluster.
-internal class EdgePairIndex(private val onProbe: () -> Unit = {}) {
+internal class EdgePairIndex(
+    private val order: (Int) -> Long = Int::toLong,
+    private val onProbe: () -> Unit = {},
+) {
     private class Tags(
         val firstTag: String,
         var firstIds: TagAdjacencyIndex.EdgeIds,
@@ -11,12 +14,12 @@ internal class EdgePairIndex(private val onProbe: () -> Unit = {}) {
 
         fun find(tag: String): Int? = if (tag == firstTag) firstIds.first() else others?.get(tag)?.first()
 
-        fun add(id: Int, tag: String) {
-            allIds.add(id)
-            if (tag == firstTag) firstIds = firstIds.add(id)
+        fun add(id: Int, tag: String, order: (Int) -> Long) {
+            allIds.add(id, order)
+            if (tag == firstTag) firstIds = firstIds.add(id, order)
             else {
                 val rest = others ?: HashMap<String, TagAdjacencyIndex.EdgeIds>().also { others = it }
-                rest[tag] = rest[tag]?.add(id) ?: TagAdjacencyIndex.EdgeIds(id)
+                rest[tag] = rest[tag]?.add(id, order) ?: TagAdjacencyIndex.EdgeIds(id)
             }
         }
 
@@ -55,7 +58,7 @@ internal class EdgePairIndex(private val onProbe: () -> Unit = {}) {
             keys[slot] = key
             rows[slot] = Tags(structure.tag, TagAdjacencyIndex.EdgeIds(id))
             size++
-        } else row.add(id, structure.tag)
+        } else row.add(id, structure.tag, order)
     }
 
     fun find(src: Int, dst: Int): Int? = rows[slot(pairKey(src, dst))]?.allIds?.first()

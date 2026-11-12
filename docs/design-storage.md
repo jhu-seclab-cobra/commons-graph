@@ -52,6 +52,9 @@ external backend modules to retain their existing representation and linear scan
 Native and concurrent storage accept `tagGroup` in construction; layered storage accepts it beside its
 projection. The default frozen factory receives the same function; a custom factory with another
 function gets one frozen structural index, with directional ranks preserving that backend's order.
+Every freeze also rebuilds the shared pair/triple rows from frozen outgoing adjacency ranks, for
+any factory or grouping. Revert inserts restored rows at those ranks; active-only rows follow all
+frozen rows. The rank table holds one entry per frozen edge until the next freeze or clear.
 `getEdges` copies all rows of a pair, or of its complete tag; absent endpoints return an empty set.
 Fixed-set group reads merge only the selected heads in directional encounter order. Freeze rebuilds through its
 existing entity transfer, clear releases all entries, and revert drops active buckets with active rows.
