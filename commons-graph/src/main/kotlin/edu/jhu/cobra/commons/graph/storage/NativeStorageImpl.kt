@@ -17,7 +17,12 @@ import java.util.Collections
  * @see NativeConcurStorageImpl
  */
 @Suppress("TooManyFunctions")
-public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactAdjacencyStorage {
+public class NativeStorageImpl(
+    projection: AdjacencyProjection? = null,
+    override val tagGroup: (String) -> String = IDENTITY_TAG_GROUP,
+) : ExactAdjacencyStorage {
+    private val pairs = EdgePairIndex()
+    private val tagAdjacency = TagAdjacencyIndex(tagGroup)
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
     override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
@@ -54,8 +59,8 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
 
     override fun addNode(properties: Map<String, IValue>): Int {
         val id = nodeCounter++
-        outEdges[id] = HashSet()
-        inEdges[id] = HashSet()
+        outEdges[id] = LinkedHashSet()
+        inEdges[id] = LinkedHashSet()
         nodeRows.set(id, properties)
         return id
     }
@@ -112,7 +117,10 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         val dstIn = inEdges[dst] ?: throw EntityNotExistException(dst.toString())
         val projected = exact?.prepare(IStorage.EdgeStructure(src, dst, tag), ::getNodeProperty)
         val id = edgeCounter++
-        edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
+        val structure = IStorage.EdgeStructure(src, dst, tag)
+        edgeEndpoints[id] = structure
+        tagAdjacency.add(id, structure)
+        pairs.add(id, structure)
         srcOut.add(id)
         dstIn.add(id)
         edgeRows.set(id, properties)
@@ -145,6 +153,8 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
 
     override fun deleteEdge(id: Int) {
         val edge = edgeEndpoints.remove(id) ?: throw EntityNotExistException(id.toString())
+        tagAdjacency.remove(id, edge)
+        pairs.remove(id, edge)
         exact?.remove(id)
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
@@ -153,6 +163,8 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
 
     private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
+        tagAdjacency.remove(eid, edge)
+        pairs.remove(eid, edge)
         exact?.remove(eid)
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
@@ -194,6 +206,22 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         return index.existing(member) ?: addEdge(source, target, index.projection.edgeTag, properties)
     }
 
+    override fun getIncomingEdges(id: Int, group: String): Set<Int> = run {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.incoming(id, group)
+    }
+
+    override fun getOutgoingEdges(id: Int, group: String): Set<Int> = run {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.outgoing(id, group)
+    }
+
+    override fun findEdge(src: Int, dst: Int): Int? = run { pairs.find(src, dst) }
+
+    override fun findEdge(src: Int, dst: Int, tag: String): Int? = run {
+        pairs.find(IStorage.EdgeStructure(src, dst, tag))
+    }
+
     // ============================================================================
     // METADATA OPERATIONS
     // ============================================================================
@@ -219,6 +247,8 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
     }
 
     override fun clear() {
+        pairs.clear()
+        tagAdjacency.clear()
         exact?.clear()
         outEdges.clear()
         inEdges.clear()

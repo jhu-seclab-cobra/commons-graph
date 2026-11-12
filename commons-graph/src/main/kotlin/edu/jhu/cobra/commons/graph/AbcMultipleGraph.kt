@@ -83,9 +83,7 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
     ): Int? {
         val srcEntry = cache.entryOf(src) ?: return null
         val dstEntry = cache.entryOf(dst) ?: return null
-        return storage.getOutgoingEdges(srcEntry.storageId).firstOrNull { edgeId ->
-            storage.getEdgeStructure(edgeId).let { it.dst == dstEntry.storageId && it.tag == tag }
-        }
+        return storage.findEdge(srcEntry.storageId, dstEntry.storageId, tag)
     }
 
     // region Node operations
@@ -244,6 +242,20 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
                     .asSequence()
             }
         }
+
+    override fun getOutgoingEdges(of: NodeID, group: String): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getOutgoingEdges(entry.storageId, group)
+            .filter { cache.containsStorageId(storage.getEdgeStructure(it).dst) }
+            .map { cache.edge(it) }.asSequence()
+    }
+
+    override fun getIncomingEdges(of: NodeID, group: String): Sequence<E> = storage.criticalSection {
+        val entry = cache.entryOf(of) ?: return@criticalSection emptySequence()
+        storage.getIncomingEdges(entry.storageId, group)
+            .filter { cache.containsStorageId(storage.getEdgeStructure(it).src) }
+            .map { cache.edge(it) }.asSequence()
+    }
 
     override fun getParents(
         of: NodeID,

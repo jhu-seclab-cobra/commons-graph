@@ -10,21 +10,26 @@ Given `(src, dst, tag)`, find the storage edge ID or determine it is absent. Cor
 
 1. Look up `src` in node registry to get `srcStorageId`. If absent, return absent.
 2. Look up `dst` to get `dstStorageId`. If absent, return absent.
-3. For each outgoing edge of `srcStorageId`, retrieve structure `(eSrc, eDst, eTag)`.
-4. If `eDst == dstStorageId` and `eTag == tag`, return this edge ID.
-5. If no match, return absent.
+3. Ask storage for the exact complete triple and return its first visible edge ID, or absent.
 
 ### Invariants
 
-- At most one edge matches a given `(src, dst, tag)` triple (uniqueness from model.md).
+- Graph edge identity remains the complete `(src, dst, tag)` triple.
+- Storage creation and deletion update the triple access in the same guarded operation.
 
 ### Termination
 
-Outgoing edge set is finite. Exits on first match or after exhausting the set.
+One finite hash lookup in core storage; backend defaults scan the finite outgoing adjacency.
 
 ### Complexity
 
-- Time: O(out-degree of src). Space: O(1).
+Expected O(1) core lookup and duplicate check; n same-source graph insertions cost expected O(n).
+Backend defaults retain O(out-degree) lookup. Hashing includes the bytes of the complete tag.
+Group adjacency returns only IDs whose immutable tag maps to the requested group, in the order
+of the full directional adjacency. It costs expected O(1 + matches) and O(matches) result space;
+no unrelated group is enumerated. Retained structural entries are O(V + E), independent of queries.
+Layered reads merge only the matching frozen and active incidences and hide frozen tombstones.
+All mutable operations update membership under their existing lock; properties never change it.
 
 ---
 

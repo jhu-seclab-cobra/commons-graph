@@ -26,34 +26,38 @@ Persistent backends persist graph-level metadata with the same lifetime as entit
 
 **Methods:**
 
+`IStorage` retains the existing node, property, metadata and lifecycle operations. Structural access adds:
+
 ```kotlin
-interface IStorage : Flushable {
-    val nodeIDs: Set<Int>
-    val edgeIDs: Set<Int>
-    fun containsNode(id: Int): Boolean
-    fun addNode(properties: Map<String, IValue> = emptyMap()): Int
-    fun getNodeProperties(id: Int): Map<String, IValue>
-    fun getNodeProperty(id: Int, name: String): IValue?
-    fun setNodeProperties(id: Int, properties: Map<String, IValue?>)
-    fun deleteNode(id: Int)
-    data class EdgeStructure(val src: Int, val dst: Int, val tag: String)
-    fun containsEdge(id: Int): Boolean
-    fun addEdge(src: Int, dst: Int, tag: String, properties: Map<String, IValue> = emptyMap()): Int
-    fun getEdgeStructure(id: Int): EdgeStructure
-    fun getEdgeProperties(id: Int): Map<String, IValue>
-    fun getEdgeProperty(id: Int, name: String): IValue?
-    fun setEdgeProperties(id: Int, properties: Map<String, IValue?>)
-    fun deleteEdge(id: Int)
-    fun getIncomingEdges(id: Int): Set<Int>
-    fun getOutgoingEdges(id: Int): Set<Int>
-    val metaNames: Set<String>
-    fun getMeta(name: String): IValue?
-    fun setMeta(name: String, value: IValue?)
-    fun clear()
-    fun transferTo(target: IStorage): Map<Int, Int>
-    val criticalSectionLock: Lock? get() = null
-}
+val tagGroup: (String) -> String
+fun getIncomingEdges(id: Int, group: String): Set<Int>
+fun getOutgoingEdges(id: Int, group: String): Set<Int>
+fun findEdge(src: Int, dst: Int, tag: String): Int?
 ```
+
+`tagGroup` is a constructor-fixed pure function of the complete immutable tag; its default is identity.
+The directional overloads copy only matching IDs under the storage's existing guard, preserving their
+encounter order in the full adjacency. A missing node throws `EntityNotExistException`; a supported
+miss returns an empty set. `findEdge` retains complete-tag identity and returns null for absent
+endpoints or a missing triple. Raw storage can hold duplicate triples; lookup returns the first visible row.
+Core storages own directional group buckets and a complete-triple lookup, retaining only IDs and structural
+keys, O(V + E) entries. `TagAdjacencyIndex` is internal to the core module; singleton memberships share
+one ID holder per edge, while larger buckets retain their encounter order. Writes update the index
+under the same guard as the physical adjacency. No edge property participates in group membership.
+Native adjacency preserves insertion order; layered adjacency keeps frozen records before active-only
+records, and promotions do not move a frozen record. The selected overloads use that same order.
+Default implementations on `IStorage` filter full adjacency under `criticalSection`, allowing the
+external backend modules to retain their existing representation and linear scan cost.
+Native and concurrent storage accept `tagGroup` in construction; layered storage accepts it beside its
+projection. The default frozen factory receives the same function; a custom factory with another
+function gets one frozen structural index owned by `FrozenLayer`. Freeze rebuilds only through its
+existing entity transfer, clear releases all entries, and revert drops active buckets with active rows.
+A property promotion records its existing structure in the active buckets; tombstones mask frozen IDs.
+
+For example, `NativeStorageImpl(tagGroup = { it.substringBefore('@') })` followed by
+`addEdge(a, b, "write@1")` lets `getIncomingEdges(b, "write")` return that ID while
+`findEdge(a, b, "write")` remains null. Bounds and equality: [spec-graph.md](spec-graph.md).
+
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -72,8 +76,6 @@ interface IStorage : Flushable {
 | `transferTo` | Copies all data into `target`; returns node ID mapping. `target` must be a different storage instance. | `target` | `Map<Int, Int>` | `IllegalArgumentException` if `target` is the receiver |
 | `flush` | Persists buffered data. No-op for in-memory implementations. | -- | -- | -- |
 | `criticalSectionLock` | The lock `criticalSection` holds: the exclusive half of the implementation's own read-write lock. `null` for an implementation that is not thread-safe. | -- | `Lock?` | -- |
-
----
 
 ### IRevertibleStorage
 
@@ -96,8 +98,6 @@ interface IStorage : Flushable {
 | `removed` | The IDs visible before the revert and absent after it. |
 | `restored` | The IDs visible after the revert whose presence or stored image the revert exposed again by dropping reverted writes, a promoted row included even when the dropped write left the same value. Disjoint from `removed` for each kind. |
 | `edgeStructuresBefore` | The source, destination and tag, read before the revert, of every affected edge visible before it: the removed edges and the restored edges visible before. A restored edge missing from the map has reappeared; one present in it survived with its stored image restored. |
-
----
 
 ### NativeStorageImpl
 

@@ -391,7 +391,9 @@ internal class StoragePerformanceTest {
             System.gc()
             val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
             val deltaMB = (after - before) / (1024.0 * 1024.0)
-            println(String.format("%-28s %14.1f", name, deltaMB))
+            println(String.format("%-28s %14.1f bytes/edge=%.3f", name, deltaMB,
+                (after - before).toDouble() / (nodeCount * edgesPerNode)))
+            java.lang.ref.Reference.reachabilityFence(storage)
         }
     }
 

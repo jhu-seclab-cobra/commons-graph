@@ -12,11 +12,16 @@ import edu.jhu.cobra.commons.value.IValue
 @Suppress("TooManyFunctions")
 internal class FrozenLayer private constructor(
     private val storage: IStorage,
+    tagGroup: (String) -> String,
     private val nodeGlobalToLocal: Map<Int, Int>,
     private val nodeLocalToGlobal: Map<Int, Int>,
     private val edgeGlobalToLocal: Map<Int, Int>,
     private val edgeLocalToGlobal: Map<Int, Int>,
 ) {
+    private val tagAdjacency = if (storage.tagGroup === tagGroup) null else TagAdjacencyIndex(tagGroup).also { index ->
+        for (id in storage.edgeIDs) index.add(id, storage.getEdgeStructure(id))
+    }
+
     private val edgeStructureCache = HashMap<Int, IStorage.EdgeStructure>()
 
     val nodeIds: Set<Int> get() = nodeGlobalToLocal.keys
@@ -76,6 +81,16 @@ internal class FrozenLayer private constructor(
             MappedEdgeSet(storage.getOutgoingEdges(localId), edgeLocalToGlobal, edgeGlobalToLocal)
         }
 
+    fun incomingEdges(globalId: Int, group: String): Set<Int>? = nodeGlobalToLocal[globalId]?.let { local ->
+        val selected = tagAdjacency?.incoming(local, group) ?: storage.getIncomingEdges(local, group)
+        MappedEdgeSet(selected, edgeLocalToGlobal, edgeGlobalToLocal)
+    }
+
+    fun outgoingEdges(globalId: Int, group: String): Set<Int>? = nodeGlobalToLocal[globalId]?.let { local ->
+        val selected = tagAdjacency?.outgoing(local, group) ?: storage.getOutgoingEdges(local, group)
+        MappedEdgeSet(selected, edgeLocalToGlobal, edgeGlobalToLocal)
+    }
+
     // Frozen storages produced by the factory may hold external resources (file-backed
     // storages); discarding one without closing leaks its handle.
     fun close() {
@@ -93,12 +108,13 @@ internal class FrozenLayer private constructor(
             previous: FrozenLayer?,
             active: ActiveLayer,
             merged: IStorage,
+            tagGroup: (String) -> String = IDENTITY_TAG_GROUP,
         ): FrozenLayer {
             val oldToNewNode = transferPreviousNodes(previous, active, merged)
             val (nodeG2L, nodeL2G) = mergeNodes(previous, active, merged, oldToNewNode)
             val (edgeG2L, edgeL2G) = mergeEdges(previous, active, merged, oldToNewNode, nodeG2L)
             transferMetadata(previous, active, merged)
-            return FrozenLayer(merged, nodeG2L, nodeL2G, edgeG2L, edgeL2G)
+            return FrozenLayer(merged, tagGroup, nodeG2L, nodeL2G, edgeG2L, edgeL2G)
         }
 
         private fun transferPreviousNodes(

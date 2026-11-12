@@ -19,7 +19,11 @@ import kotlin.concurrent.withLock
  * @see NativeStorageImpl
  */
 @Suppress("TooManyFunctions")
-public class NativeConcurStorageImpl : IStorage {
+public class NativeConcurStorageImpl(
+    override val tagGroup: (String) -> String = IDENTITY_TAG_GROUP,
+) : IStorage {
+    private val pairs = EdgePairIndex()
+    private val tagAdjacency = TagAdjacencyIndex(tagGroup)
     private val lock = ReentrantReadWriteLock()
 
     override val criticalSectionLock: Lock get() = lock.writeLock()
@@ -45,7 +49,7 @@ public class NativeConcurStorageImpl : IStorage {
      * build an equivalent snapshot; one wins the volatile store).
      */
     private class AdjEntry {
-        val set = HashSet<Int>()
+        val set = LinkedHashSet<Int>()
 
         @Volatile
         var cached: Set<Int>? = emptySet()
@@ -62,7 +66,7 @@ public class NativeConcurStorageImpl : IStorage {
 
         fun snapshot(): Set<Int> {
             cached?.let { return it }
-            val snap = java.util.Set.copyOf(set)
+            val snap = java.util.Collections.unmodifiableSet(LinkedHashSet(set))
             cached = snap
             return snap
         }
@@ -82,6 +86,8 @@ public class NativeConcurStorageImpl : IStorage {
 
     private fun deleteIncidentEdge(eid: Int) {
         val edge = edgeEndpoints[eid] ?: return
+        tagAdjacency.remove(eid, edge)
+        pairs.remove(eid, edge)
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
         edgeEndpoints.remove(eid)
@@ -161,7 +167,10 @@ public class NativeConcurStorageImpl : IStorage {
             if (src !in outEdges) throw EntityNotExistException(src.toString())
             if (dst !in outEdges) throw EntityNotExistException(dst.toString())
             val id = edgeCounter++
-            edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
+            val structure = IStorage.EdgeStructure(src, dst, tag)
+            edgeEndpoints[id] = structure
+            tagAdjacency.add(id, structure)
+            pairs.add(id, structure)
             outEdges.getValue(src).add(id)
             inEdges.getValue(dst).add(id)
             edgeRows.set(id, properties)
@@ -219,6 +228,22 @@ public class NativeConcurStorageImpl : IStorage {
             outEdges[id]?.snapshot() ?: emptySet()
         }
 
+    override fun getIncomingEdges(id: Int, group: String): Set<Int> = lock.readLock().withLock {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.incoming(id, group)
+    }
+
+    override fun getOutgoingEdges(id: Int, group: String): Set<Int> = lock.readLock().withLock {
+        if (!containsNode(id)) throw EntityNotExistException(id.toString())
+        tagAdjacency.outgoing(id, group)
+    }
+
+    override fun findEdge(src: Int, dst: Int): Int? = lock.readLock().withLock { pairs.find(src, dst) }
+
+    override fun findEdge(src: Int, dst: Int, tag: String): Int? = lock.readLock().withLock {
+        pairs.find(IStorage.EdgeStructure(src, dst, tag))
+    }
+
     // ============================================================================
     // METADATA OPERATIONS
     // ============================================================================
@@ -246,6 +271,8 @@ public class NativeConcurStorageImpl : IStorage {
 
     override fun clear(): Unit =
         lock.writeLock().withLock {
+            pairs.clear()
+            tagAdjacency.clear()
             outEdges.clear()
             inEdges.clear()
             edgeEndpoints.clear()

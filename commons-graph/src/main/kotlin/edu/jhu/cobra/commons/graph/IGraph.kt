@@ -72,6 +72,11 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
 
     public fun getIncomingEdges(of: NodeID): Sequence<E>
 
+    public fun getOutgoingEdges(of: NodeID, group: String): Sequence<E>
+
+    /** Incoming edges of a tag group, with the same graph endpoint isolation as the full query. */
+    public fun getIncomingEdges(of: NodeID, group: String): Sequence<E>
+
     public fun getOutgoingEdges(of: NodeID): Sequence<E>
 
     public fun getChildren(

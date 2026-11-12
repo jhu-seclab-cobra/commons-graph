@@ -19,7 +19,8 @@
 
 One immutable constructor input: `edgeTag`, `kindProperty`, `keyProperty`. The projection is present before any row
 is created. It has no registration method, caller predicate, lazy build or dynamic registry. Edges with another tag
-are not indexed. A matching edge requires both destination fields.
+are not indexed by this projection; general tag-group adjacency is a separate storage operation
+([storage design](design-storage.md#istorage)). A matching edge requires both destination fields.
 
 `LayeredStorageImpl(projection, frozenLayerFactory = ...)` initializes projected storage. Its factory-only constructor
 delegates to that same initialization with `projection = null`, preserving positional, trailing-lambda and named
