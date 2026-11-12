@@ -78,6 +78,7 @@ public interface IGraph<N : AbcNode, E : AbcEdge> {
     /** Incoming edges selected by any of the fixed tag groups, in full-adjacency order. */
     public fun getIncomingEdges(of: NodeID, groups: Set<String>): Sequence<E>
 
+    /** Outgoing edges of a tag group, in full-adjacency order with the full query's graph endpoint isolation. */
     public fun getOutgoingEdges(of: NodeID, group: String): Sequence<E>
 
     /** Incoming edges of a tag group, with the same graph endpoint isolation as the full query. */
