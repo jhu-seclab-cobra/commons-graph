@@ -391,8 +391,15 @@ internal class StoragePerformanceTest {
             System.gc()
             val after = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
             val deltaMB = (after - before) / (1024.0 * 1024.0)
-            println(String.format("%-28s %14.1f bytes/edge=%.3f", name, deltaMB,
-                (after - before).toDouble() / (nodeCount * edgesPerNode)))
+            val edgeCount = nodeCount * edgesPerNode
+            val retainedBytes = after - before
+            println(
+                String.format(
+                    "%-28s %14.1f retainedBytes=%d edges=%d bytes/edge=%.6f",
+                    name, deltaMB, retainedBytes, edgeCount, retainedBytes.toDouble() / edgeCount,
+                ),
+            )
+            // Keep the complete graph live through the after-GC observation, including when JIT inlines population.
             java.lang.ref.Reference.reachabilityFence(storage)
         }
     }
