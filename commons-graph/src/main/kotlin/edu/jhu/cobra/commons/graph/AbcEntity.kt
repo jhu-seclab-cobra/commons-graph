@@ -91,18 +91,20 @@ public sealed class AbcEntity : IEntity {
         default: T,
     ): ReadWriteProperty<IEntity, T> =
         object : ReadWriteProperty<IEntity, T> {
-            // The enclosing entity's class names the prefix; the delegate itself is an
-            // anonymous class whose simpleName is empty.
-            private val propPrefix = this@AbcEntity::class.java.simpleName.lowercase()
-            private val enumTypeMap by lazy { T::class.java.enumConstants.associateBy { it.name } }
+            // The delegate is created per entity wrapper, so it holds references only: whatever
+            // depends on a class alone is built once in [EntityTypeTables]. The enclosing entity's
+            // class names the prefix; the delegate itself is an anonymous class.
+            private val propPrefix = EntityTypeTables.prefixOf(this@AbcEntity.javaClass)
+
+            private fun propName(property: KProperty<*>): String = optName ?: "${propPrefix}_${property.name}"
 
             override fun getValue(
                 thisRef: IEntity,
                 property: KProperty<*>,
             ): T {
-                val propName = optName ?: "${propPrefix}_${property.name}"
+                val propName = propName(property)
                 val typeStrVal = thisRef[propName] as? StrVal
-                return typeStrVal?.core?.let { enumTypeMap[it] } ?: default
+                return typeStrVal?.core?.let { EntityTypeTables.constantsByName(T::class.java)[it] } ?: default
             }
 
             override fun setValue(
@@ -110,10 +112,47 @@ public sealed class AbcEntity : IEntity {
                 property: KProperty<*>,
                 value: T,
             ) {
-                val propName = optName ?: "${propPrefix}_${property.name}"
+                val propName = propName(property)
                 val prevValue = thisRef[propName] as? StrVal
                 if (prevValue?.core == value.name) return
                 thisRef[propName] = value.name.strVal
             }
         }
+}
+
+/**
+ * Class-keyed tables behind the `EntityType` delegate, each built once per class and shared by every
+ * delegate and entity wrapper.
+ *
+ * [ClassValue] computes a value at most once per class and is safe to read from several threads.
+ */
+@PublishedApi
+internal object EntityTypeTables {
+    private val constantsTable =
+        object : ClassValue<Map<String, IEntity.Type>>() {
+            override fun computeValue(type: Class<*>): Map<String, IEntity.Type> =
+                type.enumConstants.associate { (it as IEntity.Type).name to it }
+        }
+
+    private val prefixTable =
+        object : ClassValue<String>() {
+            override fun computeValue(type: Class<*>): String = type.simpleName.lowercase()
+        }
+
+    /**
+     * Returns the constants of the enum class [type] keyed by name.
+     *
+     * @param type The enum class implementing [IEntity.Type].
+     * @return The one map of [type], identical for every call.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T : IEntity.Type> constantsByName(type: Class<T>): Map<String, T> = constantsTable.get(type) as Map<String, T>
+
+    /**
+     * Returns the lowercase simple name of the entity class [entityClass], the prefix of an automatic property name.
+     *
+     * @param entityClass The concrete entity class.
+     * @return The prefix of [entityClass].
+     */
+    fun prefixOf(entityClass: Class<*>): String = prefixTable.get(entityClass)
 }

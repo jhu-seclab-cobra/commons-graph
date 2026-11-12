@@ -5,11 +5,13 @@ import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
 import edu.jhu.cobra.commons.value.IValue
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
+import java.util.concurrent.Executors
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /*
@@ -27,6 +29,12 @@ import kotlin.test.assertTrue
  * - `EntityType delegate auto name uses entity class prefix` -- verifies auto-generated key is
  *   prefixed with the entity class name, not the anonymous delegate class
  * - `EntityType delegate returns default on unknown stored value` -- verifies fallback for bad data
+ * - `EntityType delegates of two wrappers hold no per-class state` -- verifies a delegate keeps no map
+ *   or lazy holder, so the enum constants are not rebuilt per wrapper
+ * - `EntityType tables give one map per enum class and one prefix per entity class, also across threads` --
+ *   verifies the shared tables
+ * - `EntityType delegate unknown stored value of a second wrapper resolves like the first` -- verifies
+ *   several wrappers of one class read and write the same stored names
  * - `nullable EntityProperty delegate set null should remove property` -- B3 null propagation
  */
 internal class AbcEntityDelegateTest {
@@ -150,6 +158,51 @@ internal class AbcEntityDelegateTest {
         node["myKind"] = "INVALID_VALUE".strVal
 
         assertEquals(Kind.SOURCE, node.namedKind)
+    }
+
+    @Test
+    fun `EntityType delegates of two wrappers hold no per-class state`() {
+        val nodes = (0 until 2).map { TypeNode().also { n -> n.bind(storage, storage.addNode(), "t$it") } }
+        nodes.forEach {
+            it.kind = Kind.SINK
+            assertEquals(Kind.SINK, it.kind)
+        }
+
+        val delegateField = TypeNode::class.java.getDeclaredField("kind\$delegate").also { it.isAccessible = true }
+        nodes.forEach { node ->
+            val delegate = delegateField.get(node)
+            val held = delegate.javaClass.declaredFields.map { it.also { f -> f.isAccessible = true }.get(delegate) }
+            assertTrue(held.none { it is Map<*, *> || it is Lazy<*> }, "delegate holds per-class state: $held")
+        }
+    }
+
+    @Test
+    fun `EntityType tables give one map per enum class and one prefix per entity class, also across threads`() {
+        val pool = Executors.newFixedThreadPool(8)
+        try {
+            val maps =
+                (0 until 64)
+                    .map { pool.submit<Map<String, Kind>> { EntityTypeTables.constantsByName(Kind::class.java) } }
+                    .map { it.get() }
+            assertTrue(maps.all { it === maps[0] })
+            assertEquals(mapOf("SOURCE" to Kind.SOURCE, "SINK" to Kind.SINK), maps[0])
+        } finally {
+            pool.shutdown()
+        }
+        assertSame(EntityTypeTables.prefixOf(TypeNode::class.java), EntityTypeTables.prefixOf(TypeNode::class.java))
+        assertEquals("typenode", EntityTypeTables.prefixOf(TypeNode::class.java))
+    }
+
+    @Test
+    fun `EntityType delegate unknown stored value of a second wrapper resolves like the first`() {
+        val nodes = (0 until 2).map { TypeNode().also { n -> n.bind(storage, storage.addNode(), "t$it") } }
+        nodes[0].kind = Kind.SINK
+        nodes[1]["typenode_kind"] = "NO_SUCH_CONSTANT".strVal
+
+        assertEquals(Kind.SINK, nodes[0].kind)
+        assertEquals(Kind.SOURCE, nodes[1].kind)
+        nodes[1].kind = Kind.SINK
+        assertEquals("SINK", (nodes[1]["typenode_kind"] as? StrVal)?.core)
     }
 
     // endregion
