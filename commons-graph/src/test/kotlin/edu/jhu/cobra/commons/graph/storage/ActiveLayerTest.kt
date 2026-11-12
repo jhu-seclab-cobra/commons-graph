@@ -60,7 +60,7 @@ internal class ActiveLayerTest {
         layer.setNodeProperties(1, mapOf("a" to null, "c" to 3.intVal))
 
         assertEquals(mapOf("b" to 2.intVal, "c" to 3.intVal), layer.collectNodeProperties(1))
-        assertFalse("a" in layer.nodeColumns)
+        assertFalse("a" in layer.nodeColumns.names)
     }
 
     @Test
@@ -88,8 +88,8 @@ internal class ActiveLayerTest {
         assertFalse(layer.containsEdge(11))
         assertEquals(emptySet(), layer.outEdges.getValue(2))
         assertEquals(emptySet(), layer.inEdges.getValue(2))
-        assertFalse("n" in layer.nodeColumns)
-        assertFalse("e" in layer.edgeColumns)
+        assertFalse("n" in layer.nodeColumns.names)
+        assertFalse("e" in layer.edgeColumns.names)
     }
 
     @Test
@@ -113,8 +113,8 @@ internal class ActiveLayerTest {
 
         assertTrue(layer.nodeIds.isEmpty())
         assertTrue(layer.edgeEndpoints.isEmpty())
-        assertTrue(layer.nodeColumns.isEmpty())
-        assertTrue(layer.edgeColumns.isEmpty())
+        assertTrue(layer.nodeColumns.names.isEmpty())
+        assertTrue(layer.edgeColumns.names.isEmpty())
         assertTrue(layer.metaProperties.isEmpty())
         assertTrue(layer.deletedMetaNames.isEmpty())
     }

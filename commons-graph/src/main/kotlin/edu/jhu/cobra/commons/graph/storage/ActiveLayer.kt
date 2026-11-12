@@ -7,11 +7,11 @@ import edu.jhu.cobra.commons.value.IValue
  *
  * Holds columnar node/edge properties, edge endpoints, adjacency sets,
  * metadata, and edge/metadata tombstones, all keyed by global IDs. Columnar bookkeeping is delegated to
- * [ColumnarProperties].
+ * one [ColumnarProperties] store per entity kind.
  */
 internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = { null }) {
-    val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
-    val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
+    val nodeColumns = ColumnarProperties()
+    val edgeColumns = ColumnarProperties()
 
     // Explicit writes to edges inherited from the frozen layer. Null masks a frozen property.
     val promotedEdgeEdits = HashMap<Int, MutableMap<String, IValue?>>()
@@ -38,9 +38,7 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
     ) {
         outEdges[id] = HashSet()
         inEdges[id] = HashSet()
-        for ((key, value) in properties) {
-            nodeColumns.getOrPut(key) { HashMap() }[id] = value
-        }
+        nodeColumns.set(id, properties)
     }
 
     fun addEdge(
@@ -51,14 +49,12 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
         edgeEndpoints[id] = structure
         outEdges.getValue(structure.src).add(id)
         inEdges.getValue(structure.dst).add(id)
-        for ((key, value) in properties) {
-            edgeColumns.getOrPut(key) { HashMap() }[id] = value
-        }
+        edgeColumns.set(id, properties)
     }
 
-    fun collectNodeProperties(id: Int): Map<String, IValue> = ColumnarProperties.collectProperties(id, nodeColumns)
+    fun collectNodeProperties(id: Int): Map<String, IValue> = nodeColumns.collect(id)
 
-    fun collectEdgeProperties(id: Int): Map<String, IValue> = ColumnarProperties.collectProperties(id, edgeColumns)
+    fun collectEdgeProperties(id: Int): Map<String, IValue> = edgeColumns.collect(id)
 
     fun composePromotedEdgeProperties(
         id: Int,
@@ -79,13 +75,13 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
     }
 
     fun hasEdgeProperty(id: Int, name: String): Boolean =
-        promotedEdgeEdits[id]?.containsKey(name) ?: (edgeColumns[name]?.containsKey(id) == true)
+        promotedEdgeEdits[id]?.containsKey(name) ?: edgeColumns.contains(id, name)
 
     fun setNodeProperties(
         id: Int,
         properties: Map<String, IValue?>,
     ) {
-        ColumnarProperties.setColumnarProperties(id, properties, nodeColumns)
+        nodeColumns.set(id, properties)
     }
 
     fun setEdgeProperties(
@@ -94,7 +90,7 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
     ) {
         val promoted = promotedEdgeEdits[id]
         if (promoted == null) {
-            ColumnarProperties.setColumnarProperties(id, properties, edgeColumns)
+            edgeColumns.set(id, properties)
         } else {
             promoted.putAll(properties)
         }
@@ -105,14 +101,14 @@ internal class ActiveLayer(private val families: () -> EdgePropertyFamilies? = {
         for (eid in (inEdges[id] ?: emptySet<Int>()).toList()) removeEdge(eid)
         outEdges.remove(id)
         inEdges.remove(id)
-        ColumnarProperties.removeEntityFromColumns(id, nodeColumns)
+        nodeColumns.remove(id)
     }
 
     fun removeEdge(id: Int) {
         val edge = edgeEndpoints.remove(id) ?: return
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
-        ColumnarProperties.removeEntityFromColumns(id, edgeColumns)
+        edgeColumns.remove(id)
         promotedEdgeEdits.remove(id)
     }
 

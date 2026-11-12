@@ -27,10 +27,10 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
     private var edgeCounter: Int = 0
 
     // Columnar node property storage: one HashMap per property name (column)
-    private val nodeColumns = HashMap<String, HashMap<Int, IValue>>()
+    internal val nodeColumns = ColumnarProperties()
 
     // Columnar edge property storage
-    private val edgeColumns = HashMap<String, HashMap<Int, IValue>>()
+    internal val edgeColumns = ColumnarProperties()
 
     // Edge endpoint index (edge ID -> src, dst, tag)
     private val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
@@ -55,15 +55,13 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         val id = nodeCounter++
         outEdges[id] = HashSet()
         inEdges[id] = HashSet()
-        for ((key, value) in properties) {
-            nodeColumns.getOrPut(key) { HashMap() }[id] = value
-        }
+        nodeColumns.set(id, properties)
         return id
     }
 
     override fun getNodeProperties(id: Int): Map<String, IValue> {
         if (id !in outEdges) throw EntityNotExistException(id.toString())
-        return ColumnViewMap(id, nodeColumns)
+        return nodeColumns.view(id)
     }
 
     override fun getNodeProperty(
@@ -71,7 +69,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         name: String,
     ): IValue? {
         if (id !in outEdges) throw EntityNotExistException(id.toString())
-        return nodeColumns[name]?.get(id)
+        return nodeColumns[id, name]
     }
 
     override fun setNodeProperties(
@@ -80,7 +78,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
     ) {
         if (id !in outEdges) throw EntityNotExistException(id.toString())
         exact?.validateChange(id, properties, ::getNodeProperty)
-        ColumnarProperties.setColumnarProperties(id, properties, nodeColumns)
+        nodeColumns.set(id, properties)
     }
 
     override fun deleteNode(id: Int) {
@@ -91,7 +89,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         for (eid in inEdgeIds) deleteIncidentEdge(eid)
         outEdges.remove(id)
         inEdges.remove(id)
-        ColumnarProperties.removeEntityFromColumns(id, nodeColumns)
+        nodeColumns.remove(id)
     }
 
     // ============================================================================
@@ -116,9 +114,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         edgeEndpoints[id] = IStorage.EdgeStructure(src, dst, tag)
         srcOut.add(id)
         dstIn.add(id)
-        for ((key, value) in properties) {
-            edgeColumns.getOrPut(key) { HashMap() }[id] = value
-        }
+        edgeColumns.set(id, properties)
         exact?.record(id, projected)
         return id
     }
@@ -127,7 +123,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
 
     override fun getEdgeProperties(id: Int): Map<String, IValue> {
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-        return ColumnViewMap(id, edgeColumns)
+        return edgeColumns.view(id)
     }
 
     override fun getEdgeProperty(
@@ -135,7 +131,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         name: String,
     ): IValue? {
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-        return edgeColumns[name]?.get(id)
+        return edgeColumns[id, name]
     }
 
     override fun setEdgeProperties(
@@ -143,7 +139,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         properties: Map<String, IValue?>,
     ) {
         if (id !in edgeEndpoints) throw EntityNotExistException(id.toString())
-        ColumnarProperties.setColumnarProperties(id, properties, edgeColumns)
+        edgeColumns.set(id, properties)
     }
 
     override fun deleteEdge(id: Int) {
@@ -151,7 +147,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         exact?.remove(id)
         outEdges[edge.src]?.remove(id)
         inEdges[edge.dst]?.remove(id)
-        ColumnarProperties.removeEntityFromColumns(id, edgeColumns)
+        edgeColumns.remove(id)
     }
 
     private fun deleteIncidentEdge(eid: Int) {
@@ -160,7 +156,7 @@ public class NativeStorageImpl(projection: AdjacencyProjection? = null) : ExactA
         inEdges[edge.dst]?.remove(eid)
         outEdges[edge.src]?.remove(eid)
         edgeEndpoints.remove(eid)
-        ColumnarProperties.removeEntityFromColumns(eid, edgeColumns)
+        edgeColumns.remove(eid)
     }
 
     // ============================================================================
