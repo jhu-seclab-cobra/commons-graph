@@ -1,5 +1,14 @@
 # commons-graph
 
+[![codecov](https://codecov.io/gh/jhu-seclab-cobra/commons-graph/branch/main/graph/badge.svg)](https://codecov.io/gh/jhu-seclab-cobra/commons-graph)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-purple.svg)
+![JVM](https://img.shields.io/badge/JVM-21-blue.svg)
+[![Release](https://img.shields.io/github/v/release/jhu-seclab-cobra/commons-graph)](https://github.com/jhu-seclab-cobra/commons-graph/releases)
+[![Last commit](https://img.shields.io/github/last-commit/jhu-seclab-cobra/commons-graph/main)](https://github.com/jhu-seclab-cobra/commons-graph/commits/main)
+[![JitPack](https://jitpack.io/v/jhu-seclab-cobra/commons-graph.svg)](https://jitpack.io/#jhu-seclab-cobra/commons-graph)
+![Repository size](https://img.shields.io/github/repo-size/jhu-seclab-cobra/commons-graph)
+[![License](https://img.shields.io/github/license/jhu-seclab-cobra/commons-graph)](./LICENSE)
+
 > commons-graph names the graph abstractions shared by consuming projects.
 
 A directed property graph library for Kotlin/JVM with pluggable storage and edge labels.
