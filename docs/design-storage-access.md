@@ -2,11 +2,11 @@
 
 ## Design Overview
 
-- **Classes**: `IStorage`, `TagAdjacencyIndex`, `EdgePairIndex`, `FrozenLayer`.
+- **Classes**: `IStorage`, `TagAdjacencyIndex`, `EdgePairIndex`, `FrozenEdgeOrder`.
 - **Relationships**: Core Storage implementations maintain directional Tag group buckets and a shared pair/triple index; external backends inherit scan-based defaults.
 - **Abstract**: `IStorage` defines structural selection independent of the physical representation.
 - **Exceptions**: `EntityNotExistException` reports a missing node in directional reads.
-- **Dependency roles**: `TagAdjacencyIndex` stores directional membership; `EdgePairIndex` stores endpoint-pair and complete-triple membership; `FrozenLayer` retains frozen encounter ranks.
+- **Dependency roles**: `TagAdjacencyIndex` stores directional membership; `EdgePairIndex` stores endpoint-pair and complete-triple membership; `FrozenEdgeOrder` retains frozen encounter ranks.
 
 The complete Storage interface is in [Storage design](design-storage.md#istorage). [Tag group](glossary/glossary-storage.md#tag-group) names the selection key. Lookup steps and bounds are in [Graph specification](spec-graph.md#edge-lookup-by-triple).
 
@@ -55,9 +55,9 @@ A property promotion records its existing structure in the active buckets; tombs
 
 **Responsibility:** Retain structural membership in core Storage implementations. Membership follows immutable complete tags and endpoint IDs; each physical create/delete updates it under the same guard as adjacency. An edge property write cannot change a Tag group.
 
-### FrozenLayer
+### FrozenEdgeOrder
 
-**Responsibility:** Preserve frozen directional ranks across property promotion and revert. The rank table retains one primitive entry per frozen edge until the next Freeze or clear; capacity conversion is checked before allocating primitive rank slots.
+**Responsibility:** Preserve frozen outgoing encounter ranks for the pair/triple index across property promotion and revert. `LayeredStorageImpl` owns this table. The rank table retains one primitive entry per frozen edge until the next Freeze or clear; capacity conversion is checked before allocating primitive rank slots.
 
 ## Exception / Error Types
 
