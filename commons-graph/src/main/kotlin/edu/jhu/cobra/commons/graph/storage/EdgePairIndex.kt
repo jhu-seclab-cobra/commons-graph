@@ -149,9 +149,9 @@ internal class FrozenEdgeOrder {
     private var rows = LongArray(0)
 
     fun reset(count: Int) {
-        var capacity = 1
+        var capacity = 1L
         while (capacity < count.toLong() * 2) capacity *= 2
-        rows = LongArray(capacity)
+        rows = LongArray(Math.toIntExact(capacity))
     }
 
     fun add(id: Int, rank: Int) {
