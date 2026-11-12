@@ -88,7 +88,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         val nodesList = dbManager.indexTreeList("nodes", mapValSerializer).create()
         nodeIds.forEach { nodeID ->
             val nodeProperties = from.getNodeProperties(id = nodeID).mapVal
-            nodesList.add(nodeProperties.also { it.add(NODE_ID_KEY, IntVal(nodeID.toLong())) })
+            nodesList.add(nodeProperties.also { it[NODE_ID_KEY] = IntVal(nodeID.toLong()) })
         }
     }
 
@@ -103,9 +103,9 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             val structure = from.getEdgeStructure(edgeID)
             edgesList.add(
                 edgeProperties.also {
-                    it.add(EDGE_SRC_KEY, IntVal(structure.src.toLong()))
-                    it.add(EDGE_DST_KEY, IntVal(structure.dst.toLong()))
-                    it.add(EDGE_TAG_KEY, StrVal(structure.tag))
+                    it[EDGE_SRC_KEY] = IntVal(structure.src.toLong())
+                    it[EDGE_DST_KEY] = IntVal(structure.dst.toLong())
+                    it[EDGE_TAG_KEY] = StrVal(structure.tag)
                 },
             )
         }
@@ -117,7 +117,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
     ) {
         val metaList = dbManager.indexTreeList("meta", mapValSerializer).create()
         val metaVal = MapVal()
-        from.metaNames.forEach { name -> from.getMeta(name)?.let { value -> metaVal.add(name, value) } }
+        from.metaNames.forEach { name -> from.getMeta(name)?.let { value -> metaVal[name] = value } }
         metaList.add(metaVal)
     }
 
