@@ -143,3 +143,43 @@ internal class EdgePairIndex(
         const val MIX_MULTIPLIER = -49064778989728563L
     }
 }
+
+// Immutable frozen encounter ranks. Zero is empty; the low word stores rank + 1, the high word the global ID.
+internal class FrozenEdgeOrder {
+    private var rows = LongArray(0)
+
+    fun reset(count: Int) {
+        var capacity = 1
+        while (capacity < count.toLong() * 2) capacity *= 2
+        rows = LongArray(capacity)
+    }
+
+    fun add(id: Int, rank: Int) {
+        rows[slot(id)] = (id.toLong() shl Int.SIZE_BITS) or (rank.toLong() + 1)
+    }
+
+    fun rank(id: Int): Long {
+        val row = if (rows.isEmpty()) 0 else rows[slot(id)]
+        return if (row == 0L) Int.MAX_VALUE.toLong() + 1 + id else (row and LOW_BITS) - 1
+    }
+
+    fun clear() {
+        rows = LongArray(0)
+    }
+
+    private fun slot(id: Int): Int {
+        val hash = id * ID_MULTIPLIER
+        var slot = (hash xor (hash ushr HASH_SHIFT)) and (rows.size - 1)
+        while (rows[slot] != 0L && (rows[slot] ushr Int.SIZE_BITS).toInt() != id) {
+            slot = (slot + 1) and (rows.size - 1)
+        }
+        return slot
+    }
+
+    private companion object {
+        // Multiplicative hash, high/low-word layout and unsigned low-word mask for Int IDs and ranks.
+        const val ID_MULTIPLIER = -1640531527
+        const val HASH_SHIFT = 16
+        const val LOW_BITS = 0xffffffffL
+    }
+}

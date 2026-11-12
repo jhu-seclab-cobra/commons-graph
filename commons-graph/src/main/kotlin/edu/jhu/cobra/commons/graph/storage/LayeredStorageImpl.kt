@@ -96,8 +96,8 @@ public class LayeredStorageImpl(
     private val layers = LayerStack(tagGroup) { boundFamilies }
     private val active = layers.active
     // Frozen factories may change encounter order. Active-only IDs follow every frozen rank.
-    private val pairOrder = HashMap<Int, Int>()
-    private val pairs = EdgePairIndex(order = { pairOrder[it]?.toLong() ?: (Int.MAX_VALUE.toLong() + 1 + it) })
+    private val pairOrder = FrozenEdgeOrder()
+    private val pairs = EdgePairIndex(order = pairOrder::rank)
     private val exact = projection?.let(::ExactAdjacencyIndex)
 
     override val adjacencyProjection: AdjacencyProjection? get() = exact?.projection
@@ -325,9 +325,10 @@ public class LayeredStorageImpl(
     // Freeze already visits all edges; build ranks once so scalar reads keep constant expected work.
     private fun rebuildPairs(frozen: FrozenLayer) {
         pairs.clear()
-        pairOrder.clear()
+        pairOrder.reset(frozen.edgeIds.size)
+        var rank = 0
         for (node in frozen.nodeIds) for (id in frozen.outgoingEdges(node).orEmpty()) {
-            pairOrder[id] = pairOrder.size
+            pairOrder.add(id, rank++)
             pairs.add(id, checkNotNull(frozen.edgeStructure(id)))
         }
     }
