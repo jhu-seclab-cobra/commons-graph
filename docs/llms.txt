@@ -1,49 +1,27 @@
 # commons-graph
 
-> Backend-agnostic directed property graph library for Kotlin/JVM with pluggable storage and label-based edge visibility.
-
-commons-graph provides a typed graph API (`IGraph<N, E>`) where nodes are identified by `NodeID` (String typealias) and edges by `(src, dst, tag)` triples. Storage backends implement `IStorage` using auto-generated `Int` IDs internally; abstract base classes (`AbcMultipleGraph`, `AbcSimpleGraph`) coordinate graph operations, storage delegation, and the label hierarchy (poset) for edge visibility control. Packages: `edu.jhu.cobra.commons.graph` (root), `edu.jhu.cobra.commons.graph.storage` (storage backends), `edu.jhu.cobra.commons.graph.poset` (labels, `IPoset`, `PosetTrait`).
+> A Kotlin/JVM directed property graph library with typed entities, Storage backends and label-based visibility.
 
 ## Instructions for Agents
 
-- Use `NodeID` (String typealias) for all graph-level node operations.
-- Identify edges by `(src: NodeID, dst: NodeID, tag: String)` triples at the graph level.
-- Construct nodes via `graph.addNode(withID)`. Construct edges via `graph.addEdge(src, dst, tag)`.
-- Never construct `AbcNode` or `AbcEdge` subclasses directly. The graph layer binds them to storage.
-- Access entity properties via operator syntax: `entity["key"]`, `entity["key"] = value`, `"key" in entity`.
-- Property values are `IValue` types from the commons-value library.
-- Use `AbcMultipleGraph` for graphs allowing multiple edges between the same node pair.
-- Use `AbcSimpleGraph` for graphs allowing at most one edge per direction between any two nodes.
-- Use `Label` for edge visibility control. Pass `Label` to `addEdge`, `getOutgoingEdges`, `getChildren`, etc.
-- `Label.INFIMUM` is below all labels -- an edge carrying it is visible under every label; a query under it sees only such edges. `Label.SUPREMUM` is above all -- disables label filtering.
-- Never assign `Label.SUPREMUM` to edges. It is a structural bound only.
-- Owner marks are written when nodes are added or claimed. Call `graph.storage.flush()` when needed by the storage backend.
-- `IStorage` uses auto-generated `Int` IDs internally. Never expose storage `Int` IDs to graph users.
-- Use `NativeStorageImpl` for single-threaded in-memory graphs.
-- Use `NativeConcurStorageImpl` for thread-safe in-memory graphs.
-- Use `LayeredStorageImpl` for phased analysis with freeze-and-stack semantics. It is thread-safe.
-- Share a storage or graph across threads only when `storage.criticalSectionLock != null`. Never share `NativeStorageImpl`, `JgraphtStorageImpl`, `MapDBStorageImpl`, or `Neo4jStorageImpl`.
-- Wrap every multi-call sequence that must be atomic (check-then-add, read-modify-write) in `storage.criticalSection { }`. Labeled traversal sequences evaluate lazily; their whole iteration is not atomic.
-- Never call a `suspend` function, or wait on another thread, inside `storage.criticalSection { }`.
-- Read `llms/storage.md` Concurrent Use before writing multi-threaded code.
-- Never add language-specific analysis logic to this library. Language mapping belongs in analysis modules.
+- Read the relevant API page before constructing a Graph, Entity or Storage.
+- Construct bound entities through Graph factory methods.
+- Configure graph identity, entity factories and optional Label hierarchy as the Graph API requires.
+- Choose a Storage implementation for the caller’s persistence and concurrency requirements.
+- Never put language-specific analysis policy in this library.
 
 ## Graph API
 
-- [Graph & Base Classes](llms/graph.md): `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph` -- node/edge CRUD, traversal, label-filtered queries.
+- [Graph](llms/graph.md): Graph construction, entity operations and structural queries.
+- [Entities](llms/entity.md): Bound entity properties and delegates.
+- [Labels](llms/label.md): Label hierarchy and label-selected queries.
+- [Algorithms](design-algorithm.md): Graph algorithm function contracts and caller examples.
 
-## Graph Algorithms
+## Storage API
 
-- [Graph Algorithms](design-algorithm.md): `tarjanScc`, `immediateDominators` — public contracts and caller examples.
+- [Storage](llms/storage.md): Storage operations, constructor settings and concurrent-use constraints.
 
-## Storage
+## Optional
 
-- [Storage Backends](llms/storage.md): `IStorage`, `NativeStorageImpl`, `NativeConcurStorageImpl`, `LayeredStorageImpl` -- pluggable backends with auto-generated IDs, `criticalSection`, concurrent-use rules.
-
-## Entities
-
-- [Entities](llms/entity.md): `IEntity`, `AbcEntity`, `AbcNode`, `AbcEdge` -- property access, type delegates, storage binding.
-
-## Labels
-
-- [Labels & Poset](llms/label.md): Label system -- `Label`, `IPoset`, `PosetDftImpl`, `PosetTrait`.
+- [Documentation index](index.md): Current design, specifications and external API notes.
+- [API page index](llms/index.md): File list for the API pages and generated aggregate.

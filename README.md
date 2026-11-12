@@ -1,6 +1,6 @@
 # commons-graph
 
-> Common graph abstractions and storage for Kotlin.
+> commons-graph names the graph abstractions shared by consuming projects.
 
 A directed property graph library for Kotlin/JVM with pluggable storage and edge labels.
 
@@ -54,7 +54,7 @@ fun main() {
 
 ## API
 
-`IGraph<N, E>` provides `addNode(withID: NodeID): N`, `addEdge(src: NodeID, dst: NodeID, tag: String): E`, and traversal queries such as `getChildren(of: NodeID): Sequence<N>`. `NodeID` is a `String` alias. `AbcMultipleGraph` implements this interface; `AbcSimpleGraph` restricts each directed node pair to one edge. `PosetTrait` adds label-aware operations. `IStorage` provides storage operations and `flush()`; resource lifecycle belongs to the storage owner. See the [graph API](docs/llms/graph.md), [storage API](docs/llms/storage.md), and [label API](docs/llms/label.md) for signatures and parameters.
+Exported signatures, parameters and return types: [Graph API](docs/llms/graph.md), [Entity API](docs/llms/entity.md), [Storage API](docs/llms/storage.md) and [Label API](docs/llms/label.md).
 
 ## Citation
 

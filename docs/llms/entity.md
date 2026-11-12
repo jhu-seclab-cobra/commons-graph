@@ -4,26 +4,14 @@
 
 ## Quick Start
 
-- Use `MyGraph` from [Graph & Base Classes](graph.md#quick-start).
-
 ```kotlin
-import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
-import edu.jhu.cobra.commons.value.IntVal
+import edu.jhu.cobra.commons.graph.IEntity
 import edu.jhu.cobra.commons.value.StrVal
-import edu.jhu.cobra.commons.value.strVal
 
-val graph = MyGraph(NativeStorageImpl())
-graph.addNode("a")
-graph.addNode("b")
-val node = graph.addNode("myNode")
-node["color"] = "red".strVal
-val color = node["color"] as? StrVal
-val hasColor = "color" in node
-val allProps = node.asMap()
-
-val edge = graph.addEdge("a", "b", "calls")
-edge["weight"] = IntVal(10)
-edge.update(mapOf("weight" to IntVal(20), "stale" to null))
+fun setColor(entity: IEntity): StrVal? {
+    entity["color"] = StrVal("red")
+    return entity["color"] as? StrVal
+}
 ```
 
 ## API
@@ -36,7 +24,7 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 - **`operator set(name: String, value: IValue?)`** -- Set property. Pass `null` to remove.
 - **`operator contains(name: String): Boolean`** -- Check property existence.
 - **`fun asMap(): Map<String, IValue>`** -- Snapshot of all properties.
-- **`fun update(props: Map<String, IValue?>)`** -- Bulk update. `null` values remove properties.
+- **`fun update(props: Map<String, IValue?>): Unit`** -- Bulk update. `null` values remove properties.
 
 ### `AbcEntity` (sealed class, implements `IEntity`)
 
@@ -61,20 +49,10 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 - **`val labels: Set<Label>`** -- Visibility labels, including any implied labels. Use `graph.setLabels(edge, edge.storedLabels + label)` to update stored labels.
 - **`abstract val type: AbcEdge.Type`** -- Edge type. Subclasses implement `AbcEdge.Type` as an enum.
 
-### Property Delegate Usage
+## Configuration
 
-```kotlin
-import edu.jhu.cobra.commons.graph.AbcNode
-import edu.jhu.cobra.commons.value.IntVal
-import edu.jhu.cobra.commons.value.StrVal
-
-class MyNode : AbcNode() {
-    enum class MyType : AbcNode.Type { FUNC, CLASS }
-    override var type: MyType by EntityType(default = MyType.FUNC)
-    var name: StrVal by EntityProperty(default = StrVal())
-    var optData: IntVal? by EntityProperty()
-}
-```
+- Create bound Entities through a Graph; entity subclasses supply their type and optional property delegates.
+- Set delegate defaults in the subclass; the example operation accepts an already bound `IEntity`.
 
 ## Gotchas
 
