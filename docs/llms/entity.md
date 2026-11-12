@@ -48,7 +48,7 @@ edge.update(mapOf("weight" to IntVal(20), "stale" to null))
 - **`val dstNid: NodeID`** -- Destination node ID.
 - **`val eTag: String`** -- Edge tag.
 - **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
-- **`var labels: Set<Label>`** -- Visibility labels assigned to this edge.
+- **`val labels: Set<Label>`** -- Visibility labels, including any implied labels. Use `graph.setLabels(edge, edge.storedLabels + label)` to update stored labels.
 - **`abstract val type: AbcEdge.Type`** -- Edge type. Subclasses implement `AbcEdge.Type` as an enum.
 
 ### Property Delegate Usage

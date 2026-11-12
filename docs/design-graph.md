@@ -3,7 +3,7 @@
 ## Design Overview
 
 - **Classes**: `IGraph`, `AbcMultipleGraph`, `AbcSimpleGraph`, `GraphMergeLaws`, `PropertyMergeLaw`, `WriterChange`, `EdgeKey`
-- **Relationships**: `AbcMultipleGraph` implements `IGraph`, `GraphMergeLaws` and `Flushable`; `AbcSimpleGraph` extends `AbcMultipleGraph`
+- **Relationships**: `AbcMultipleGraph` implements `IGraph` and `GraphMergeLaws`; `AbcSimpleGraph` extends `AbcMultipleGraph`
 - **Abstract**: `IGraph` (implemented by `AbcMultipleGraph`); `AbcMultipleGraph` (extended by `AbcSimpleGraph`)
 - **Exceptions**: `EntityAlreadyExistException` raised on duplicate node/edge add; `EntityNotExistException` raised on edge add with missing src/dst; `MergeConflictException` raised by a merge law; all extend `GraphException`
 - **Dependency roles**: Data holders: `NodeID`. Orchestrator: `AbcMultipleGraph` (coordinates entity factories and graph storage). Helpers: `IStorage` (injected via abstract property); `GraphEntityCache` (internal — NodeID↔Int index and soft-referenced entity wrappers).
@@ -73,7 +73,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 ### AbcMultipleGraph
 
-**Responsibility:** Canonical `IGraph` + `Flushable` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `PosetTrait` when mixed in by concrete graph classes.
+**Responsibility:** Canonical `IGraph` implementation. Maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. Allows multiple parallel edges between the same `(src, dst)` pair. Label-filtered operations provided by `PosetTrait` when mixed in by concrete graph classes.
 
 **State / Fields:**
 
@@ -117,7 +117,7 @@ All edge query methods filter by this graph's node registry membership. See `mod
 
 ### AbcSimpleGraph
 
-**Responsibility:** Graph variant enforcing at most one edge per directed `(src, dst)` pair. Extends `AbcMultipleGraph`. All node CRUD, label, and traversal operations are inherited.
+**Responsibility:** Graph variant enforcing at most one edge per directed `(src, dst)` pair. Extends `AbcMultipleGraph`. Node CRUD and traversal operations are inherited; label operations require `PosetTrait`.
 
 **Overridden Methods:**
 

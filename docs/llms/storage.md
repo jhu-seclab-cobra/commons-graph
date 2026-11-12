@@ -101,7 +101,7 @@ storage.criticalSection {
 
 - Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
 - Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
-- Graph, poset, and labeled-edge operations already run inside `criticalSection`. Wrap only a group of them that must be atomic together (see `llms/graph.md`).
+- Graph and poset operations use `criticalSection`. Labeled traversal sequences are lazy: each step is atomic, but the whole iteration is not. Wrap a group of operations or an iteration that must be atomic together (see `llms/graph.md`).
 - A copy returned by a thread-safe storage is fixed at the call. Later writes, `freeze()`, and `clearActiveLayer()` do not change it.
 - Never call a `suspend` function inside `criticalSection`. The coroutine can resume on another thread, which does not own the lock.
 - Never wait inside `criticalSection` for another thread that uses the same storage (`Future.get()`, `CountDownLatch.await()`, `Thread.join()`, `runBlocking`, `awaitAll`). Both threads block forever.
@@ -118,4 +118,4 @@ storage.criticalSection {
 - `deleteNode` cascades to all incident edges in the same storage.
 - `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
 - `LayeredStorageImpl.freeze()` merges active + frozen into a new frozen layer. Active layer properties overlay frozen layer properties for the same entity.
-- `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting frozen-layer entities. Only active-layer entities can be deleted.
+- `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting a frozen node. Deleting a frozen edge masks it until a revert or freeze.

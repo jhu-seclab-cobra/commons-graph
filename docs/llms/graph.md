@@ -5,6 +5,17 @@
 ## Quick Start
 
 ```kotlin
+import edu.jhu.cobra.commons.graph.AbcEdge
+import edu.jhu.cobra.commons.graph.AbcMultipleGraph
+import edu.jhu.cobra.commons.graph.AbcNode
+import edu.jhu.cobra.commons.graph.poset.IPoset
+import edu.jhu.cobra.commons.graph.poset.LabelEdgeIndex
+import edu.jhu.cobra.commons.graph.poset.PosetDftImpl
+import edu.jhu.cobra.commons.graph.poset.PosetTrait
+import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.NativeStorageImpl
+import edu.jhu.cobra.commons.value.IntVal
+
 class MyNode : AbcNode() {
     enum class MyType : AbcNode.Type { DEFAULT }
     override val type = MyType.DEFAULT
@@ -17,16 +28,20 @@ class MyGraph(
     override val storage: IStorage,
 ) : AbcMultipleGraph<MyNode, MyEdge>(), PosetTrait<MyNode, MyEdge> {
     override val graphId = "myGraph"
-    override val poset: IPoset = PosetDftImpl(storage)
+    override val poset: IPoset = PosetDftImpl(NativeStorageImpl())
+    override val labelIndex = LabelEdgeIndex<MyEdge>()
     override fun newNodeObj() = MyNode()
     override fun newEdgeObj() = MyEdge()
+    override fun onRestoredEdges(ids: Set<Int>) = restoreLabelIndex(ids, ::edgeByStorageId)
 }
 
-val graph = MyGraph(NativeStorageImpl())
-val n1 = graph.addNode("a")
-val n2 = graph.addNode("b")
-val edge = graph.addEdge("a", "b", "calls")
-edge["weight"] = IntVal(5)
+fun main() {
+    val graph = MyGraph(NativeStorageImpl())
+    graph.addNode("a")
+    graph.addNode("b")
+    val edge = graph.addEdge("a", "b", "calls")
+    edge["weight"] = IntVal(5)
+}
 ```
 
 ## API
@@ -38,12 +53,12 @@ edge["weight"] = IntVal(5)
 - **`getNode(whoseID: NodeID): N?`** -- Retrieve a node by ID. Returns `null` if absent.
 - **`containNode(whoseID: NodeID): Boolean`** -- Check node existence.
 - **`delNode(whoseID: NodeID)`** -- Delete a node and all incident edges.
-- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Lazy sequence of nodes, optionally filtered.
+- **`getAllNodes(doSatisfy: (N) -> Boolean = { true }): Sequence<N>`** -- Snapshot sequence of nodes, optionally filtered.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Create an edge. Raises `EntityNotExistException` if nodes missing, `EntityAlreadyExistException` if edge exists.
 - **`getEdge(src: NodeID, dst: NodeID, tag: String): E?`** -- Retrieve an edge. Returns `null` if absent.
 - **`containEdge(src: NodeID, dst: NodeID, tag: String): Boolean`** -- Check edge existence.
 - **`delEdge(src: NodeID, dst: NodeID, tag: String)`** -- Delete an edge.
-- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Lazy sequence of edges, optionally filtered.
+- **`getAllEdges(doSatisfy: (E) -> Boolean = { true }): Sequence<E>`** -- Snapshot sequence of edges, optionally filtered.
 - **`getIncomingEdges(of: NodeID): Sequence<E>`** -- All incoming edges to a node.
 - **`getOutgoingEdges(of: NodeID): Sequence<E>`** -- All outgoing edges from a node.
 - **`getChildren(of: NodeID, edgeCond: (E) -> Boolean = { true }): Sequence<N>`** -- Direct successors via outgoing edges.
@@ -60,7 +75,7 @@ edge["weight"] = IntVal(5)
 
 ### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
 
-Concrete graph classes mix in `PosetTrait` and provide `override val poset: IPoset`.
+Concrete graph classes mix in `PosetTrait` and provide `poset` and `labelIndex`.
 
 - **`val poset: IPoset`** -- Pluggable poset module for label hierarchy operations.
 - **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Create or update edge with a label. Appends label if edge exists.
@@ -85,7 +100,7 @@ Pure declarations for merging the prospective changes of several writers; each w
 ### `AbcSimpleGraph<N, E>` (extends `AbcMultipleGraph`)
 
 - **`addEdge(src: NodeID, dst: NodeID, tag: String): E`** -- Raises `EntityAlreadyExistException` if any edge from `src` to `dst` exists, regardless of tag.
-- **`addEdge(src: NodeID, dst: NodeID, tag: String, label: Label): E`** -- Same constraint: at most one edge per direction.
+- The labeled `addEdge` overload requires `PosetTrait`; the same one-edge-per-direction constraint applies.
 - **`edgeUniqueKeys(edge: EdgeKey): Map<String, List<String>>`** -- Declares the `(src, dst)` pair as a unique key, so `coalesceEdges` fails for two distinct edges on one pair.
 
 ## Gotchas
@@ -96,6 +111,6 @@ Pure declarations for merging the prospective changes of several writers; each w
 - `addEdge` with `Label` on `AbcMultipleGraph` is additive -- calling with the same `(src, dst, tag)` appends the label, not replaces.
 - `rebuild()` must be called after re-opening a previously populated storage to restore in-memory indexes.
 - `IGraph` queries returning `Sequence` return a snapshot taken at the call. Later writes do not change which entities it yields. Label-filtered `PosetTrait` queries are lazy (see `llms/label.md`).
-- On a thread-safe storage, each `IGraph`, `PosetTrait`, and `IPoset` call is atomic. A group of calls is not: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
+- On a thread-safe storage, individual graph and poset operations are atomic; labeled traversal sequences are lazy and their whole iteration is not. A group of calls is not atomic: wrap `if (!graph.containNode(id)) graph.addNode(id)` and every other check-then-act in `graph.storage.criticalSection { }`.
 - Entities in a snapshot read storage live. On an entity that another thread has deleted, property access raises `EntityNotExistException`.
 - Share a graph across threads only when its storage is thread-safe (`graph.storage.criticalSectionLock != null`). Concurrency rules: `llms/storage.md`, Concurrent Use.
