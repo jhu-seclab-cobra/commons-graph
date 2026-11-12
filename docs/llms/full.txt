@@ -207,6 +207,7 @@ fun main() {
 - **`abstract val storage: IStorage`** -- Graph data storage backend.
 - **`protected abstract fun newNodeObj(): N`** -- Factory for an unbound node instance.
 - **`protected abstract fun newEdgeObj(): E`** -- Factory for an unbound edge instance.
+- **`protected open fun isEdgeVisible(edge: E): Boolean`** -- Declare enumerated edge visibility here; do not hide edges in whole-adjacency overrides.
 - **`protected fun rebuild()`** -- Restore graph caches from storage: registers the nodes whose owner set holds this graph's ID.
 
 ### `PosetTrait<N, E>` (extends `IGraph`, provides label-filtered operations)
