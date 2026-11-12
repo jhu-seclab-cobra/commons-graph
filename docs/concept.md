@@ -9,13 +9,13 @@ Graph applications need to run on different storage engines, but each engine exp
 This module is the stable graph domain boundary, translating domain-level graph operations into backend-specific storage behavior.
 
 **Data Flow**
-- **Inputs:** Domain operations using node identifiers and edge tuples, entity property reads and updates, traversal and neighborhood queries, label hierarchy mutations, layer transition signals.
-- **Outputs:** Domain-consistent node and edge views, deterministic query results, label-filtered traversal results, backend-independent error semantics.
-- **Connections:** Upstream services -> graph domain contract + label hierarchy contract -> graph store contract -> backend implementations and layered storage composers.
+- **Inputs:** Domain operations using node identifiers and edge tuples, entity property reads and updates, traversal and neighborhood queries, Label hierarchy mutations, layer transition signals.
+- **Outputs:** Domain-consistent node and edge views, query membership determined by the Graph contract, label-filtered traversal results, backend-independent error semantics.
+- **Connections:** Upstream services -> graph domain contract + Label hierarchy contract -> graph store contract -> backend implementations and Layered Storage composers.
 
 **Scope Boundaries**
-- **Owned:** Graph domain vocabulary, entity identity model, graph and store contracts, layered storage composition, label partial-order framework, metadata contract, import/export contract.
-- **Not Owned:** Backend-specific tuning, graph algorithm libraries, database lifecycle operations, external deployment concerns.
+- **Owned:** Graph domain vocabulary, entity identity model, graph and store contracts, Layered Storage composition, label partial-order framework, metadata contract, import/export contract.
+- **Not Owned:** Backend deployment, database lifecycle operations and language-specific analysis policy.
 
 ## 2. Concepts
 
@@ -24,80 +24,73 @@ This module is the stable graph domain boundary, translating domain-level graph 
 [Domain Services]
         |
         v
-[Graph Contract + Label Hierarchy Contract]
+[Graph contract + Label hierarchy contract]
   (node identifiers + edge tuples)     (labels)
         |                                 |
         v                                 v
 [Domain Coordinator]
   ├── Deterministic edge identity
-  └── Label visibility filtering
+  └── `Label` visibility filtering
         |                                 |
         v                                 v
-[Store Contract: graph]         [Store Contract: label hierarchy]
+[Store Contract: graph]         [Storage: Label hierarchy]
         |                                 |
-        +--> Flat store                   +--> Flat store (label DAG)
+        +--> Storage                   +--> Storage for Label hierarchy
         |
-        +--> Layered store (freeze-and-stack)
+        +--> Layered Storage
 ```
 
 **Core Concepts**
 
-- **Graph**
-  - **Definition:** The top-level domain contract for directed property graph operations. Accepts string node identifiers and edge tuples, enforces graph-level policy, and delegates storage.
-  - **Scope:** Owns edge uniqueness semantics, node/edge lifecycle, and traversal queries. Does not own storage internals or backend selection.
-  - **Relationships:** Delegates to storage for persistence. Delegates to the label hierarchy for edge visibility filtering. Produces entities as query results.
+- **Name:** [Graph](glossary/glossary-graph.md#graph)
+  - **Role:** Keeps application graph operations independent of the storage backend.
+  - **Scope:** Owns edge uniqueness, entity lifecycle and structural traversal.
+  - **Relationships:** Delegates persistence to Storage and visibility selection to Label hierarchy.
 
-- **Node**
-  - **Definition:** A vertex in the graph, identified by a user-provided string identifier. Carries typed properties.
-  - **Scope:** Owns its identity and property access. Does not own adjacency data or traversal logic.
-  - **Relationships:** Created and queried through the graph.
+- **Name:** [Node](glossary/glossary-graph.md#node)
+  - **Role:** Provides application vertex identity and typed property access.
+  - **Scope:** Excludes adjacency indexing and traversal.
+  - **Relationships:** Created and queried through a Graph.
 
-- **Edge**
-  - **Definition:** A directed connection between two nodes, identified by source, destination, and tag. Carries typed properties.
-  - **Scope:** Owns its structural metadata (source, destination, tag) and property access. Does not own adjacency indexing.
-  - **Relationships:** Created through the graph. Visibility governed by the label hierarchy.
+- **Name:** [Edge](glossary/glossary-graph.md#edge)
+  - **Role:** Provides directed connectivity with a tag and typed properties.
+  - **Scope:** Owns structural identity; excludes adjacency indexing.
+  - **Relationships:** Connects Nodes; `Label` assignments determine visibility.
 
-- **Entity**
-  - **Definition:** The common abstraction for nodes and edges as property-carrying graph elements.
-  - **Scope:** Owns typed property access. Does not own identity generation or lifecycle.
-  - **Relationships:** Both nodes and edges are entities. See `model.md` for identity and existence rules.
+- **Name:** [Entity](glossary/glossary-graph.md#entity)
+  - **Role:** Gives Nodes and Edges one property-access contract.
+  - **Scope:** Excludes identity generation and lifecycle.
+  - **Relationships:** Reads and writes through Storage; identity rules are in the model.
 
-- **Storage**
-  - **Definition:** A generic directed property graph engine that manages nodes, edges, adjacency indices, and per-entity properties using auto-generated integer identifiers.
-  - **Scope:** Owns data structure management, adjacency indices, persistence, and identifier generation. Does not know about domain-level node identifiers, labels, or graph policy.
-  - **Relationships:** Consumed by the graph layer, which maintains a mapping between string node identifiers and storage integer identifiers. The same storage contract backs both the main graph and the label hierarchy.
+- **Name:** [Storage](glossary/glossary-graph.md#storage)
+  - **Role:** Supplies the data access that a Graph delegates to a backend.
+  - **Scope:** Owns identifiers, adjacency, properties, metadata and persistence.
+  - **Relationships:** Backs both the main Graph and its separate Label hierarchy.
 
-- **Label**
-  - **Definition:** A domain marker that controls edge visibility. Wraps a string value. Includes structural bounds for top and bottom of the partial order.
-  - **Scope:** Owns its string identity and structural-bound semantics. Does not own hierarchy relationships (those belong to the label hierarchy).
-  - **Relationships:** Organized into a partial order by the label hierarchy. Used by the graph layer to filter edge queries.
+- **Name:** [`Label`](glossary/glossary-labels.md#label)
+  - **Role:** Scopes edge visibility without encoding order in its string.
+  - **Scope:** Owns string identity and the two structural bounds.
+  - **Relationships:** Ordered by Label hierarchy and assigned to Edges.
 
-- **Label Hierarchy (Poset)**
-  - **Definition:** A directed acyclic graph where nodes represent labels and edges represent parent relationships. Provides ancestor queries, comparability checks, and partial-order operations over labels.
-  - **Scope:** Owns label ordering, ancestor traversal, and comparability. Does not own label identity or edge association.
-  - **Relationships:** Backed by a dedicated storage instance. Queried by the graph layer for edge visibility filtering. Labels represent context paths, and the partial order reflects containment rather than simple string prefix.
+- **Name:** [Label hierarchy](glossary/glossary-labels.md#label-hierarchy)
+  - **Role:** Supports visibility queries over context relationships with multiple parents.
+  - **Scope:** Owns ordering, named parent relationships and ancestor queries.
+  - **Relationships:** Uses separate Storage; order follows parent relationships, not a string prefix.
 
-- **Layered Storage**
-  - **Definition:** A composition of one frozen storage instance plus one mutable active layer into a unified storage view. Supports phase-based analysis where completed phases become read-only.
-  - **Scope:** Owns layer lifecycle, freeze transitions, query routing, and merge operations. Deletion restricted to the active layer.
-  - **Relationships:** Composed from flat storage instances. Exposes the same storage contract. On freeze, active data merges into the frozen layer and a fresh active layer is created.
+- **Name:** [Layered Storage](glossary/glossary-storage.md#layered-storage)
+  - **Role:** Lets later analysis phases read completed data while writing temporary changes.
+  - **Scope:** Owns layer lifecycle, query resolution and merge-on-Freeze.
+  - **Relationships:** Combines one Frozen layer with one Active layer; node and edge deletion rules belong to the model.
 
 ## 3. Contracts & Flow
 
 **Data Contracts**
 - **With upstream modules:** Inputs are valid string node identifiers, edge tuples, and property names. Outputs are graph and entity views or explicit domain exceptions.
-- **With storage implementations:** Storage preserves node and edge semantics, enforces existence constraints, and exposes deterministic adjacency and property behavior. Storage operates on auto-generated integer identifiers with no domain type awareness.
-- **With layered storage composers:** Flat storage instances serve as building blocks. Composers manage layer lifecycle, freeze transitions, and query routing through the standard storage contract.
+- **With storage implementations:** Storage determines query membership and enforces existence constraints; iteration order is unspecified unless an API states it. Storage has no application-domain policy.
+- **With Layered Storage composers:** Flat storage instances serve as building blocks. Composers manage layer lifecycle, freeze transitions, and query routing through the standard storage contract.
 
 **Internal Processing Flow**
-1. **Request normalization** — Domain service provides a valid node identifier and edge tuple, invokes a graph operation.
-2. **Contract checks** — Graph layer enforces existence, uniqueness, and variant rules.
-3. **Identity translation** — Graph layer maps string node identifiers to storage integer identifiers.
-4. **Store dispatch** — Graph layer delegates to storage for node, edge, adjacency, and property operations.
-5. **Label hierarchy dispatch** (label operations) — Label hierarchy queries route to a dedicated storage instance.
-6. **Result propagation** — Success returns typed domain outputs. Contract violations raise domain exceptions.
-
-See `spec-graph.md` for layered query resolution and ownership persistence algorithms.
+The Graph coordinates application identity and delegates data access to Storage; the Label hierarchy supplies ordering for visibility selection. Algorithm steps belong to [Graph operations](spec-graph.md), [Label hierarchy queries](spec-poset.md), [label carrier queries](spec-poset-label-index.md) and [merge operations](spec-graph-merge.md).
 
 ## 4. Scenarios
 
@@ -107,8 +100,40 @@ See `spec-graph.md` for layered query resolution and ownership persistence algor
 
 - **Boundary:** A query on an empty graph returns empty results. No nodes or edges exist, and traversal produces no output.
 
-- **Interaction (layered):** A static analysis tool builds a syntax graph, freezes it, then builds control-flow edges on top of the frozen data. The syntax data merges into a frozen layer. Control-flow construction writes to a fresh active layer. Property reads for syntax nodes cascade to the frozen layer.
+- **Interaction (layered):** A static analysis tool builds a syntax graph, freezes it, then builds control-flow edges on top of the frozen data. The syntax data merges into a Frozen layer. Control-flow construction writes to a fresh Active layer. Property reads for syntax nodes cascade to the Frozen layer.
 
-- **Interaction (active-only deletion):** During construction, the tool creates temporary nodes in the active layer, then deletes them before freezing. Deletion succeeds because the nodes are in the active layer. Attempting to delete a frozen node raises a domain exception.
+- **Interaction (active-only deletion):** During construction, the tool creates temporary nodes in the Active layer, then deletes them before freezing. Deletion succeeds because the nodes are in the Active layer. Attempting to delete a Frozen layer Node is rejected; deleting a Frozen layer Edge hides it until revert or Freeze.
 
-- **Interaction (label-filtered traversal):** The tool defines context labels and their parent relationships in the label hierarchy. When querying edges visible under a given label, the graph layer uses the hierarchy to determine dominated labels, then filters edges accordingly.
+- **Interaction (label-filtered traversal):** The tool defines context labels and their parent relationships in the Label hierarchy. When querying edges visible under a given label, the graph layer uses the hierarchy to determine dominated labels, then filters edges accordingly.
+
+## 5. Rationale and Rejected Alternatives
+
+### Label hierarchy queries
+
+- **DFS interval labeling**: O(1) query but correct only on trees — in a DAG a
+  label reachable through two parents receives one interval, so containment
+  tests against the other parent report false negatives.
+- **Per-query BFS**: correct, no invalidation state, but O(V + E) on the hot
+  visibility-filtering path.
+- **Multi-interval labeling**: correct on DAGs, but interval-set size is
+  unbounded in the worst case and the implementation complexity exceeds the
+  closure table with no asymptotic gain at this scale.
+
+### Label carrier queries
+
+- **Full scan per relabel**: O(|E|) per merge; quadratic over an analysis.
+- **Full candidate scan per copy**: O(|candidates(from)|) per merge; a label
+  copied once per arrival of each nested branch rescans its earlier carriers
+  each time.
+- **Cursor kept by the index per `(from, to)` pair**: the index would hold
+  caller state that the caller's `cond` and its own run boundaries decide.
+- **Append-only record log per label**: every repeated record of one edge
+  stays in the log, so a first copy visits each edge once per record instead
+  of once.
+- **Exact index (remove on relabel)**: needs a removal record per relabel; the
+  superset keeps relabel and restore at O(1) per assignment.
+- **Traversal-local write log**: misses carriers written before the current
+  traversal under the same deterministic label.
+- **Candidates keyed by `(src, dst, tag)`**: the graph-level identity survives
+  a delete and re-add while the storage ID does not; the stale entry shadows
+  the re-added edge, and the query drops both.
