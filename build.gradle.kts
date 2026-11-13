@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
@@ -104,5 +105,20 @@ subprojects {
         config.setFrom(rootProject.files("detekt.yml"))
         buildUponDefaultConfig = true
         parallel = true
+    }
+}
+
+// These implementation modules share core's internal completion record without exposing a public API.
+configure(
+    listOf(
+        project(":jhu-seclab-cobra-commons-graph-impl-jgrapht"),
+        project(":jhu-seclab-cobra-commons-graph-impl-mapdb"),
+        project(":jhu-seclab-cobra-commons-graph-impl-neo4j"),
+    ),
+) {
+    tasks.named<KotlinCompile>("compileKotlin") {
+        val coreCompilation = project(":jhu-seclab-cobra-commons-graph").tasks.named<KotlinCompile>("compileKotlin")
+        dependsOn(coreCompilation)
+        friendPaths.from(coreCompilation.flatMap { it.destinationDirectory })
     }
 }

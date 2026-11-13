@@ -122,7 +122,7 @@ public class LayeredStorageImpl(
             active.clear()
             rebuildPairs(merged)
         }
-        logCompletion("freeze", this, started)
+        logCompletion(operationLogger, "freeze", this, started)
     }
 
     /**
@@ -143,7 +143,7 @@ public class LayeredStorageImpl(
             restoreExactAdjacency(notice)
             notifyRevert(notice)
         }
-        logCompletion("clearActiveLayer", this, started)
+        logCompletion(operationLogger, "clearActiveLayer", this, started)
     }
 
     override fun addRevertListener(listener: RevertListener) {
@@ -416,25 +416,25 @@ public class LayeredStorageImpl(
 
     override fun clear(): Unit {
         val started = System.nanoTime()
-        lock.writeLock().withLock{
-                val removedEdges = layers.edgeIds().toSet()
-                val notice =
-                    RevertNotice(
-                        removed = StorageEntityIds(layers.nodeIds().toSet(), removedEdges),
-                        restored = StorageEntityIds(emptySet(), emptySet()),
-                        edgeStructuresBefore = removedEdges.associateWith(layers::edgeStructure),
-                    )
-                layers.frozen?.close()
-                layers.frozen = null
-                active.clear()
-                pairs.clear()
-                pairOrder.clear()
-                exact?.clear()
-                nodeCounter = 0
-                edgeCounter = 0
-                notifyRevert(notice)
-            }
-        logCompletion("clear", this, started)
+        lock.writeLock().withLock {
+            val removedEdges = layers.edgeIds().toSet()
+            val notice =
+                RevertNotice(
+                    removed = StorageEntityIds(layers.nodeIds().toSet(), removedEdges),
+                    restored = StorageEntityIds(emptySet(), emptySet()),
+                    edgeStructuresBefore = removedEdges.associateWith(layers::edgeStructure),
+                )
+            layers.frozen?.close()
+            layers.frozen = null
+            active.clear()
+            pairs.clear()
+            pairOrder.clear()
+            exact?.clear()
+            nodeCounter = 0
+            edgeCounter = 0
+            notifyRevert(notice)
+        }
+        logCompletion(operationLogger, "clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
@@ -457,24 +457,11 @@ public class LayeredStorageImpl(
             }
             nodeIdMap
         }
-        logCompletion("transferTo", target, started)
+        logCompletion(operationLogger, "transferTo", target, started)
         return transferred
     }
 
     override fun flush() {
         // No buffered writes; mutations are applied immediately.
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

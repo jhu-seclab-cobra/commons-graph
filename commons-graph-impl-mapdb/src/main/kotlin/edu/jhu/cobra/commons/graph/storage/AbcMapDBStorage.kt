@@ -208,7 +208,7 @@ public abstract class AbcMapDBStorage protected constructor(
             inEdges.clear()
             metaProperties.clear()
         }
-        logCompletion("clear", this, started)
+        logCompletion(operationLogger, "clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
@@ -232,20 +232,7 @@ public abstract class AbcMapDBStorage protected constructor(
             }
             idMap
         }
-        logCompletion("transferTo", target, started)
+        logCompletion(operationLogger, "transferTo", target, started)
         return transferred
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

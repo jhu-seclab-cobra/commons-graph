@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.storage.nio
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.logCompletion
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -70,7 +71,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
-        logCompletion("import", into, started)
+        logCompletion(operationLogger, "import", into, started)
         return into
     }
 
@@ -103,18 +104,5 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): Boolean {
         val originalId = entityId.toIntOrNull() ?: return false
         return !predicate(originalId)
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

@@ -3,8 +3,12 @@
 ## Design Overview
 
 The Storage implementations and file importers submit completion records through kotlin-logging.
-Private file-level loggers belong to each implementation module. Logging introduces no public API
-and changes no Storage state or return value. The existing `RevertListener` interface remains the
+The core module's internal `logCompletion` function in `StorageOperationLog.kt` constructs every
+completion record. Each operation passes its file-level logger, operation, affected Storage and
+start time to that function. The JGraphT, MapDB and Neo4j main compilations have friend access to
+core's main compilation output so they can call this internal function. This access is limited
+to those three backend modules; external consumers receive no public logging declaration.
+The owner changes no Storage state or return value. The existing `RevertListener` interface remains the
 callback mechanism; it does not depend on a separate observer library.
 
 ## Function Specifications

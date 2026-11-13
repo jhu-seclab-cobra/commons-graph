@@ -1,6 +1,7 @@
 package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.logCompletion
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageImporter
@@ -117,7 +118,7 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         }
         val (nodeIdMapping, filteredNodeIds) = importNodes(nodesCache.values, into, predicate)
         importEdges(edgeCache.values, into, nodeIdMapping, filteredNodeIds)
-        logCompletion("import", into, started)
+        logCompletion(operationLogger, "import", into, started)
         return into
     }
 
@@ -224,17 +225,4 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val value = DftCharBufferSerializerImpl.serialize(this).toString()
             return DefaultAttribute.createAttribute(value.replace("\"", "\\\""))
         }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
-    }
 }

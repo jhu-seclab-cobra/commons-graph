@@ -300,7 +300,7 @@ public class NativeConcurStorageImpl(
             nodeCounter = 0
             edgeCounter = 0
         }
-        logCompletion("clear", this, started)
+        logCompletion(operationLogger, "clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
@@ -323,20 +323,7 @@ public class NativeConcurStorageImpl(
             }
             nodeIdMap
         }
-        logCompletion("transferTo", target, started)
+        logCompletion(operationLogger, "transferTo", target, started)
         return transferred
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

@@ -260,7 +260,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             nodeCounter = 0
             edgeCounter = 0
         }
-        logCompletion("clear", this, started)
+        logCompletion(operationLogger, "clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
@@ -274,7 +274,7 @@ public abstract class AbcNeo4jStorage protected constructor(
             findMetaNode()?.propertyEntries()?.forEach { (name, value) -> target.setMeta(name, value) }
             idMap
         }
-        logCompletion("transferTo", target, started)
+        logCompletion(operationLogger, "transferTo", target, started)
         return transferred
     }
 
@@ -304,17 +304,4 @@ public abstract class AbcNeo4jStorage protected constructor(
     }
 
     override fun close(): Unit = writeGuarded { managementService.shutdown() }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
-    }
 }

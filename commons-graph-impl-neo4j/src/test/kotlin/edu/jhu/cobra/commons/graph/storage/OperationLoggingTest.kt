@@ -10,11 +10,11 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import edu.jhu.cobra.commons.value.intVal
-import org.slf4j.LoggerFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import org.slf4j.LoggerFactory
 
 internal class OperationLoggingTest {
     @Test

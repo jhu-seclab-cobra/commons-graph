@@ -276,7 +276,7 @@ public class NativeStorageImpl(
         metaProperties.clear()
         nodeCounter = 0
         edgeCounter = 0
-        logCompletion("clear", this, started)
+        logCompletion(operationLogger, "clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
@@ -296,20 +296,7 @@ public class NativeStorageImpl(
         for (name in metaProperties.keys) {
             target.setMeta(name, metaProperties[name])
         }
-        logCompletion("transferTo", target, started)
+        logCompletion(operationLogger, "transferTo", target, started)
         return nodeIdMap
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

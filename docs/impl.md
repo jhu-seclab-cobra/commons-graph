@@ -52,6 +52,8 @@
 
 ## Developer Instructions
 
+- `KotlinCompile.friendPaths` accepts core main output through `from(coreCompilation.flatMap { it.destinationDirectory })`; only the three backend main compilation tasks receive this internal-visibility access and depend on core compilation.
+
 - `MapVal.put(key, value)` mutates the map; in MapDB off-heap storage, re-`put` after modification.
 - `incomingEdgesOf` / `outgoingEdgesOf` return internal Set references; copy before modification.
 - `getAllEdges(from, to)` returns `null` when a vertex does not exist; validate before calling.

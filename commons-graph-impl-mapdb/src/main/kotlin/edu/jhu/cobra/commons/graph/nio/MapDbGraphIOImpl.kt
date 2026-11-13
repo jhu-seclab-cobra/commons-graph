@@ -2,6 +2,7 @@ package edu.jhu.cobra.commons.graph.nio
 
 import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import edu.jhu.cobra.commons.graph.storage.logCompletion
 import edu.jhu.cobra.commons.graph.storage.MapDbValSerializer
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
@@ -139,7 +140,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             importEdges(dbManager, into, nodeIdMapping, filteredNodeIds)
             importMeta(dbManager, into)
         }
-        logCompletion("import", into, started)
+        logCompletion(operationLogger, "import", into, started)
         return into
     }
 
@@ -193,18 +194,5 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         if (!dbManager.exists("meta")) return
         val metaList = dbManager.indexTreeList("meta", mapValSerializer).open()
         metaList.forEach { metaVal -> metaVal!!.core.forEach { (name, value) -> into.setMeta(name, value) } }
-    }
-}
-
-private fun logCompletion(operation: String, storage: IStorage, started: Long) {
-    operationLogger.atInfo {
-        message = "Storage operation completed"
-        payload = mapOf(
-            "operation" to operation,
-            "implementation" to storage.javaClass.name,
-            "storageId" to System.identityHashCode(storage),
-            "outcome" to "success",
-            "durationNs" to System.nanoTime() - started,
-        )
     }
 }

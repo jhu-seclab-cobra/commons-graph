@@ -15,7 +15,10 @@ internal fun encodePropertyName(name: String): String = buildString {
 internal fun decodePropertyName(name: String): String {
     if (!name.startsWith(PROPERTY_ATTRIBUTE_PREFIX)) return name
     val encoded = name.removePrefix(PROPERTY_ATTRIBUTE_PREFIX)
-    require(encoded.length % PROPERTY_NAME_UNIT_WIDTH == 0 && encoded.all { it.digitToIntOrNull(PROPERTY_NAME_RADIX) != null }) {
+    require(
+        encoded.length % PROPERTY_NAME_UNIT_WIDTH == 0 &&
+            encoded.all { it.digitToIntOrNull(PROPERTY_NAME_RADIX) != null },
+    ) {
         "Invalid encoded GML property name: $name"
     }
     return encoded.chunked(PROPERTY_NAME_UNIT_WIDTH).joinToString("") {
