@@ -49,6 +49,17 @@ public class LayeredStorageImpl(
     override val tagGroup: (String) -> String,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl(tagGroup = tagGroup) },
 ) : LayeredStorage {
+    /** Constructs registered entity-local rows with the existing topology and layered lifecycle. */
+    public constructor(
+        schema: StorageSchema,
+        projection: AdjacencyProjection? = null,
+        tagGroup: (String) -> String = IDENTITY_TAG_GROUP,
+    ) : this(projection, EdgePropertyFamilies.NONE, tagGroup) {
+        registered = SchemaState(schema)
+    }
+
+    private var registered: SchemaState? = null
+    internal val hasRegisteredSchema: Boolean get() = registered != null
     /** Constructs unconfigured storage through the same initialization as a projected storage. */
     @JvmOverloads
     public constructor(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
@@ -165,8 +176,10 @@ public class LayeredStorageImpl(
 
     override fun addNode(properties: Map<String, IValue>): Int =
         lock.writeLock().withLock {
+            val prepared = registered?.prepare(properties)
             val id = nodeCounter++
-            active.addNode(id, properties)
+            active.addNode(id, if (prepared == null) properties else emptyMap())
+            if (prepared != null) active.nodeRows.setCaptured(id, prepared.apply({ null }, state().symbols))
             id
         }
 
@@ -184,9 +197,12 @@ public class LayeredStorageImpl(
     ): Unit =
         lock.writeLock().withLock {
             if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+            val prepared = registered?.prepare(properties)
             exact?.validateChange(id, properties, layers::nodeProperty)
             layers.promoteNode(id)
-            active.setNodeProperties(id, properties)
+            if (prepared == null) active.setNodeProperties(id, properties)
+            else active.nodeRows.setCaptured(id, prepared.apply({ active.nodeRows.capturedProperty(id, it) },
+                state().symbols))
         }
 
     override fun deleteNode(id: Int): Unit =
@@ -219,11 +235,13 @@ public class LayeredStorageImpl(
         properties: Map<String, IValue>,
     ): Int =
         lock.writeLock().withLock {
+            val prepared = registered?.prepare(properties, tag)
             val projected = exact?.prepare(IStorage.EdgeStructure(src, dst, tag), layers::nodeProperty)
             layers.promoteNode(src)
             layers.promoteNode(dst)
             val id = edgeCounter++
-            active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), properties)
+            active.addEdge(id, IStorage.EdgeStructure(src, dst, tag), if (prepared == null) properties else emptyMap())
+            if (prepared != null) active.setCapturedEdgeProperties(id, prepared.apply({ null }, state().symbols))
             pairs.add(id, layers.edgeStructure(id))
             exact?.record(id, projected)
             id
@@ -260,15 +278,87 @@ public class LayeredStorageImpl(
         properties: Map<String, IValue?>,
     ): Unit =
         lock.writeLock().withLock {
-            if (!active.containsEdge(id)) {
-                val structure = layers.edgeStructure(id)
-                layers.promoteNode(structure.src)
-                layers.promoteNode(structure.dst)
-                active.addEdge(id, structure, emptyMap())
-                active.promotedEdgeEdits[id] = HashMap()
-            }
-            active.setEdgeProperties(id, properties)
+            val prepared = registered?.prepare(properties, layers.edgeStructure(id).tag)
+            promoteEdge(id)
+            if (prepared == null) active.setEdgeProperties(id, properties)
+            else active.setCapturedEdgeProperties(id, prepared.apply({ active.capturedEdgeProperty(id, it) },
+                state().symbols))
         }
+
+    private fun promoteEdge(id: Int) {
+        if (active.containsEdge(id)) return
+        val structure = layers.edgeStructure(id)
+        layers.promoteNode(structure.src)
+        layers.promoteNode(structure.dst)
+        active.addEdge(id, structure, emptyMap())
+        active.promotedEdgeEdits[id] = HashMap()
+    }
+
+    private fun state(): SchemaState = checkNotNull(registered) { "Storage has no registered schema" }
+
+    internal fun <T : Any> nodeField(id: Int, key: PropertyKey<T>): T? = lock.readLock().withLock {
+        state().schema.requireKey(key)
+        key.value(layers.capturedNodeProperty(id, key.name))
+    }
+
+    internal fun <T : Any> edgeField(id: Int, key: PropertyKey<T>, layer: StorageLayer): T? =
+        lock.readLock().withLock {
+            state().schema.requireKey(key)
+            key.value(layers.capturedEdgeProperty(id, key.name, layer))
+        }
+
+    internal fun <T : Any> edgeCells(
+        id: Int,
+        key: IndexedPropertyKey<T>,
+        layer: StorageLayer,
+        lifetime: StorageScope,
+    ): CellReader<T> = lock.readLock().withLock {
+        state().schema.requireKey(key)
+        if (layer == StorageLayer.VISIBLE && !layers.containsEdge(id)) return@withLock CellReader(null, lifetime)
+        val selected = key.family(layers.capturedEdgeProperty(id, key.name,
+            if (layer == StorageLayer.VISIBLE) StorageLayer.ACTIVE else layer))
+        val frozen = if (layer == StorageLayer.VISIBLE) {
+            key.family(layers.capturedEdgeProperty(id, key.name, StorageLayer.FROZEN))
+        } else null
+        CellReader(selected ?: frozen, lifetime, if (selected == null) null else frozen)
+    }
+
+    internal fun <T : Any> setNodeField(id: Int, key: PropertyKey<T>, value: T?) = lock.writeLock().withLock {
+        state().schema.requireKey(key)
+        require(key !is IndexedPropertyKey<*>) { "Use cell access for ${key.name}" }
+        val captured = value?.let(key::capture)
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        val projection = adjacencyProjection
+        if (key.name == projection?.kindProperty || key.name == projection?.keyProperty) {
+            exact?.validateChange(id, mapOf(key.name to captured?.compatibility(key.name)), layers::nodeProperty)
+        }
+        layers.promoteNode(id)
+        active.nodeRows.setCaptured(id, mapOf(key.name to captured))
+    }
+
+    internal fun <T : Any> setEdgeField(id: Int, key: PropertyKey<T>, value: T?) = lock.writeLock().withLock {
+        state().schema.requireKey(key)
+        require(key !is IndexedPropertyKey<*>) { "Use cell access for ${key.name}" }
+        val captured = value?.let(key::capture)
+        promoteEdge(id)
+        active.setCapturedEdgeProperties(id, mapOf(key.name to captured))
+    }
+
+    internal fun <T : Any> setEdgeCell(
+        id: Int,
+        key: IndexedPropertyKey<T>,
+        address: Pair<String, String>,
+        value: T?,
+    ) = lock.writeLock().withLock {
+        val state = state()
+        state.schema.requireKey(key)
+        require(key.matches(key.name, layers.edgeStructure(id).tag)) { "Wrong edge tag for ${key.name}" }
+        val captured = value?.let { key.capture(it).value }
+        promoteEdge(id)
+        val family = key.family(active.capturedEdgeProperty(id, key.name)) ?: CapturedFamily(key, state.symbols)
+        family.set(address.first, address.second, captured, true)
+        active.setCapturedEdgeProperties(id, mapOf(key.name to family))
+    }
 
     override fun deleteEdge(id: Int): Unit =
         lock.writeLock().withLock {

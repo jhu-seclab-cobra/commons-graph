@@ -41,6 +41,21 @@ public class NativeStorageImpl(
     // Edge property rows
     private val edgeRows = RowProperties()
 
+    internal fun capturedNodeRow(id: Int): CapturedRow? = if (containsNode(id)) nodeRows.captured(id) else null
+
+    internal fun capturedEdgeRow(id: Int): CapturedRow? = if (containsEdge(id)) edgeRows.captured(id) else null
+
+    internal fun capturedNodeProperty(id: Int, name: String): CapturedProperty? = nodeRows.capturedProperty(id, name)
+
+    internal fun capturedEdgeProperty(id: Int, name: String): CapturedProperty? = edgeRows.capturedProperty(id, name)
+
+    internal fun addCapturedNode(properties: CapturedRow): Int = addNode(emptyMap()).also {
+        nodeRows.setCaptured(it, properties)
+    }
+
+    internal fun addCapturedEdge(src: Int, dst: Int, tag: String, properties: CapturedRow): Int =
+        addEdge(src, dst, tag, emptyMap()).also { edgeRows.setCaptured(it, properties) }
+
     // Edge endpoint index (edge ID -> src, dst, tag)
     private val edgeEndpoints = HashMap<Int, IStorage.EdgeStructure>()
 

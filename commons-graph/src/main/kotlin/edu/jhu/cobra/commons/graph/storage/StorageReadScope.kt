@@ -6,7 +6,29 @@ import edu.jhu.cobra.commons.value.IValue
 public class StorageReadScope internal constructor(
     private val storage: LayeredStorage,
     private val lifetime: StorageScope,
+    private val typed: LayeredStorageImpl? = null,
 ) {
+    /** Returns an admitted immutable field without a compatibility conversion or payload copy. */
+    public fun <T : Any> getNodeProperty(id: Int, key: PropertyKey<T>): T? = access {
+        registered().nodeField(id, key)
+    }
+
+    /** Selects an immutable field from one physical edge image. */
+    public fun <T : Any> getEdgeProperty(
+        id: Int,
+        key: PropertyKey<T>,
+        layer: StorageLayer = StorageLayer.VISIBLE,
+    ): T? = access { registered().edgeField(id, key, layer) }
+
+    /** Borrows pair-addressed cells; immutable selected payloads may escape this callback. */
+    public fun <T : Any> edgeCells(
+        id: Int,
+        key: IndexedPropertyKey<T>,
+        layer: StorageLayer = StorageLayer.VISIBLE,
+    ): CellReader<T> = access { registered().edgeCells(id, key, layer, lifetime) }
+
+    private fun registered(): LayeredStorageImpl = checkNotNull(typed) { "Storage has no registered field capability" }
+
     /** Fixed visible node IDs; raw IDs must be reacquired after clear. */
     public fun getNodeIDs(): Set<Int> = access { storage.nodeIDs.toSet() }
 

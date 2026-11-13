@@ -49,6 +49,22 @@ internal class FrozenLayer private constructor(
 
     fun containsEdge(globalId: Int): Boolean = globalId in edgeGlobalToLocal
 
+    fun capturedNodeRow(globalId: Int): CapturedRow? =
+        nodeGlobalToLocal[globalId]?.let(storage::nodeCapture)
+
+    fun capturedEdgeRow(globalId: Int): CapturedRow? =
+        edgeGlobalToLocal[globalId]?.let(storage::edgeCapture)
+
+    fun capturedNodeProperty(globalId: Int, name: String): CapturedProperty? = nodeGlobalToLocal[globalId]?.let {
+        if (storage is NativeStorageImpl) storage.capturedNodeProperty(it, name)
+        else storage.getNodeProperty(it, name)?.let(::LegacyProperty)
+    }
+
+    fun capturedEdgeProperty(globalId: Int, name: String): CapturedProperty? = edgeGlobalToLocal[globalId]?.let {
+        if (storage is NativeStorageImpl) storage.capturedEdgeProperty(it, name)
+        else storage.getEdgeProperty(it, name)?.let(::LegacyProperty)
+    }
+
     /** Returns the node's frozen properties, or null when the node is not frozen. */
     fun nodeProperties(globalId: Int): Map<String, IValue>? =
         nodeGlobalToLocal[globalId]?.let { localId -> storage.getNodeProperties(localId) }
@@ -153,11 +169,11 @@ internal class FrozenLayer private constructor(
                 val globalId = previous.nodeLocalToGlobal.getValue(localId)
                 val props =
                     if (active.containsNode(globalId)) {
-                        active.collectNodeProperties(globalId)
+                        active.nodeRows.captured(globalId)
                     } else {
-                        previous.storage.getNodeProperties(localId)
+                        previous.storage.nodeCapture(localId)
                     }
-                oldToNew[localId] = merged.addNode(props)
+                oldToNew[localId] = merged.addNodeCapture(props)
             }
             return oldToNew
         }
@@ -176,7 +192,7 @@ internal class FrozenLayer private constructor(
                 }
             for (globalId in active.nodeIds) {
                 if (globalId in g2l) continue
-                val newLocalId = merged.addNode(active.collectNodeProperties(globalId))
+                val newLocalId = merged.addNodeCapture(active.nodeRows.captured(globalId))
                 g2l[globalId] = newLocalId
                 l2g[newLocalId] = globalId
             }
@@ -215,11 +231,11 @@ internal class FrozenLayer private constructor(
             for ((globalEdgeId, structure) in active.edgeEndpoints) {
                 if (globalEdgeId in g2l) continue
                 val newId =
-                    merged.addEdge(
+                    merged.addEdgeCapture(
                         nodeG2L.getValue(structure.src),
                         nodeG2L.getValue(structure.dst),
                         structure.tag,
-                        active.collectEdgeProperties(globalEdgeId),
+                        active.edgeRows.captured(globalEdgeId),
                     )
                 g2l[globalEdgeId] = newId
                 l2g[newId] = globalEdgeId
@@ -241,7 +257,7 @@ internal class FrozenLayer private constructor(
                 val structure = previous.storage.getEdgeStructure(localEdgeId)
                 val props = resolveEdgeProperties(previous, active, localEdgeId, globalEdgeId)
                 val newId =
-                    merged.addEdge(
+                    merged.addEdgeCapture(
                         oldToNewNode.getValue(structure.src),
                         oldToNewNode.getValue(structure.dst),
                         structure.tag,
@@ -258,11 +274,11 @@ internal class FrozenLayer private constructor(
             active: ActiveLayer,
             localEdgeId: Int,
             globalEdgeId: Int,
-        ): Map<String, IValue> {
-            val base = previous.storage.getEdgeProperties(localEdgeId)
+        ): CapturedRow {
+            val base = previous.storage.edgeCapture(localEdgeId)
             if (!active.containsEdge(globalEdgeId)) return base
-            if (globalEdgeId !in active.promotedEdgeEdits) return active.collectEdgeProperties(globalEdgeId)
-            return active.composePromotedEdgeProperties(globalEdgeId, base)
+            if (globalEdgeId !in active.promotedEdgeEdits) return active.edgeRows.captured(globalEdgeId)
+            return active.composePromotedCaptured(globalEdgeId, base)
         }
 
         private fun transferMetadata(

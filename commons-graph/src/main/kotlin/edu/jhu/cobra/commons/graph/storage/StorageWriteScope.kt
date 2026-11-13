@@ -6,7 +6,29 @@ import edu.jhu.cobra.commons.value.IValue
 public class StorageWriteScope internal constructor(
     private val storage: LayeredStorage,
     private val lifetime: StorageScope,
+    private val typed: LayeredStorageImpl? = null,
 ) {
+    /** Captures a complete node field once; null deletes the field. */
+    public fun <T : Any> setNodeProperty(id: Int, key: PropertyKey<T>, value: T?): Unit = access {
+        registered().setNodeField(id, key, value)
+    }
+
+    /** Captures a complete edge field once; null deletes the field. */
+    public fun <T : Any> setEdgeProperty(id: Int, key: PropertyKey<T>, value: T?): Unit = access {
+        registered().setEdgeField(id, key, value)
+    }
+
+    /** Publishes one captured cell and its family membership under the current write guard. */
+    public fun <T : Any> setEdgeCell(
+        id: Int,
+        key: IndexedPropertyKey<T>,
+        first: String,
+        second: String,
+        value: T?,
+    ): Unit = access { registered().setEdgeCell(id, key, first to second, value) }
+
+    private fun registered(): LayeredStorageImpl = checkNotNull(typed) { "Storage has no registered field capability" }
+
     /** Creates a node with captured property content and returns its stable storage ID. */
     public fun addNode(properties: Map<String, IValue> = emptyMap()): Int = access { storage.addNode(properties) }
 

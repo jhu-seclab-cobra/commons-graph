@@ -45,8 +45,15 @@ internal class LayerStack(
     // its frozen properties into its active row first.
     fun promoteNode(id: Int) {
         if (active.containsNode(id)) return
-        val props = frozen?.nodeProperties(id) ?: throw EntityNotExistException(id.toString())
-        active.addNode(id, props)
+        val props = frozen?.capturedNodeRow(id) ?: throw EntityNotExistException(id.toString())
+        active.addNode(id, emptyMap())
+        active.nodeRows.setCaptured(id, props)
+    }
+
+    fun capturedNodeProperty(id: Int, name: String): CapturedProperty? = when {
+        active.containsNode(id) -> active.nodeRows.capturedProperty(id, name)
+        frozen?.containsNode(id) == true -> frozen?.capturedNodeProperty(id, name)
+        else -> throw EntityNotExistException(id.toString())
     }
 
     fun edgeIds(): Set<Int> {
@@ -78,7 +85,7 @@ internal class LayerStack(
 
     private fun activeEdgeProperties(id: Int): Map<String, IValue> {
         if (id !in active.promotedEdgeEdits) return active.edgeRows.view(id)
-        return active.composePromotedEdgeProperties(id, checkNotNull(frozen?.edgeProperties(id)))
+        return active.composePromotedCaptured(id, checkNotNull(frozen?.capturedEdgeRow(id))).compatibility()
     }
 
     // The row one layer itself holds, or null; a tombstone hides an edge from VISIBLE only.
@@ -107,17 +114,27 @@ internal class LayerStack(
         name: String,
     ): IValue? {
         val edits = active.promotedEdgeEdits[id] ?: return active.edgeRows[id, name]
-        if (name in edits) return edits[name]
+        if (active.hasEdgeProperty(id, name)) return active.explicitEdgeProperty(id, name)
         val anchor = families().anchor(active.edgeEndpoints.getValue(id).tag, name)
-        return if (anchor != null && anchor in edits) null else frozen?.edgeProperty(id, name)
+        return if (anchor != null && active.hasEdgeProperty(id, anchor) || active.masksFrozenProperty(id, name))
+            null else frozen?.edgeProperty(id, name)
     }
 
     private fun localActiveEdgeProperty(
         id: Int,
         name: String,
     ): IValue? {
-        val edits = active.promotedEdgeEdits[id]
-        return if (edits == null) active.edgeRows[id, name] else edits[name]
+        return active.explicitEdgeProperty(id, name)
+    }
+
+    fun capturedEdgeProperty(id: Int, name: String, layer: StorageLayer): CapturedProperty? = when (layer) {
+        StorageLayer.FROZEN -> frozen?.capturedEdgeProperty(id, name)
+        StorageLayer.ACTIVE -> if (active.containsEdge(id)) active.capturedEdgeProperty(id, name) else null
+        StorageLayer.VISIBLE -> when {
+            !containsEdge(id) -> null
+            active.containsEdge(id) && active.hasEdgeProperty(id, name) -> active.capturedEdgeProperty(id, name)
+            else -> frozen?.capturedEdgeProperty(id, name)
+        }
     }
 
     fun edgeProperty(

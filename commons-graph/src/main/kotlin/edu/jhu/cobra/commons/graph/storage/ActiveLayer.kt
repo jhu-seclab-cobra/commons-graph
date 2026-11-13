@@ -18,7 +18,7 @@ internal class ActiveLayer(
     val edgeRows = RowProperties()
 
     // Explicit writes to edges inherited from the frozen layer. Null masks a frozen property.
-    val promotedEdgeEdits = HashMap<Int, MutableMap<String, IValue?>>()
+    val promotedEdgeEdits = HashMap<Int, MutableMap<String, CapturedProperty?>>()
     val edgeEndpoints = LinkedHashMap<Int, IStorage.EdgeStructure>()
     val outEdges = HashMap<Int, MutableSet<Int>>()
     val inEdges = HashMap<Int, MutableSet<Int>>()
@@ -64,23 +64,48 @@ internal class ActiveLayer(
     fun composePromotedEdgeProperties(
         id: Int,
         frozen: Map<String, IValue>,
-    ): Map<String, IValue> {
+    ): Map<String, IValue> = composePromotedCaptured(id, frozen.mapValues { LegacyProperty(it.value) }).compatibility()
+
+    fun composePromotedCaptured(id: Int, frozen: CapturedRow): CapturedRow {
         val edits = promotedEdgeEdits.getValue(id)
         val tag = edgeEndpoints.getValue(id).tag
         val family = families()
-        val result = HashMap<String, IValue>()
+        val result = HashMap<String, CapturedProperty>()
         for ((name, value) in frozen) {
             val anchor = family.anchor(tag, name)
-            if (anchor == null || anchor !in edits) result[name] = value
+            if (anchor == null || !hasEdgeProperty(id, anchor)) result[name] = value
         }
         for ((name, value) in edits) {
-            if (value == null) result.remove(name) else result[name] = value
+            if (value == null) result.remove(name) else result[name] = value.composeFamily(frozen[name])
         }
         return result
     }
 
-    fun hasEdgeProperty(id: Int, name: String): Boolean =
-        promotedEdgeEdits[id]?.containsKey(name) ?: edgeRows.contains(id, name)
+    fun hasEdgeProperty(id: Int, name: String): Boolean {
+        val promoted = promotedEdgeEdits[id] ?: return edgeRows.contains(id, name)
+        if (name in promoted) return (promoted[name] as? CapturedFamily<*>)?.holds(name) ?: true
+        return promoted.values.filterIsInstance<CapturedFamily<*>>().any { it.holds(name) }
+    }
+
+    fun capturedEdgeProperty(id: Int, name: String): CapturedProperty? =
+        promotedEdgeEdits[id]?.get(name) ?: edgeRows.capturedProperty(id, name)
+
+    fun explicitEdgeProperty(id: Int, name: String): IValue? {
+        val promoted = promotedEdgeEdits[id] ?: return edgeRows[id, name]
+        if (name in promoted) return promoted[name]?.compatibility(name)
+        return promoted.values.filterIsInstance<CapturedFamily<*>>()
+            .firstOrNull { name.startsWith(it.key.memberPrefix) }?.compatibility(name)
+    }
+
+    fun masksFrozenProperty(id: Int, name: String): Boolean =
+        promotedEdgeEdits[id]?.values.orEmpty().filterIsInstance<CapturedFamily<*>>().any {
+            it.anchorWritten && name.startsWith(it.key.memberPrefix)
+        }
+
+    fun setCapturedEdgeProperties(id: Int, properties: Map<String, CapturedProperty?>) {
+        val promoted = promotedEdgeEdits[id]
+        if (promoted == null) edgeRows.setCaptured(id, properties) else promoted.putAll(properties)
+    }
 
     fun setNodeProperties(
         id: Int,
@@ -97,7 +122,7 @@ internal class ActiveLayer(
         if (promoted == null) {
             edgeRows.set(id, properties)
         } else {
-            promoted.putAll(properties)
+            promoted.putAll(properties.mapValues { it.value?.let(::LegacyProperty) })
         }
     }
 

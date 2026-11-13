@@ -29,6 +29,7 @@ public interface GraphWriter {
  */
 public class StorageAccess(private val storage: LayeredStorage) : AutoCloseable {
     private val guard = StorageAccessGuard(requireNotNull(storage.criticalSectionLock) { "Storage requires a guard" })
+    private val typed = (storage as? LayeredStorageImpl)?.takeIf { it.hasRegisteredSchema }
 
     /** Existing combined access for callers migrating to separate capabilities. */
     public val compatibility: LayeredStorage = StorageCompatibility(storage, guard, ::close)
@@ -38,7 +39,7 @@ public class StorageAccess(private val storage: LayeredStorage) : AutoCloseable 
         override fun <R> read(action: (StorageReadScope) -> R): R = guard.readScoped {
             val lifetime = StorageScope(guard)
             try {
-                action(StorageReadScope(storage, lifetime))
+                action(StorageReadScope(storage, lifetime, typed))
             } finally {
                 lifetime.expire()
             }
@@ -50,7 +51,7 @@ public class StorageAccess(private val storage: LayeredStorage) : AutoCloseable 
         override fun <R> write(action: (StorageWriteScope) -> R): R = guard.write {
             val lifetime = StorageScope(guard)
             try {
-                action(StorageWriteScope(compatibility, lifetime))
+                action(StorageWriteScope(compatibility, lifetime, typed))
             } finally {
                 lifetime.expire()
             }
