@@ -113,6 +113,9 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 
 ## Gotchas
 
+- The typed reader/writer, `ArrayStorage`, schema keys and scoped cell readers in [Storage design](../design-storage.md#typed-storage-capabilities) are not available APIs; missing implementation is listed in [Storage Open Gaps](../design-gaps-storage.md#typed-storage-implementation).
+- Compatibility outer-map copies do not freeze nested mutable `IValue` content; preserve ownership until the captured-snapshot boundary is implemented.
+
 - Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
 - Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.
 - Graph operations and Label hierarchy operations are atomic on their thread-safe Storage. Labeled traversal sequences are lazy: each step is atomic, but the whole iteration is not. Wrap a group of operations or an iteration that must be atomic together (see [Graph API](graph.md)).

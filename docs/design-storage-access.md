@@ -59,6 +59,16 @@ A property promotion records its existing structure in the active buckets; tombs
 
 **Responsibility:** Preserve frozen outgoing encounter ranks for the pair/triple index across property promotion and revert. `LayeredStorageImpl` owns this table. The rank table retains one primitive entry per frozen edge until the next Freeze or clear; capacity conversion is checked before allocating primitive rank slots.
 
+### Typed adjacency and frozen arrays
+
+`ArrayStorage` selects `(node, kind, direction)` before decoding properties. Both directions refer to one central edge record. Empty nodes allocate no adjacency container; schema dictionaries and nonempty bucket directories are store-owned. Existing directional Tag group and pair/triple indexes are reused where semantics fit, without another authoritative structural map.
+
+Primitive edge-slot vectors are a measured candidate for mutable buckets. An order-preserving vector removal may scan/shift the selected bucket. Swap removal is allowed only on an internal order-independent path; required ranks or an ordered path must preserve public native insertion order and layered frozen-before-active order. Promotion never moves a frozen edge. Measure maintenance and ordered-merge costs before choosing vectors or lists. Raw parallel/self edges and opaque complete tags remain supported. Selection never bypasses caller acquisition observations, including empty results.
+
+Frozen storage uses two compressed sparse row (CSR) directions, sparse per-node kind directories, central edge fields and stable-ID mappings [@graphflow2021]. Small sorted directories, packed property offsets and capacity/slack choices require measurements. Scoped reads borrow immutable ranges without set copies or a mutable translated-edge cache. Compatibility snapshots allocate explicitly and preserve promised encounter order. Exact projections retain immutable keys and existing indexes; no unconditional extra triple table is introduced. Index coverage follows actual query patterns [@index2018]; no optimality or workload speedup transfers from the paper.
+
+Physical Freeze remains reusable. The caller chooses its phase boundary after writes and publication quiesce; immutable node content does not imply immutable graph membership/annotations. Build steps and bounds: [Storage algorithms](spec-storage.md#typed-selection-and-freeze).
+
 ## Exception / Error Types
 
 `EntityNotExistException` is raised by directional reads when the node is absent. Pair and complete-triple reads return empty or null for missing endpoints.
@@ -78,3 +88,9 @@ check(storage.findEdge(source, target, "write") == null)
 check(storage.findEdge(source, target, "write@1") == edge)
 check(storage.getEdges(source, target) == setOf(edge))
 ```
+
+For the unimplemented typed path, construct schema storage with a registered kind, add one edge through its writer, then consume `incoming(node, kind)` inside a read scope. Only that kind is selected; a compatibility directional snapshot retains its promised encounter order after subsequent writes.
+
+## Open Gaps
+
+[Selection and layout measurements](design-gaps-storage.md#pending-acceptance-measurements) decide mutable buckets and directory choices. Existing selected Tag group and pair/triple reads already avoid a full-adjacency scan; replacing them is not an unmeasured benefit.

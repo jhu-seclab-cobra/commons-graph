@@ -26,42 +26,7 @@ Completion records follow [Storage operation logging](design-storage-logging.md)
 
 **Methods:**
 
-```kotlin
-interface IStorage : Flushable {
-    val nodeIDs: Set<Int>
-    val edgeIDs: Set<Int>
-    fun containsNode(id: Int): Boolean
-    fun addNode(properties: Map<String, IValue> = emptyMap()): Int
-    fun getNodeProperties(id: Int): Map<String, IValue>
-    fun getNodeProperty(id: Int, name: String): IValue?
-    fun setNodeProperties(id: Int, properties: Map<String, IValue?>)
-    fun deleteNode(id: Int)
-    data class EdgeStructure(val src: Int, val dst: Int, val tag: String)
-    fun containsEdge(id: Int): Boolean
-    fun addEdge(src: Int, dst: Int, tag: String, properties: Map<String, IValue> = emptyMap()): Int
-    fun getEdgeStructure(id: Int): EdgeStructure
-    fun getEdgeProperties(id: Int): Map<String, IValue>
-    fun getEdgeProperty(id: Int, name: String): IValue?
-    fun setEdgeProperties(id: Int, properties: Map<String, IValue?>)
-    fun deleteEdge(id: Int)
-    fun getIncomingEdges(id: Int): Set<Int>
-    fun getOutgoingEdges(id: Int): Set<Int>
-    val tagGroup: (String) -> String
-    fun getIncomingEdges(id: Int, group: String): Set<Int>
-    fun getOutgoingEdges(id: Int, group: String): Set<Int>
-    fun getIncomingEdges(id: Int, groups: Set<String>): Set<Int>
-    fun getOutgoingEdges(id: Int, groups: Set<String>): Set<Int>
-    fun getEdges(src: Int, dst: Int, tag: String? = null): Set<Int>
-    fun findEdge(src: Int, dst: Int): Int?
-    fun findEdge(src: Int, dst: Int, tag: String): Int?
-    val metaNames: Set<String>
-    fun getMeta(name: String): IValue?
-    fun setMeta(name: String, value: IValue?)
-    fun clear()
-    fun transferTo(target: IStorage): Map<Int, Int>
-    val criticalSectionLock: Lock? get() = null
-}
-```
+Implemented compatibility signatures: [Storage API](llms/storage.md#istorage-extends-flushable).
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
@@ -82,6 +47,39 @@ interface IStorage : Flushable {
 | `criticalSectionLock` | The lock `criticalSection` holds: the exclusive half of the implementation's own read-write lock. `null` for an implementation that is not thread-safe. | -- | `Lock?` | -- |
 
 Structural selection, constructor settings and index lifecycle: [Storage structural access](design-storage-access.md).
+
+### Typed storage capabilities
+
+These are the chosen interfaces and ownership boundaries; missing implementation is listed in [Open Gaps](design-gaps-storage.md#typed-storage-implementation). All types below belong to the core module; visibility is stated per type. Arrays, directories and builders are internal.
+
+| Type / visibility | Responsibility, state and operations |
+|---|---|
+| `GraphReader` / public | `read(action)` supplies one guarded read scope for structure, typed fields and selected cells. Borrowed cursors/readers expire at scope exit; immutable selected payloads may escape. Mutation inside a scope fails rather than upgrading the read lock. |
+| `GraphWriter` / public | Creates/deletes entities and captures property writes under the owning guard; validates endpoints, schema, capacity and derived indexes before exposing a write. |
+| `EdgeKind`, `PropertyKey<T>` / public | Registered schema identities with stable serialized names, primitive or immutable payload type, cardinality and capture/codec rules. Registration precedes construction; incompatible duplicate names fail. Process-local ordinals are not serialized identities. |
+| `ArrayStorage` / public | Mutable engine containing stable-ID/slot maps, reverse ID arrays, endpoint/kind/tag fields, entity-local properties and directional adjacency. It composes a guard strategy; concurrent use retains compound atomicity. |
+| Frozen storage / public read-only capability, internal representation | Read-only capability over frozen arrays and immutable payloads, produced by an internal builder. No unusable mutation methods or lazy mutable translation cache. |
+| Compatibility adapter / internal | Retains `IStorage`, graph factory entry points, names, tags and codecs. It converts typed fields to `IValue` at explicit boundaries without a second authoritative row store. |
+
+Public Graph identity remains `NodeID` and opaque `(source, destination, tag)` Edge identity. Raw Storage may retain duplicate physical triples; the graph owner enforces its identity contract. Display IDs are not parseable. Kind is independent of the complete tag. Legacy type properties project the central field; import rejects disagreement.
+
+Surviving logical IDs remain stable through compaction and every Freeze. `clear` starts a new lifetime and invalidates old handles; close invalidates access. Check capacity before increment/allocation so IDs cannot wrap. Internal slot reuse never reuses a live logical identity. Listener registration has a closeable token or an explicit storage-owned graph lifetime.
+
+Required primitive fields use direct access; optional fields carry explicit presence, so zero and `NullVal` are not absence. Extension properties stay entity-local. Sorted key/value rows and packed frozen rows require row-size and mixed-operation measurements; keep small linear rows where they win. No global property-name scan or parallel row-name index is introduced.
+
+Mutable composite `IValue` is captured privately on admission and copied at legacy read/export boundaries. Structural records use registered immutable payloads; read-only Kotlin collection interfaces alone do not establish immutability. Codecs retain schema versions, type tags and reference identity; malformed shape fails before visibility. The library owns generic schema mechanics, not caller-specific reference meanings.
+
+| Function sketch | Input / output / errors |
+|---|---|
+| `GraphReader.read(action)` | Calls the action with a stable view and returns its result; rejects expired borrowed access and mutation in scope. Interleaved readers/writers snapshot selected IDs before writing. |
+| `GraphWriter.addEdge(src,dst,kind,tag,fields)` | Validates/captures fields and returns a stable Storage ID, never a compacted slot; endpoint, schema and capacity errors fail before mutation. Graph insertion separately enforces triple identity. |
+| `property(entity, key: PropertyKey<T>)` | Returns immutable `T` or explicit absence; wrong schema/type and absent required fields fail distinctly. Generic `T` may box on the JVM. |
+| `intProperty(entity,key): Int` / `longProperty(entity,key): Long` | Required primitive-return field access; rejects absent required fields and wrong schema/type without a nullable/generic return. |
+| `snapshotProperties(entity)` | Returns a fixed compatibility map with captured payload content; work includes requested properties and copied mutable payload. |
+
+The library owns physical layers, generic notifications, schema layout and read guards. Callers own evaluation buffers, chronology, plain/supplied projections, acquired observations, reference validation, retirement and atomic publication groups. No library buffer API or duplicate authority is introduced.
+
+Native, concurrent and layered capabilities remain available. JGraphT interoperability and MapDB/Neo4j persistence remain optional with their resource/transaction contracts. Unsupported layered capabilities fail at construction; flat-store family binding remains vacuous. Backend removal needs external-client inventory and separate acceptance. Migration uses one caller-owned implementation selector, the present implementation as default, no independent field/adjacency/value switches and no silent runtime fallback. Default change requires separate acceptance.
 
 ### IRevertibleStorage
 
@@ -194,6 +192,8 @@ storage.addNode()
 storage.clearActiveLayer()
 check(storage.nodeIDs == setOf(node))
 ```
+
+For the unimplemented typed path, register keys/kinds before constructing `ArrayStorage(schema)`; use its writer to add endpoints and an edge, then consume `incoming(node, kind)` and `property(entity,key)` within `GraphReader.read`. The selected immutable payload remains valid after return; a borrowed reader does not. `snapshotProperties` produces a fixed captured image before a later writer update.
 
 ## Open Gaps
 

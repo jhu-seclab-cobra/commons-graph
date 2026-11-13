@@ -65,3 +65,42 @@ Property read and adjacency query check at most two layers. Property write updat
 ### Example
 
 For edge tag `call`, configure family `(call, p_, labels)`, add an edge with `labels = [L]` and `p_x = 1`, then Freeze. Writing only `labels = [M]` into the Active layer makes the visible `p_x` absent; writing `p_x = 2` makes it 2. Revert restores `[L]` and 1, while Freeze after the edits retains `[M]` and 2. A deleted Frozen layer Edge is absent in the visible view, remains readable through the explicit Frozen layer snapshot, and reappears after revert.
+
+## Typed Selection and Freeze
+
+### Problem
+
+Given registered typed fields, stable logical IDs, one Active layer and at most one Frozen layer, select only requested kinds and build replacement immutable storage within a caller budget. Preserve public identity, ordered compatibility reads, family selection, deletion, reusable Freeze and revert notifications. [Open Gaps](design-gaps-storage.md#typed-storage-implementation) identifies missing implementation.
+
+### Steps
+
+1. Validate required capabilities and schema before construction. Enter one read guard for a read scope and activate its borrowed readers; reject mutation within that scope.
+2. Resolve stable node ID to slot and select incoming/outgoing kind membership without loading unrelated rows. Return immutable selected payloads or scoped ranges; snapshot selected IDs before an interleaved write and capture legacy snapshot payloads explicitly.
+3. Select layer and family presence before a cell. On first active family write start empty labels/inputs; atomically capture and publish the active family. Never supply frozen inputs for active labels.
+4. On scope exit invalidate borrowed readers and release the guard on every exit path. Immutable acquired payloads remain valid.
+5. For Freeze take the exclusive guard. Count visible entities, memberships and properties; include current storage, replacement arrays, indexes and workspace. Check capacity/conversion and budget before each allocation.
+6. Build replacement stable-ID/slot maps, central fields, both CSR directions and nonempty kind directories. Apply active edits, property/family/metadata deletion and frozen-edge tombstones; preserve required encounter ranks and complete identity.
+7. Validate endpoints, counts, directories, codecs and indexes before publication. On preflight/validation failure close new resources and retain old storage and active state. Actual out-of-memory recovery is not guaranteed.
+8. Publish the sole replacement Frozen layer, reset touched active state and release obsolete resources; emit lifecycle completion after consistency and resource closure. Revert retains the algorithm above and repairs derived caches through existing notices.
+
+### Invariants
+
+- Compaction never changes surviving logical IDs; clear/close invalidate old handles.
+- One edge record owns endpoints/kind/tag; indexes own derived selection. Raw duplicate triples remain distinct physical rows.
+- Frozen arrays and admitted typed payloads are immutable; readers never write a translation cache.
+- Named, whole-row and cell reads select labels and complete inputs together. Frozen-node deletion stays forbidden; frozen-edge deletion stays supported.
+- Replacement is published only after validation; compatibility snapshots preserve captured content and promised encounter order.
+
+### Termination
+
+Reads process finite selected neighborhoods. Freeze performs finite count/fill/validation passes and finite directory sorts. Revert visits touched state and finite listener work.
+
+### Complexity
+
+For `r` selected edges, `b` nonempty kinds and `p` extension properties, candidate mutable selection is expected O(1+r), frozen selection O(log b+r), and untyped enumeration O(b+degree). Required ordering may add rank merging/sorting; measure its cost. Ordered vector removal costs O(selected degree) plus property/index work. Sorted extension lookup costs O(log p), insertion/removal O(p); small linear rows remain O(p).
+
+Freeze costs O(V+E+P) counting/filling plus directory sorting, payload conversion, ordered-index construction and resource work; V/E/P count visible nodes/edges/properties. Peak space includes old+new+workspace, payloads and auxiliary indexes. Revert costs touched state plus notification/cache repair. Hash bounds are expected/amortized; collision and resize worst cases remain linear.
+
+### Edge Cases
+
+Empty graphs and zero-property entities require no per-entity empty container. Missing endpoints, wrong schema and overflow fail before mutation; capacity never wraps. Import retains explicit identity remapping. Repeated Freeze, sparse/dense edits, self/parallel edges, tombstones and empty active families obey the same rules.

@@ -14,7 +14,7 @@ Literature citations resolve in `docs/references.bib`.
 |------|---------|
 | [glossary-graph.md](glossary-graph.md) | Graph, Node, Edge, Entity and Storage |
 | [glossary-merge.md](glossary-merge.md) | Property merge and Owner union |
-| [glossary-storage.md](glossary-storage.md) | Layered Storage, its layers, Freeze and Tag group |
+| [glossary-storage.md](glossary-storage.md) | Layers, Freeze, Tag group, read scopes and compressed sparse row |
 | [glossary-labels.md](glossary-labels.md) | Labels, their bounds and the Label hierarchy |
 | [glossary-algorithm.md](glossary-algorithm.md) | Graph search, components and dominators |
 

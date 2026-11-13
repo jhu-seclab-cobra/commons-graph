@@ -22,8 +22,8 @@ is the rollback operation. A layered `clear` emits only its `clear` record, not 
 record. `transferTo` is the in-memory bulk load; CSV, GML and MapDB `import` are file bulk loads.
 
 The operation emits after all state updates, lock or transaction completion, resource closure,
-and synchronous revert callbacks return successfully. A propagated exception emits no completion
-record; the caller that handles the exception owns failure logging.
+and synchronous revert callbacks return successfully. A propagated exception emits no success completion
+record; the caller that handles it owns failure detail and its failed-unit summary.
 
 Each record has message `Storage operation completed` and structured fields `operation`,
 `implementation`, `storageId`, `outcome` (`success`), and `durationNs`. `storageId` is the process-local
@@ -56,3 +56,10 @@ storage.clear()
 
 With INFO enabled, this sequence produces `freeze`, `clearActiveLayer`, and `clear` records.
 `addNode`, `setNodeProperties`, and the read of `nodeIDs` produce no record.
+
+## Open Gaps
+
+- Correlation/resource reporting is chosen but absent from `logCompletion`: accept or generate correlation at the standalone boundary and bind once; carry operation identity, schema/phase, budget, old/new counts and processed bytes when available without a hot-path scan. [Typed Freeze](spec-storage.md#typed-selection-and-freeze) accounts for old storage, replacement and workspace together.
+- Bounded/external-I/O operations need an INFO start with target/budget and completed outcomes on handled exits. `StorageOperationLog.kt` records successful completions only. Propagation attaches context without duplicate ERROR records; the handling boundary emits failure detail once and links its summary by error ID. Expected revert/discard is success.
+- Normal reads/writes retain zero logging checks, timers, counters or event allocations. Profiling counters are separate and opt-in; repeatable optional diagnostics are sampled to at most one per second, while required summaries remain complete. [Logging acceptance](design-gaps-storage.md#pending-acceptance-measurements) remains pending.
+- Can completion emission remain outside storage locks and after consistency/resource closure for every new bulk operation? No logging exception may alter committed state. The application owns backend, bounded sinks, destination, rotation and retention.

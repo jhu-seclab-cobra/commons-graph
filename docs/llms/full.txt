@@ -8,6 +8,7 @@
 - Construct bound entities through Graph factory methods.
 - Configure graph identity, entity factories and optional Label hierarchy as the Graph API requires.
 - Choose a Storage implementation for the caller’s persistence and concurrency requirements.
+- Use `IValue` for the available compatibility `IStorage` property API; consult [Storage design](design-storage.md#typed-storage-capabilities) for registered primitive/immutable payloads and scoped cell readers that remain unimplemented.
 - Never put language-specific analysis policy in this library.
 
 ## Graph API
@@ -374,6 +375,9 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - Bind an optional `EdgePropertyFamilies` declaration once, before or after import; unequal rebinding fails.
 
 ## Gotchas
+
+- The typed reader/writer, `ArrayStorage`, schema keys and scoped cell readers in [Storage design](../design-storage.md#typed-storage-capabilities) are not available APIs; missing implementation is listed in [Storage Open Gaps](../design-gaps-storage.md#typed-storage-implementation).
+- Compatibility outer-map copies do not freeze nested mutable `IValue` content; preserve ownership until the captured-snapshot boundary is implemented.
 
 - Share one storage instance across threads only when `storage.criticalSectionLock != null`. `criticalSection` does not guard a single-threaded storage; two threads on one corrupt it.
 - Each single `IStorage` call on a thread-safe storage is atomic. A sequence of calls is not. Wrap every check-then-add, read-modify-write, or read that decides a write in one `storage.criticalSection { }`.

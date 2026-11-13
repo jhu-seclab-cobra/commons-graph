@@ -13,9 +13,9 @@ Layered Storage: the composition of an immutable Frozen layer and a mutable Acti
 - **Reference:** none
 
 ### Frozen layer
-- **Definition:** The immutable layer of a Layered Storage, holding the entities and properties merged at the last freeze under its own local identifiers.
+- **Definition:** The immutable layer of a Layered Storage, holding the entities and properties merged at the last Freeze, independent of the physical identifier layout.
 - **Example:** A Layered Storage that added nodes `a` and `b` and then froze → the layer holding `a` and `b`.
-- **Source:** `storage/FrozenLayer.kt` `FrozenLayer`
+- **Source:** `docs/design-storage-access.md` Typed adjacency and frozen arrays; `storage/FrozenLayer.kt` `FrozenLayer`
 - **Reference:** none
 
 ### Active layer
@@ -36,3 +36,14 @@ Layered Storage: the composition of an immutable Frozen layer and a mutable Acti
 - **Definition:** The string a storage's constructor-fixed pure function assigns to an immutable complete edge tag for directional adjacency selection.
 - **Example:** `tagGroup = { it.substringBefore('@') }` maps `write@1` and `write@2` to `write`.
 - **Source:** `storage/IStorage.kt` `tagGroup`; `docs/design-storage.md` IStorage
+
+### Read scope
+- **Definition:** The guarded lifetime during which a reader can borrow one consistent Storage view.
+- **Example:** `reader.read(action)` → the action may consume a borrowed cell reader; that reader expires when the action returns.
+- **Source:** `docs/design-storage.md` Typed storage capabilities
+
+### Compressed sparse row (CSR)
+- **Definition:** An adjacency representation grouping a node's incident edge identifiers into contiguous ranges addressed by offsets.
+- **Example:** Offsets `[0,2,2]` and edges `[e1,e2]` → the first node has two selected edges and the second has none.
+- **Source:** `docs/design-storage-access.md` Typed adjacency and frozen arrays
+- **Literature:** [@graphflow2021, sec. 4.1.1] — borrowed
