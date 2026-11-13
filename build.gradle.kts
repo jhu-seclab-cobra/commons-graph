@@ -55,9 +55,6 @@ subprojects {
     // kotlin("test") auto-selects JUnit 4 as the test framework.
 
     dependencies {
-        "implementation"(libs.kotlin.logging)
-        "implementation"(libs.slf4j.api)
-        "testImplementation"(libs.logback.classic)
         "testImplementation"(kotlin("test"))
     }
 
