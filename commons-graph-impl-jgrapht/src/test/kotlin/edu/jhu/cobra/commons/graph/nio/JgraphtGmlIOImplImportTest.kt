@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
  * - `import requires file to exist`
  * - `import returns target storage`
  * - `export and import empty storage round-trip`
- * - `export and import preserve nonempty storage attributes`
+ * - `export and import preserve nonempty storage attributes` -- reserved and encoded names retain all values
  * - `import with node filter excludes node and its edges` -- node predicate skips the node
  *   and every edge referencing it
  * - `export with node filter skips edges of filtered nodes` -- no NPE on dangling edges
@@ -78,9 +78,17 @@ internal class JgraphtGmlIOImplImportTest {
 
     @Test
     fun `export and import preserve nonempty storage attributes`() {
-        val n1 = srcStorage.addNode(mapOf("name" to "NodeAlpha".strVal))
-        val n2 = srcStorage.addNode(mapOf("name" to "NodeBeta".strVal))
-        srcStorage.addEdge(n1, n2, "depends_on", mapOf("weight" to 1.5.floatVal))
+        val propertyNames = listOf(
+            "", "weight", "id", "ID", "label", "source", "target", "graphics",
+            "nid", "esrc", "edst", "etype", "0", "a-b", "属性", "property", "property0077", "w",
+        )
+        val properties = propertyNames.associateWith { it.strVal }
+        val firstProperties = properties + ("name" to "NodeAlpha".strVal)
+        val secondProperties = properties + ("name" to "NodeBeta".strVal)
+        val edgeProperties = properties + ("weight" to 1.5.floatVal)
+        val n1 = srcStorage.addNode(firstProperties)
+        val n2 = srcStorage.addNode(secondProperties)
+        srcStorage.addEdge(n1, n2, "depends_on", edgeProperties)
 
         JgraphtGmlIOImpl.export(tempFile, srcStorage)
 
@@ -96,9 +104,9 @@ internal class JgraphtGmlIOImplImportTest {
         val edge = target.edgeIDs.single()
         val structure = target.getEdgeStructure(edge)
         assertEquals("depends_on", structure.tag)
-        assertEquals("NodeAlpha".strVal, target.getNodeProperty(structure.src, "name"))
-        assertEquals("NodeBeta".strVal, target.getNodeProperty(structure.dst, "name"))
-        assertEquals(1.5.floatVal, target.getEdgeProperty(edge, "weight"))
+        assertEquals(firstProperties, target.getNodeProperties(structure.src))
+        assertEquals(secondProperties, target.getNodeProperties(structure.dst))
+        assertEquals(edgeProperties, target.getEdgeProperties(edge))
     }
 
     // -- filtering --

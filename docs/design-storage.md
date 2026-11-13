@@ -167,7 +167,7 @@ Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` 
 
 `NativeCsvIOImpl` (public object) exposes `isValidFile`/`export`/`import`; the CSV format constants and escaping live in internal `NativeCsvFormat`, streaming write in internal `NativeCsvWriter`, streaming read in internal `NativeCsvReader` (with `NodeRecord`/`EdgeRecord` data holders). `import` owns the reader lifetime and completion record. Its private `importNodes` applies the node predicate, creates accepted nodes, and returns the source-to-destination ID map and filtered source IDs before any edge is imported. Edge import uses both results to exclude filtered endpoints and reject unknown endpoints; metadata is imported last.
 
-`JgraphtGmlIOImpl.export` writes serialized `nid`, `esrc`, `edst`, `etype`, and node and edge properties as custom GML attributes. Its importer requires these structural attributes to restore node identity and edge endpoints and tags.
+`JgraphtGmlIOImpl.export` writes serialized structural fields `nid`, `esrc`, `edst`, and `etype` under those GML attribute names. Every user property name is encoded as `property` followed by four lowercase hexadecimal digits for each UTF-16 code unit, including empty names and names reserved by GML. This injective encoding uses only letters and digits and separates user properties from structural fields. Import removes the structural fields before decoding user property names; a name without the prefix is retained, while a prefixed name must consist of complete hexadecimal groups. Property values use the existing Value serializer. Thus `weight`, `nid`, `id`, `label`, and names beginning with `property` retain their names and values after export/import.
 
 ## Exception / Error Types
 
@@ -177,7 +177,7 @@ All graph-layer exceptions extend the abstract base `GraphException` (extends `E
 |-----------|------------|
 | `EntityNotExistException` | Accessing/modifying a non-existent node or edge through an `IStorage` accessor (the `StorageLayer` snapshot returns null instead); adding an edge with missing src/dst |
 | `EntityAlreadyExistException` | Graph layer: adding a node/edge whose `NodeID` or `(src, dst, tag)` triple already exists; never raised by `IStorage`, whose IDs are auto-generated |
-| `InvalidPropNameException` | Property name collides with a backend reserved name (Neo4j `__sid__`, `__tag__`, `__meta_id__`) or an exporter structural attribute (GML `nid`/`esrc`/`edst`/`etype`, MapDB `_nid`/`_esrc`/`_edst`/`_etag`) |
+| `InvalidPropNameException` | Property name collides with a backend reserved name (Neo4j `__sid__`, `__tag__`, `__meta_id__`) or a MapDB exporter structural attribute (`_nid`/`_esrc`/`_edst`/`_etag`) |
 | `FrozenLayerModificationException` | Deleting a frozen-layer node in `LayeredStorageImpl` |
 
 Deletion of a non-existent entity is a no-op at the graph level.

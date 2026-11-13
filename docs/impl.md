@@ -46,6 +46,10 @@
 - `org.mapdb:mapdb:3.1.0` -- embedded off-heap storage; alias `libs.mapdb.core`
 - `org.neo4j:neo4j:2026.08.0` -- embedded graph database; alias `libs.neo4j.core`
 
+- `io.github.oshai:kotlin-logging-jvm:8.0.4` -- logging facade; alias `libs.kotlin.logging`
+- `org.slf4j:slf4j-api:2.0.15` -- SLF4J API; alias `libs.slf4j.api`
+- `ch.qos.logback:logback-classic:1.5.13` -- test event capture; depends on SLF4J 2.0.15; alias `libs.logback.classic`
+
 ## Developer Instructions
 
 - `MapVal.put(key, value)` mutates the map; in MapDB off-heap storage, re-`put` after modification.
@@ -63,7 +67,7 @@
 - Neo4j property values serialized to `ByteArray` via `DftByteArraySerializerImpl`.
 - Neo4j internal `__sid__` property stores IStorage Int ID as `Long`; schema indexes on `__sid__` enable indexed lookups.
 - Neo4j storage meta lives on one node labeled `_M` with marker property `__meta_id__`; found via `findNode(META_LABEL, META_ID, 0L)`; excluded from `nodeIDs` because entity queries use label `_N`.
-- GML export enables `EXPORT_CUSTOM_VERTEX_ATTRIBUTES` and `EXPORT_CUSTOM_EDGE_ATTRIBUTES` to write the registered providers: `nid` for nodes, `esrc`/`edst`/`etype` for edges, and user properties. Label flags only control labels and do not enable these attributes.
+- GML export enables `EXPORT_CUSTOM_VERTEX_ATTRIBUTES` and `EXPORT_CUSTOM_EDGE_ATTRIBUTES` to write the registered providers: `nid` for nodes, `esrc`/`edst`/`etype` for edges, and encoded user property names. GML reserves `weight` for a numeric edge value, so serialized user values never use raw user names as GML keys. Label flags only control labels and do not enable these attributes.
 - `closeOnJvmShutdown()` is a safety net; call `close()` explicitly as primary path.
 - Use `lazy` for Neo4j DB initialization to avoid constructor blocking.
 - JDK `ReentrantReadWriteLock`: `writeLock()` returns one `Lock` instance per lock; the write-lock holder may take the read lock, a read-lock holder never gets the write lock (no upgrade, it blocks forever). `kotlin.concurrent.withLock` takes any `Lock`.

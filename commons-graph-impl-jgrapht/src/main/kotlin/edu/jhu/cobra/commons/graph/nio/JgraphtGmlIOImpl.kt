@@ -1,6 +1,5 @@
 package edu.jhu.cobra.commons.graph.nio
 
-import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.IStorage
 import edu.jhu.cobra.commons.graph.storage.nio.EntityFilter
 import edu.jhu.cobra.commons.graph.storage.nio.IStorageExporter
@@ -35,17 +34,10 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
     private const val EDGE_DST_ATTR = "edst"
     private const val EDGE_TAG_ATTR = "etype"
 
-    // A user property exported under one of these names would be indistinguishable
-    // from the structural attribute on import; export rejects the collision up front.
-    private val RESERVED_ATTRS = setOf(NODE_ID_ATTR, EDGE_SRC_ATTR, EDGE_DST_ATTR, EDGE_TAG_ATTR)
-
-    private fun rejectReservedProps(
-        entityId: Int,
-        props: Map<String, IValue>,
-    ) {
-        val clash = props.keys.firstOrNull { it in RESERVED_ATTRS } ?: return
-        throw InvalidPropNameException(clash, entityId.toString())
-    }
+    // GML keys contain only letters and digits; fixed-width UTF-16 encoding preserves every Kotlin name.
+    private const val PROPERTY_ATTRIBUTE_PREFIX = "property"
+    private const val PROPERTY_NAME_RADIX = 16
+    private const val PROPERTY_NAME_UNIT_WIDTH = 4
 
     /**
      * Type tags [DftCharBufferSerializerImpl] emits as the frame prefix before the first `:`.
@@ -80,13 +72,10 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
                 val structure = from.getEdgeStructure(edgeID)
                 structure.src in idOfVx && structure.dst in idOfVx
             }
-        nodeList.forEach { rejectReservedProps(it, from.getNodeProperties(it)) }
-        edgeList.forEach { rejectReservedProps(it, from.getEdgeProperties(it)) }
         exporter.setVertexAttributeProvider { index: Int ->
             val nodeID = nodeList[index]
             val metaProp = mapOf(NODE_ID_ATTR to StrVal(nodeID.toString()))
-            val props = metaProp + from.getNodeProperties(nodeID)
-            props.mapValues { (_, value) -> value.toAttribute }
+            metaProp.mapValues { (_, value) -> value.toAttribute } + propertyAttributes(from.getNodeProperties(nodeID))
         }
         exporter.setEdgeAttributeProvider { index: Int ->
             val edgeID = edgeList[index]
@@ -97,8 +86,7 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
                     EDGE_DST_ATTR to StrVal(structure.dst.toString()),
                     EDGE_TAG_ATTR to StrVal(structure.tag),
                 )
-            val props = metaProp + from.getEdgeProperties(edgeID)
-            props.mapValues { (_, value) -> value.toAttribute }
+            metaProp.mapValues { (_, value) -> value.toAttribute } + propertyAttributes(from.getEdgeProperties(edgeID))
         }
         val graph = DirectedPseudograph<Int, Int>(Int::class.java)
         nodeList.forEachIndexed { index, _ -> graph.addVertex(index) }
@@ -192,7 +180,7 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
                 filteredNodeIds.add(oldNid)
                 continue
             }
-            nodeIdMapping[oldNid] = into.addNode(props)
+            nodeIdMapping[oldNid] = into.addNode(decodeProperties(props))
         }
         return nodeIdMapping to filteredNodeIds
     }
@@ -211,7 +199,31 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             if (oldSrc in filteredNodeIds || oldDst in filteredNodeIds) continue
             val src = nodeIdMapping[oldSrc] ?: error("Unknown node ID: $oldSrc")
             val dst = nodeIdMapping[oldDst] ?: error("Unknown node ID: $oldDst")
-            into.addEdge(src, dst, type, props)
+            into.addEdge(src, dst, type, decodeProperties(props))
+        }
+    }
+
+    private fun propertyAttributes(properties: Map<String, IValue>): Map<String, Attribute> =
+        properties.entries.associate { (name, value) -> encodePropertyName(name) to value.toAttribute }
+
+    private fun encodePropertyName(name: String): String = buildString {
+        append(PROPERTY_ATTRIBUTE_PREFIX)
+        for (unit in name) {
+            append(unit.code.toString(PROPERTY_NAME_RADIX).padStart(PROPERTY_NAME_UNIT_WIDTH, '0'))
+        }
+    }
+
+    private fun decodeProperties(properties: Map<String, IValue>): Map<String, IValue> =
+        properties.mapKeys { (name, _) -> decodePropertyName(name) }
+
+    private fun decodePropertyName(name: String): String {
+        if (!name.startsWith(PROPERTY_ATTRIBUTE_PREFIX)) return name
+        val encoded = name.removePrefix(PROPERTY_ATTRIBUTE_PREFIX)
+        require(encoded.length % PROPERTY_NAME_UNIT_WIDTH == 0 && encoded.all { it.digitToIntOrNull(PROPERTY_NAME_RADIX) != null }) {
+            "Invalid encoded GML property name: $name"
+        }
+        return encoded.chunked(PROPERTY_NAME_UNIT_WIDTH).joinToString("") {
+            it.toInt(PROPERTY_NAME_RADIX).toChar().toString()
         }
     }
 

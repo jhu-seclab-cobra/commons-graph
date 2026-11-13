@@ -1,8 +1,6 @@
 package edu.jhu.cobra.commons.graph.nio
 
-import edu.jhu.cobra.commons.graph.InvalidPropNameException
 import edu.jhu.cobra.commons.graph.storage.JgraphtStorageImpl
-import edu.jhu.cobra.commons.value.strVal
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -16,7 +14,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /*
- * Tests for JgraphtGmlIOImpl: file validation, export, reserved attribute names, and foreign file rejection.
+ * Tests for JgraphtGmlIOImpl: file validation, export, and foreign file rejection.
  *
  * - `isValidFile returns false for nonexistent file`
  * - `isValidFile returns false for empty file`
@@ -26,8 +24,6 @@ import kotlin.test.assertTrue
  * - `export accepts existing empty file`
  * - `export creates file at destination path`
  * - `export returns destination path`
- * - `export throws when node property uses reserved attribute name` -- "nid" would clobber meta
- * - `export throws when edge property uses reserved attribute name` -- "etype" would clobber meta
  * - `import throws when node lacks nid attribute` -- foreign node record is not skipped silently
  * - `import throws when edge lacks structural attributes` -- foreign edge record is not skipped silently
  * - `import throws when file carries no serialized attributes` -- plain GML is rejected, not imported empty
@@ -111,26 +107,6 @@ internal class JgraphtGmlIOImplTest {
     fun `export returns destination path`() {
         val result = JgraphtGmlIOImpl.export(tempFile, srcStorage)
         assertEquals(tempFile, result)
-    }
-
-    // -- reserved attribute names --
-
-    @Test
-    fun `export throws when node property uses reserved attribute name`() {
-        srcStorage.addNode(mapOf("nid" to "boom".strVal))
-        assertFailsWith<InvalidPropNameException> {
-            JgraphtGmlIOImpl.export(tempFile, srcStorage)
-        }
-    }
-
-    @Test
-    fun `export throws when edge property uses reserved attribute name`() {
-        val n1 = srcStorage.addNode()
-        val n2 = srcStorage.addNode()
-        srcStorage.addEdge(n1, n2, "rel", mapOf("etype" to "boom".strVal))
-        assertFailsWith<InvalidPropNameException> {
-            JgraphtGmlIOImpl.export(tempFile, srcStorage)
-        }
     }
 
     // -- foreign file rejection --
