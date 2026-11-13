@@ -1,0 +1,144 @@
+/*
+ * Operation logging contract:
+ * - `bulk import logs only after successful completion`: one record per file, none on predicate failure.
+ * - `entity operations stay silent and whole operations emit once`: TRACE capture verifies
+ *   silent node, edge and property operations, and one structured record per transfer or clear.
+ * - `failed transfer emits no completion`: a rejected operation has no success record.
+ * - `freeze and rollback log after callbacks and failures stay silent`: layered completion boundary.
+ */
+package edu.jhu.cobra.commons.graph.storage
+
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import edu.jhu.cobra.commons.graph.storage.nio.NativeCsvIOImpl
+import edu.jhu.cobra.commons.value.intVal
+import org.slf4j.LoggerFactory
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+internal class OperationLoggingTest {
+    @Test
+    fun `entity operations stay silent and whole operations emit once`() {
+        val storages: List<IStorage> = listOf(NativeStorageImpl(), NativeConcurStorageImpl(), LayeredStorageImpl())
+        try {
+            for (storage in storages) {
+                capture { events ->
+                    val node = storage.addNode(mapOf("value" to 1.intVal))
+                    val edge = storage.addEdge(node, node, "tag")
+                    repeat(100) {
+                        storage.getNodeProperty(node, "value")
+                        storage.setNodeProperties(node, mapOf("value" to it.intVal))
+                        storage.getEdgeStructure(edge)
+                        storage.getOutgoingEdges(node)
+                        storage.setEdgeProperties(edge, mapOf("value" to it.intVal))
+                        storage.getEdgeProperty(edge, "value")
+                    }
+                    storage.getNodeProperties(node)
+                    storage.getEdgeProperties(edge)
+                    storage.nodeIDs
+                    storage.edgeIDs
+                    storage.setMeta("value", 1.intVal)
+                    storage.getMeta("value")
+                    assertEquals(0, events.size)
+                    val target = NativeStorageImpl()
+                    storage.transferTo(target)
+                    assertRecord(events.single(), "transferTo", target)
+                    assertEquals(1, target.nodeIDs.size)
+                    assertEquals(1, target.edgeIDs.size)
+                    events.clear()
+                    storage.deleteEdge(edge)
+                    storage.deleteNode(node)
+                    assertEquals(0, events.size)
+                    storage.addNode()
+                    storage.clear()
+                    assertRecord(events.single(), "clear", storage)
+                    events.clear()
+                    storage.clear()
+                    assertRecord(events.single(), "clear", storage)
+                }
+            }
+        } finally {
+            storages.filterIsInstance<AutoCloseable>().forEach { it.close() }
+        }
+    }
+
+    @Test
+    fun `failed transfer emits no completion`() = capture { events ->
+        val storage = NativeStorageImpl()
+        assertFailsWith<IllegalArgumentException> { storage.transferTo(storage) }
+        assertEquals(0, events.size)
+    }
+
+    @Test
+    fun `freeze and rollback log after callbacks and failures stay silent`() = capture { events ->
+        val storage = LayeredStorageImpl()
+        storage.freeze()
+        assertEquals("freeze", fields(events.single())["operation"])
+        events.clear()
+        storage.addRevertListener { assertEquals(0, events.size) }
+        storage.clearActiveLayer()
+        assertEquals("clearActiveLayer", fields(events.single())["operation"])
+        events.clear()
+        storage.addRevertListener { error("callback failed") }
+        assertFailsWith<IllegalStateException> { storage.clearActiveLayer() }
+        assertEquals(0, events.size)
+    }
+
+    @Test
+    fun `bulk import logs only after successful completion`() {
+        val directory = java.nio.file.Files.createTempDirectory("import-logging")
+        try {
+            val source = NativeStorageImpl()
+            val node = source.addNode(mapOf("value" to 1.intVal))
+            source.addEdge(node, node, "tag")
+            val file = NativeCsvIOImpl.export(directory.resolve("graph.csv"), source)
+            capture { events ->
+                val target = NativeStorageImpl()
+                NativeCsvIOImpl.import(file, target)
+                assertRecord(events.single(), "import", target)
+                assertEquals(1, target.nodeIDs.size)
+                assertEquals(1, target.edgeIDs.size)
+                events.clear()
+                assertFailsWith<IllegalArgumentException> {
+                    NativeCsvIOImpl.import(file, NativeStorageImpl()) { throw IllegalArgumentException("filter failed") }
+                }
+                assertEquals(0, events.size)
+            }
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    private fun assertRecord(event: ILoggingEvent, operation: String, storage: IStorage) {
+        val fields = fields(event)
+        assertEquals(Level.INFO, event.level)
+        assertEquals("Storage operation completed", event.message)
+        assertEquals(operation, fields["operation"])
+        assertEquals(storage.javaClass.name, fields["implementation"])
+        assertEquals(System.identityHashCode(storage), fields["storageId"])
+        assertEquals("success", fields["outcome"])
+        assertTrue((fields.getValue("durationNs") as Long) >= 0)
+    }
+
+    private fun fields(event: ILoggingEvent): Map<String, Any?> =
+        event.keyValuePairs.associate { it.key to it.value }
+
+    private fun capture(action: (MutableList<ILoggingEvent>) -> Unit) {
+        val logger = LoggerFactory.getLogger("edu.jhu.cobra.commons.graph") as Logger
+        val oldLevel = logger.level
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.level = Level.TRACE
+        logger.addAppender(appender)
+        try {
+            action(appender.list)
+        } finally {
+            logger.detachAppender(appender)
+            logger.level = oldLevel
+            appender.stop()
+        }
+    }
+}

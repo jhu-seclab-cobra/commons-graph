@@ -3,10 +3,13 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.graph.FrozenLayerModificationException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Multi-layer freeze-and-stack storage for phased analysis pipelines.
@@ -111,6 +114,7 @@ public class LayeredStorageImpl(
     public val layerCount: Int get() = lock.readLock().withLock { if (layers.frozen != null) 2 else 1 }
 
     public fun freeze() {
+        val started = System.nanoTime()
         lock.writeLock().withLock {
             val merged = FrozenLayer.merge(layers.frozen, active, frozenLayerFactory(), tagGroup)
             layers.frozen?.close()
@@ -118,6 +122,7 @@ public class LayeredStorageImpl(
             active.clear()
             rebuildPairs(merged)
         }
+        logCompletion("freeze", this, started)
     }
 
     /**
@@ -129,7 +134,8 @@ public class LayeredStorageImpl(
      * the active-only nodes and edges as removed; the promoted frozen nodes and edges, and the
      * tombstoned frozen edges, as restored; and the structures of the edges visible before.
      */
-    public fun clearActiveLayer(): Unit =
+    public fun clearActiveLayer(): Unit {
+        val started = System.nanoTime()
         lock.writeLock().withLock {
             val notice = activeLayerDropNotice(active, layers.frozen)
             active.clear()
@@ -137,6 +143,8 @@ public class LayeredStorageImpl(
             restoreExactAdjacency(notice)
             notifyRevert(notice)
         }
+        logCompletion("clearActiveLayer", this, started)
+    }
 
     override fun addRevertListener(listener: RevertListener) {
         revertListeners.add(listener)
@@ -406,30 +414,34 @@ public class LayeredStorageImpl(
     // LIFECYCLE
     // ============================================================================
 
-    override fun clear(): Unit =
-        lock.writeLock().withLock {
-            val removedEdges = layers.edgeIds().toSet()
-            val notice =
-                RevertNotice(
-                    removed = StorageEntityIds(layers.nodeIds().toSet(), removedEdges),
-                    restored = StorageEntityIds(emptySet(), emptySet()),
-                    edgeStructuresBefore = removedEdges.associateWith(layers::edgeStructure),
-                )
-            layers.frozen?.close()
-            layers.frozen = null
-            active.clear()
-            pairs.clear()
-            pairOrder.clear()
-            exact?.clear()
-            nodeCounter = 0
-            edgeCounter = 0
-            notifyRevert(notice)
-        }
+    override fun clear(): Unit {
+        val started = System.nanoTime()
+        lock.writeLock().withLock{
+                val removedEdges = layers.edgeIds().toSet()
+                val notice =
+                    RevertNotice(
+                        removed = StorageEntityIds(layers.nodeIds().toSet(), removedEdges),
+                        restored = StorageEntityIds(emptySet(), emptySet()),
+                        edgeStructuresBefore = removedEdges.associateWith(layers::edgeStructure),
+                    )
+                layers.frozen?.close()
+                layers.frozen = null
+                active.clear()
+                pairs.clear()
+                pairOrder.clear()
+                exact?.clear()
+                nodeCounter = 0
+                edgeCounter = 0
+                notifyRevert(notice)
+            }
+        logCompletion("clear", this, started)
+    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // Copying into the iterated storage mutates it mid-iteration; reject up front.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        return lock.readLock().withLock {
+        val transferred = lock.readLock().withLock {
             val nodeIdMap = HashMap<Int, Int>()
             for (nodeId in layers.nodeIds()) {
                 nodeIdMap[nodeId] = target.addNode(layers.nodeProperties(nodeId))
@@ -445,9 +457,24 @@ public class LayeredStorageImpl(
             }
             nodeIdMap
         }
+        logCompletion("transferTo", target, started)
+        return transferred
     }
 
     override fun flush() {
         // No buffered writes; mutations are applied immediately.
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

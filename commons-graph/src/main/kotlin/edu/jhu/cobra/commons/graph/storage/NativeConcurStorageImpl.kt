@@ -2,9 +2,12 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Thread-safe in-memory graph storage using read-write locks with auto-generated Int IDs.
@@ -283,7 +286,8 @@ public class NativeConcurStorageImpl(
         // No buffered writes; mutations are applied immediately.
     }
 
-    override fun clear(): Unit =
+    override fun clear(): Unit {
+        val started = System.nanoTime()
         lock.writeLock().withLock {
             pairs.clear()
             tagAdjacency.clear()
@@ -296,11 +300,14 @@ public class NativeConcurStorageImpl(
             nodeCounter = 0
             edgeCounter = 0
         }
+        logCompletion("clear", this, started)
+    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // A self-transfer would request the write lock while holding the read lock — deadlock.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        return lock.readLock().withLock {
+        val transferred = lock.readLock().withLock {
             val nodeIdMap = HashMap<Int, Int>()
             for (nodeId in outEdges.keys) {
                 val newId = target.addNode(collectNodeProperties(nodeId))
@@ -316,5 +323,20 @@ public class NativeConcurStorageImpl(
             }
             nodeIdMap
         }
+        logCompletion("transferTo", target, started)
+        return transferred
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

@@ -2,7 +2,10 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.Collections
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * In-memory graph storage using Int-keyed HashMaps with auto-generated IDs.
@@ -261,6 +264,7 @@ public class NativeStorageImpl(
     }
 
     override fun clear() {
+        val started = System.nanoTime()
         pairs.clear()
         tagAdjacency.clear()
         exact?.clear()
@@ -272,9 +276,11 @@ public class NativeStorageImpl(
         metaProperties.clear()
         nodeCounter = 0
         edgeCounter = 0
+        logCompletion("clear", this, started)
     }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // Copying into the iterated storage mutates it mid-iteration; reject up front.
         require(target !== this) { "Cannot transfer a storage into itself" }
         val nodeIdMap = HashMap<Int, Int>()
@@ -290,6 +296,20 @@ public class NativeStorageImpl(
         for (name in metaProperties.keys) {
             target.setMeta(name, metaProperties[name])
         }
+        logCompletion("transferTo", target, started)
         return nodeIdMap
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

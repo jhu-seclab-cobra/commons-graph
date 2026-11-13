@@ -2,8 +2,11 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jgrapht.Graph
 import org.jgrapht.graph.DirectedPseudograph
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Shared [IStorage] engine backed by the JGraphT library.
@@ -210,7 +213,8 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
         // No buffered writes; mutations are applied immediately.
     }
 
-    override fun clear(): Unit =
+    override fun clear(): Unit {
+        val started = System.nanoTime()
         writeGuarded {
             jgtGraph.removeAllEdges(jgtGraph.edgeSet().toSet())
             jgtGraph.removeAllVertices(jgtGraph.vertexSet().toSet())
@@ -225,12 +229,15 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
             nodeCounter = 0
             edgeCounter = 0
         }
+        logCompletion("clear", this, started)
+    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // A self-transfer mutates the iterated maps and, in the concurrent subclass,
         // requests the write lock while holding the read lock — deadlock.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        return readGuarded {
+        val transferred = readGuarded {
             val idMap = HashMap<Int, Int>()
             for (nodeId in nodeProperties.keys) {
                 idMap[nodeId] = target.addNode(nodeProperties.getValue(nodeId))
@@ -246,5 +253,20 @@ public abstract class AbcJgraphtStorage protected constructor() : IStorage {
             }
             idMap
         }
+        logCompletion("transferTo", target, started)
+        return transferred
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

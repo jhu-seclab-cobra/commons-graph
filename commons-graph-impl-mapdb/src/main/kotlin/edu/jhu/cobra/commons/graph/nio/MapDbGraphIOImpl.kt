@@ -11,15 +11,18 @@ import edu.jhu.cobra.commons.value.IntVal
 import edu.jhu.cobra.commons.value.MapVal
 import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.mapVal
-import org.mapdb.DB
-import org.mapdb.DBException
-import org.mapdb.DBMaker
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
+import org.mapdb.DB
+import org.mapdb.DBException
+import org.mapdb.DBMaker
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Implementation of [IStorageExporter] and [IStorageImporter] using MapDB for graph data persistence.
@@ -126,6 +129,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
+        val started = System.nanoTime()
         require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exist" }
         val dbManager = DBMaker.fileDB(srcFile.toFile()).fileMmapEnableIfSupported().make()
         dbManager.use {
@@ -135,6 +139,7 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
             importEdges(dbManager, into, nodeIdMapping, filteredNodeIds)
             importMeta(dbManager, into)
         }
+        logCompletion("import", into, started)
         return into
     }
 
@@ -188,5 +193,18 @@ public object MapDbGraphIOImpl : IStorageExporter, IStorageImporter {
         if (!dbManager.exists("meta")) return
         val metaList = dbManager.indexTreeList("meta", mapValSerializer).open()
         metaList.forEach { metaVal -> metaVal!!.core.forEach { (name, value) -> into.setMeta(name, value) } }
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

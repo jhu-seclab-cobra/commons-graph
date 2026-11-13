@@ -1,11 +1,14 @@
 package edu.jhu.cobra.commons.graph.storage.nio
 
 import edu.jhu.cobra.commons.graph.storage.IStorage
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
 import kotlin.io.path.isDirectory
 import kotlin.io.path.notExists
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Exports and imports nodes and edges from storage to a CSV directory.
@@ -49,6 +52,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
+        val started = System.nanoTime()
         NativeCsvReader(path = srcFile).use { reader ->
             val nodeStringToInt = HashMap<String, Int>()
             val filteredNodeIds = HashSet<String>()
@@ -75,6 +79,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             }
             reader.readMeta().forEach { (name, value) -> into.setMeta(name, value) }
         }
+        logCompletion("import", into, started)
         return into
     }
 
@@ -89,5 +94,18 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): Boolean {
         val originalId = entityId.toIntOrNull() ?: return false
         return !predicate(originalId)
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

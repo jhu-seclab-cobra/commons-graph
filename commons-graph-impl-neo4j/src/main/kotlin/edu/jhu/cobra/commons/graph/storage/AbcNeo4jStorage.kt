@@ -2,15 +2,18 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
+import java.nio.file.Path
+import java.util.concurrent.TimeUnit
+import kotlin.io.path.createDirectories
+import kotlin.io.path.notExists
 import org.neo4j.configuration.GraphDatabaseSettings
 import org.neo4j.dbms.api.DatabaseManagementService
 import org.neo4j.dbms.api.DatabaseManagementServiceBuilder
 import org.neo4j.graphdb.Direction
 import org.neo4j.graphdb.Transaction
-import java.nio.file.Path
-import java.util.concurrent.TimeUnit
-import kotlin.io.path.createDirectories
-import kotlin.io.path.notExists
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Shared [IStorage] engine using Neo4j 5.x embedded mode with zero in-memory ID mappings.
@@ -248,7 +251,8 @@ public abstract class AbcNeo4jStorage protected constructor(
             if (value == null) findMetaNode()?.removeProperty(name) else findOrCreateMetaNode()[name] = value
         }
 
-    override fun clear(): Unit =
+    override fun clear(): Unit {
+        val started = System.nanoTime()
         writeTx {
             for (rel in findRelationships(EDGE_TYPE)) rel.delete()
             for (node in findNodes(NODE_LABEL)) node.delete()
@@ -256,17 +260,22 @@ public abstract class AbcNeo4jStorage protected constructor(
             nodeCounter = 0
             edgeCounter = 0
         }
+        logCompletion("clear", this, started)
+    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // A self-transfer mutates the iterated graph and, in the concurrent subclass,
         // requests the write lock while holding the read lock — deadlock.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        return readTx {
+        val transferred = readTx {
             val idMap = copyNodesTo(target)
             copyEdgesTo(target, idMap)
             findMetaNode()?.propertyEntries()?.forEach { (name, value) -> target.setMeta(name, value) }
             idMap
         }
+        logCompletion("transferTo", target, started)
+        return transferred
     }
 
     private fun Transaction.copyNodesTo(target: IStorage): HashMap<Int, Int> {
@@ -295,4 +304,17 @@ public abstract class AbcNeo4jStorage protected constructor(
     }
 
     override fun close(): Unit = writeGuarded { managementService.shutdown() }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
+    }
 }

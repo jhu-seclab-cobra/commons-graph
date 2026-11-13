@@ -2,8 +2,11 @@ package edu.jhu.cobra.commons.graph.storage
 
 import edu.jhu.cobra.commons.graph.EntityNotExistException
 import edu.jhu.cobra.commons.value.IValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.mapdb.DB
 import org.mapdb.Serializer
+
+private val operationLogger = KotlinLogging.logger {}
 
 /**
  * Shared [IStorage] engine backed by MapDB for off-heap storage of nodes and edges.
@@ -191,7 +194,8 @@ public abstract class AbcMapDBStorage protected constructor(
             if (value == null) metaProperties.remove(name) else metaProperties[name] = value
         }
 
-    override fun clear(): Unit =
+    override fun clear(): Unit {
+        val started = System.nanoTime()
         writeGuarded {
             nodeCounter = 0
             edgeCounter = 0
@@ -204,12 +208,15 @@ public abstract class AbcMapDBStorage protected constructor(
             inEdges.clear()
             metaProperties.clear()
         }
+        logCompletion("clear", this, started)
+    }
 
     override fun transferTo(target: IStorage): Map<Int, Int> {
+        val started = System.nanoTime()
         // A self-transfer mutates the iterated maps and, in the concurrent subclass,
         // requests the write lock while holding the read lock — deadlock.
         require(target !== this) { "Cannot transfer a storage into itself" }
-        return readGuarded {
+        val transferred = readGuarded {
             val idMap = HashMap<Int, Int>()
             for (nodeId in nodeProperties.keys) {
                 idMap[nodeId] = target.addNode(nodeProperties.getValue(nodeId))
@@ -225,5 +232,20 @@ public abstract class AbcMapDBStorage protected constructor(
             }
             idMap
         }
+        logCompletion("transferTo", target, started)
+        return transferred
+    }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
     }
 }

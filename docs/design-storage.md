@@ -16,6 +16,8 @@ The storage layer is the **backend-agnostic directed property graph engine**. It
 
 Persistent backends persist graph-level metadata with the same lifetime as entity data: wherever entity data survives (reopen of the same storage path, export/import round-trip), metadata written via `setMeta` survives with it. Backend-specific meta persistence mechanics: `impl.md`.
 
+Completion records follow [Storage operation logging](design-storage-logging.md).
+
 ## Class / Type Specifications
 
 ### IStorage

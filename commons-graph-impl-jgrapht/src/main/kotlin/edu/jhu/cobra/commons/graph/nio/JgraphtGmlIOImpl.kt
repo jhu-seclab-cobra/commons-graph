@@ -10,6 +10,14 @@ import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.serializer.DftCharBufferSerializerImpl
 import edu.jhu.cobra.commons.value.serializer.Type
 import edu.jhu.cobra.commons.value.serializer.asCharBuffer
+import io.github.oshai.kotlinlogging.KotlinLogging
+import java.nio.BufferUnderflowException
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.fileSize
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.notExists
 import org.jgrapht.graph.DirectedPseudograph
 import org.jgrapht.nio.Attribute
 import org.jgrapht.nio.AttributeType
@@ -18,13 +26,8 @@ import org.jgrapht.nio.ImportException
 import org.jgrapht.nio.gml.GmlExporter
 import org.jgrapht.nio.gml.GmlImporter
 import org.jgrapht.util.SupplierUtil
-import java.nio.BufferUnderflowException
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.exists
-import kotlin.io.path.fileSize
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.notExists
+
+private val operationLogger = KotlinLogging.logger {}
 
 public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
     private const val NODE_ID_ATTR = "nid"
@@ -114,6 +117,7 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         into: IStorage,
         predicate: EntityFilter,
     ): IStorage {
+        val started = System.nanoTime()
         require(srcFile.exists() && srcFile.fileSize() > 0) { "File $srcFile does not exists or it is empty" }
         val nodesCache = mutableMapOf<Int, MutableMap<String, IValue>>()
         val edgeCache = mutableMapOf<Int, MutableMap<String, IValue>>()
@@ -128,6 +132,7 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
         }
         val (nodeIdMapping, filteredNodeIds) = importNodes(nodesCache.values, into, predicate)
         importEdges(edgeCache.values, into, nodeIdMapping, filteredNodeIds)
+        logCompletion("import", into, started)
         return into
     }
 
@@ -228,4 +233,17 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val value = DftCharBufferSerializerImpl.serialize(this).toString()
             return DefaultAttribute.createAttribute(value.replace("\"", "\\\""))
         }
+}
+
+private fun logCompletion(operation: String, storage: IStorage, started: Long) {
+    operationLogger.atInfo {
+        message = "Storage operation completed"
+        payload = mapOf(
+            "operation" to operation,
+            "implementation" to storage.javaClass.name,
+            "storageId" to System.identityHashCode(storage),
+            "outcome" to "success",
+            "durationNs" to System.nanoTime() - started,
+        )
+    }
 }
