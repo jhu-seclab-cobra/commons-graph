@@ -63,7 +63,7 @@
 - Neo4j property values serialized to `ByteArray` via `DftByteArraySerializerImpl`.
 - Neo4j internal `__sid__` property stores IStorage Int ID as `Long`; schema indexes on `__sid__` enable indexed lookups.
 - Neo4j storage meta lives on one node labeled `_M` with marker property `__meta_id__`; found via `findNode(META_LABEL, META_ID, 0L)`; excluded from `nodeIDs` because entity queries use label `_N`.
-- `EXPORT_VERTEX_LABELS` / `EXPORT_EDGE_LABELS` must be explicitly set to `true` for GML export.
+- GML export enables `EXPORT_CUSTOM_VERTEX_ATTRIBUTES` and `EXPORT_CUSTOM_EDGE_ATTRIBUTES` to write the registered providers: `nid` for nodes, `esrc`/`edst`/`etype` for edges, and user properties. Label flags only control labels and do not enable these attributes.
 - `closeOnJvmShutdown()` is a safety net; call `close()` explicitly as primary path.
 - Use `lazy` for Neo4j DB initialization to avoid constructor blocking.
 - JDK `ReentrantReadWriteLock`: `writeLock()` returns one `Lock` instance per lock; the write-lock holder may take the read lock, a read-lock holder never gets the write lock (no upgrade, it blocks forever). `kotlin.concurrent.withLock` takes any `Lock`.

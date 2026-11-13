@@ -20,7 +20,11 @@ internal class OperationLoggingTest {
     @Test
     fun `entity operations stay silent and whole operations emit once`() {
         val directory = java.nio.file.Files.createTempDirectory("operation-logging")
-        val storages: List<IStorage> = listOf(Neo4jStorageImpl(directory.resolve("plain")), Neo4jConcurStorageImpl(directory.resolve("concurrent")))
+        val storages: List<IStorage> =
+            listOf(
+                Neo4jStorageImpl(directory.resolve("plain")),
+                Neo4jConcurStorageImpl(directory.resolve("concurrent")),
+            )
         try {
             for (storage in storages) {
                 capture { events ->

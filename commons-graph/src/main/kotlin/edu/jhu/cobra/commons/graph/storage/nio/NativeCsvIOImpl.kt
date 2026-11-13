@@ -54,16 +54,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
     ): IStorage {
         val started = System.nanoTime()
         NativeCsvReader(path = srcFile).use { reader ->
-            val nodeStringToInt = HashMap<String, Int>()
-            val filteredNodeIds = HashSet<String>()
-            reader.readNodes().forEach { (nodeId, props) ->
-                if (isFilteredOut(nodeId, predicate)) {
-                    filteredNodeIds.add(nodeId)
-                    return@forEach
-                }
-                val storageId = into.addNode(props)
-                nodeStringToInt[nodeId] = storageId
-            }
+            val (nodeStringToInt, filteredNodeIds) = importNodes(reader, into, predicate)
             reader.readEdges().forEach { record ->
                 if (isFilteredOut(record.edgeId, predicate)) return@forEach
                 if (record.src in filteredNodeIds || record.dst in filteredNodeIds) return@forEach
@@ -81,6 +72,24 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         }
         logCompletion("import", into, started)
         return into
+    }
+
+    private fun importNodes(
+        reader: NativeCsvReader,
+        into: IStorage,
+        predicate: EntityFilter,
+    ): Pair<Map<String, Int>, Set<String>> {
+        val nodeStringToInt = HashMap<String, Int>()
+        val filteredNodeIds = HashSet<String>()
+        reader.readNodes().forEach { (nodeId, props) ->
+            if (isFilteredOut(nodeId, predicate)) {
+                filteredNodeIds.add(nodeId)
+                return@forEach
+            }
+            val storageId = into.addNode(props)
+            nodeStringToInt[nodeId] = storageId
+        }
+        return nodeStringToInt to filteredNodeIds
     }
 
     /**

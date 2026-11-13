@@ -106,6 +106,8 @@ public object JgraphtGmlIOImpl : IStorageExporter, IStorageImporter {
             val edgeStructure = from.getEdgeStructure(edge)
             graph.addEdge(idOfVx.getValue(edgeStructure.src), idOfVx.getValue(edgeStructure.dst), index)
         }
+        exporter.setParameter(GmlExporter.Parameter.EXPORT_CUSTOM_VERTEX_ATTRIBUTES, true)
+        exporter.setParameter(GmlExporter.Parameter.EXPORT_CUSTOM_EDGE_ATTRIBUTES, true)
         exporter.setParameter(GmlExporter.Parameter.EXPORT_VERTEX_LABELS, true)
         exporter.setParameter(GmlExporter.Parameter.EXPORT_EDGE_LABELS, true)
         exporter.exportGraph(graph, dstFile.toFile())

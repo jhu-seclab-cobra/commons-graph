@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
  * - `import requires file to exist`
  * - `import returns target storage`
  * - `export and import empty storage round-trip`
- * - `export with nodes and edges creates non-empty file`
+ * - `export and import preserve nonempty storage attributes`
  * - `import with node filter excludes node and its edges` -- node predicate skips the node
  *   and every edge referencing it
  * - `export with node filter skips edges of filtered nodes` -- no NPE on dangling edges
@@ -77,7 +77,7 @@ internal class JgraphtGmlIOImplImportTest {
     }
 
     @Test
-    fun `export with nodes and edges creates non-empty file`() {
+    fun `export and import preserve nonempty storage attributes`() {
         val n1 = srcStorage.addNode(mapOf("name" to "NodeAlpha".strVal))
         val n2 = srcStorage.addNode(mapOf("name" to "NodeBeta".strVal))
         srcStorage.addEdge(n1, n2, "depends_on", mapOf("weight" to 1.5.floatVal))
@@ -89,6 +89,16 @@ internal class JgraphtGmlIOImplImportTest {
         assertTrue(content.contains("graph"))
         assertTrue(content.contains("node"))
         assertTrue(content.contains("edge"))
+        val target = JgraphtStorageImpl()
+        JgraphtGmlIOImpl.import(tempFile, target)
+        assertEquals(2, target.nodeIDs.size)
+        assertEquals(1, target.edgeIDs.size)
+        val edge = target.edgeIDs.single()
+        val structure = target.getEdgeStructure(edge)
+        assertEquals("depends_on", structure.tag)
+        assertEquals("NodeAlpha".strVal, target.getNodeProperty(structure.src, "name"))
+        assertEquals("NodeBeta".strVal, target.getNodeProperty(structure.dst, "name"))
+        assertEquals(1.5.floatVal, target.getEdgeProperty(edge, "weight"))
     }
 
     // -- filtering --

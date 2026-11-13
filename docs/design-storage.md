@@ -163,9 +163,11 @@ Each backend module folds its plain and concurrent implementations into one abst
 
 Each base declares `protected abstract fun <R> readGuarded(action: () -> R): R` and `writeGuarded`. Plain subclasses pass through and leave `criticalSectionLock` `null`; concurrent subclasses guard with a `ReentrantReadWriteLock` and expose its write lock as `criticalSectionLock`. `NativeStorageImpl` and `NativeConcurStorageImpl` remain separate classes: they differ in read-path strategy (live views vs snapshot copies) as specified by their collection-return contracts.
 
-### CSV export/import (`storage.nio`)
+### Storage export/import
 
-`NativeCsvIOImpl` (public object) exposes `isValidFile`/`export`/`import`; the CSV format constants and escaping live in internal `NativeCsvFormat`, streaming write in internal `NativeCsvWriter`, streaming read in internal `NativeCsvReader` (with `NodeRecord`/`EdgeRecord` data holders).
+`NativeCsvIOImpl` (public object) exposes `isValidFile`/`export`/`import`; the CSV format constants and escaping live in internal `NativeCsvFormat`, streaming write in internal `NativeCsvWriter`, streaming read in internal `NativeCsvReader` (with `NodeRecord`/`EdgeRecord` data holders). `import` owns the reader lifetime and completion record. Its private `importNodes` applies the node predicate, creates accepted nodes, and returns the source-to-destination ID map and filtered source IDs before any edge is imported. Edge import uses both results to exclude filtered endpoints and reject unknown endpoints; metadata is imported last.
+
+`JgraphtGmlIOImpl.export` writes serialized `nid`, `esrc`, `edst`, `etype`, and node and edge properties as custom GML attributes. Its importer requires these structural attributes to restore node identity and edge endpoints and tags.
 
 ## Exception / Error Types
 
