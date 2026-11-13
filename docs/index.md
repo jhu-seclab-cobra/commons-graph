@@ -10,6 +10,7 @@
 | [design-graph.md](design-graph.md) | Graph interfaces and pure merge declarations |
 | [design-label.md](design-label.md) | Label hierarchy, label operations and index |
 | [design-storage.md](design-storage.md) | Compatibility and typed capabilities, ownership and implementation |
+| [design-storage-capabilities.md](design-storage-capabilities.md) | Guarded capability adapters and fixed compatibility snapshots |
 | [design-storage-logging.md](design-storage-logging.md) | Whole-operation completion records and silent entity operations |
 | [design-storage-access.md](design-storage-access.md) | Typed adjacency, Tag groups, pair lookup and encounter order |
 | [design-storage-concurrency.md](design-storage-concurrency.md) | Compound operations and synchronization constraints |

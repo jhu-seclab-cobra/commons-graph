@@ -136,3 +136,18 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - `setNodeProperties`/`setEdgeProperties` with `null` values delete those properties, not set them to null.
 - `LayeredStorageImpl.freeze()` merges active + frozen into a new Frozen layer. Active layer properties overlay Frozen layer properties for the same entity.
 - `LayeredStorageImpl` raises `FrozenLayerModificationException` when deleting a frozen node. Deleting a frozen edge masks it until a revert or freeze.
+
+## Capability adapters
+
+- **`StorageAccess(storage: LayeredStorage)`** — Takes ownership; exposes `reader`, `writer`, `compatibility` and idempotent `close()`.
+- **`GraphReader.read(action: (StorageReadScope) -> R): R`** — Supplies a read-only scope; saved scopes and iterators expire at exit.
+- **`GraphWriter.write(action: (StorageWriteScope) -> R): R`** — Supplies a write-only scope with compound exclusion, without callback rollback.
+- **`GraphWriter.freeze()` / `clearActiveLayer()` / `clear()`** — Applies the existing layered lifecycle.
+- **`StorageReadScope.getNodeIDs()` / `getEdgeIDs()`** — Returns fixed selected ID snapshots.
+- **`StorageReadScope.getNodeProperties(id)` / `getEdgeProperties(id)`** — Returns detached fixed property maps.
+- **`StorageReadScope.getIncomingEdges(id, group?)` / `getOutgoingEdges(id, group?)`** — Returns ordered iterators valid inside the callback.
+- **`StorageWriteScope.addNode(properties)` / `addEdge(src, dst, tag, properties)`** — Captures values and returns storage IDs.
+- Keep no direct access to the storage supplied to `StorageAccess`; close its owner after releasing every graph.
+- Exit the read scope before writing, freezing, reverting, clearing, closing or acquiring a compatibility critical section; each attempt throws `IllegalStateException`.
+- Use borrowed scopes on their entering thread only; copied property content and selected ID snapshots may escape.
+- Reacquire integer entity IDs after `clear`; integers do not carry a stored-entity lifetime.

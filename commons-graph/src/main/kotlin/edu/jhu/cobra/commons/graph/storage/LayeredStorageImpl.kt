@@ -48,7 +48,7 @@ public class LayeredStorageImpl(
     propertyFamilies: EdgePropertyFamilies?,
     override val tagGroup: (String) -> String,
     private val frozenLayerFactory: () -> IStorage = { NativeStorageImpl(tagGroup = tagGroup) },
-) : IRevertibleStorage, ExactAdjacencyStorage, LayeredEdgeReads {
+) : LayeredStorage {
     /** Constructs unconfigured storage through the same initialization as a projected storage. */
     @JvmOverloads
     public constructor(frozenLayerFactory: () -> IStorage = { NativeStorageImpl() }) :
@@ -111,9 +111,9 @@ public class LayeredStorageImpl(
     // LAYERED STORAGE API
     // ============================================================================
 
-    public val layerCount: Int get() = lock.readLock().withLock { if (layers.frozen != null) 2 else 1 }
+    override val layerCount: Int get() = lock.readLock().withLock { if (layers.frozen != null) 2 else 1 }
 
-    public fun freeze() {
+    override fun freeze() {
         val started = System.nanoTime()
         lock.writeLock().withLock {
             val merged = FrozenLayer.merge(layers.frozen, active, frozenLayerFactory(), tagGroup)
@@ -134,7 +134,7 @@ public class LayeredStorageImpl(
      * the active-only nodes and edges as removed; the promoted frozen nodes and edges, and the
      * tombstoned frozen edges, as restored; and the structures of the edges visible before.
      */
-    public fun clearActiveLayer(): Unit {
+    override fun clearActiveLayer(): Unit {
         val started = System.nanoTime()
         lock.writeLock().withLock {
             val notice = activeLayerDropNotice(active, layers.frozen)
@@ -235,7 +235,7 @@ public class LayeredStorageImpl(
         lock.readLock().withLock { java.util.Map.copyOf(layers.edgeProperties(id)) }
 
     /** A copy of the edge's properties as [layer] holds them, read under one lock; null when [layer] has no row. */
-    public fun getEdgeProperties(
+    override fun getEdgeProperties(
         id: Int,
         layer: StorageLayer,
     ): Map<String, IValue>? = lock.readLock().withLock { layers.edgeProperties(id, layer)?.toMap() }
@@ -459,6 +459,14 @@ public class LayeredStorageImpl(
         }
         logCompletion(operationLogger, "transferTo", target, started)
         return transferred
+    }
+
+    override fun close() {
+        try {
+            clear()
+        } finally {
+            revertListeners.clear()
+        }
     }
 
     override fun flush() {

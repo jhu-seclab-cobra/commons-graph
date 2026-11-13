@@ -49,7 +49,7 @@ Implemented compatibility signatures: [Storage API](llms/storage.md#istorage-ext
 Structural selection, constructor settings and index lifecycle: [Storage structural access](design-storage-access.md).
 
 ### Typed storage capabilities
-
+The implemented capability adapters and their lifetimes are specified in [Storage capability adapters](design-storage-capabilities.md). Registered fields and physical layout below remain separate implementation work.
 These are the chosen interfaces and ownership boundaries; missing implementation is listed in [Open Gaps](design-gaps-storage.md#typed-storage-implementation). All types below belong to the core module; visibility is stated per type. Arrays, directories and builders are internal.
 
 | Type / visibility | Responsibility, state and operations |
