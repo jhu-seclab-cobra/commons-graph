@@ -1,6 +1,6 @@
 /*
  * Storage capability adapter acceptance.
- * - should expire scopes and iterators on every exit: lifetime and thread confinement.
+ * - should expire scopes and iterators on every exit: lifetime, thread confinement, prior writes and guard release.
  * - should reject every mutation path in a read scope: no lock upgrade or mutation.
  * - should keep captured nested snapshots independent: admission, read and layer snapshots.
  * - should exclude concurrent compound updates: one guard across a read-modify-write sequence.
@@ -14,12 +14,15 @@ import edu.jhu.cobra.commons.value.ListVal
 import edu.jhu.cobra.commons.value.NullVal
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 internal class StorageAccessTest {
@@ -60,6 +63,30 @@ internal class StorageAccessTest {
             assertFailsWith<IllegalStateException> { saved.containsNode(id) }
             val writer = access.writer.write { it }
             assertFailsWith<IllegalStateException> { writer.addNode() }
+            lateinit var savedWriter: StorageWriteScope
+            var committedNode: Int? = null
+            val failure = IllegalArgumentException("write action")
+            val thrown = assertFailsWith<IllegalArgumentException> {
+                access.writer.write { write ->
+                    savedWriter = write
+                    committedNode = write.addNode()
+                    throw failure
+                }
+            }
+            assertSame(failure, thrown)
+            assertFailsWith<IllegalStateException> { savedWriter.addNode() }
+            val survivingNode = assertNotNull(committedNode)
+            assertTrue(access.reader.read { it.containsNode(survivingNode) })
+            // A leaked guard must not retain a blocked worker after the bounded assertion fails.
+            val executor = Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory())
+            try {
+                val freshNode = executor.submit(Callable {
+                    access.writer.write { it.addNode() }
+                }).get(10, TimeUnit.SECONDS)
+                assertTrue(access.reader.read { it.containsNode(freshNode) })
+            } finally {
+                executor.shutdownNow()
+            }
         }
     }
 
