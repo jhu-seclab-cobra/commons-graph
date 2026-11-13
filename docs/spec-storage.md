@@ -6,7 +6,7 @@ State rules: [model](model.md#property-families-in-layered-storage). Types: [Sto
 
 ### Problem
 
-Given a Layered Storage with one Active layer and at most one Frozen layer, resolve property reads, adjacency queries, and containment checks. Correct when active node rows and active-only edge rows are authoritative, while a promoted frozen edge's explicit property edits override its frozen row one name at a time.
+Given a Layered Storage with one Active layer and at most one Frozen layer, resolve property reads, adjacency queries, and entity-presence checks. Correct when active node rows and active-only edge rows are authoritative, while a promoted frozen edge's explicit property edits override its frozen row one name at a time.
 
 ### Steps — Property read
 
@@ -24,7 +24,7 @@ Given a Layered Storage with one Active layer and at most one Frozen layer, reso
 ### Steps — Edge delete
 
 1. Active-only edge: remove it.
-2. Frozen edge (promoted or not): remove the active copy when present, then record a tombstone. Containment, ID enumeration, and property/structure reads treat a tombstoned edge as absent.
+2. Frozen edge (promoted or not): remove the active copy when present, then record a tombstone. Entity-presence checks, ID enumeration, and property/structure reads treat a tombstoned edge as absent.
 
 ### Steps — Property write (cross-layer)
 
