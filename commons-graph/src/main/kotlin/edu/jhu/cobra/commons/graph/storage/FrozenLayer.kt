@@ -65,6 +65,16 @@ internal class FrozenLayer private constructor(
         else storage.getEdgeProperty(it, name)?.let(::LegacyProperty)
     }
 
+    fun nodeContent(globalId: Int, name: String): PropertyValue? = nodeGlobalToLocal[globalId]?.let {
+        if (storage is NativeStorageImpl) storage.nodeContent(it, name)
+        else storage.getNodeProperty(it, name)?.let { value -> LegacyProperty(value) }
+    }
+
+    fun edgeContent(globalId: Int, name: String): PropertyValue? = edgeGlobalToLocal[globalId]?.let {
+        if (storage is NativeStorageImpl) storage.edgeContent(it, name)
+        else storage.getEdgeProperty(it, name)?.let { value -> LegacyProperty(value) }
+    }
+
     /** Returns the node's frozen properties, or null when the node is not frozen. */
     fun nodeProperties(globalId: Int): Map<String, IValue>? =
         nodeGlobalToLocal[globalId]?.let { localId -> storage.getNodeProperties(localId) }

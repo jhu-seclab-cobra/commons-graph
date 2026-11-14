@@ -42,6 +42,9 @@ public open class PropertyKey<T : Any>(
 
 /** Compatibility conversion of a pair-addressed family and its membership anchor. */
 public interface IndexedPropertyCodec<T : Any> : PropertyCodec<T> {
+    /** Validates the complete payload against its opaque cell coordinates before admission. */
+    public fun validate(first: String, second: String, value: T) {}
+
     /** Encodes two opaque coordinates without parsing their meaning. */
     public fun cellName(first: String, second: String): String
 

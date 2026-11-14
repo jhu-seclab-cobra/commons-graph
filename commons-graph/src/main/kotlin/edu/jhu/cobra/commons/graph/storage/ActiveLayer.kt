@@ -97,6 +97,16 @@ internal class ActiveLayer(
             .firstOrNull { name.startsWith(it.key.memberPrefix) }?.compatibility(name)
     }
 
+    fun edgeContent(id: Int, name: String): PropertyValue? {
+        val promoted = promotedEdgeEdits[id] ?: return edgeRows.content(id, name)
+        if (name in promoted) return promoted[name]?.content(name)
+        for (value in promoted.values) {
+            val family = value as? CapturedFamily<*> ?: continue
+            if (name.startsWith(family.key.memberPrefix)) return family.content(name)
+        }
+        return null
+    }
+
     fun masksFrozenProperty(id: Int, name: String): Boolean =
         promotedEdgeEdits[id]?.values.orEmpty().filterIsInstance<CapturedFamily<*>>().any {
             it.anchorWritten && name.startsWith(it.key.memberPrefix)

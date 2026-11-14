@@ -23,7 +23,7 @@ Small property rows retain linear name selection. A point access may visit the a
 
 ### IndexedPropertyKey and CellReader
 
-`IndexedPropertyKey<T>` registers one family anchor, its legacy cell-name prefix and its cell codec. A cell address consists of two opaque strings supplied by the caller; string length framing is an interchange concern, not a parser for graph identities. Storage interns the addressed strings into store-owned integer dictionaries and selects a primitive pair key. Dictionary, boxing, capacity and resize costs belong to the measured layout.
+`IndexedPropertyKey<T>` registers one family anchor, its legacy cell-name prefix and its cell codec. A cell address consists of two opaque strings supplied by the caller; string length framing is an interchange concern, not a parser for graph identities. Storage interns the addressed strings into store-owned integer dictionaries and selects a primitive pair key. Dictionary, boxing, capacity and resize costs belong to the measured layout. Dictionary entries remain owned by the storage until `clear()` or `close()` releases every row and frozen layer; those operations then clear both directions of the dictionary. Escaped immutable content retains strings rather than dictionary offsets.
 
 One private directory belongs to the family in its entity row. `CellReader<T>.lookup(first, second)` selects one entry without enumerating or copying the directory. The reader checks the entering thread, owner lifetime and read-scope lifetime on every operation. Only the selected immutable payload may escape; neither the mutable directory nor its backing arrays escape.
 
@@ -33,7 +33,11 @@ Absence, an explicit deletion and stored `NullVal` remain distinct. A codec may 
 
 ## Function Specifications
 
-The public read scope provides typed node/edge property selection and `edgeCells(id, key, layer)`. A key must belong to the storage's construction-time schema. Missing optional content returns absence; required primitive access rejects an absent value. A physical-layer read of an unknown edge returns absence, preserving the existing snapshot contract.
+`PropertyValue` is an admitted immutable scalar, cell payload, family membership or privately captured legacy extension value. `get(key)` returns its typed payload; `members(key)` returns its immutable family identifiers. `snapshot()` creates independent compatibility content. Wrong key or content kind fails. A caller view may retain these values in its own buffered records without a legacy codec cycle; it retains no storage row, mutable cell directory or read scope.
+
+`getNodeContents` and `getEdgeContents` acquire fixed maps of these values. Named content reads select only one property or one cell. `setNodeContents` and `setEdgeContents` validate all named values against the construction schema before mutation and admit already captured payloads without recapture. Compatibility writes use the same validation after decoding. Family membership and addressed cell content are published together under the existing guard. Codecs validate the payload against its cell coordinates before publication.
+
+The public read scope provides typed node/edge property selection and `edgeCells(id, key, layer)`. A key must belong to the storage's construction-time schema. Missing optional content returns absence. `getNodeInt`, `getNodeLong`, `getEdgeInt` and `getEdgeLong` return a required primitive value and reject absence; a stored zero remains a present value. A physical-layer read of an unknown edge returns absence, preserving the existing snapshot contract.
 
 The public write scope provides typed node/edge field updates and selected edge-cell updates. Validation and new-payload capture precede publication. The existing callback exclusion contract applies; this API adds no rollback of earlier successful callback calls.
 

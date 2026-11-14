@@ -8,6 +8,36 @@ public class StorageWriteScope internal constructor(
     private val lifetime: StorageScope,
     private val typed: LayeredStorageImpl? = null,
 ) {
+    /** Checks buffered node content against this schema before the caller publishes a logical effect. */
+    public fun validateNodeContents(properties: Map<String, PropertyValue?>): Unit = access {
+        registered().validateContents(properties, null)
+    }
+
+    /** Checks buffered edge content and cell coordinates before the caller publishes a logical effect. */
+    public fun validateEdgeContents(tag: String, properties: Map<String, PropertyValue?>): Unit = access {
+        registered().validateContents(properties, tag)
+    }
+
+    /** Validates and captures legacy node updates for a caller-owned buffer, without publishing them. */
+    public fun captureNodeContents(properties: Map<String, IValue?>): Map<String, PropertyValue?> = access {
+        registered().captureContents(properties, null)
+    }
+
+    /** Validates and captures legacy edge updates for a caller-owned buffer, without publishing them. */
+    public fun captureEdgeContents(tag: String, properties: Map<String, IValue?>): Map<String, PropertyValue?> = access {
+        registered().captureContents(properties, tag)
+    }
+
+    /** Validates and admits captured node content without recapturing registered payloads. */
+    public fun setNodeContents(id: Int, properties: Map<String, PropertyValue?>): Unit = access {
+        registered().setNodeContents(id, properties)
+    }
+
+    /** Publishes complete captured field/cell/membership updates under one guard. */
+    public fun setEdgeContents(id: Int, properties: Map<String, PropertyValue?>): Unit = access {
+        registered().setEdgeContents(id, properties)
+    }
+
     /** Captures a complete node field once; null deletes the field. */
     public fun <T : Any> setNodeProperty(id: Int, key: PropertyKey<T>, value: T?): Unit = access {
         registered().setNodeField(id, key, value)

@@ -8,6 +8,34 @@ public class StorageReadScope internal constructor(
     private val lifetime: StorageScope,
     private val typed: LayeredStorageImpl? = null,
 ) {
+    /** Required primitive field; absence is an error rather than a zero default. */
+    public fun getNodeInt(id: Int, key: PropertyKey<Int>): Int = checkNotNull(getNodeProperty(id, key))
+
+    /** Required primitive field; absence is an error rather than a zero default. */
+    public fun getNodeLong(id: Int, key: PropertyKey<Long>): Long = checkNotNull(getNodeProperty(id, key))
+
+    /** Required primitive field in the selected layer. */
+    public fun getEdgeInt(id: Int, key: PropertyKey<Int>, layer: StorageLayer = StorageLayer.VISIBLE): Int =
+        checkNotNull(getEdgeProperty(id, key, layer))
+
+    /** Required primitive field in the selected layer. */
+    public fun getEdgeLong(id: Int, key: PropertyKey<Long>, layer: StorageLayer = StorageLayer.VISIBLE): Long =
+        checkNotNull(getEdgeProperty(id, key, layer))
+
+    /** Fixed named node contents, sharing admitted immutable payloads. */
+    public fun getNodeContents(id: Int): Map<String, PropertyValue> = access { registered().nodeContents(id) }
+
+    /** One named node content without a legacy codec cycle. */
+    public fun getNodeContent(id: Int, name: String): PropertyValue? = access { registered().nodeContent(id, name) }
+
+    /** Fixed contents of one physical edge image. */
+    public fun getEdgeContents(id: Int, layer: StorageLayer = StorageLayer.VISIBLE): Map<String, PropertyValue>? =
+        access { registered().edgeContents(id, layer) }
+
+    /** One field or indexed cell in the selected physical image. */
+    public fun getEdgeContent(id: Int, name: String, layer: StorageLayer = StorageLayer.VISIBLE): PropertyValue? =
+        access { registered().edgeContent(id, name, layer) }
+
     /** Returns an admitted immutable field without a compatibility conversion or payload copy. */
     public fun <T : Any> getNodeProperty(id: Int, key: PropertyKey<T>): T? = access {
         registered().nodeField(id, key)

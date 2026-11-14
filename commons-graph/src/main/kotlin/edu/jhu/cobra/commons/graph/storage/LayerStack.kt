@@ -56,6 +56,42 @@ internal class LayerStack(
         else -> throw EntityNotExistException(id.toString())
     }
 
+    fun nodeContents(id: Int): Map<String, PropertyValue> = when {
+        active.containsNode(id) -> active.nodeRows.captured(id).contents()
+        frozen?.containsNode(id) == true -> checkNotNull(frozen?.capturedNodeRow(id)).contents()
+        else -> throw EntityNotExistException(id.toString())
+    }
+
+    fun nodeContent(id: Int, name: String): PropertyValue? = when {
+        active.containsNode(id) -> active.nodeRows.content(id, name)
+        frozen?.containsNode(id) == true -> frozen?.nodeContent(id, name)
+        else -> throw EntityNotExistException(id.toString())
+    }
+
+    fun edgeContents(id: Int, layer: StorageLayer): Map<String, PropertyValue>? {
+        if (layer == StorageLayer.FROZEN) return frozen?.capturedEdgeRow(id)?.contents()
+        if (layer == StorageLayer.VISIBLE && !containsEdge(id)) return null
+        if (active.containsEdge(id)) {
+            val row = if (id in active.promotedEdgeEdits) {
+                active.composePromotedCaptured(id, checkNotNull(frozen?.capturedEdgeRow(id)))
+            } else active.edgeRows.captured(id)
+            return row.contents()
+        }
+        return if (layer == StorageLayer.ACTIVE) null else frozen?.capturedEdgeRow(id)?.contents()
+    }
+
+    fun edgeContent(id: Int, name: String, layer: StorageLayer): PropertyValue? {
+        if (layer == StorageLayer.FROZEN) return frozen?.edgeContent(id, name)
+        if (layer == StorageLayer.VISIBLE && !containsEdge(id)) return null
+        if (layer == StorageLayer.ACTIVE) return if (active.containsEdge(id)) active.edgeContent(id, name) else null
+        if (active.containsEdge(id)) {
+            if (id !in active.promotedEdgeEdits || active.hasEdgeProperty(id, name)) return active.edgeContent(id, name)
+            val anchor = families().anchor(active.edgeEndpoints.getValue(id).tag, name)
+            if (anchor != null && active.hasEdgeProperty(id, anchor) || active.masksFrozenProperty(id, name)) return null
+        }
+        return frozen?.edgeContent(id, name)
+    }
+
     fun edgeIds(): Set<Int> {
         val frozenIds = frozen?.edgeIds?.let(::withoutTombstones) ?: emptySet()
         if (active.edgeEndpoints.isEmpty()) return frozenIds

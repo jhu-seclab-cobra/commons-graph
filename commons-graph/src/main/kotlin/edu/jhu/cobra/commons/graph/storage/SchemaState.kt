@@ -26,6 +26,53 @@ internal class SchemaState(val schema: StorageSchema) {
         }
         return PreparedProperties(fields, families.values.toList())
     }
+
+    fun prepareContents(properties: Map<String, PropertyValue?>, tag: String? = null): PreparedProperties {
+        val fields = LinkedHashMap<String, CapturedProperty?>()
+        val families = LinkedHashMap<IndexedPropertyKey<*>, FamilyPatch<*>>()
+        for ((name, value) in properties) {
+            val family = indexed.firstOrNull { it.matches(name, tag) }
+            if (family != null) {
+                families.getOrPut(family) { FamilyPatch(family) }.accept(name, value)
+                continue
+            }
+            if (value == null) { fields[name] = null; continue }
+            when (value) {
+                is CapturedField<*> -> {
+                    schema.requireKey(value.key)
+                    require(name == value.key.name && value.key !is IndexedPropertyKey<*>) { "Wrong field name $name" }
+                    fields[name] = value
+                }
+                is LegacyProperty -> fields[name] = schema.keys[name]?.takeUnless { it is IndexedPropertyKey<*> }
+                    ?.decode(value.value) ?: value
+                is CapturedMembers -> error("Membership outside its family")
+            }
+        }
+        return PreparedProperties(fields, families.values.toList())
+    }
+
+    fun captureContents(properties: Map<String, IValue?>, tag: String?): Map<String, PropertyValue?> {
+        val result = LinkedHashMap<String, PropertyValue?>()
+        for ((name, value) in properties) {
+            if (value == null) { result[name] = null; continue }
+            val family = indexed.firstOrNull { it.matches(name, tag) }
+            result[name] = when {
+                family != null -> captureFamilyValue(family, name, value)
+                schema.keys[name] != null && schema.keys[name] !is IndexedPropertyKey<*> ->
+                    schema.keys.getValue(name).decode(value.deepCopy())
+                else -> PropertyValue.legacy(value)
+            }
+        }
+        return result
+    }
+
+    private fun <T : Any> captureFamilyValue(key: IndexedPropertyKey<T>, name: String, value: IValue): PropertyValue {
+        if (name == key.name) return CapturedMembers(key, key.indexedCodec.decodeMembers(value))
+        val (first, second) = requireNotNull(key.indexedCodec.cellAddress(name)) { "Invalid cell name $name" }
+        val captured = key.decode(value.deepCopy())
+        key.indexedCodec.validate(first, second, captured.value)
+        return captured
+    }
 }
 
 internal class PreparedProperties(
@@ -51,7 +98,22 @@ internal class FamilyPatch<T : Any>(val key: IndexedPropertyKey<T>) {
             return
         }
         val (first, second) = requireNotNull(key.indexedCodec.cellAddress(name)) { "Invalid cell name $name" }
-        cells.add(Triple(first, second, value?.let { key.decode(it.deepCopy()).value }))
+        val captured = value?.let { key.decode(it.deepCopy()).value }
+        if (captured != null) key.indexedCodec.validate(first, second, captured)
+        cells.add(Triple(first, second, captured))
+    }
+
+    fun accept(name: String, value: PropertyValue?) {
+        if (value is LegacyProperty) { decode(name, value.value); return }
+        if (name == key.name) {
+            anchorWritten = true
+            members = value?.members(key)
+            return
+        }
+        val (first, second) = requireNotNull(key.indexedCodec.cellAddress(name)) { "Invalid cell name $name" }
+        val payload = value?.get(key)
+        if (payload != null) key.indexedCodec.validate(first, second, payload)
+        cells.add(Triple(first, second, payload))
     }
 
     fun apply(current: CapturedProperty?, symbols: PropertySymbols): CapturedFamily<T> {

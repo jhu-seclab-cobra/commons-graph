@@ -49,6 +49,10 @@ public class NativeStorageImpl(
 
     internal fun capturedEdgeProperty(id: Int, name: String): CapturedProperty? = edgeRows.capturedProperty(id, name)
 
+    internal fun nodeContent(id: Int, name: String): PropertyValue? = nodeRows.content(id, name)
+
+    internal fun edgeContent(id: Int, name: String): PropertyValue? = edgeRows.content(id, name)
+
     internal fun addCapturedNode(properties: CapturedRow): Int = addNode(emptyMap()).also {
         nodeRows.setCaptured(it, properties)
     }

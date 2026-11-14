@@ -11,13 +11,25 @@ internal sealed interface CapturedProperty {
     fun isPresent(name: String): Boolean
 }
 
-internal class LegacyProperty(val value: IValue) : CapturedProperty {
+internal class LegacyProperty(val value: IValue) : CapturedProperty, PropertyValue {
+    override val key: PropertyKey<*>? get() = null
+    override fun <T : Any> get(key: PropertyKey<T>): T = error("Unregistered legacy content for ${key.name}")
+    override fun members(key: IndexedPropertyKey<*>): List<String> = error("Legacy content is not membership")
+    override fun snapshot(): IValue = value.deepCopy()
+    override fun equals(other: Any?): Boolean = other is LegacyProperty && value == other.value
+    override fun hashCode(): Int = value.hashCode()
     override fun compatibility(name: String): IValue = value
     override fun copyInto(name: String, target: MutableMap<String, IValue>) { target[name] = value }
     override fun isPresent(name: String): Boolean = true
 }
 
-internal class CapturedField<T : Any>(val key: PropertyKey<T>, val value: T) : CapturedProperty {
+internal class CapturedField<T : Any>(override val key: PropertyKey<T>, val value: T) : CapturedProperty, PropertyValue {
+    override fun <V : Any> get(key: PropertyKey<V>): V = checkNotNull(key.value(this))
+    override fun members(key: IndexedPropertyKey<*>): List<String> = error("Scalar content is not membership")
+    override fun snapshot(): IValue = key.codec.encode(value)
+    override fun equals(other: Any?): Boolean =
+        other is CapturedField<*> && key.agrees(other.key) && value == other.value
+    override fun hashCode(): Int = 31 * key.name.hashCode() + value.hashCode()
     override fun compatibility(name: String): IValue = key.codec.encode(value)
     override fun copyInto(name: String, target: MutableMap<String, IValue>) { target[name] = compatibility(name) }
     override fun isPresent(name: String): Boolean = true

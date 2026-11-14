@@ -91,6 +91,20 @@ internal class RowProperties(
         return value as? CapturedProperty ?: LegacyProperty(value as IValue)
     }
 
+    fun content(id: Int, name: String): PropertyValue? {
+        val row = rows[id] ?: return null
+        val at = indexOf(row, name, row.size)
+        if (at >= 0) {
+            val value = row[at + 1]
+            return if (value is CapturedProperty) value.content(name) else LegacyProperty(value as IValue)
+        }
+        for (i in row.indices step 2) {
+            val family = row[i + 1] as? CapturedFamily<*> ?: continue
+            if (name.startsWith(family.key.memberPrefix)) return family.content(name)
+        }
+        return null
+    }
+
     fun captured(id: Int): CapturedRow {
         val row = rows[id] ?: return emptyMap()
         val result = LinkedHashMap<String, CapturedProperty>()

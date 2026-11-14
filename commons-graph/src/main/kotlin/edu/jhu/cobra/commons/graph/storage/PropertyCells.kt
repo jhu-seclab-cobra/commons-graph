@@ -47,6 +47,22 @@ internal class CapturedFamily<T : Any>(
 
     fun hasEdit(first: String, second: String): Boolean = address(first, second)?.let(cells::containsKey) == true
 
+    fun content(name: String): PropertyValue? {
+        if (name == key.name) return if (anchorWritten && !anchorDeleted) CapturedMembers(key, members()) else null
+        val address = key.indexedCodec.cellAddress(name) ?: return null
+        return lookup(address.first, address.second)?.let { CapturedField(key, it) }
+    }
+
+    fun copyContentsInto(target: MutableMap<String, PropertyValue>) {
+        content(key.name)?.let { target[key.name] = it }
+        for ((pair, value) in cells) {
+            if (value == null) continue
+            val first = symbols.text((pair ushr Int.SIZE_BITS).toInt())
+            val second = symbols.text(pair.toInt())
+            target[key.indexedCodec.cellName(first, second)] = CapturedField(key, value)
+        }
+    }
+
     fun members(): List<String> = membership.map(symbols::text)
 
     fun setMembers(members: List<String>?) {

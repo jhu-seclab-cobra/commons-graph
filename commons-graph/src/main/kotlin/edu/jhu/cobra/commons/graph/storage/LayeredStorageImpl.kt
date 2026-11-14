@@ -296,6 +296,48 @@ public class LayeredStorageImpl(
 
     private fun state(): SchemaState = checkNotNull(registered) { "Storage has no registered schema" }
 
+    internal fun captureContents(properties: Map<String, IValue?>, tag: String?): Map<String, PropertyValue?> =
+        lock.writeLock().withLock { state().captureContents(properties, tag) }
+
+    internal fun validateContents(properties: Map<String, PropertyValue?>, tag: String?): Unit =
+        lock.writeLock().withLock { state().prepareContents(properties, tag); Unit }
+
+    internal fun nodeContents(id: Int): Map<String, PropertyValue> = lock.readLock().withLock {
+        state(); layers.nodeContents(id)
+    }
+
+    internal fun nodeContent(id: Int, name: String): PropertyValue? = lock.readLock().withLock {
+        state(); layers.nodeContent(id, name)
+    }
+
+    internal fun edgeContents(id: Int, layer: StorageLayer): Map<String, PropertyValue>? = lock.readLock().withLock {
+        state(); layers.edgeContents(id, layer)
+    }
+
+    internal fun edgeContent(id: Int, name: String, layer: StorageLayer): PropertyValue? = lock.readLock().withLock {
+        state(); layers.edgeContent(id, name, layer)
+    }
+
+    internal fun setNodeContents(id: Int, properties: Map<String, PropertyValue?>) = lock.writeLock().withLock {
+        val state = state()
+        val prepared = state.prepareContents(properties)
+        if (!layers.containsNode(id)) throw EntityNotExistException(id.toString())
+        val projection = adjacencyProjection
+        if (projection != null) {
+            val selected = properties.filterKeys { it == projection.kindProperty || it == projection.keyProperty }
+            exact?.validateChange(id, selected.mapValues { it.value?.snapshot() }, layers::nodeProperty)
+        }
+        layers.promoteNode(id)
+        active.nodeRows.setCaptured(id, prepared.apply({ active.nodeRows.capturedProperty(id, it) }, state.symbols))
+    }
+
+    internal fun setEdgeContents(id: Int, properties: Map<String, PropertyValue?>) = lock.writeLock().withLock {
+        val state = state()
+        val prepared = state.prepareContents(properties, layers.edgeStructure(id).tag)
+        promoteEdge(id)
+        active.setCapturedEdgeProperties(id, prepared.apply({ active.capturedEdgeProperty(id, it) }, state.symbols))
+    }
+
     internal fun <T : Any> nodeField(id: Int, key: PropertyKey<T>): T? = lock.readLock().withLock {
         state().schema.requireKey(key)
         key.value(layers.capturedNodeProperty(id, key.name))
@@ -354,6 +396,7 @@ public class LayeredStorageImpl(
         state.schema.requireKey(key)
         require(key.matches(key.name, layers.edgeStructure(id).tag)) { "Wrong edge tag for ${key.name}" }
         val captured = value?.let { key.capture(it).value }
+        if (captured != null) key.indexedCodec.validate(address.first, address.second, captured)
         promoteEdge(id)
         val family = key.family(active.capturedEdgeProperty(id, key.name)) ?: CapturedFamily(key, state.symbols)
         family.set(address.first, address.second, captured, true)
@@ -517,6 +560,7 @@ public class LayeredStorageImpl(
             layers.frozen?.close()
             layers.frozen = null
             active.clear()
+            registered?.symbols?.clear()
             pairs.clear()
             pairOrder.clear()
             exact?.clear()
