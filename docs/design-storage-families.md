@@ -31,7 +31,11 @@ A registered indexed `PropertyKey<T>` owns a private primitive pair-key director
 
 The first active write to a frozen call family starts with an empty label set and empty input collection, never seeded from the frozen payload. Frozen label `L` with input `n7` and active label `L2` with input `n9` expose only the active family: `L2` cannot inherit frozen input `L`. Later active writes retain earlier active cells; revert restores the complete frozen family. Layer selection applies to labels and inputs together in named/cell reads, whole-row reads and Freeze. Caller schemas own call-specific policy; storage provides atomic family mechanics.
 
-Typed labels use one immutable sorted distinct primitive-ID set; membership uses binary search and union visits both sets. Cells do not become thousands of property names or a copied directory per write. Full compatibility snapshots enumerate requested cells and payloads. A cell update includes new-payload capture and any label union; the whole family update is not constant-time.
+Typed labels use one immutable sorted distinct primitive-ID set; membership uses binary search and union visits both sets. Inserting one member copies existing identifiers around the insertion position found by binary search.
+
+A separate immutable primitive-ID array retains the caller's membership encounter order and contains exactly the same identifiers. Assignment records the supplied order; a newly present member is appended and removal retains the order of remaining members. `CellReader.members` and compatibility membership values follow this array, independent of dictionary allocation on other entities. Order metadata and its maintenance allocations belong to the complete layout measurement.
+
+Cells do not become thousands of property names or a copied directory per write. Full compatibility snapshots enumerate requested cells and payloads. A cell update includes new-payload capture and any label union; the whole family update is not constant-time.
 
 `StorageReadScope.edgeCells(entity,key,layer): CellReader<T>` returns a scoped reader; the family writer validates schema, presence and capture before publishing labels and cells together. Wrong type, expired reader and unsupported family semantics fail distinctly. Registered fields and scoped cells are constructed with `LayeredStorageImpl(StorageSchema(keys))`; the fixed compatibility declaration remains available to legacy callers.
 

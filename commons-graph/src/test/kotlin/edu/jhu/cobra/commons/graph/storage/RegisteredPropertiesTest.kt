@@ -63,6 +63,33 @@ internal class RegisteredPropertiesTest {
     }
 
     @Test
+    fun `should preserve membership encounter order independently of other rows`() {
+        val key = IndexedPropertyKey("labels", "cell:", Payload::class, CellCodec())
+        StorageAccess(LayeredStorageImpl(StorageSchema(listOf(key)))).use { access ->
+            val edge = access.writer.write { write ->
+                val node = write.addNode()
+                val seed = write.addEdge(node, node, "seed")
+                write.setEdgeCell(seed, key, "C", "L1", Payload(listOf("seed")))
+                write.addEdge(node, node, "selected").also {
+                    write.setEdgeCell(it, key, "C", "L2", Payload(listOf("n9")))
+                    write.setEdgeCell(it, key, "C", "L1", Payload(listOf("n7")))
+                }
+            }
+            assertEquals(listOf("L2", "L1"), access.reader.read { it.edgeCells(edge, key).members() })
+            assertEquals(ListVal(StrVal("L2"), StrVal("L1")),
+                access.compatibility.getEdgeProperty(edge, "labels"))
+            access.writer.write { write ->
+                write.setEdgeCell(edge, key, "C", "L2", null)
+                write.setEdgeCell(edge, key, "C", "L2", Payload(listOf("n9")))
+            }
+            assertEquals(listOf("L1", "L2"), access.reader.read { it.edgeCells(edge, key).members() })
+            access.compatibility.setEdgeProperties(edge, mapOf("labels" to ListVal(StrVal("L2"), StrVal("L1"))))
+            access.writer.freeze()
+            assertEquals(listOf("L2", "L1"), access.reader.read { it.edgeCells(edge, key).members() })
+        }
+    }
+
+    @Test
     fun `should select one physical family and expire its reader`() {
         val key = IndexedPropertyKey("labels", "cell:", Payload::class, CellCodec())
         StorageAccess(LayeredStorageImpl(StorageSchema(listOf(key)))).use { access ->

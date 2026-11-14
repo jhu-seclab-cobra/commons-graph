@@ -21,7 +21,7 @@ public class CellReader<T : Any> internal constructor(
         return family?.hasEdit(first, second) == true
     }
 
-    /** Fixed membership identifiers in the stored primitive-ID order. */
+    /** Fixed membership identifiers in caller encounter order. */
     public fun members(): List<String> {
         lifetime.checkActive()
         return if (family?.anchorWritten == true) family.members() else fallback?.members().orEmpty()
@@ -36,6 +36,7 @@ internal class CapturedFamily<T : Any>(
 ) : CapturedProperty {
     private val counts = HashMap<Int, Int>()
     private var membership = IntArray(0)
+    private var membershipOrder = IntArray(0)
     var anchorWritten = false
         private set
     private var anchorDeleted = false
@@ -63,12 +64,13 @@ internal class CapturedFamily<T : Any>(
         }
     }
 
-    fun members(): List<String> = membership.map(symbols::text)
+    fun members(): List<String> = membershipOrder.map(symbols::text)
 
     fun setMembers(members: List<String>?) {
         anchorWritten = true
         anchorDeleted = members == null
-        membership = members.orEmpty().map(symbols::intern).distinct().sorted().toIntArray()
+        membershipOrder = members.orEmpty().map(symbols::intern).distinct().toIntArray()
+        membership = membershipOrder.sortedArray()
     }
 
     fun set(first: String, second: String, value: T?, updateMembership: Boolean) {
@@ -83,9 +85,18 @@ internal class CapturedFamily<T : Any>(
         anchorWritten = true
         anchorDeleted = false
         val at = membership.binarySearch(secondId)
-        if (value != null && at < 0) membership = (membership + secondId).sortedArray()
+        if (value != null && at < 0) {
+            val insert = -at - 1
+            val next = IntArray(membership.size + 1)
+            membership.copyInto(next, endIndex = insert)
+            next[insert] = secondId
+            membership.copyInto(next, destinationOffset = insert + 1, startIndex = insert)
+            membership = next
+            membershipOrder += secondId
+        }
         if (value == null && counts[secondId] == 0 && at >= 0) {
             membership = membership.filter { it != secondId }.toIntArray()
+            membershipOrder = membershipOrder.filter { it != secondId }.toIntArray()
         }
     }
 
@@ -128,6 +139,7 @@ internal class CapturedFamily<T : Any>(
         if (frozen == null || anchorWritten) return this
         val result = CapturedFamily(key, symbols)
         result.membership = frozen.membership
+        result.membershipOrder = frozen.membershipOrder
         result.anchorWritten = frozen.anchorWritten
         result.anchorDeleted = frozen.anchorDeleted
         result.cells.putAll(frozen.cells)
