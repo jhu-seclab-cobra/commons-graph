@@ -2,6 +2,8 @@
  * Immutable content transport for caller-owned buffers.
  * - should retain typed content and protect compatibility aliases: one captured payload across named reads/writes.
  * - should publish membership and a selected cell together: complete family content through Freeze and revert.
+ * - should expose an empty compatibility map for a deleted family: deletion retains no compatibility member.
+ * - should distinguish required primitive zero from absence: zero and numeric limits remain values.
  */
 package edu.jhu.cobra.commons.graph.storage
 

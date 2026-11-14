@@ -3,6 +3,8 @@
  * - should admit once and expose independent compatibility content: immutable payload sharing and alias isolation.
  * - should reject schema and codec errors before mutation: wrong keys, malformed legacy values and atomic validation.
  * - should select one physical family and expire its reader: first-active reset, later cells and frozen restoration.
+ * - should preserve membership encounter order independently of other rows: dictionary allocation cannot reorder
+ *   labels.
  */
 package edu.jhu.cobra.commons.graph.storage
 

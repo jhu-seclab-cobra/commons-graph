@@ -61,11 +61,6 @@ internal class ActiveLayer(
 
     fun collectEdgeProperties(id: Int): Map<String, IValue> = edgeRows.collect(id)
 
-    fun composePromotedEdgeProperties(
-        id: Int,
-        frozen: Map<String, IValue>,
-    ): Map<String, IValue> = composePromotedCaptured(id, frozen.mapValues { LegacyProperty(it.value) }).compatibility()
-
     fun composePromotedCaptured(id: Int, frozen: CapturedRow): CapturedRow {
         val edits = promotedEdgeEdits.getValue(id)
         val tag = edgeEndpoints.getValue(id).tag

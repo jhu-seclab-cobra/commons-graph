@@ -23,7 +23,7 @@
 
 `EdgePropertyFamilies?.anchor(tag: String, name: String): String?` classifies a property, returning its family anchor or null. Classification compares one tag, anchor and prefix, with string work bounded by the addressed key and declaration lengths; binding compares one fixed tuple independent of Graph size.
 
-The [model](model.md#property-families-in-layered-storage) owns family visibility. `ActiveLayer.composePromotedEdgeProperties` implements the whole-row composition used by reads and Freeze: while copying frozen properties, omit family members whose anchor has an explicit active edit, then apply every explicit active edit, null removals included. Other properties retain sparse fallback. Capturing the declaration once adds classification work per visited property; no per-edge, per-label, per-write or per-buffer registration state is retained.
+The [model](model.md#property-families-in-layered-storage) owns family visibility. `ActiveLayer.composePromotedCaptured` composes admitted whole-row content for reads and Freeze without encoding compatibility values: while copying frozen properties, omit family members whose anchor has an explicit active edit, then apply every explicit active edit, null removals included. Other properties retain sparse fallback. Capturing the declaration once adds classification work per visited property; no per-edge, per-label, per-write or per-buffer registration state is retained.
 
 ### Typed indexed families
 
