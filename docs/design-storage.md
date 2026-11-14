@@ -193,7 +193,7 @@ storage.clearActiveLayer()
 check(storage.nodeIDs == setOf(node))
 ```
 
-For the planned array/typed-adjacency path, register keys/kinds before constructing `ArrayStorage(schema)`; use its writer to add endpoints and an edge, then consume `incoming(node, kind)` and `property(entity,key)` within `GraphReader.read`. The selected immutable payload remains valid after return; a borrowed reader does not. `snapshotProperties` produces a fixed captured image before a later writer update.
+For the planned array and typed adjacency implementation, register keys/kinds before constructing `ArrayStorage(schema)`; use its writer to add endpoints and an edge, then consume `incoming(node, kind)` and `property(entity,key)` within `GraphReader.read`. The selected immutable payload remains valid after return; a borrowed reader does not. `snapshotProperties` produces a fixed captured image before a later writer update.
 
 ## Open Gaps
 

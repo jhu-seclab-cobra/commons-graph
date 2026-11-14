@@ -89,7 +89,7 @@ check(storage.findEdge(source, target, "write@1") == edge)
 check(storage.getEdges(source, target) == setOf(edge))
 ```
 
-For the planned typed-adjacency path, construct schema storage with a registered kind, add one edge through its writer, then consume `incoming(node, kind)` inside a read scope. Only that kind is selected; a compatibility directional snapshot retains its promised encounter order after subsequent writes.
+For the planned typed adjacency implementation, construct schema storage with a registered kind, add one edge through its writer, then consume `incoming(node, kind)` inside a read scope. Only that kind is selected; a compatibility directional snapshot retains its promised encounter order after subsequent writes.
 
 ## Open Gaps
 
