@@ -36,8 +36,8 @@ internal class SchemaState(val schema: StorageSchema) {
                 families.getOrPut(family) { FamilyPatch(family) }.accept(name, value)
                 continue
             }
-            if (value == null) { fields[name] = null; continue }
             when (value) {
+                null -> fields[name] = null
                 is CapturedField<*> -> {
                     schema.requireKey(value.key)
                     require(name == value.key.name && value.key !is IndexedPropertyKey<*>) { "Wrong field name $name" }

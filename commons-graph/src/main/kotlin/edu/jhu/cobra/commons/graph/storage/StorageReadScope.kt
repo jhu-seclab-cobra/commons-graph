@@ -3,6 +3,7 @@ package edu.jhu.cobra.commons.graph.storage
 import edu.jhu.cobra.commons.value.IValue
 
 /** Read-only operations valid on the entering thread during one [GraphReader.read] callback. */
+@Suppress("TooManyFunctions") // One guarded read facade; storage owns the query algorithms.
 public class StorageReadScope internal constructor(
     private val storage: LayeredStorage,
     private val lifetime: StorageScope,

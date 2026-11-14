@@ -114,14 +114,12 @@ internal class LayerStack(
     }
 
     fun edgeProperties(id: Int): Map<String, IValue> {
-        if (active.containsEdge(id)) return activeEdgeProperties(id)
-        if (!containsFrozenEdge(id)) throw EntityNotExistException(id.toString())
-        return checkNotNull(frozen?.edgeProperties(id))
-    }
-
-    private fun activeEdgeProperties(id: Int): Map<String, IValue> {
-        if (id !in active.promotedEdgeEdits) return active.edgeRows.view(id)
-        return active.composePromotedCaptured(id, checkNotNull(frozen?.capturedEdgeRow(id))).compatibility()
+        if (!active.containsEdge(id)) {
+            if (!containsFrozenEdge(id)) throw EntityNotExistException(id.toString())
+            return checkNotNull(frozen?.edgeProperties(id))
+        }
+        return if (id !in active.promotedEdgeEdits) active.edgeRows.view(id)
+        else active.composePromotedCaptured(id, checkNotNull(frozen?.capturedEdgeRow(id))).compatibility()
     }
 
     // The row one layer itself holds, or null; a tombstone hides an edge from VISIBLE only.
@@ -131,7 +129,7 @@ internal class LayerStack(
     ): Map<String, IValue>? =
         when (layer) {
             StorageLayer.VISIBLE -> if (containsEdge(id)) edgeProperties(id) else null
-            StorageLayer.ACTIVE -> if (active.containsEdge(id)) activeEdgeProperties(id) else null
+            StorageLayer.ACTIVE -> if (active.containsEdge(id)) edgeProperties(id) else null
             StorageLayer.FROZEN -> frozen?.edgeProperties(id)
         }
 
@@ -149,7 +147,7 @@ internal class LayerStack(
         id: Int,
         name: String,
     ): IValue? {
-        val edits = active.promotedEdgeEdits[id] ?: return active.edgeRows[id, name]
+        if (id !in active.promotedEdgeEdits) return active.edgeRows[id, name]
         if (active.hasEdgeProperty(id, name)) return active.explicitEdgeProperty(id, name)
         val anchor = families().anchor(active.edgeEndpoints.getValue(id).tag, name)
         return if (anchor != null && active.hasEdgeProperty(id, anchor) || active.masksFrozenProperty(id, name))

@@ -33,7 +33,7 @@ The first active write to a frozen call family starts with an empty label set an
 
 Typed labels use one immutable sorted distinct primitive-ID set; membership uses binary search and union visits both sets. Cells do not become thousands of property names or a copied directory per write. Full compatibility snapshots enumerate requested cells and payloads. A cell update includes new-payload capture and any label union; the whole family update is not constant-time.
 
-`cells(entity,key): CellReader<T>` returns a scoped reader; the family writer validates schema, presence and capture before publishing labels and cells together. Wrong type, expired reader and unsupported family semantics fail distinctly. The typed API remains unimplemented; the declaration above remains the available compatibility API.
+`StorageReadScope.edgeCells(entity,key,layer): CellReader<T>` returns a scoped reader; the family writer validates schema, presence and capture before publishing labels and cells together. Wrong type, expired reader and unsupported family semantics fail distinctly. Registered fields and scoped cells are constructed with `LayeredStorageImpl(StorageSchema(keys))`; the fixed compatibility declaration remains available to legacy callers.
 
 ## Exception / Error Types
 
@@ -50,8 +50,8 @@ storage.bindPropertyFamilies(EdgePropertyFamilies("call", "p_", "labels"))
 check(storage.propertyFamilies?.anchorName == "labels")
 ```
 
-For the unimplemented typed path, register an indexed field before constructing schema storage, write its labels/cells through the family writer, and select one immutable payload through `cells(entity,key)` inside a read scope. A reader used after scope exit fails; the selected payload remains valid.
+Register an `IndexedPropertyKey` before constructing schema storage, write its labels/cells through the guarded writer, and select one immutable payload through `edgeCells(entity,key,layer)` inside a read scope. A reader used after scope exit fails; the selected payload remains valid.
 
 ## Open Gaps
 
-[Typed storage implementation](design-gaps-storage.md#typed-storage-implementation) tracks missing typed family access and immutable payload ownership.
+[Typed storage implementation](design-gaps-storage.md#typed-storage-implementation) tracks the remaining physical layout, lifetime and acceptance requirements.

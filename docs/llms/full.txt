@@ -415,3 +415,15 @@ storage.setEdgeProperties(edgeId, mapOf("weight" to IntVal(5)))
 - Exit the read scope before writing, freezing, reverting, clearing, closing or acquiring a compatibility critical section; each attempt throws `IllegalStateException`.
 - Use borrowed scopes on their entering thread only; copied property content and selected ID snapshots may escape.
 - Reacquire integer entity IDs after `clear`; integers do not carry a stored-entity lifetime.
+
+## Registered fields and cells
+
+Construct `LayeredStorageImpl(StorageSchema(keys))` before `StorageAccess`. A `PropertyKey<T>` binds one compatibility name, runtime type and `PropertyCodec<T>`; the codec validates/captures immutable payloads and converts independent compatibility values. Registration is fixed at construction.
+
+- `read.getNodeProperty(id,key)` and `read.getEdgeProperty(id,key,layer)` return optional immutable payloads without a codec cycle. Required `getNodeInt`, `getNodeLong`, `getEdgeInt` and `getEdgeLong` reject absence rather than returning zero.
+- `write.setNodeProperty(id,key,value)` and `write.setEdgeProperty(id,key,value)` capture before publication.
+- `IndexedPropertyKey<T>` registers one anchor, cell prefix and opaque pair-address codec. `read.edgeCells(id,key,layer).lookup(first,second)` selects one payload without enumerating the directory; `members()` returns fixed membership. `write.setEdgeCell` captures the changed payload and publishes membership/cell together.
+- `PropertyValue.capture(key,value)` admits a typed payload. `membership(key,values)` admits fixed family membership; `legacy(value)` captures an extension value. A retained value supports typed `get(key)`, `members(key)` and independent compatibility `snapshot()`.
+- `getNodeContents`/`getEdgeContents` return fixed maps of admitted values; named `getNodeContent`/`getEdgeContent` select one property. `setNodeContents`/`setEdgeContents` validate the complete update before mutation and retain already admitted payloads without recapture. `captureNodeContents`/`captureEdgeContents` and `validateNodeContents`/`validateEdgeContents` prepare caller-owned buffered writes without publishing them.
+
+An escaped payload or property-content map retains no mutable row, directory or borrowing scope. A borrowed cell reader expires at callback exit. Family selection and explicit deletion retain the layered contracts; full compatibility snapshots pay for their requested values. Schema meaning and reference interpretation belong to the caller.

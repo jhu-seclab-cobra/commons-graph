@@ -37,6 +37,29 @@ internal class PropertyValueTest {
     }
 
     @Test
+    fun `should expose an empty compatibility map for a deleted family`() {
+        val key = IndexedPropertyKey("labels", "cell:", String::class, ContentCellCodec, "call")
+        val storage = LayeredStorageImpl(StorageSchema(listOf(key)))
+        StorageAccess(storage).use { access ->
+            val node = access.writer.write { it.addNode() }
+            val edge = access.writer.write { it.addEdge(node, node, "call") }
+            access.writer.write { it.setEdgeCell(edge, key, "C", "L", "n7") }
+            val captured = access.reader.read { checkNotNull(it.getEdgeContents(edge)) }
+            access.writer.write { it.setEdgeContents(edge, mapOf("labels" to null, "cell:C:L" to null)) }
+            val map = storage.getEdgeProperties(edge)
+            assertEquals(true, map.isEmpty())
+            assertEquals(0, map.size)
+            assertEquals(emptySet(), map.entries)
+            access.writer.clear()
+            val field = LayeredStorageImpl::class.java.getDeclaredField("registered").apply { isAccessible = true }
+            val state = field.get(storage) as SchemaState
+            assertNull(state.symbols.find("L"))
+            assertEquals("n7", captured.getValue("cell:C:L").get(key))
+            assertEquals(listOf("L"), captured.getValue("labels").members(key))
+        }
+    }
+
+    @Test
     fun `should distinguish required primitive zero from absence`() {
         val integer = PropertyKey("int", Int::class, object : PropertyCodec<Int> {
             override fun capture(value: Int): Int = value

@@ -9,7 +9,7 @@
 - Configure graph identity, entity factories and optional Label hierarchy as the Graph API requires.
 - Choose a Storage implementation for the caller’s persistence and concurrency requirements.
 - Use `StorageAccess(LayeredStorageImpl())` for guarded `GraphReader`/`GraphWriter` capabilities and fixed `IValue` compatibility snapshots.
-- Consult [Storage design](design-storage.md#typed-storage-capabilities) for registered primitive/immutable payloads and scoped cell readers that remain unimplemented.
+- Consult [Storage design](design-storage.md#typed-storage-capabilities) for construction-time `StorageSchema`, registered primitive/immutable payloads and guarded `edgeCells` readers.
 - Never put language-specific analysis policy in this library.
 
 ## Graph API

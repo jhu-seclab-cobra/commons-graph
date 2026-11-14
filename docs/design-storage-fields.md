@@ -29,7 +29,7 @@ One private directory belongs to the family in its entity row. `CellReader<T>.lo
 
 `setEdgeCell(id, key, first, second, value)` captures the new payload before mutation and publishes its directory entry and family membership under the existing storage guard. A write to an existing active family retains its other active entries. The first active family write starts with empty membership and cells; it does not copy frozen entries. The caller's schema translates the membership identifiers and cell addresses to legacy names. The library assigns no PHP label or evaluation-context meaning to either coordinate.
 
-Absence, an explicit deletion and stored `NullVal` remain distinct. A codec may reject `NullVal` for a required record type. A deleted active family member masks the corresponding frozen content; clearing active state restores the complete frozen family. A full compatibility snapshot encodes the requested family members and cells under one guard, so membership and cells come from the same physical image.
+Absence, an explicit deletion and stored `NullVal` remain distinct. A codec may reject `NullVal` for a required record type. Private deletion entries are absent from the compatibility map: its emptiness, size and entries describe the same visible properties. A deleted active family member masks the corresponding frozen content; clearing active state restores the complete frozen family. A full compatibility snapshot encodes the requested family members and cells under one guard, so membership and cells come from the same physical image.
 
 ## Function Specifications
 
