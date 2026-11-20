@@ -17,6 +17,9 @@ import kotlin.test.assertTrue
 /*
  * Black-box tests for AbcMultipleGraph: node CRUD.
  *
+ * - `texts of the same bytes are one node ID` -- verifies the node ID is its canonical text in every lookup
+ * - `claim and read register the canonical text of the identity` -- verifies claimNode and readNode
+ * - `a node ID holding a lone surrogate outside the byte units is its own ID` -- verifies such an ID stays distinct
  * - `addNode returns node with correct id` -- verifies addNode output
  * - `addNode registers id in nodeIDs` -- verifies nodeIDs updated
  * - `addNode duplicate throws EntityAlreadyExistException` -- verifies duplicate guard
@@ -42,6 +45,47 @@ internal class AbcMultipleGraphTest {
     }
 
     // region Node CRUD
+
+    @Test
+    fun `texts of the same bytes are one node ID`() {
+        val node = graph.addNode("\uDCC3\uDCA9")
+
+        assertEquals("é", node.id)
+        assertEquals(setOf("é"), graph.nodeIDs)
+        assertEquals("é", storage.getNodeProperty(node.storageId, AbcMultipleGraph.PROP_NODE_ID)?.core)
+        assertFailsWith<EntityAlreadyExistException> { graph.addNode("é") }
+        assertEquals(node, graph.getNode("é"))
+        assertEquals(node, graph.getNode("\uDCC3\uDCA9"))
+        assertTrue(graph.containNode("\uDCC3\uDCA9"))
+        graph.addNode(NODE_ID_2)
+        graph.addEdge("\uDCC3\uDCA9", NODE_ID_2, EDGE_TAG_1)
+        assertNotNull(graph.getEdge("é", NODE_ID_2, EDGE_TAG_1))
+        assertEquals("é", graph.getOutgoingEdges("\uDCC3\uDCA9").single().srcNid)
+    }
+
+    @Test
+    fun `claim and read register the canonical text of the identity`() {
+        val source = graph.addNode("é")
+        val identity =
+            object : NodeIdentity {
+                override val id = "\uDCC3\uDCA9"
+                override val storageId = source.storageId
+            }
+        assertEquals("é", graph.readNode(identity).id)
+        val receiver = GraphFixtures.TestMultipleGraph(storage)
+        assertEquals("é", receiver.claimNode(identity).id)
+        assertEquals(setOf("é"), receiver.nodeIDs)
+        assertEquals("é", GraphFixtures.TestMultipleGraph(storage).readNode(identity).id)
+    }
+
+    @Test
+    fun `a node ID holding a lone surrogate outside the byte units is its own ID`() {
+        assertEquals("n\uD800", graph.addNode("n\uD800").id)
+        graph.addNode("n?")
+        assertEquals(setOf("n\uD800", "n?"), graph.nodeIDs)
+        assertEquals("n\uD800", graph.getNode("n\uD800")?.id)
+        assertEquals("\uDC80", graph.addNode("\uDC80").id)
+    }
 
     @Test
     fun `row lookup resolves only this graph's registered identity`() {

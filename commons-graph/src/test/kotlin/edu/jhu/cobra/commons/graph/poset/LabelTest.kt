@@ -1,5 +1,6 @@
 package edu.jhu.cobra.commons.graph.poset
 
+import edu.jhu.cobra.commons.value.StrVal
 import edu.jhu.cobra.commons.value.strVal
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,16 +9,36 @@ import kotlin.test.assertNotEquals
 /**
  * Black-box tests for Label value class, INFIMUM/SUPREMUM structural bounds.
  *
- * - `Label created from string exposes core` — verifies primary constructor
- * - `Label created from StrVal exposes core` — verifies secondary constructor
+ * - `Label created from string exposes core` — verifies the String factory
+ * - `Label created from StrVal exposes core` — verifies the StrVal factory
  * - `Labels with same core are equal` — verifies value class equality
  * - `Labels with same core have equal hashCode` — verifies hashCode consistency
  * - `Labels with different core are not equal` — verifies inequality
  * - `INFIMUM core is Int MIN_VALUE string` — verifies INFIMUM bound value
  * - `SUPREMUM core is Int MAX_VALUE string` — verifies SUPREMUM bound value
  * - `INFIMUM and SUPREMUM are distinct` — verifies bounds differ
+ * - `texts of the same bytes are one label` — verifies the label is its canonical text
+ * - `a lone surrogate outside the byte units is its own label` — verifies such a text stays distinct
  */
 internal class LabelTest {
+    @Test
+    fun `texts of the same bytes are one label`() {
+        val units = Label("\uDCC3\uDCA9")
+
+        assertEquals("é", units.core)
+        assertEquals(Label("é"), units)
+        assertEquals(Label("é").hashCode(), units.hashCode())
+        assertEquals("\uDC80", Label("\uDC80").core)
+    }
+
+    @Test
+    fun `a lone surrogate outside the byte units is its own label`() {
+        assertEquals("a\uD800", Label("a\uD800").core)
+        assertNotEquals(Label("a?"), Label("a\uD800"))
+        assertEquals(Label("\uDD00"), Label(StrVal("\uDD00")))
+        assertEquals("💀", Label("💀").core)
+    }
+
     @Test
     fun `Label created from string exposes core`() {
         val label = Label("test")

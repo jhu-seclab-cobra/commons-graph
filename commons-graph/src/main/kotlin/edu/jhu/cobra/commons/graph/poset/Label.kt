@@ -11,13 +11,22 @@ public typealias LabelID = String
  * [INFIMUM] and [SUPREMUM] are structural bounds. An edge carrying [INFIMUM] is visible under
  * every label; [SUPREMUM] is never assigned to edges.
  *
- * @property core The core string representation of the label.
+ * A label is its canonical text, the `core` of a [StrVal]: two texts that stand for the same bytes
+ * are one label.
+ *
+ * @param strVal The label text, whose `core` is canonical.
  */
 @JvmInline
 public value class Label(
-    public val core: LabelID,
+    private val strVal: StrVal,
 ) {
-    public constructor(strVal: StrVal) : this(strVal.core)
+    /** The label whose text is the canonical text of [core]. */
+    public constructor(core: LabelID) : this(StrVal(core))
+
+    /** The canonical text of the label. */
+    public val core: LabelID get() = strVal.core
+
+    override fun toString(): String = "Label(core=$core)"
 
     public companion object {
         /** Greatest Lower Bound — below all labels in the poset. */

@@ -12,6 +12,8 @@ The graph layer translates domain-level graph operations into coordinated calls 
 
 `AbcMultipleGraph` maintains bidirectional `NodeID`-to-`Int` mapping, delegating to `IStorage` via auto-generated `Int` IDs. See `spec-graph.md` for edge lookup and traversal algorithms.
 
+A node ID is its canonical text, the `core` of `StrVal(id)` (commons-value `StrVal`): two texts that stand for the same bytes, such as `"é"` and `"\uDCC3\uDCA9"`, are one node ID. `addNode`, `claimNode` and `readNode` register, store and bind the canonical text, so `AbcNode.id`, `nodeIDs` and the stored node ID property hold the same text. A lookup by another text of the same bytes finds the node: `GraphEntityCache` looks up the given text and, only when that misses, its canonical text, so a lookup that hits costs no canonical scan. Canonical text keeps an unpaired surrogate outside U+DC80..U+DCFF as itself, so an ID holding one, such as `"n\uD800"`, is distinct from every other ID.
+
 ## Class / Type Specifications
 
 ### IGraph
@@ -52,7 +54,7 @@ interface IGraph<N : AbcNode, E : AbcEdge> {
 
 | Method | Behavior | Input | Output | Errors |
 |--------|----------|-------|--------|--------|
-| `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
+| `addNode` | Creates a new storage row marked as owned by this graph and registers the node in this graph under the canonical text of `withID` | `withID`: NodeID | `N` | `EntityAlreadyExistException` if exists |
 | `claimNode` | Registers an existing storage row in this graph, marking it as owned by this graph, without creating a new row. Returns the existing node if already claimed. | `from`: NodeIdentity, its existing ID and logical row; AbcNode implements this read-only contract | `N` | `EntityNotExistException` if the row is absent from storage |
 | `getNode` | Retrieves a node by ID | `whoseID`: NodeID | `N?` | -- |
 | `readNode` | Reuses the registered wrapper, or reads the given existing row through the node factory without claiming it; no owner write, registry insertion or scan | existing ID and logical row | `N` | `IllegalArgumentException` if the row is absent or its identity differs |

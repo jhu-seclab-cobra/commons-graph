@@ -26,14 +26,17 @@ See `model.md` for label ordering semantics, edge visibility rules, and invarian
 typealias LabelID = String
 
 @JvmInline
-value class Label(val core: LabelID) {
-    constructor(strVal: StrVal) : this(strVal.core)
+value class Label(private val strVal: StrVal) {
+    constructor(core: LabelID) : this(StrVal(core))
+    val core: LabelID      // strVal.core
     companion object {
         val INFIMUM: Label   // Greatest Lower Bound -- below all labels
         val SUPREMUM: Label  // Least Upper Bound -- above all labels
     }
 }
 ```
+
+A label is its canonical text: `Label(core)` keeps the `core` of `StrVal(core)` (commons-value `StrVal`), so two texts that stand for the same bytes, such as `"é"` and `"\uDCC3\uDCA9"`, are one label in the poset caches and in the stored label property. Canonical text keeps an unpaired surrogate outside U+DC80..U+DCFF as itself, so a label holding one, such as `"a\uD800"`, is distinct from every other label. `Label(strVal)` keeps the given `StrVal`, so a label read from a stored `StrVal` allocates no text.
 
 See `model.md` for label ordering and structural-bound semantics.
 

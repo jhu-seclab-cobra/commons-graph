@@ -103,18 +103,21 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     // region Node operations
 
+    // A node ID enters the graph as its canonical text, so the registry key, the stored ID and AbcNode.id agree.
     override fun addNode(withID: NodeID): N =
         storage.criticalSection {
-            if (cache.containsNode(withID)) throw EntityAlreadyExistException(withID)
-            val storageId = storage.addNode(mapOf(PROP_NODE_ID to withID.strVal, PROP_OWNERS to owners.initial()))
-            cache.node(cache.register(withID, storageId))
+            val stored = withID.strVal
+            if (cache.entryOfCanonical(stored.core) != null) throw EntityAlreadyExistException(withID)
+            val storageId = storage.addNode(mapOf(PROP_NODE_ID to stored, PROP_OWNERS to owners.initial()))
+            cache.node(cache.register(stored.core, storageId))
         }
 
     override fun claimNode(from: NodeIdentity): N =
         storage.criticalSection {
-            cache.entryOf(from.id)?.let { return@criticalSection cache.node(it) }
+            val id = canonicalId(from.id)
+            cache.entryOfCanonical(id)?.let { return@criticalSection cache.node(it) }
             owners.mark(from.storageId)
-            cache.node(cache.register(from.id, from.storageId))
+            cache.node(cache.register(id, from.storageId))
         }
 
     override fun getNode(whoseID: NodeID): N? =
@@ -125,9 +128,9 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     override fun readNode(from: NodeIdentity): N =
         storage.criticalSection {
-            val id = from.id
+            val id = canonicalId(from.id)
             val row = from.storageId
-            cache.entryOf(id)?.let { entry ->
+            cache.entryOfCanonical(id)?.let { entry ->
                 require(entry.storageId == row) { "Node $id is not registered at row $row" }
                 return@criticalSection cache.node(entry)
             }

@@ -19,7 +19,7 @@ fun connect(graph: IGraph<*, *>): String {
 ### `IGraph<N : AbcNode, E : AbcEdge>`
 
 - **`val nodeIDs: Set<NodeID>`** -- All node IDs in the graph.
-- **`addNode(withID: NodeID): N`** -- Create a node. Raises `EntityAlreadyExistException` if ID exists.
+- **`addNode(withID: NodeID): N`** -- Create a node under the canonical text of `withID` (the `core` of `StrVal(withID)`); two texts that stand for the same bytes are one node ID, and a lookup by either finds the node. Raises `EntityAlreadyExistException` if ID exists.
 - **`claimNode(from: NodeIdentity): N`** — Registers an existing storage row without allocating a row; raises `EntityNotExistException` for a missing row.
 - **`readNode(from: NodeIdentity): N`** — Reads an existing row without claiming it; raises `IllegalArgumentException` for absent or mismatched identity.
 - **`resolveNodeId(storageId: Int): NodeID?`** — Returns a registered application identifier or null.

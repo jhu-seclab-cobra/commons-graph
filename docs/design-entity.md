@@ -26,7 +26,7 @@ typealias InternalID = Int
 
 ### NodeID
 
-**Responsibility:** User-provided node identifier.
+**Responsibility:** User-provided node identifier. The graph keeps its canonical text, so two texts that stand for the same bytes are one node ID ([design-graph.md](design-graph.md#design-overview)).
 
 ```kotlin
 typealias NodeID = String

@@ -17,7 +17,7 @@ fun directEdges(graph: PosetTrait<*, *>, label: Label): List<AbcEdge> =
 
 ### `Label` (inline value class)
 
-- **`Label(core: LabelID)`** -- Create from string. `LabelID` is a `String` typealias.
+- **`Label(core: LabelID)`** -- Create from string; the label keeps the canonical text of `core`, so two texts that stand for the same bytes are one label. `LabelID` is a `String` typealias.
 - **`Label(strVal: StrVal)`** -- Create from `StrVal`.
 - **`val core: LabelID`** -- The underlying string identifier.
 - **`Label.INFIMUM: Label`** -- Greatest lower bound. Below all labels in the Label hierarchy.

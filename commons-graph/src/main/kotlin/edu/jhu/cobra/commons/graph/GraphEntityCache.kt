@@ -37,14 +37,26 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
 
     val entries: Collection<NodeEntry<N>> get() = nodeEntries.values
 
-    fun entryOf(nodeId: NodeID): NodeEntry<N>? = nodeEntries[nodeId]
+    /**
+     * The entry of [nodeId] or of its canonical text. Keys are canonical text, so a hit costs no canonical
+     * scan; only a miss computes the canonical text, which is [nodeId] itself for canonical text.
+     */
+    fun entryOf(nodeId: NodeID): NodeEntry<N>? {
+        nodeEntries[nodeId]?.let { return it }
+        val canonical = canonicalId(nodeId)
+        return if (canonical === nodeId) null else nodeEntries[canonical]
+    }
 
-    fun containsNode(nodeId: NodeID): Boolean = nodeId in nodeEntries
+    /** The entry of [canonicalId], which is already canonical text. */
+    fun entryOfCanonical(canonicalId: NodeID): NodeEntry<N>? = nodeEntries[canonicalId]
+
+    fun containsNode(nodeId: NodeID): Boolean = entryOf(nodeId) != null
 
     fun containsStorageId(storageId: Int): Boolean = storageId in nodeByStorageId
 
     fun resolveNodeId(storageId: Int): NodeID? = nodeByStorageId[storageId]?.nodeId
 
+    /** Registers [nodeId], canonical text, at [storageId]. */
     fun register(
         nodeId: NodeID,
         storageId: Int,

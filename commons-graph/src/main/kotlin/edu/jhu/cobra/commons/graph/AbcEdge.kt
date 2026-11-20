@@ -110,7 +110,7 @@ public abstract class AbcEdge : AbcEntity() {
     public var storedLabels: Set<Label>
         get() {
             val raw = storage.getEdgeProperty(storageId, LABELS_PROP) as? ListVal ?: return emptySet()
-            return raw.core.mapTo(HashSet(raw.core.size)) { Label((it as StrVal).core) }
+            return raw.core.mapTo(HashSet(raw.core.size)) { Label(it as StrVal) }
         }
         internal set(values) {
             storage.setEdgeProperties(storageId, mapOf(LABELS_PROP to values.map { it.core }.listVal))
@@ -179,7 +179,7 @@ public abstract class AbcEdge : AbcEntity() {
         private fun labelsOf(value: IValue?): Set<Label> =
             when (value) {
                 null -> emptySet()
-                is ListVal -> value.core.mapTo(HashSet()) { Label((it as StrVal).core) }
+                is ListVal -> value.core.mapTo(HashSet()) { Label(it as StrVal) }
                 else -> throw IllegalArgumentException("labels property is not a list: $value")
             }
     }
