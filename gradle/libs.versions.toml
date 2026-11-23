@@ -1,7 +1,12 @@
 [versions]
+logback-classic = "1.5.13"
+slf4j-api = "2.0.15"
+kotlin-logging = "8.0.4"
+projectVersion = "0.1.0"
 kotlin = "2.4.20"
 kover = "0.9.9"
 ktlint = "14.2.0"
+ktlintEngine = "1.8.0"
 detekt = "1.23.8"
 cobra-commons-value = "0.2.0"
 mapdb = "3.1.0"
@@ -9,9 +14,9 @@ jgrapht = "1.5.3"
 neo4j = "2026.08.0"
 
 [libraries]
-kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version = "8.0.4" }
-slf4j-api = { module = "org.slf4j:slf4j-api", version = "2.0.15" }
-logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.5.13" }
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-api" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback-classic" }
 neo4j-core = { module = "org.neo4j:neo4j", version.ref = "neo4j" }
 mapdb-core = { module = "org.mapdb:mapdb", version.ref = "mapdb" }
 jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }

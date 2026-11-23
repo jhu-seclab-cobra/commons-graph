@@ -9,6 +9,9 @@ plugins {
     alias(libs.plugins.detekt) apply false
 }
 
+val publicationVersion = libs.versions.projectVersion.get()
+val ktlintEngineVersion = libs.versions.ktlintEngine.get()
+
 val minJavaProperty = providers.gradleProperty("minJava").get()
 val minJava =
     minJavaProperty.toIntOrNull()?.takeIf { it >= 8 }
@@ -25,9 +28,6 @@ if (runningJavaVersion < targetJavaVersion) {
 // Shared configuration for all library subprojects.
 // Each submodule's build.gradle.kts only needs to declare its own dependencies.
 subprojects {
-
-    // ----- Plugins -----
-
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "org.jetbrains.kotlinx.kover")
     apply(plugin = "java-library")
@@ -36,16 +36,17 @@ subprojects {
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
     group = "edu.jhu.cobra"
-    version = "0.1.0"
-
-    // ----- Repositories -----
+    version = publicationVersion
 
     repositories {
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
     }
 
-    // ----- Kotlin -----
+    // kotlin("test") auto-selects JUnit 4 as the test framework.
+    dependencies {
+        "testImplementation"(kotlin("test"))
+    }
 
     configure<KotlinJvmProjectExtension> {
         explicitApi()
@@ -54,8 +55,6 @@ subprojects {
             freeCompilerArgs.add("-Xjdk-release=$minJava")
         }
     }
-
-    // ----- Java Library -----
 
     configure<JavaPluginExtension> {
         sourceCompatibility = targetJavaVersion
@@ -66,13 +65,6 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.release.set(minJava)
-    }
-
-    // ----- Testing -----
-    // kotlin("test") auto-selects JUnit 4 as the test framework.
-
-    dependencies {
-        "testImplementation"(kotlin("test"))
     }
 
     tasks.withType<Test> {
@@ -96,18 +88,8 @@ subprojects {
         }
     }
 
-    // ----- Publishing -----
-
-    configure<PublishingExtension> {
-        publications {
-            create<MavenPublication>("maven") { from(components["java"]) }
-        }
-    }
-
-    // ----- Code Quality -----
-
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set("1.8.0")
+        version.set(ktlintEngineVersion)
         verbose.set(true)
         android.set(false)
         outputToConsole.set(true)
@@ -121,6 +103,12 @@ subprojects {
         config.setFrom(rootProject.files("detekt.yml"))
         buildUponDefaultConfig = true
         parallel = true
+    }
+
+    configure<PublishingExtension> {
+        publications {
+            create<MavenPublication>("maven") { from(components["java"]) }
+        }
     }
 }
 
