@@ -323,4 +323,8 @@ public abstract class AbcMultipleGraph<N : AbcNode, E : AbcEdge> :
 
     /** Rebuilds the NodeID-to-storage-ID index from the rows whose [PROP_OWNERS] set holds [graphId]. */
     protected fun rebuild(): Unit = storage.criticalSection { cache.rebuild() }
+
+    /** Rebuilds the node index in the given storage ID order, then indexes any remaining owned nodes. */
+    protected fun rebuildInNodeOrder(storageIds: List<Int>): Unit =
+        storage.criticalSection { cache.rebuildInNodeOrder(storageIds) }
 }

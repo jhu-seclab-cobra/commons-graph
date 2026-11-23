@@ -116,7 +116,7 @@ A subclass narrows enumerated edge visibility only by overriding `isEdgeVisible`
 
 **Ownership Persistence:**
 
-`addNode` writes the `__owners__` property, the set holding this graph's ID, in the same storage call that creates the row. `claimNode` adds this graph's ID to the row's owner set when it is absent. `rebuild()` restores the nodes whose owner set holds this graph's ID; a row with no owner set belongs to no graph. See `spec-graph.md` for the mark/rebuild algorithm.
+`addNode` writes the `__owners__` property, the set holding this graph's ID, in the same storage call that creates the row. `claimNode` adds this graph's ID to the row's owner set when it is absent. `rebuild()` restores the nodes whose owner set holds this graph's ID. A row with no owner set belongs to no graph. A graph reading a CSV import can call `rebuildInNodeOrder` with the imported storage IDs to expose the owned nodes in that order, followed by any other owned nodes already in storage. See `spec-graph.md` for the mark/rebuild algorithm.
 
 ### AbcSimpleGraph
 

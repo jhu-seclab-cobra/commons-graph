@@ -52,10 +52,23 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         srcFile: Path,
         into: IStorage,
         predicate: EntityFilter,
+    ): IStorage = importRows(srcFile, into, predicate)
+
+    /**
+     * Imports the entire graph and returns its destination node IDs in CSV row order.
+     */
+    public fun importWithNodeOrder(srcFile: Path, into: IStorage): List<Int> =
+        buildList { importRows(srcFile, into, predicate = { true }) { add(it) } }
+
+    private fun importRows(
+        srcFile: Path,
+        into: IStorage,
+        predicate: EntityFilter,
+        onNodeImported: ((Int) -> Unit)? = null,
     ): IStorage {
         val started = System.nanoTime()
         NativeCsvReader(path = srcFile).use { reader ->
-            val (nodeStringToInt, filteredNodeIds) = importNodes(reader, into, predicate)
+            val (nodeStringToInt, filteredNodeIds) = importNodes(reader, into, predicate, onNodeImported)
             reader.readEdges().forEach { record ->
                 if (isFilteredOut(record.edgeId, predicate)) return@forEach
                 if (record.src in filteredNodeIds || record.dst in filteredNodeIds) return@forEach
@@ -79,6 +92,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
         reader: NativeCsvReader,
         into: IStorage,
         predicate: EntityFilter,
+        onNodeImported: ((Int) -> Unit)?,
     ): Pair<Map<String, Int>, Set<String>> {
         val nodeStringToInt = HashMap<String, Int>()
         val filteredNodeIds = HashSet<String>()
@@ -89,6 +103,7 @@ public object NativeCsvIOImpl : IStorageExporter, IStorageImporter {
             }
             val storageId = into.addNode(props)
             nodeStringToInt[nodeId] = storageId
+            onNodeImported?.invoke(storageId)
         }
         return nodeStringToInt to filteredNodeIds
     }

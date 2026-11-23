@@ -29,7 +29,7 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
         var ref: SoftReference<N>?,
     )
 
-    private val nodeEntries = HashMap<NodeID, NodeEntry<N>>()
+    private var nodeEntries: MutableMap<NodeID, NodeEntry<N>> = HashMap()
     private val nodeByStorageId = HashMap<Int, NodeEntry<N>>()
     private val edgeCache = HashMap<Int, SoftReference<E>>()
 
@@ -134,6 +134,15 @@ internal class GraphEntityCache<N : AbcNode, E : AbcEdge>(
     fun rebuild() {
         clear()
         for (storageId in storage.nodeIDs) registerRestored(storageId)
+    }
+
+    fun rebuildInNodeOrder(storageIds: List<Int>) {
+        clear()
+        nodeEntries = LinkedHashMap()
+        for (storageId in storageIds) registerRestored(storageId)
+        for (storageId in storage.nodeIDs) {
+            if (!containsStorageId(storageId)) registerRestored(storageId)
+        }
     }
 
     fun clear() {
