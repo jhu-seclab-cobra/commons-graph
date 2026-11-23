@@ -1,7 +1,3 @@
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"
-}
-
 rootProject.name = "commons-graph"
 
 // No vendored checkouts. Standalone builds resolve commons-value from
