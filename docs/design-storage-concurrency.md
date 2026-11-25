@@ -47,3 +47,8 @@ val count = storage.criticalSection {
 }
 check(count == 1)
 ```
+
+## Open Gaps
+
+- **A single storage call outside a critical section can lose its own unlock.** Decided: a held lock is released on every exit ([Function Specifications](#function-specifications)). Code: a section checks its stack headroom and releases down to its entry holds, and every other lock use takes the storage's own lock with `withLock` or with `read` and `write` and releases it in a `finally`, in `NativeConcurStorageImpl`, `LayeredStorageImpl`, `StorageAccessGuard` (guarded reads and `close`), `JgraphtConcurStorageImpl`, `MapDBConcurStorageImpl` and `Neo4jConcurStorageImpl`. A `StackOverflowError` thrown inside the unlock of such a call outside any section leaves the lock held by that thread. A caller observes the error, and then every other thread that calls the storage, and `close`, waits without end.
+- **A read hold left by a read-only call is not released by a section exit.** Decided: the same sentence. Code: the exit of `criticalSection` counts and releases only the holds on the write lock. A read-only storage call (for example `containsNode`) whose unlock was cut by a `StackOverflowError` leaves a hold on the read lock, and the section exit does not release it. A caller observes that a later write acquisition on that thread (a write call or a `criticalSection`) blocks without end, because a read lock does not upgrade to the write lock.
