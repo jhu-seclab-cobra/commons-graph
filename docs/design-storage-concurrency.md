@@ -28,11 +28,11 @@ A section that holds two storages' locks at once (a `criticalSection` nested ins
 
 ## Function Specifications
 
-`IStorage.criticalSection(action: () -> T): T` invokes a synchronous action once and returns its result; a non-null criticalSectionLock is held for the full invocation and released on every exit. With a null lock, the action runs unguarded.
+`IStorage.criticalSection(action: () -> T): T` invokes a synchronous action once and returns its result; a non-null criticalSectionLock is held for the full invocation and released on every exit, a `StackOverflowError` included. With a null lock, the action runs unguarded.
 
 ## Exception / Error Types
 
-Action exceptions propagate. A caller never suspends or waits on another thread while holding the section, and never attempts to upgrade a held read lock to a write lock.
+Action exceptions propagate. A `StackOverflowError` propagates too, and its exit releases the lock: before it takes the lock, a section checks that the stack at its own frame has room for the release and throws the overflow when it has not, so no hold is left; its exit then releases the lock down to the holds the thread had on entry, which also frees a hold that a storage call of the action left when the overflow cut that call's own release. The lock of a storage that does not count the holds of a thread (any `Lock` other than a reentrant lock) is released once. A caller never suspends or waits on another thread while holding the section, and never attempts to upgrade a held read lock to a write lock.
 
 ## Caller Examples
 

@@ -9,7 +9,8 @@ internal class StorageAccessGuard(private val lock: Lock) {
     private var closed = false
     private val readDepth = ThreadLocal<Int>()
 
-    val mutationLock: Lock = object : Lock by lock {
+    val mutationLock: Lock = object : HoldCountingLock, Lock by lock {
+        override fun holdsOfCurrentThread(): Int = lock.holdsOfCurrentThread()
         override fun lock() { acquire { lock.lock(); true } }
         override fun lockInterruptibly() { acquire { lock.lockInterruptibly(); true } }
         override fun tryLock(): Boolean = acquire { lock.tryLock() }
