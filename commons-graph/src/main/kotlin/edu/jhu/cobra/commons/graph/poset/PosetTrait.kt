@@ -19,7 +19,8 @@ import edu.jhu.cobra.commons.graph.storage.criticalSection
  * `by` iff at least one of its [AbcEdge.labels] `l` satisfies `by == l` or `by > l` per
  * [IPoset.compare]. Every label operation below reads and writes [AbcEdge.storedLabels]; an
  * edge type whose [AbcEdge.labels] add implied labels keeps them out of the index and the
- * writes. The index lists an edge under its [AbcEdge.indexedLabels] and verifies a carrier by them. Covered labels never shadow one another — every edge
+ * writes. The index lists an edge under its [AbcEdge.indexedLabels] and verifies a carrier by them.
+ * Covered labels never shadow one another — every edge
  * carrying at least one covered label is returned, regardless of which other
  * covered labels coexist in the same adjacency result. [Label.SUPREMUM]
  * bypasses filtering and returns all edges, labeled or not; edges with no
