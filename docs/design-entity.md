@@ -115,6 +115,7 @@ abstract class AbcEdge : AbcEntity() {
     override val id: String                    // "$srcNid-$eTag-$dstNid"
     abstract override val type: AbcEdge.Type
     open val labels: Set<Label>                // default: storedLabels
+    open val indexedLabels: Set<Label>         // default: storedLabels
     var storedLabels: Set<Label>               // setter internal
     internal fun isStored(): Boolean
 }
@@ -125,6 +126,7 @@ abstract class AbcEdge : AbcEntity() {
 - `eTag` -- the edge tag, injected at bind time
 - `storedLabels` -- the set of `Label` values, backed by a `ListVal` storage property named `"labels"`; the setter is `internal` so assignments go through `PosetTrait` (see `design-label.md`)
 - `labels` -- the visibility labels; `storedLabels` unless the edge type overrides it with labels its graph implies (see `design-label.md`)
+- `indexedLabels` -- the labels the graph's label index lists the edge under and checks a carrier by; `storedLabels` unless the edge type overrides it with labels its storage keeps beyond the stored ones (see `design-label.md`)
 - `isStored()` -- whether the bound storage still contains `storageId`
 - `bind()` -- post-construction injection of storage reference, storage ID, and structural info
 - `toString()` format: `{srcNid-eTag-dstNid, type}`

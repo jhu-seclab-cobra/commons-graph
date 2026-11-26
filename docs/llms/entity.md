@@ -47,6 +47,7 @@ fun setColor(entity: IEntity): StrVal? {
 - **`val eTag: String`** -- Edge tag.
 - **`val storageId: Int`** -- Internal storage ID. Do not use in graph-level code.
 - **`val labels: Set<Label>`** -- Visibility labels, including any implied labels. Use `graph.setLabels(edge, edge.storedLabels + label)` to update stored labels.
+- **`open val indexedLabels: Set<Label>`** -- Labels the graph's label index lists the edge under and checks a carrier by; the stored labels unless the edge type overrides it with labels its storage keeps beyond them.
 - **`abstract val type: AbcEdge.Type`** -- Edge type. Subclasses implement `AbcEdge.Type` as an enum.
 
 ## Configuration

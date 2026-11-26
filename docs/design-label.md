@@ -87,16 +87,17 @@ The poset store uses auto-generated `Int` IDs:
 
 ---
 
-### AbcEdge.labels and AbcEdge.storedLabels
+### AbcEdge.labels, AbcEdge.storedLabels and AbcEdge.indexedLabels
 
-**Responsibility:** `storedLabels` stores the set of labels assigned to an edge; `labels` returns the visibility labels `PosetTrait` filters by.
+**Responsibility:** `storedLabels` stores the set of labels assigned to an edge; `labels` returns the visibility labels `PosetTrait` filters by; `indexedLabels` returns the labels `LabelEdgeIndex` lists the edge under and checks a carrier by.
 
 ```kotlin
 open val labels: Set<Label>      // default: storedLabels
+open val indexedLabels: Set<Label> // default: storedLabels
 var storedLabels: Set<Label>     // setter internal
 ```
 
-`storedLabels` is backed by a `ListVal` storage property. Its setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `copyLabel`, `setLabels`), which keeps `LabelEdgeIndex` complete. `labels` returns `storedLabels` unless an edge type overrides it to add the labels its graph implies from its own records; the visibility filter reads `labels`, while the label assignments, `getLabeledEdges`, `visitLabeledEdgesSince` and `LabelEdgeIndex` read `storedLabels`, so a label an edge only implies has no carrier in the index and a write never stores it.
+`storedLabels` is backed by a `ListVal` storage property. Its setter is `internal`: label assignments go through `PosetTrait` (`addEdge`/`delEdge` with a label, `relabel`, `copyLabel`, `setLabels`), which keeps `LabelEdgeIndex` complete. `labels` returns `storedLabels` unless an edge type overrides it to add the labels its graph implies from its own records; the visibility filter reads `labels`, the label assignments read `storedLabels`, and `LabelEdgeIndex`, `getLabeledEdges`, `visitLabeledEdgesSince` and `copyLabel` list an edge under and verify a carrier by `indexedLabels`, so a label an edge only implies has no carrier in the index and a write never stores it. `indexedLabels` is `storedLabels` unless an edge type overrides it to add labels its storage keeps for the edge beyond the ones `storedLabels` reads, such as those of a lower storage layer; the index records them when it is built or restored, and a carrier that holds one of them only in `indexedLabels` is listed and returned.
 
 ---
 
