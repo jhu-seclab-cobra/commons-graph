@@ -99,6 +99,14 @@ public abstract class AbcEdge : AbcEntity() {
         get() = storedLabels
 
     /**
+     * The labels the graph's label index lists this edge under and checks a carrier by. By default they are the
+     * [storedLabels]; an edge type whose storage keeps labels of the edge beyond the ones [storedLabels] reads
+     * overrides this to return them as well.
+     */
+    public open val indexedLabels: Set<Label>
+        get() = storedLabels
+
+    /**
      * Labels stored on this edge.
      *
      * The setter is internal: assignments go through
