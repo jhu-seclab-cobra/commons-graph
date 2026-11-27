@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /*
- * Tests for LayeredStorageViews: UnionSet and MappedEdgeSet lazy views.
+ * Tests for LayeredStorageViews: UnionSet, MappedEdgeSet and ExcludingSet lazy views.
  *
  * - `UnionSet size returns second size when first empty` -- first-empty
  * - `UnionSet contains finds element only in first` -- first-only
@@ -21,6 +21,8 @@ import kotlin.test.assertTrue
  * - `MappedEdgeSet isEmpty returns true when local set empty` -- empty local
  * - `MappedEdgeSet iterator translates local IDs to global IDs` -- translation
  * - `MappedEdgeSet size reflects local set size` -- size delegation
+ * - `ExcludingSet size counts base elements when excluded elements outnumber them` -- tombstones elsewhere
+ * - `ExcludingSet size subtracts excluded elements when base elements outnumber them` -- tombstone on the node
  */
 internal class LayeredStorageViewsTest {
     private lateinit var storage: LayeredStorageImpl
@@ -171,6 +173,24 @@ internal class LayeredStorageViewsTest {
         storage.freeze()
         val outgoing = storage.getOutgoingEdges(n1)
         assertEquals(2, outgoing.size)
+    }
+
+    // endregion
+
+    // region ExcludingSet view
+
+    @Test
+    fun `ExcludingSet size counts base elements when excluded elements outnumber them`() {
+        val view = ExcludingSet(setOf(1, 2), setOf(2, 3, 4, 5))
+        assertEquals(1, view.size)
+        assertEquals(setOf(1), view.toSet())
+    }
+
+    @Test
+    fun `ExcludingSet size subtracts excluded elements when base elements outnumber them`() {
+        val view = ExcludingSet(setOf(1, 2, 3, 4), setOf(1, 9))
+        assertEquals(3, view.size)
+        assertEquals(setOf(2, 3, 4), view.toSet())
     }
 
     // endregion

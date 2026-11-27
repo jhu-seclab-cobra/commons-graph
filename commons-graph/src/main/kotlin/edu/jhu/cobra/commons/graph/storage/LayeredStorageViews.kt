@@ -70,7 +70,9 @@ internal class ExcludingSet<E>(
     private val base: Set<E>,
     private val excluded: Set<E>,
 ) : AbstractSet<E>() {
-    override val size: Int get() = base.size - excluded.count { it in base }
+    // Counts over the smaller set: a query on one node pays for its own edges, not for every excluded element.
+    override val size: Int
+        get() = if (excluded.size < base.size) base.size - excluded.count { it in base } else base.count { it !in excluded }
 
     override fun iterator(): Iterator<E> =
         iterator {
